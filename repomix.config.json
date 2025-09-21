@@ -26,9 +26,11 @@
     "package.json",
     "tsconfig.json",
     "index.tsx",
-    "src",
-    "docs/relaycode-tui/splash-screen.readme.md",
-    "docs/relaycode-tui/initialization-screen.readme.md"
+    "src"
+    // "docs/relaycode-tui/splash-screen.readme.md",
+    // "docs/relaycode-tui/initialization-screen.readme.md"
+    // "docs/relaycode-tui/dashboard-screen.readme.md",
+    // "docs/relaycode-tui/global-help-screen.readme.md"
   ],
   "ignore": {
     "useGitignore": true,

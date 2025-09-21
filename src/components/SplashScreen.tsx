@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { useStore } from '../store';
+import { useAppStore } from '../stores/app.store';
 import chalk from 'chalk';
 import Separator from './Separator';
 
 const SplashScreen = () => {
-    const { showInitScreen } = useStore(state => state.actions);
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
     const [countdown, setCountdown] = useState(5);
 
     const handleSkip = () => {
@@ -37,12 +37,12 @@ const SplashScreen = () => {
 
     return (
         <Box flexDirection="column">
-            <Text>▲ relaycode</Text>
+            <Text color="cyan">▲ relaycode</Text>
             <Separator />
-            <Text>{logo}</Text>
+            <Text color="cyan">{logo}</Text>
             <Box flexDirection="column" alignItems="center">
-                <Text>A zero-friction, AI-native patch engine.</Text>
-                <Text>Built by Arman and contributors · https://relay.noca.pro</Text>
+                <Text italic>A zero-friction, AI-native patch engine.</Text>
+                <Text italic color="gray">Built by Arman and contributors · {chalk.underline('https://relay.noca.pro')}</Text>
             </Box>
             
             <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
@@ -65,13 +65,13 @@ const SplashScreen = () => {
             </Box>
             
             <Box marginTop={1}><Separator /></Box>
-            <Text>If you love this workflow, check out https://www.noca.pro for the full</Text>
+            <Text>If you love this workflow, check out {chalk.underline('https://www.noca.pro')} for the full</Text>
             <Text>web app with repo-wide visual context, history, and rollback.</Text>
-            <Text>{chalk.bold('(V)')}isit noca.pro</Text>
+            <Text>{chalk.cyan.bold('(V)')}isit noca.pro</Text>
             <Separator />
-            <Text>Follow {chalk.bold('(X)')} · Join {chalk.bold('(D)')}iscord · Star on {chalk.bold('(G)')}itHub</Text>
+            <Text>Follow {chalk.cyan.bold('(X)')} · Join {chalk.cyan.bold('(D)')}iscord · Star on {chalk.cyan.bold('(G)')}itHub</Text>
             <Separator />
-            <Text>Loading... {countdown} (Press any key to skip)</Text>
+            <Text>Loading... {countdown} ({chalk.gray('Press any key to skip')})</Text>
         </Box>
     );
 };

@@ -1,9 +1,18 @@
 # Directory Structure
 ```
-docs/
-  relaycode-tui/
-    initialization-screen.readme.md
-    splash-screen.readme.md
+src/
+  components/
+    DashboardScreen.tsx
+    GlobalHelpScreen.tsx
+    InitializationScreen.tsx
+    Separator.tsx
+    SplashScreen.tsx
+  stores/
+    app.store.ts
+    dashboard.store.ts
+    init.store.ts
+  App.tsx
+  utils.ts
 index.tsx
 package.json
 tsconfig.json
@@ -11,319 +20,859 @@ tsconfig.json
 
 # Files
 
-## File: docs/relaycode-tui/initialization-screen.readme.md
-````markdown
-# INITIALIZATION-SCREEN.README.MD
+## File: src/components/DashboardScreen.tsx
+```typescript
+import React, { useMemo } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
+import chalk from 'chalk';
+import Spinner from 'ink-spinner';
+import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
+import Separator from './Separator';
+import GlobalHelpScreen from './GlobalHelpScreen';
 
-## Relaycode TUI: The Stateful Initialization Screen
+// --- Sub-components & Helpers ---
 
-This document specifies the design and behavior of the stateful initialization screen for Relaycode, triggered by the `relay init` command.
+const getStatusIcon = (status: TransactionStatus) => {
+    switch (status) {
+        case 'PENDING': return chalk.yellow('?');
+        case 'APPLIED': return chalk.green('✓');
+        case 'COMMITTED': return chalk.blue('→');
+        case 'FAILED': return chalk.red('✗');
+        case 'REVERTED': return chalk.gray('↩');
+        case 'IN-PROGRESS': return <Spinner type="dots" />;
+        default: return ' ';
+    }
+};
 
-### 1. Core Philosophy
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `-${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `-${minutes}m`;
+};
 
-The initialization process is the user's first true impression of the Relaycode application. It must be more than a simple script that prints sequential log lines. Our philosophy is to treat it as a **guided bootstrap sequence**.
+const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {
+    const icon = getStatusIcon(transaction.status);
+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+    const statusText = transaction.status.padEnd(11, ' ');
+    
+    let message = transaction.message;
+    if (transaction.status === 'IN-PROGRESS') {
+        message = chalk.cyan(message);
+    }
+    
+    const content = (
+        <Text>
+            {time} {icon} {statusText} {transaction.hash} · {message}
+        </Text>
+    );
 
--   **Application-like Experience:** The screen has a persistent frame, and content updates in-place, creating the feel of a desktop installer rather than a command-line utility.
--   **Transparency and Confidence:** The user sees what the system is analyzing, what it's about to do, and the results of its actions in real-time. This builds trust and demystifies the setup process.
--   **Stateful Context:** Information discovered in early phases (like the Project ID) is persisted on-screen, providing context for later steps.
--   **Interactive & Intelligent:** The process can pause to ask for user input on key decisions, using sensible defaults and providing clear choices.
+    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+};
 
-### 2. UI Layout Components
+const ConfirmationContent = ({ status, transactionsToConfirm }: { status: DashboardStatus, transactionsToConfirm: Transaction[] }) => {
+    const isApprove = status === 'CONFIRM_APPROVE';
+    const actionText = isApprove ? 'APPROVE' : 'COMMIT';
+    
+    return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Text bold>{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>
+            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                {transactionsToConfirm.map(tx => (
+                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                ))}
+            </Box>
+        </Box>
+    );
+};
 
-The screen maintains a consistent single-column layout, divided into three key regions:
+// --- Main Component ---
 
-1.  **Header:** `▲ relaycode bootstrap` - A static title that changes to `▲ relaycode bootstrap complete` upon success.
-2.  **Body:** The primary dynamic content area. It displays the current phase, analysis results, interactive prompts, and the final summary report.
-3.  **Footer / Status Bar:** A single line at the bottom that provides context on the current operation or displays the available keyboard actions.
+const DashboardScreen = () => {
+    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+    const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
+    const { exit } = useApp();
 
-### 3. The State Machine: A Four-Phase Flow
+    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
 
-The initialization process is a state machine that progresses through four distinct phases.
+    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
+    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
+    
+    useInput((input, key) => {
+        if (input === '?') {
+            toggleHelp();
+            return;
+        }
 
----
+        if (showHelp) {
+            if (key.escape || input === '?') toggleHelp();
+            return;
+        }
 
-#### **Phase 1: Analyze**
+        if (isModal) {
+            if (key.return) confirmAction();
+            if (key.escape) cancelAction();
+            return;
+        }
 
-The sequence begins by scanning the project environment to gather context. The UI shows this as a live checklist.
+        if (isProcessing) return; // No input while processing
+        
+        if (input.toLowerCase() === 'q') exit();
 
-**State 1.1: Initial Analysis**
+        if (key.upArrow) moveSelectionUp();
+        if (key.downArrow) moveSelectionDown();
+        
+        if (input.toLowerCase() === 'p') togglePause();
+        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
+    });
+
+    const renderStatusBar = () => {
+        let statusText, statusIcon;
+        switch (status) {
+            case 'LISTENING': statusText = 'LISTENING'; statusIcon = chalk.green('●'); break;
+            case 'PAUSED': statusText = 'PAUSED'; statusIcon = chalk.yellow('||'); break;
+            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
+            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
+            default: statusText = 'LISTENING'; statusIcon = chalk.green('●');
+        }
+
+        let approvalStr = String(pendingApprovals).padStart(2, '0');
+        let commitStr = String(pendingCommits).padStart(2, '0');
+
+        if (status === 'APPROVING') approvalStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
+        if (status === 'COMMITTING') commitStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
+        if (status === 'CONFIRM_APPROVE') approvalStr = chalk.bold.yellow(`┌ ${approvalStr} ┐`);
+        if (status === 'CONFIRM_COMMIT') commitStr = chalk.bold.yellow(`┌ ${commitStr} ┐`);
+        
+        return (
+            <Text>
+                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+            </Text>
+        )
+    }
+
+    const renderFooter = () => {
+        if (isModal) return <Text>(Enter) Confirm      (Esc) Cancel</Text>;
+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+        const pauseAction = status === 'PAUSED' ? '(R)esume' : '(P)ause';
+        return <Text>(↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · {pauseAction} · (Q)uit</Text>;
+    }
+    
+    const transactionsToConfirm = useMemo(() => {
+        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
+        return [];
+    }, [status, transactions]);
+
+    return (
+        <Box flexDirection="column" height="100%">
+            {showHelp && <GlobalHelpScreen />}
+
+            <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
+                <Text>▲ relaycode dashboard</Text>
+                <Separator />
+                <Box marginY={1}>
+                    {renderStatusBar()}
+                </Box>
+                
+                {isModal && (
+                    <>
+                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
+                        <Separator />
+                    </>
+                )}
+                
+                <Text> EVENT STREAM (Last 15 minutes)</Text>
+                <Box flexDirection="column" marginTop={1}>
+                    {transactions.map((tx, index) => (
+                        <EventStreamItem 
+                            key={tx.id} 
+                            transaction={tx} 
+                            isSelected={!isModal && index === selectedTransactionIndex}
+                        />
+                    ))}
+                </Box>
+
+                <Box marginTop={1}><Separator /></Box>
+                <Text>{renderFooter()}</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default DashboardScreen;
 ```
- ▲ relaycode bootstrap
- ──────────────────────────────────────────────────────────────────────────────
- PHASE 1: ANALYZE
 
- (●) Scanning project structure...
-     └─ Finding package.json
- ( ) Determining Project ID
- ( ) Checking for existing .gitignore
+## File: src/components/GlobalHelpScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
 
- ──────────────────────────────────────────────────────────────────────────────
- This utility will configure relaycode for your project.
+const GlobalHelpScreen = () => {
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                paddingX={2}
+                paddingY={1}
+                width="80%"
+            >
+                <Box justifyContent="center" marginBottom={1}>
+                    <Text bold>▲ relaycode · keyboard shortcuts</Text>
+                </Box>
+                <Box flexDirection="column" gap={1}>
+                    <Box flexDirection="column">
+                        <Text bold>GLOBAL</Text>
+                        <Text>  ?        Toggle this help screen</Text>
+                        <Text>  Q        Quit to terminal (from main screens)</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold>DASHBOARD (watch)</Text>
+                        <Text>  ↑↓       Navigate event stream</Text>
+                        <Text>  P        Pause / Resume clipboard watcher</Text>
+                        <Text>  A        Approve all pending transactions</Text>
+                        <Text>  C        Commit all applied transactions to git</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold>REVIEW & DETAILS SCREENS</Text>
+                        <Text>  D        Show / Collapse file diff</Text>
+                        <Text>  R        Show / Collapse reasoning steps</Text>
+                        <Text>  C        Enter / Exit Copy Mode (Details Screen)</Text>
+                        <Text>  U        Undo / Revert Transaction</Text>
+                        <Text>  Space    Toggle approval state of a file (Review Screen)</Text>
+                    </Box>
+                </Box>
+            </Box>
+            <Box marginTop={1}>
+                <Text bold>(Press ? or Esc to close)</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default GlobalHelpScreen;
 ```
--   **Behavior:** The system performs its initial checks. The `(●)` symbol can act as a spinner or simply indicate the current task.
--   **Transition:** Upon completion, the screen seamlessly transitions to Phase 2.
 
----
+## File: src/stores/app.store.ts
+```typescript
+import { create } from 'zustand';
 
-#### **Phase 2: Configure**
+export type AppScreen = 'splash' | 'init' | 'dashboard';
 
-The results from the analysis are now displayed in a persistent `CONTEXT` panel. The body of the screen updates to show the configuration tasks the system is now performing.
+interface AppState {
+    currentScreen: AppScreen;
+    actions: {
+        showInitScreen: () => void;
+        showDashboardScreen: () => void;
+    };
+}
 
-**State 2.1: Configuration in Progress**
+export const useAppStore = create<AppState>((set) => ({
+    currentScreen: 'splash',
+    actions: {
+        showInitScreen: () => set({ currentScreen: 'init' }),
+        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+    },
+}));
 ```
- ▲ relaycode bootstrap
- ──────────────────────────────────────────────────────────────────────────────
- CONTEXT
-   ✓ Project ID: 'relaycode' (from package.json)
-   ✓ Gitignore:  Found at ./
 
- PHASE 2: CONFIGURE
+## File: src/stores/dashboard.store.ts
+```typescript
+import { create } from 'zustand';
+import { sleep } from '../utils';
 
- (●) Creating relay.config.json...
-     └─ Writing default configuration with Project ID
- ( ) Initializing .relay state directory
- ( ) Generating system prompt template
+// --- Types ---
+export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS';
 
- ──────────────────────────────────────────────────────────────────────────────
- Applying configuration based on project analysis...
+export interface Transaction {
+    id: string;
+    timestamp: number;
+    status: TransactionStatus;
+    hash: string;
+    message: string;
+    error?: string;
+}
+
+export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'CONFIRM_COMMIT' | 'APPROVING' | 'COMMITTING';
+
+// --- Initial State (for simulation) ---
+const createInitialTransactions = (): Transaction[] => [
+    { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+    { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+    { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+    { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+    { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+    { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+];
+
+// --- Store Interface ---
+interface DashboardState {
+    status: DashboardStatus;
+    previousStatus: DashboardStatus; // To handle cancel from confirmation
+    transactions: Transaction[];
+    selectedTransactionIndex: number;
+    showHelp: boolean;
+    actions: {
+        togglePause: () => void;
+        moveSelectionUp: () => void;
+        moveSelectionDown: () => void;
+        startApproveAll: () => void;
+        startCommitAll: () => void;
+        confirmAction: () => Promise<void>;
+        cancelAction: () => void;
+        toggleHelp: () => void;
+    };
+}
+
+// --- Store Implementation ---
+export const useDashboardStore = create<DashboardState>((set, get) => ({
+    status: 'LISTENING',
+    previousStatus: 'LISTENING',
+    transactions: createInitialTransactions(),
+    selectedTransactionIndex: 0,
+    showHelp: false,
+    actions: {
+        togglePause: () => set(state => ({
+            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING'
+        })),
+        moveSelectionUp: () => set(state => ({
+            selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1)
+        })),
+        moveSelectionDown: () => set(state => ({
+            selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1)
+        })),
+        startApproveAll: () => set(state => ({
+            status: 'CONFIRM_APPROVE',
+            previousStatus: state.status,
+        })),
+        startCommitAll: () => set(state => ({
+            status: 'CONFIRM_COMMIT',
+            previousStatus: state.status,
+        })),
+        cancelAction: () => set(state => ({ status: state.previousStatus })),
+        toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+
+        confirmAction: async () => {
+            const { status, previousStatus } = get();
+            if (status === 'CONFIRM_APPROVE') {
+                set({ status: 'APPROVING' });
+
+                // Find pending transactions and mark them as in-progress
+                let pendingTxIds: string[] = [];
+                set(state => {
+                    const newTxs = state.transactions.map(tx => {
+                        if (tx.status === 'PENDING') {
+                            pendingTxIds.push(tx.id);
+                            return { ...tx, status: 'IN-PROGRESS' as const };
+                        }
+                        return tx;
+                    });
+                    return { transactions: newTxs };
+                });
+
+                await sleep(2000); // Simulate approval process
+
+                // Mark them as applied
+                set(state => {
+                    const newTxs = state.transactions.map(tx => {
+                        if (pendingTxIds.includes(tx.id)) {
+                            return { ...tx, status: 'APPLIED' as const };
+                        }
+                        return tx;
+                    });
+                    return { transactions: newTxs, status: previousStatus };
+                });
+            } else if (status === 'CONFIRM_COMMIT') {
+                set({ status: 'COMMITTING' });
+                 // Find applied transactions and mark them as in-progress
+                 let appliedTxIds: string[] = [];
+                 set(state => {
+                     const newTxs = state.transactions.map(tx => {
+                         if (tx.status === 'APPLIED') {
+                            appliedTxIds.push(tx.id);
+                             return { ...tx, status: 'IN-PROGRESS' as const };
+                         }
+                         return tx;
+                     });
+                     return { transactions: newTxs };
+                 });
+ 
+                 await sleep(2000); // Simulate commit process
+ 
+                 // Mark them as committed
+                 set(state => {
+                     const newTxs = state.transactions.map(tx => {
+                         if (appliedTxIds.includes(tx.id)) {
+                             return { ...tx, status: 'COMMITTED' as const };
+                         }
+                         return tx;
+                     });
+                     return { transactions: newTxs, status: previousStatus };
+                 });
+            }
+        },
+    },
+}));
 ```
--   **Behavior:** The `CONTEXT` panel shows the outcome of Phase 1. The main list shows the file system modifications as they happen.
--   **Transition:** The process may pause and transition to Phase 3 if user input is required. Otherwise, it proceeds directly to Phase 4.
 
----
+## File: src/stores/init.store.ts
+```typescript
+import { create } from 'zustand';
 
-#### **Phase 3: Interactive Choice**
+// Types
+export type TaskStatus = 'pending' | 'active' | 'done';
+export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' | 'FINALIZE';
+export type GitignoreChoice = 'ignore' | 'share';
 
-This is a blocking state that halts the automated process to request user input. This makes the tool feel intelligent and respectful of user preferences.
+export interface Task {
+    id: string;
+    title: string;
+    subtext?: string;
+    status: TaskStatus;
+}
 
-**State 3.1: Awaiting User Input**
+// Initial State definitions from README
+export const initialAnalyzeTasks: Task[] = [
+    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
+    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
+    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
+];
+
+export const initialConfigureTasks: Task[] = [
+    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
+    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
+    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
+];
+
+// Store Interface
+interface InitState {
+    phase: InitPhase;
+    analyzeTasks: Task[];
+    projectId: string | null;
+    gitignoreFound: boolean | null;
+    configureTasks: Task[];
+    interactiveChoice: GitignoreChoice | null;
+
+    actions: {
+        setPhase: (phase: InitPhase) => void;
+        updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+        setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
+        updateConfigureTask: (id: string, status: TaskStatus) => void;
+        setInteractiveChoice: (choice: GitignoreChoice) => void;
+        resetInit: () => void;
+    };
+}
+
+// Create the store
+export const useInitStore = create<InitState>((set) => ({
+    phase: 'ANALYZE',
+    analyzeTasks: initialAnalyzeTasks,
+    projectId: null,
+    gitignoreFound: null,
+    configureTasks: initialConfigureTasks,
+    interactiveChoice: null,
+
+    actions: {
+        setPhase: (phase) => set({ phase }),
+        updateAnalyzeTask: (id, status) => set(state => ({
+            analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t)
+        })),
+        setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+        updateConfigureTask: (id, status) => set(state => ({
+            configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t)
+        })),
+        setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+        resetInit: () => set({
+            phase: 'ANALYZE',
+            analyzeTasks: JSON.parse(JSON.stringify(initialAnalyzeTasks)),
+            projectId: null,
+            gitignoreFound: null,
+            configureTasks: JSON.parse(JSON.stringify(initialConfigureTasks)),
+            interactiveChoice: null,
+        }),
+    },
+}));
 ```
- ▲ relaycode bootstrap
- ──────────────────────────────────────────────────────────────────────────────
- CONTEXT
-   ✓ Project ID: 'relaycode'
-   ✓ Gitignore:  Found at ./
 
- PHASE 2: CONFIGURE
-
- [✓] Created relay.config.json
- [✓] Initialized .relay state directory
- > The .relay/ directory is usually ignored by git.
-   Do you want to share its state with your team by committing it?
-
- ──────────────────────────────────────────────────────────────────────────────
- (Enter) No, ignore it (default)      (S) Yes, share it
+## File: src/utils.ts
+```typescript
+// Utility for simulation
+export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 ```
--   **Behavior:** The focus shifts to the prompt, indicated by `>`. The footer transforms into a contextual action bar, clearly showing the default action (`Enter`) and alternative keyboard shortcuts.
--   **Transition:** Resumes the flow to Phase 4 after receiving valid user input (`Enter` or `S`).
 
----
+## File: src/components/InitializationScreen.tsx
+```typescript
+import React, { useEffect } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
+import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
+import chalk from 'chalk';
+import Separator from './Separator';
+import { useAppStore } from '../stores/app.store';
+import { sleep } from '../utils';
 
-#### **Phase 4: Finalize & Hand-off**
+const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	let symbol;
+	switch (task.status) {
+		case 'pending': symbol = '( )'; break;
+		case 'active': symbol = chalk.cyan('(●)'); break;
+		case 'done': symbol = chalk.green(doneSymbol); break;
+	}
 
-The final state. The screen transforms into a summary report, providing confirmation of the setup and clear instructions for the user's next steps. The content of this report is *dynamically generated* based on the choices made in previous phases.
+	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
 
-**State 4.1: Success Report (Default Choice)**
+	return (
+		<Box flexDirection="column">
+			<Text>
+				{symbol} {title}
+			</Text>
+			{task.subtext && task.status !== 'done' && (
+				<Text>
+					{'     └─ '}{task.subtext}
+				</Text>
+			)}
+		</Box>
+	);
+};
+
+const InitializationScreen = () => {
+    const phase = useInitStore(s => s.phase);
+    const analyzeTasks = useInitStore(s => s.analyzeTasks);
+    const configureTasks = useInitStore(s => s.configureTasks);
+    const interactiveChoice = useInitStore(s => s.interactiveChoice);
+    const projectId = useInitStore(s => s.projectId);
+    const actions = useInitStore(s => s.actions);
+    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+    const { exit } = useApp();
+
+    useInput((input, key) => {
+        if (phase === 'INTERACTIVE') {
+            if (key.return) {
+                actions.setInteractiveChoice('ignore');
+            } else if (input.toLowerCase() === 's') {
+                actions.setInteractiveChoice('share');
+            }
+        }
+        if (phase === 'FINALIZE') {
+            if (input.toLowerCase() === 'q') {
+                exit();
+            } else if (input.toLowerCase() === 'w') {
+                showDashboardScreen();
+            }
+        }
+    });
+
+    useEffect(() => {
+        actions.resetInit();
+        const runSimulation = async () => {
+            actions.setPhase('ANALYZE');
+            for (const task of initialAnalyzeTasks) {
+                actions.updateAnalyzeTask(task.id, 'active');
+                await sleep(800);
+                actions.updateAnalyzeTask(task.id, 'done');
+            }
+            actions.setAnalysisResults(`'relaycode' (from package.json)`, true);
+            await sleep(500);
+
+            actions.setPhase('CONFIGURE');
+            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+            for (const task of configTasksUntilInteractive) {
+                actions.updateConfigureTask(task.id, 'active');
+                await sleep(800);
+                actions.updateConfigureTask(task.id, 'done');
+            }
+            await sleep(500);
+
+            actions.setPhase('INTERACTIVE');
+        };
+
+        runSimulation();
+    }, []);
+
+    useEffect(() => {
+        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+            const resumeSimulation = async () => {
+                actions.setPhase('CONFIGURE');
+                const lastTask = initialConfigureTasks[2];
+                if (lastTask) {
+                    actions.updateConfigureTask(lastTask.id, 'active');
+                    await sleep(800);
+                    actions.updateConfigureTask(lastTask.id, 'done');
+                    await sleep(500);
+
+                    actions.setPhase('FINALIZE');
+                }
+            };
+            resumeSimulation();
+        }
+    }, [interactiveChoice, phase, actions]);
+
+    const renderAnalyze = () => (
+        <Box flexDirection="column">
+            <Text bold>PHASE 1: ANALYZE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
+            </Box>
+        </Box>
+    );
+
+    const renderContext = () => (
+        <Box flexDirection="column" marginBottom={1}>
+            <Text bold>CONTEXT</Text>
+            <Text>  {chalk.green('✓')} Project ID: {projectId}</Text>
+            <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>
+        </Box>
+    );
+
+    const renderConfigure = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold>PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
+            </Box>
+        </Box>
+    );
+
+    const renderInteractive = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold>PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
+                <Box flexDirection="column" marginTop={1}>
+                    <Text>{chalk.cyan('>')} The .relay/ directory is usually ignored by git.</Text>
+                    <Text>  Do you want to share its state with your team by committing it?</Text>
+                </Box>
+            </Box>
+        </Box>
+    );
+
+    const renderFinalize = () => {
+        const stateText = interactiveChoice === 'share'
+            ? ".relay/ directory initialized. It will be committed to git."
+            : ".relay/ directory initialized and added to .gitignore.";
+        const stateSubText = interactiveChoice === 'share'
+            ? undefined
+            : "Local transaction history will be stored here.";
+        
+        return (
+            <Box flexDirection="column">
+                <Text bold> SYSTEM READY</Text>
+                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                    <Box flexDirection="column">
+                        <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>
+                        <Text>          {chalk.gray('›')} Edit this file to tune linters, git integration, etc.</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text>{chalk.green('✓')} State:    {stateText}</Text>
+                        {stateSubText && <Text>          {chalk.gray('›')} {stateSubText}</Text>}
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
+                        <Text>          {chalk.gray('›')} Copied to clipboard. Paste into your AI's custom instructions.</Text>
+                    </Box>
+                </Box>
+            </Box>
+        );
+    };
+
+    const renderPhase = () => {
+        switch (phase) {
+            case 'ANALYZE': return renderAnalyze();
+            case 'CONFIGURE': return renderConfigure();
+            case 'INTERACTIVE': return renderInteractive();
+            case 'FINALIZE': return renderFinalize();
+        }
+    };
+    
+    let footerText;
+    switch (phase) {
+        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+        case 'INTERACTIVE': footerText = `(${chalk.bold('Enter')}) No, ignore it (default)      (${chalk.bold('S')}) Yes, share it`; break;
+        case 'FINALIZE': footerText = `(${chalk.bold('W')})atch for Patches · (${chalk.bold('L')})View Logs · (${chalk.bold('Q')})uit`; break;
+    }
+
+    return (
+        <Box flexDirection="column">
+            <Text>{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
+            <Separator />
+            <Box marginY={1}>{renderPhase()}</Box>
+            <Separator />
+            <Text>{footerText}</Text>
+        </Box>
+    );
+};
+
+export default InitializationScreen;
 ```
- ▲ relaycode bootstrap complete
- ──────────────────────────────────────────────────────────────────────────────
-  SYSTEM READY
 
-  ✓ Config:   relay.config.json created.
-              › Edit this file to tune linters, git integration, etc.
+## File: src/components/Separator.tsx
+```typescript
+import React, { useState, useEffect } from 'react';
+import {Text} from 'ink';
 
-  ✓ State:    .relay/ directory initialized and added to .gitignore.
-              › Local transaction history will be stored here.
+const useStdoutDimensions = () => {
+	const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
 
-  ✓ Prompt:   System prompt generated at .relay/prompts/system-prompt.md.
-              › Copied to clipboard. Paste into your AI's custom instructions.
+	useEffect(() => {
+		const updateDimensions = () => {
+			setDimensions({
+				columns: process.stdout.columns || 80,
+				rows: process.stdout.rows || 24
+			});
+		};
 
- ──────────────────────────────────────────────────────────────────────────────
- (W)atch for Patches · (L)View Logs · (Q)uit
+		updateDimensions();
+		process.stdout.on('resize', updateDimensions);
+
+		return () => {
+			process.stdout.off('resize', updateDimensions);
+		};
+	}, []);
+
+	return [dimensions.columns, dimensions.rows];
+};
+
+const Separator = () => {
+	const [columns] = useStdoutDimensions();
+	return <Text>{'─'.repeat(columns || 80)}</Text>;
+};
+
+export default Separator;
 ```
--   **Behavior:** The header updates to `...complete`. The Body provides a scannable summary. Crucially, the footer now becomes a menu, guiding the user to the next logical actions within the Relaycode ecosystem.
--   **Dynamic Content:** If the user had chosen to *share* the state in Phase 3, the `State` line would dynamically change to: `✓ State: .relay/ directory initialized. It will be committed to git.`
 
-### 4. Edge Cases & Alternate Flows
+## File: src/components/SplashScreen.tsx
+```typescript
+import React, { useState, useEffect } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import chalk from 'chalk';
+import Separator from './Separator';
 
-A robust TUI must gracefully handle pre-existing conditions.
+const SplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState(5);
 
--   **Scenario: Config File Already Exists**
-    -   In Phase 1, the analysis will detect `relay.config.json`.
-    -   The flow skips creating the file and instead verifies its contents.
-    -   The final report will reflect this: `✓ Config: relay.config.json verified.` The header might say `bootstrap verified`.
+    const handleSkip = () => {
+        showInitScreen();
+    };
 
--   **Scenario: `package.json` Not Found**
-    -   In Phase 1, the analysis fails to find `package.json`.
-    -   The system falls back to using the current directory name as the Project ID.
-    -   The `CONTEXT` panel in Phase 2 will display: `✓ Project ID: 'my-project' (from directory name)`.
+    useInput(() => {
+        handleSkip();
+    });
 
-### 5. UI Symbol Legend
+    useEffect(() => {
+        if (countdown === 0) {
+            showInitScreen();
+            return;
+        }
 
-| Symbol | Meaning | State |
-| :--- | :--- | :--- |
-| `▲` | Application Header | Static |
-| `( )` | Task Pending | In-Progress |
-| `(●)` | Task Active / In-Progress | In-Progress |
-| `[✓]` | Task Completed (File Operation) | In-Progress |
-| `✓` | Item OK / Verified / Completed | Static / Final |
-| `>` | Focused Item / User Prompt | Interactive |
-| `›` | Informational Sub-point | Static |
-| `─` | Horizontal Separator | Static |
-````
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
 
-## File: docs/relaycode-tui/splash-screen.readme.md
-````markdown
-# SPLASH-SCREEN.README.MD
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
 
-## Relaycode TUI: The Startup Splash Screen
-
-This document specifies the design and behavior of the timed, auto-dismissing splash screen that appears every time the Relaycode application starts.
-
-### 1. Core Philosophy
-
-The splash screen is the very first visual element a user sees. Its purpose is threefold:
-
-1.  **Brand Reinforcement:** It immediately presents the Relaycode name, ASCII art logo, and tagline, establishing a strong and professional brand identity from the first moment.
-2.  **Instantaneous Feedback:** It confirms to the user that the command was successful and the application is loading. This is crucial for a fast CLI tool, as it bridges the "empty terminal" gap between command execution and the first interactive screen.
-3.  **User-Friendly & Non-Blocking:** The screen is designed to be ephemeral. It provides its information and then gets out of the way *automatically*, requiring no user interaction. It respects the user's time while still serving its purpose. It also provides an explicit "skip" option for power users.
-
-### 2. UI Layout Components
-
-The splash screen is a single, static view with one dynamic element.
-
-1.  **Header:** `▲ relaycode` - The application's root title.
-2.  **Body:** A multi-section area containing:
-    *   The primary ASCII art logo.
-    *   The application tagline and author/community credits.
-    *   A structured "About" section with version and build timestamp information.
-    *   A promotional section for the `noca.pro` web application.
-    *   A community links section (X, Discord, GitHub).
-3.  **Footer / Status Bar:** The final line of the screen. This is the only dynamic component, displaying the countdown timer and the prompt to skip.
-
-### 3. Visual Design & States
-
-The screen has a primary visual state and a simple, time-based progression.
-
-#### **State 3.1: Initial Render (T-5 seconds)**
-
-This is the complete view rendered at the moment of application startup.
-
-```
- ▲ relaycode
- ──────────────────────────────────────────────────────────────────────────────
-
+    const logo = `
          ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
          ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
          ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+`;
 
-  A zero-friction, AI-native patch engine.
-  Built by Arman and contributors · https://relay.noca.pro
+    return (
+        <Box flexDirection="column">
+            <Text>▲ relaycode</Text>
+            <Separator />
+            <Text>{logo}</Text>
+            <Box flexDirection="column" alignItems="center">
+                <Text>A zero-friction, AI-native patch engine.</Text>
+                <Text>Built by Arman and contributors · https://relay.noca.pro</Text>
+            </Box>
+            
+            <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                <Box flexDirection="column" width="45%">
+                    <Text>Version 1.1.5</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>relaycode</Text>
+                    <Text>relaycode-core</Text>
+                    <Text>apply-multi-diff</Text>
+                    <Text>konro</Text>
+                </Box>
+                 <Box flexDirection="column" width="45%">
+                    <Text>Build Timestamps</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>2025-09-20 13:58:05</Text>
+                    <Text>2025-09-20 10:59:05</Text>
+                    <Text>(versioned)</Text>
+                    <Text>(versioned)</Text>
+                </Box>
+            </Box>
+            
+            <Box marginTop={1}><Separator /></Box>
+            <Text>If you love this workflow, check out https://www.noca.pro for the full</Text>
+            <Text>web app with repo-wide visual context, history, and rollback.</Text>
+            <Text>{chalk.bold('(V)')}isit noca.pro</Text>
+            <Separator />
+            <Text>Follow {chalk.bold('(X)')} · Join {chalk.bold('(D)')}iscord · Star on {chalk.bold('(G)')}itHub</Text>
+            <Separator />
+            <Text>Loading... {countdown} (Press any key to skip)</Text>
+        </Box>
+    );
+};
 
-  Version 1.1.5                         Build Timestamps
-  ─────────────────────────             ─────────────────────────
-  relaycode                             2025-09-20 13:58:05
-  relaycode-core                        2025-09-20 10:59:05
-  apply-multi-diff                      (versioned)
-  konro                                 (versioned)
-
- ──────────────────────────────────────────────────────────────────────────────
-  If you love this workflow, check out https://www.noca.pro for the full
-  web app with repo-wide visual context, history, and rollback.
-  (V)isit noca.pro
- ──────────────────────────────────────────────────────────────────────────────
- Follow (X) · Join (D)iscord · Star on (G)itHub
- ──────────────────────────────────────────────────────────────────────────────
-  Loading... 5 (Press any key to skip)
+export default SplashScreen;
 ```
 
-#### **State 3.2: Countdown Progression (T-4 to T-1 seconds)**
+## File: src/App.tsx
+```typescript
+import React, { useEffect } from 'react';
+import { useAppStore } from './stores/app.store';
+import SplashScreen from './components/SplashScreen';
+import InitializationScreen from './components/InitializationScreen';
+import DashboardScreen from './components/DashboardScreen';
 
-The screen remains visually identical except for the final line, which updates every second.
+const App = () => {
+    const currentScreen = useAppStore(state => state.currentScreen);
 
-**Example at T-2 seconds:**
+    useEffect(() => {
+        // Clear the terminal when the screen changes to ensure a clean view.
+        // This is especially important when transitioning from the splash screen.
+        console.clear();
+    }, [currentScreen]);
+    
+    if (currentScreen === 'splash') {
+        return <SplashScreen />;
+    }
+
+    if (currentScreen === 'init') {
+        return <InitializationScreen />;
+    }
+
+    if (currentScreen === 'dashboard') {
+        return <DashboardScreen />;
+    }
+
+    return null;
+};
+
+export default App;
 ```
-... (rest of the screen is unchanged) ...
- ──────────────────────────────────────────────────────────────────────────────
-  Loading... 2 (Press any key to skip)
-```
-
-### 4. Behavior & Technical Implementation
-
-The screen's behavior is governed by a simple timer and a keyboard listener.
-
-#### **4.1. Implementation Flow**
-
-1.  **On Startup:** The application's entry point immediately clears the terminal screen.
-2.  **Render Static Content:** The entire multi-line string for the splash screen (Header, Body, and initial Footer) is printed to stdout *once*.
-3.  **Initialize Timers & Listeners:**
-    *   A `setInterval` function is started with a 1000ms interval to handle the countdown.
-    *   A raw keyboard input listener is activated to detect any key press.
-4.  **Countdown Loop (on `setInterval` tick):**
-    *   The countdown variable is decremented (e.g., `5` becomes `4`).
-    *   The code uses terminal control sequences to move the cursor to the beginning of the *last line*.
-    *   It clears the last line.
-    *   It re-renders the footer string with the new countdown number (e.g., `Loading... 4 (Press any key to skip)`).
-    *   **Crucially, it does not re-render the entire screen.** This is efficient and prevents any flickering.
-5.  **Termination Conditions:** The loop terminates when one of two conditions is met:
-    *   **Timeout:** The countdown variable reaches `0`.
-    *   **User Skip:** The keyboard listener detects *any* key press.
-6.  **Cleanup & Transition:** Upon termination:
-    *   The `setInterval` timer is cleared (`clearInterval`).
-    *   The keyboard listener is detached.
-    *   The application proceeds to its next logical state (e.g., rendering the Dashboard or the appropriate command's UI).
-
-#### **4.2. Codebase Integration**
-
--   The version numbers (`1.1.5`, etc.) and timestamps should be dynamically imported from the respective `package.json` and build-time constant files (e.g., `__LAST_MODIFIED__`) to ensure they are always up-to-date.
--   The logic for handling "(versioned)" packages should check if a timestamp constant exists; if not, it displays the placeholder text.
--   This splash screen logic should wrap the main application router/dispatcher in `cli.ts`.
-
-This design ensures a professional, informative, and user-respectful startup experience that strengthens the Relaycode brand and smoothly onboards the user into the application.
-````
-
-## File: index.tsx
-````typescript
-import React from 'react';
-import { render } from 'ink';
-import App from './src/App.tsx';
-
-render(<App />);
-````
-
-## File: package.json
-````json
-{
-  "name": "relaycode-tui",
-  "module": "index.tsx",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "start": "bun run index.tsx",
-    "dev": "bun run --watch index.tsx"
-  },
-  "dependencies": {
-    "ink": "^4.4.1",
-    "react": "^18.2.0",
-    "ink-use-stdout-dimensions": "^1.0.1",
-    "ink-text-input": "^4.0.3",
-    "ink-select-input": "^4.2.2",
-    "ink-spinner": "^5.0.0",
-    "chalk": "^5.3.0",
-    "clipboardy": "^4.0.0",
-    "zustand": "^4.4.1"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^18.2.22",
-    "@types/node": "^20.5.9",
-    "typescript": "^5"
-  }
-}
-````
 
 ## File: tsconfig.json
-````json
+```json
 {
   "compilerOptions": {
     // Environment setup & latest features
@@ -353,4 +902,49 @@ render(<App />);
     "noPropertyAccessFromIndexSignature": false
   }
 }
-````
+```
+
+## File: index.tsx
+```typescript
+import React from 'react';
+import { render } from 'ink';
+import App from './src/App';
+
+// Check if we're running in an interactive terminal
+if (process.stdin.isTTY && process.stdout.isTTY) {
+    render(<App />);
+} else {
+    console.log('Interactive terminal required. Please run in a terminal that supports raw input mode.');
+    process.exit(1);
+}
+```
+
+## File: package.json
+```json
+{
+  "name": "relaycode-tui",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.tsx",
+    "dev": "bun run --watch index.tsx"
+  },
+  "dependencies": {
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
+    "ink-text-input": "^4.0.3",
+    "ink-select-input": "^4.2.2",
+    "ink-spinner": "^5.0.0",
+    "chalk": "^5.3.0",
+    "clipboardy": "^4.0.0",
+    "zustand": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.2.22",
+    "@types/node": "^20.5.9",
+    "typescript": "^5"
+  }
+}
+```

@@ -1,10 +1,6 @@
 import { create } from 'zustand';
 
-// Utility for simulation
-export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 // Types
-export type AppScreen = 'splash' | 'init';
 export type TaskStatus = 'pending' | 'active' | 'done';
 export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' | 'FINALIZE';
 export type GitignoreChoice = 'ignore' | 'share';
@@ -30,8 +26,7 @@ export const initialConfigureTasks: Task[] = [
 ];
 
 // Store Interface
-interface TuiState {
-    currentScreen: AppScreen;
+interface InitState {
     phase: InitPhase;
     analyzeTasks: Task[];
     projectId: string | null;
@@ -40,7 +35,6 @@ interface TuiState {
     interactiveChoice: GitignoreChoice | null;
 
     actions: {
-        showInitScreen: () => void;
         setPhase: (phase: InitPhase) => void;
         updateAnalyzeTask: (id: string, status: TaskStatus) => void;
         setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
@@ -51,8 +45,7 @@ interface TuiState {
 }
 
 // Create the store
-export const useStore = create<TuiState>((set) => ({
-    currentScreen: 'splash',
+export const useInitStore = create<InitState>((set) => ({
     phase: 'ANALYZE',
     analyzeTasks: initialAnalyzeTasks,
     projectId: null,
@@ -61,7 +54,6 @@ export const useStore = create<TuiState>((set) => ({
     interactiveChoice: null,
 
     actions: {
-        showInitScreen: () => set({ currentScreen: 'init' }),
         setPhase: (phase) => set({ phase }),
         updateAnalyzeTask: (id, status) => set(state => ({
             analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t)
