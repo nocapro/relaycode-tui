@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
+import { useAppStore } from '../stores/app.store';
 import Separator from './Separator';
 import GlobalHelpScreen from './GlobalHelpScreen';
 
@@ -67,6 +68,7 @@ const DashboardScreen = () => {
     const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
     const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
     const { exit } = useApp();
+    const showReviewScreen = useAppStore(s => s.actions.showReviewScreen);
 
     const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
     const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
@@ -97,6 +99,10 @@ const DashboardScreen = () => {
 
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
+        
+        if (key.return) {
+            showReviewScreen();
+        }
         
         if (input.toLowerCase() === 'p') togglePause();
         if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();

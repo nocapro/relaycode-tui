@@ -8,14 +8,18 @@ docs/
 src/
   components/
     DashboardScreen.tsx
+    DiffScreen.tsx
     GlobalHelpScreen.tsx
     InitializationScreen.tsx
+    ReasonScreen.tsx
+    ReviewScreen.tsx
     Separator.tsx
     SplashScreen.tsx
   stores/
     app.store.ts
     dashboard.store.ts
     init.store.ts
+    review.store.ts
   App.tsx
   utils.ts
 index.tsx
@@ -24,6 +28,444 @@ tsconfig.json
 ```
 
 # Files
+
+## File: src/components/DiffScreen.tsx
+````typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+interface DiffScreenProps {
+    filePath: string;
+    diffContent: string;
+    isExpanded: boolean;
+}
+
+const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
+    const lines = diffContent.split('\n');
+    const COLLAPSE_THRESHOLD = 20;
+    const COLLAPSE_SHOW_LINES = 8;
+
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
+        }
+        return lines.map((line, i) => renderLine(line, i));
+    };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (line.startsWith('+')) color = 'green';
+        if (line.startsWith('-')) color = 'red';
+        if (line.startsWith('@@')) color = 'cyan';
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>DIFF: {filePath}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DiffScreen;
+````
+
+## File: src/components/ReasonScreen.tsx
+````typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+interface ReasonScreenProps {
+    reasoning: string;
+}
+
+const ReasonScreen = ({ reasoning }: ReasonScreenProps) => {
+    return (
+        <Box flexDirection="column">
+            <Text>REASONING</Text>
+            <Box flexDirection="column" marginTop={1}>
+                <Text>{reasoning}</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default ReasonScreen;
+````
+
+## File: src/components/ReviewScreen.tsx
+````typescript
+import React from 'react';
+import { Box, Text, useInput } from 'ink';
+import { useReviewStore, type FileItem, type ScriptResult } from '../stores/review.store';
+import Separator from './Separator';
+import DiffScreen from './DiffScreen';
+import ReasonScreen from './ReasonScreen';
+
+// --- Sub-components ---
+
+const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean}) => {
+    let icon;
+    let color;
+    switch (file.status) {
+        case 'APPROVED': icon = '[✓]'; color = 'green'; break;
+        case 'REJECTED': icon = '[✗]'; color = 'red'; break;
+        case 'FAILED': icon = '[!]'; color = 'red'; break;
+        case 'MODIFIED': icon = '[~]'; color = 'yellow'; break;
+    }
+
+    const content = (
+        <Box>
+            <Text color={color}>{icon} MOD {file.path}</Text>
+            <Box flexGrow={1} />
+            {file.error ? <Text color="red">({file.error})</Text> : <Text>[{file.strategy}]</Text>}
+        </Box>
+    );
+
+    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+}
+
+const ScriptItemRow = ({ script, isSelected, isExpanded }: { script: ScriptResult, isSelected: boolean, isExpanded: boolean }) => {
+    const icon = script.success ? <Text color="green">✓</Text> : <Text color="red">✗</Text>;
+    const arrow = isExpanded ? '▾' : '▸';
+
+    const content = <Text>{icon} {script.command} ({script.duration}s) {arrow} {script.summary}</Text>;
+    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+}
+
+// --- Main Component ---
+
+const ReviewScreen = () => {
+    const store = useReviewStore();
+    const { 
+        hash, message, reasoning, files, scripts, 
+        selectedItemIndex, bodyView, isDiffExpanded 
+    } = store;
+    const { 
+        moveSelectionUp, moveSelectionDown, toggleFileApproval, 
+        toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff
+    } = store.actions;
+    
+    const numFiles = files.length;
+    
+    useInput((input, key) => {
+        if (key.upArrow) moveSelectionUp();
+        if (key.downArrow) moveSelectionDown();
+
+        if (input.toLowerCase() === 'r') toggleReasoningView();
+        
+        if (input === ' ') {
+            if (selectedItemIndex < numFiles) {
+                toggleFileApproval();
+            }
+        }
+        
+        if (input.toLowerCase() === 'd') {
+            if (selectedItemIndex < numFiles) {
+                toggleDiffView();
+            }
+        }
+
+        if (input.toLowerCase() === 'x' && bodyView === 'diff') {
+            expandDiff();
+        }
+
+        if (key.return) { // Enter key
+             if (selectedItemIndex >= numFiles) { // It's a script
+                toggleScriptView(selectedItemIndex);
+            }
+        }
+    });
+
+    const renderBody = () => {
+        if (bodyView === 'none') return null;
+
+        if (bodyView === 'reasoning') {
+            return <ReasonScreen reasoning={reasoning} />;
+        }
+        
+        if (bodyView === 'diff') {
+            const selectedFile = files[selectedItemIndex];
+            if (!selectedFile) return null;
+            return <DiffScreen filePath={selectedFile.path} diffContent={selectedFile.diff} isExpanded={isDiffExpanded} />;
+        }
+
+        if (bodyView === 'script_output') {
+             const scriptIndex = selectedItemIndex - numFiles;
+             const selectedScript = scripts[scriptIndex];
+             if (!selectedScript) return null;
+             return (
+                <Box flexDirection="column">
+                    <Text>OUTPUT: `{selectedScript.command}`</Text>
+                    <Box marginTop={1}><Text>{selectedScript.output}</Text></Box>
+                </Box>
+             );
+        }
+        
+        return null;
+    }
+
+    const renderFooter = () => {
+        let actions = ["(↑↓) Nav", "(Spc) Toggle"];
+        
+        if (bodyView === 'diff') {
+            actions.push(isDiffExpanded ? "(X)Collapse" : "(X)pand Diff");
+            actions.push("(D)Collapse View");
+        } else if (selectedItemIndex < numFiles) {
+            actions.push("(D)iff");
+        }
+        
+        if (bodyView === 'reasoning') {
+            actions.push("(R)Collapse View");
+        } else {
+            actions.push("(R)easoning");
+        }
+
+        if (selectedItemIndex >= numFiles) {
+             const isExpanded = bodyView === 'script_output' && selectedItemIndex >= numFiles;
+             actions.push(isExpanded ? "(Ent)Collapse" : "(Ent)Expand");
+        }
+        
+        actions.push("(A)pprove");
+        
+        return <Text>{actions.join(' · ')}</Text>
+    }
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode review</Text>
+            <Separator />
+            
+            {/* Navigator */}
+            <Box flexDirection="column" marginY={1}>
+                <Text>{hash} · {message}</Text>
+                <Text>(+22/-11) · 2/3 Files · 3.9s</Text>
+                <Box marginY={1}>
+                    <Text>{bodyView === 'reasoning' ? '▾' : '▸'} (R)easoning (3 steps)</Text>
+                </Box>
+                <Separator/>
+                {scripts.map((script, index) => (
+                    <ScriptItemRow 
+                        key={script.command} 
+                        script={script}
+                        isSelected={selectedItemIndex === numFiles + index}
+                        isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                    />
+                ))}
+                <Separator/>
+                <Text>FILES</Text>
+                 {files.map((file, index) => (
+                    <FileItemRow 
+                        key={file.id} 
+                        file={file} 
+                        isSelected={selectedItemIndex === index}
+                    />
+                ))}
+            </Box>
+            
+            <Separator/>
+            
+            {/* Body */}
+            <Box marginY={1}>
+                {renderBody()}
+            </Box>
+
+            {(bodyView !== 'none' && renderBody() !== null) && <Separator />}
+
+            {/* Footer */}
+            <Box>
+                {renderFooter()}
+            </Box>
+        </Box>
+    );
+};
+
+export default ReviewScreen;
+````
+
+## File: src/stores/review.store.ts
+````typescript
+import { create } from 'zustand';
+
+// --- Types ---
+
+export type FileStatus = 'MODIFIED' | 'FAILED' | 'APPROVED' | 'REJECTED';
+export interface FileItem {
+    id: string;
+    path: string;
+    status: FileStatus;
+    diff: string;
+    error?: string;
+    strategy: 'replace' | 'standard-diff';
+}
+
+export interface ScriptResult {
+    command: string;
+    success: boolean;
+    duration: number;
+    summary: string;
+    output: string;
+}
+
+export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'none';
+
+interface ReviewState {
+    // Transaction Info
+    hash: string;
+    message: string;
+    prompt: string;
+    reasoning: string;
+    
+    // File & Script Info
+    files: FileItem[];
+    scripts: ScriptResult[];
+    
+    // UI State
+    selectedItemIndex: number; // Can be file or script
+    bodyView: BodyView;
+    isDiffExpanded: boolean;
+
+    actions: {
+        moveSelectionUp: () => void;
+        moveSelectionDown: () => void;
+        toggleFileApproval: () => void;
+        toggleDiffView: () => void;
+        toggleReasoningView: () => void;
+        toggleScriptView: (index: number) => void;
+        expandDiff: () => void;
+    };
+}
+
+// --- Mock Data ---
+
+const mockFiles: FileItem[] = [
+    { id: '1', path: 'src/core/clipboard.ts', status: 'APPROVED', diff: `--- a/src/core/clipboard.ts
++++ b/src/core/clipboard.ts
+@@ -1,5 +1,6 @@
+ import { copy as copyToClipboard } from 'clipboardy';
++import { getErrorMessage } from '../utils';
+ 
+ export const copy = async (text: string) => {
+   try {
+-    await copyToClipboard(text);
++    await copyToClipboard(String(text));
+     return { success: true };
+   } catch (error) {
+-    return { success: false, error: error.message };
++    return { success: false, error: getErrorMessage(error) };
+   }
+ };`, strategy: 'replace' },
+    { id: '2', path: 'src/utils/shell.ts', status: 'APPROVED', diff: `--- a/src/utils/shell.ts
++++ b/src/utils/shell.ts
+@@ -10,3 +10,11 @@
+ export const executeCommand = async (command: string): Promise<string> => {
+   // ... implementation
+ };
++
++export const getErrorMessage = (error: unknown): string => {
++  if (error instanceof Error) {
++    return error.message;
++  }
++  return String(error);
++};
+`, strategy: 'standard-diff' },
+    { id: '3', path: 'src/components/Button.tsx', status: 'FAILED', diff: '', error: 'Hunk #1 failed to apply', strategy: 'standard-diff' },
+];
+
+const mockScripts: ScriptResult[] = [
+    { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
+    { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: `src/core/clipboard.ts
+  45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+  88:5   Warning  Unexpected console statement. (no-console)` },
+];
+
+const mockReasoning = `1. Identified a potential uncaught exception in the \`restoreSnapshot\` function
+   if a file operation fails midway through a loop of many files. This could
+   leave the project in a partially-reverted, inconsistent state.
+
+2. Wrapped the file restoration loop in a \`Promise.all\` and added a dedicated
+   error collection array. This ensures that all file operations are
+   attempted and that a comprehensive list of failures is available
+   afterward for better error reporting or partial rollback logic.`;
+
+// --- Store Implementation ---
+
+export const useReviewStore = create<ReviewState>((set, get) => ({
+    // Transaction Info
+    hash: '4b9d8f03',
+    message: 'refactor: simplify clipboard logic',
+    prompt: 'Simplify the clipboard logic using an external library...',
+    reasoning: mockReasoning,
+
+    // File & Script Info
+    files: mockFiles,
+    scripts: mockScripts,
+
+    // UI State
+    selectedItemIndex: 0, // Start with first file
+    bodyView: 'none',
+    isDiffExpanded: false,
+
+    actions: {
+        moveSelectionUp: () => set(state => ({
+            selectedItemIndex: Math.max(0, state.selectedItemIndex - 1)
+        })),
+        moveSelectionDown: () => set(state => ({
+            selectedItemIndex: Math.min(state.files.length + state.scripts.length - 1, state.selectedItemIndex + 1)
+        })),
+        toggleFileApproval: () => set(state => {
+            const { selectedItemIndex, files } = state;
+            if (selectedItemIndex >= files.length) return {}; // Not a file
+            
+            const newFiles = [...files];
+            const file = newFiles[selectedItemIndex];
+            if (file) {
+                if (file.status === 'APPROVED') {
+                    file.status = 'REJECTED';
+                } else if (file.status === 'REJECTED') {
+                    file.status = 'APPROVED';
+                }
+            }
+            return { files: newFiles };
+        }),
+        toggleDiffView: () => set(state => {
+            const { bodyView } = state;
+            if (state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
+            return {
+                bodyView: bodyView === 'diff' ? 'none' : 'diff',
+                isDiffExpanded: false // Always start collapsed
+            };
+        }),
+        toggleReasoningView: () => set(state => {
+            const { bodyView } = state;
+            return {
+                bodyView: bodyView === 'reasoning' ? 'none' : 'reasoning'
+            };
+        }),
+        toggleScriptView: (index: number) => set(state => {
+            const { bodyView, selectedItemIndex } = state;
+            if (bodyView === 'script_output' && selectedItemIndex === index) {
+                return { bodyView: 'none' };
+            }
+            return { bodyView: 'script_output' };
+        }),
+        expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+    }
+}));
+````
 
 ## File: docs/relaycode-tui/diff-screen.readme.md
 ````markdown
@@ -702,257 +1144,6 @@ Your job is to now work with me to fix the FAILED files and achieve the original
 The user is now seamlessly engaged in a productive, context-aware repair session, having spent zero time explaining the problem. This workflow transforms Relaycode from just a patch tool into a powerful orchestrator for more complex, agent-driven development.
 ````
 
-## File: src/components/DashboardScreen.tsx
-````typescript
-import React, { useMemo } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
-import chalk from 'chalk';
-import Spinner from 'ink-spinner';
-import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
-import Separator from './Separator';
-import GlobalHelpScreen from './GlobalHelpScreen';
-
-// --- Sub-components & Helpers ---
-
-const getStatusIcon = (status: TransactionStatus) => {
-    switch (status) {
-        case 'PENDING': return chalk.yellow('?');
-        case 'APPLIED': return chalk.green('✓');
-        case 'COMMITTED': return chalk.blue('→');
-        case 'FAILED': return chalk.red('✗');
-        case 'REVERTED': return chalk.gray('↩');
-        case 'IN-PROGRESS': return <Spinner type="dots" />;
-        default: return ' ';
-    }
-};
-
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `-${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `-${minutes}m`;
-};
-
-const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {
-    const icon = getStatusIcon(transaction.status);
-    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
-    const statusText = transaction.status.padEnd(11, ' ');
-    
-    let message = transaction.message;
-    if (transaction.status === 'IN-PROGRESS') {
-        message = chalk.cyan(message);
-    }
-    
-    const content = (
-        <Text>
-            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {message}
-        </Text>
-    );
-
-    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
-};
-
-const ConfirmationContent = ({ status, transactionsToConfirm }: { status: DashboardStatus, transactionsToConfirm: Transaction[] }) => {
-    const isApprove = status === 'CONFIRM_APPROVE';
-    const actionText = isApprove ? 'APPROVE' : 'COMMIT';
-    
-    return (
-        <Box flexDirection="column" marginY={1} paddingLeft={2}>
-            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
-            <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>
-            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-                {transactionsToConfirm.map(tx => (
-                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-                ))}
-            </Box>
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const DashboardScreen = () => {
-    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
-    const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
-    const { exit } = useApp();
-
-    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
-    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
-
-    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
-    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
-    
-    useInput((input, key) => {
-        if (input === '?') {
-            toggleHelp();
-            return;
-        }
-
-        if (showHelp) {
-            if (key.escape || input === '?') toggleHelp();
-            return;
-        }
-
-        if (isModal) {
-            if (key.return) confirmAction();
-            if (key.escape) cancelAction();
-            return;
-        }
-
-        if (isProcessing) return; // No input while processing
-        
-        if (input.toLowerCase() === 'q') exit();
-
-        if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
-        
-        if (input.toLowerCase() === 'p') togglePause();
-        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
-        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
-    });
-
-    const renderStatusBar = () => {
-        let statusText, statusIcon;
-        switch (status) {
-            case 'LISTENING': statusText = 'LISTENING'; statusIcon = chalk.green('●'); break;
-            case 'PAUSED': statusText = 'PAUSED'; statusIcon = chalk.yellow('||'); break;
-            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
-            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
-            default: statusText = 'LISTENING'; statusIcon = chalk.green('●');
-        }
-
-        let approvalStr = String(pendingApprovals).padStart(2, '0');
-        let commitStr = String(pendingCommits).padStart(2, '0');
-
-        if (status === 'APPROVING') approvalStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
-        if (status === 'COMMITTING') commitStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
-        if (status === 'CONFIRM_APPROVE') approvalStr = chalk.bold.yellow(`┌ ${approvalStr} ┐`);
-        if (status === 'CONFIRM_COMMIT') commitStr = chalk.bold.yellow(`┌ ${commitStr} ┐`);
-        
-        return (
-            <Text>
-                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
-            </Text>
-        )
-    }
-
-    const renderFooter = () => {
-        if (isModal) return (
-            <Text>
-                ({chalk.cyan.bold('Enter')}) Confirm      ({chalk.cyan.bold('Esc')}) Cancel
-            </Text>
-        );
-        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
-
-        const pauseAction = status === 'PAUSED' ? `(${chalk.cyan.bold('R')})esume` : `(${chalk.cyan.bold('P')})ause`;;
-        return <Text color="gray">
-            ({chalk.cyan.bold('↑↓')}) Nav · ({chalk.cyan.bold('Enter')}) Review · ({chalk.cyan.bold('A')})pprove All · ({chalk.cyan.bold('C')})ommit All · {pauseAction} · ({chalk.cyan.bold('Q')})uit
-        </Text>
-    }
-    
-    const transactionsToConfirm = useMemo(() => {
-        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
-        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
-        return [];
-    }, [status, transactions]);
-
-    return (
-        <Box flexDirection="column" height="100%">
-            {showHelp && <GlobalHelpScreen />}
-
-            <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
-                <Text color="cyan">▲ relaycode dashboard</Text>
-                <Separator />
-                <Box marginY={1}>
-                    {renderStatusBar()}
-                </Box>
-                
-                {isModal && (
-                    <>
-                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
-                        <Separator />
-                    </>
-                )}
-                
-                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
-                <Box flexDirection="column" marginTop={1}>
-                    {transactions.map((tx, index) => (
-                        <EventStreamItem 
-                            key={tx.id} 
-                            transaction={tx} 
-                            isSelected={!isModal && index === selectedTransactionIndex}
-                        />
-                    ))}
-                </Box>
-
-                <Box marginTop={1}><Separator /></Box>
-                {renderFooter()}
-            </Box>
-        </Box>
-    );
-};
-
-export default DashboardScreen;
-````
-
-## File: src/components/GlobalHelpScreen.tsx
-````typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-import chalk from 'chalk';
-
-const GlobalHelpScreen = () => {
-    return (
-        <Box
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-            width="100%"
-            height="100%"
-        >
-            <Box
-                flexDirection="column"
-                borderStyle="round"
-                paddingX={2}
-                paddingY={1}
-                width="80%"
-            >
-                <Box justifyContent="center" marginBottom={1}>
-                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
-                </Box>
-                <Box flexDirection="column" gap={1}>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">GLOBAL</Text>
-                        <Text>  {chalk.cyan.bold('?')}        Toggle this help screen</Text>
-                        <Text>  {chalk.cyan.bold('Q')}        Quit to terminal (from main screens)</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">DASHBOARD (watch)</Text>
-                        <Text>  {chalk.cyan.bold('↑↓')}       Navigate event stream</Text>
-                        <Text>  {chalk.cyan.bold('P')}        Pause / Resume clipboard watcher</Text>
-                        <Text>  {chalk.cyan.bold('A')}        Approve all pending transactions</Text>
-                        <Text>  {chalk.cyan.bold('C')}        Commit all applied transactions to git</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
-                        <Text>  {chalk.cyan.bold('D')}        Show / Collapse file diff</Text>
-                        <Text>  {chalk.cyan.bold('R')}        Show / Collapse reasoning steps</Text>
-                        <Text>  {chalk.cyan.bold('C')}        Enter / Exit Copy Mode (Details Screen)</Text>
-                        <Text>  {chalk.cyan.bold('U')}        Undo / Revert Transaction</Text>
-                        <Text>  {chalk.cyan.bold('Space')}    Toggle approval state of a file (Review Screen)</Text>
-                    </Box>
-                </Box>
-            </Box>
-            <Box marginTop={1}>
-                <Text bold>(Press {chalk.cyan.bold('?')} or {chalk.cyan.bold('Esc')} to close)</Text>
-            </Box>
-        </Box>
-    );
-};
-
-export default GlobalHelpScreen;
-````
-
 ## File: src/components/Separator.tsx
 ````typescript
 import React, { useState, useEffect } from 'react';
@@ -992,13 +1183,14 @@ export default Separator;
 ````typescript
 import { create } from 'zustand';
 
-export type AppScreen = 'splash' | 'init' | 'dashboard';
+export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review';
 
 interface AppState {
     currentScreen: AppScreen;
     actions: {
         showInitScreen: () => void;
         showDashboardScreen: () => void;
+        showReviewScreen: () => void;
     };
 }
 
@@ -1007,6 +1199,7 @@ export const useAppStore = create<AppState>((set) => ({
     actions: {
         showInitScreen: () => set({ currentScreen: 'init' }),
         showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+        showReviewScreen: () => set({ currentScreen: 'review' }),
     },
 }));
 ````
@@ -1268,22 +1461,333 @@ export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, 
 }
 ````
 
+## File: src/components/DashboardScreen.tsx
+````typescript
+import React, { useMemo } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
+import Spinner from 'ink-spinner';
+import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
+import { useAppStore } from '../stores/app.store';
+import Separator from './Separator';
+import GlobalHelpScreen from './GlobalHelpScreen';
+
+// --- Sub-components & Helpers ---
+
+const getStatusIcon = (status: TransactionStatus) => {
+    switch (status) {
+        case 'PENDING': return <Text color="yellow">?</Text>;
+        case 'APPLIED': return <Text color="green">✓</Text>;
+        case 'COMMITTED': return <Text color="blue">→</Text>;
+        case 'FAILED': return <Text color="red">✗</Text>;
+        case 'REVERTED': return <Text color="gray">↩</Text>;
+        case 'IN-PROGRESS': return <Spinner type="dots" />;
+        default: return <Text> </Text>;
+    }
+};
+
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `-${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `-${minutes}m`;
+};
+
+const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {
+    const icon = getStatusIcon(transaction.status);
+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+    const statusText = transaction.status.padEnd(11, ' ');
+    
+    const messageNode = transaction.status === 'IN-PROGRESS' 
+        ? <Text color="cyan">{transaction.message}</Text> 
+        : transaction.message;
+    
+    const content = (
+        <Text>
+            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
+        </Text>
+    );
+
+    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+};
+
+const ConfirmationContent = ({ status, transactionsToConfirm }: { status: DashboardStatus, transactionsToConfirm: Transaction[] }) => {
+    const isApprove = status === 'CONFIRM_APPROVE';
+    const actionText = isApprove ? 'APPROVE' : 'COMMIT';
+    
+    return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>
+            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                {transactionsToConfirm.map(tx => (
+                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                ))}
+            </Box>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const DashboardScreen = () => {
+    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+    const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
+    const { exit } = useApp();
+    const showReviewScreen = useAppStore(s => s.actions.showReviewScreen);
+
+    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
+    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
+    
+    useInput((input, key) => {
+        if (input === '?') {
+            toggleHelp();
+            return;
+        }
+
+        if (showHelp) {
+            if (key.escape || input === '?') toggleHelp();
+            return;
+        }
+
+        if (isModal) {
+            if (key.return) confirmAction();
+            if (key.escape) cancelAction();
+            return;
+        }
+
+        if (isProcessing) return; // No input while processing
+        
+        if (input.toLowerCase() === 'q') exit();
+
+        if (key.upArrow) moveSelectionUp();
+        if (key.downArrow) moveSelectionDown();
+        
+        if (key.return) {
+            showReviewScreen();
+        }
+        
+        if (input.toLowerCase() === 'p') togglePause();
+        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
+    });
+
+    const renderStatusBar = () => {
+        let statusText: string;
+        let statusIcon: React.ReactNode;
+        switch (status) {
+            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
+        }
+
+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
+        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
+
+        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'COMMITTING') commitStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'CONFIRM_APPROVE') approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        if (status === 'CONFIRM_COMMIT') commitStr = <Text bold color="yellow">┌ {commitStr} ┐</Text>;
+        
+        return (
+            <Text>
+                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+            </Text>
+        )
+    }
+
+    const renderFooter = () => {
+        if (isModal) return (
+            <Text>
+                (<Text color="cyan" bold>Enter</Text>) Confirm      (<Text color="cyan" bold>Esc</Text>) Cancel
+            </Text>
+        );
+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+        const pauseAction = status === 'PAUSED'
+			? <Text>(<Text color="cyan" bold>R</Text>)esume</Text>
+			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
+		return <Text color="gray">
+			(<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
+		</Text>
+    }
+    
+    const transactionsToConfirm = useMemo(() => {
+        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
+        return [];
+    }, [status, transactions]);
+
+    return (
+        <Box flexDirection="column" height="100%">
+            {showHelp && <GlobalHelpScreen />}
+
+            <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
+                <Text color="cyan">▲ relaycode dashboard</Text>
+                <Separator />
+                <Box marginY={1}>
+                    {renderStatusBar()}
+                </Box>
+                
+                {isModal && (
+                    <>
+                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
+                        <Separator />
+                    </>
+                )}
+                
+                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+                <Box flexDirection="column" marginTop={1}>
+                    {transactions.map((tx, index) => (
+                        <EventStreamItem 
+                            key={tx.id} 
+                            transaction={tx} 
+                            isSelected={!isModal && index === selectedTransactionIndex}
+                        />
+                    ))}
+                </Box>
+
+                <Box marginTop={1}><Separator /></Box>
+                {renderFooter()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DashboardScreen;
+````
+
+## File: src/components/GlobalHelpScreen.tsx
+````typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+const GlobalHelpScreen = () => {
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                paddingX={2}
+                paddingY={1}
+                width="80%"
+            >
+                <Box justifyContent="center" marginBottom={1}>
+                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
+                </Box>
+                <Box flexDirection="column" gap={1}>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">GLOBAL</Text>
+                        <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
+                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (from main screens)</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">DASHBOARD (watch)</Text>
+                        <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                        <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
+                        <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                        <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                        <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
+                        <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
+                        <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
+                    </Box>
+                </Box>
+            </Box>
+            <Box marginTop={1}>
+                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default GlobalHelpScreen;
+````
+
+## File: src/App.tsx
+````typescript
+import React, { useEffect } from 'react';
+import { useAppStore } from './stores/app.store';
+import SplashScreen from './components/SplashScreen';
+import InitializationScreen from './components/InitializationScreen';
+import DashboardScreen from './components/DashboardScreen';
+import ReviewScreen from './components/ReviewScreen';
+
+const App = () => {
+    const currentScreen = useAppStore(state => state.currentScreen);
+
+    useEffect(() => {
+        // Clear the terminal when the screen changes to ensure a clean view.
+        // This is especially important when transitioning from the splash screen.
+        console.clear();
+    }, [currentScreen]);
+    
+    if (currentScreen === 'splash') {
+        return <SplashScreen />;
+    }
+
+    if (currentScreen === 'init') {
+        return <InitializationScreen />;
+    }
+
+    if (currentScreen === 'dashboard') {
+        return <DashboardScreen />;
+    }
+
+    if (currentScreen === 'review') {
+        return <ReviewScreen />;
+    }
+
+    return null;
+};
+
+export default App;
+````
+
+## File: index.tsx
+````typescript
+import React from 'react';
+import { render } from 'ink';
+import App from './src/App';
+
+// Check if we're running in an interactive terminal
+if (process.stdin.isTTY && process.stdout.isTTY) {
+    render(<App />);
+} else {
+    console.log('Interactive terminal required. Please run in a terminal that supports raw input mode.');
+    process.exit(1);
+}
+````
+
 ## File: src/components/InitializationScreen.tsx
 ````typescript
 import React, { useEffect } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
-import chalk from 'chalk';
 import Separator from './Separator';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
 
 const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
-	let symbol;
+	let symbol: React.ReactNode;
 	switch (task.status) {
 		case 'pending': symbol = '( )'; break;
-		case 'active': symbol = chalk.cyan('(●)'); break;
-		case 'done': symbol = chalk.green(doneSymbol); break;
+		case 'active': symbol = <Text color="cyan">(●)</Text>; break;
+		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
 	}
 
 	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
@@ -1386,8 +1890,8 @@ const InitializationScreen = () => {
     const renderContext = () => (
         <Box flexDirection="column" marginBottom={1}>
             <Text bold color="cyan">CONTEXT</Text>
-            <Text>  {chalk.green('✓')} Project ID: {projectId}</Text>
-            <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>
+            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
+            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
         </Box>
     );
 
@@ -1408,7 +1912,7 @@ const InitializationScreen = () => {
             <Box flexDirection="column" marginTop={1}>
                 {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
                 <Box flexDirection="column" marginTop={1}>
-                    <Text>{chalk.cyan('>')} The .relay/ directory is usually ignored by git.</Text>
+                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
                     <Text>  Do you want to share its state with your team by committing it?</Text>
                 </Box>
             </Box>
@@ -1428,15 +1932,15 @@ const InitializationScreen = () => {
                 <Text bold color="green"> SYSTEM READY</Text>
                 <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
                     <Box flexDirection="column">
-                        <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>
+                        <Text><Text color="green">✓</Text> Config:   relay.config.json created.</Text>
                         <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
                     </Box>
                     <Box flexDirection="column">
-                        <Text>{chalk.green('✓')} State:    {stateText}</Text>
+                        <Text><Text color="green">✓</Text> State:    {stateText}</Text>
                         {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
                     </Box>
                     <Box flexDirection="column">
-                        <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
+                        <Text><Text color="green">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
                         <Text color="gray" italic>          › Copied to clipboard. Paste into your AI's custom instructions.</Text>
                     </Box>
                 </Box>
@@ -1457,8 +1961,8 @@ const InitializationScreen = () => {
     switch (phase) {
         case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
         case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
-        case 'INTERACTIVE': footerText = <Text>({chalk.cyan.bold('Enter')}) No, ignore it (default)      ({chalk.cyan.bold('S')}) Yes, share it</Text>; break;
-        case 'FINALIZE': footerText = <Text>({chalk.cyan.bold('W')})atch for Patches · ({chalk.cyan.bold('L')})View Logs · ({chalk.cyan.bold('Q')})uit</Text>; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
     }
 
     return (
@@ -1480,7 +1984,6 @@ export default InitializationScreen;
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
-import chalk from 'chalk';
 import Separator from './Separator';
 
 const SplashScreen = () => {
@@ -1521,7 +2024,7 @@ const SplashScreen = () => {
             <Text color="cyan">{logo}</Text>
             <Box flexDirection="column" alignItems="center">
                 <Text italic>A zero-friction, AI-native patch engine.</Text>
-                <Text italic color="gray">Built by Arman and contributors · {chalk.underline('https://relay.noca.pro')}</Text>
+                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
             </Box>
             
             <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
@@ -1544,68 +2047,18 @@ const SplashScreen = () => {
             </Box>
             
             <Box marginTop={1}><Separator /></Box>
-            <Text>If you love this workflow, check out {chalk.underline('https://www.noca.pro')} for the full</Text>
+            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
             <Text>web app with repo-wide visual context, history, and rollback.</Text>
-            <Text>{chalk.cyan.bold('(V)')}isit noca.pro</Text>
+            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
             <Separator />
-            <Text>Follow {chalk.cyan.bold('(X)')} · Join {chalk.cyan.bold('(D)')}iscord · Star on {chalk.cyan.bold('(G)')}itHub</Text>
+            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
             <Separator />
-            <Text>Loading... {countdown} ({chalk.gray('Press any key to skip')})</Text>
+            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
         </Box>
     );
 };
 
 export default SplashScreen;
-````
-
-## File: src/App.tsx
-````typescript
-import React, { useEffect } from 'react';
-import { useAppStore } from './stores/app.store';
-import SplashScreen from './components/SplashScreen';
-import InitializationScreen from './components/InitializationScreen';
-import DashboardScreen from './components/DashboardScreen';
-
-const App = () => {
-    const currentScreen = useAppStore(state => state.currentScreen);
-
-    useEffect(() => {
-        // Clear the terminal when the screen changes to ensure a clean view.
-        // This is especially important when transitioning from the splash screen.
-        console.clear();
-    }, [currentScreen]);
-    
-    if (currentScreen === 'splash') {
-        return <SplashScreen />;
-    }
-
-    if (currentScreen === 'init') {
-        return <InitializationScreen />;
-    }
-
-    if (currentScreen === 'dashboard') {
-        return <DashboardScreen />;
-    }
-
-    return null;
-};
-
-export default App;
-````
-
-## File: index.tsx
-````typescript
-import React from 'react';
-import { render } from 'ink';
-import App from './src/App';
-
-// Check if we're running in an interactive terminal
-if (process.stdin.isTTY && process.stdout.isTTY) {
-    render(<App />);
-} else {
-    console.log('Interactive terminal required. Please run in a terminal that supports raw input mode.');
-    process.exit(1);
-}
 ````
 
 ## File: package.json
@@ -1625,7 +2078,6 @@ if (process.stdin.isTTY && process.stdout.isTTY) {
     "ink-text-input": "^4.0.3",
     "ink-select-input": "^4.2.2",
     "ink-spinner": "^5.0.0",
-    "chalk": "^5.3.0",
     "clipboardy": "^4.0.0",
     "zustand": "^4.4.1"
   },

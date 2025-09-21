@@ -3,6 +3,7 @@ import { useAppStore } from './stores/app.store';
 import SplashScreen from './components/SplashScreen';
 import InitializationScreen from './components/InitializationScreen';
 import DashboardScreen from './components/DashboardScreen';
+import ReviewScreen from './components/ReviewScreen';
 
 const App = () => {
     const currentScreen = useAppStore(state => state.currentScreen);
@@ -23,6 +24,10 @@ const App = () => {
 
     if (currentScreen === 'dashboard') {
         return <DashboardScreen />;
+    }
+
+    if (currentScreen === 'review') {
+        return <ReviewScreen />;
     }
 
     return null;
