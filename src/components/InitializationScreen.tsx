@@ -1,17 +1,16 @@
 import React, { useEffect } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
-import chalk from 'chalk';
 import Separator from './Separator';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
 
 const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
-	let symbol;
+	let symbol: React.ReactNode;
 	switch (task.status) {
 		case 'pending': symbol = '( )'; break;
-		case 'active': symbol = chalk.cyan('(●)'); break;
-		case 'done': symbol = chalk.green(doneSymbol); break;
+		case 'active': symbol = <Text color="cyan">(●)</Text>; break;
+		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
 	}
 
 	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
@@ -114,8 +113,8 @@ const InitializationScreen = () => {
     const renderContext = () => (
         <Box flexDirection="column" marginBottom={1}>
             <Text bold color="cyan">CONTEXT</Text>
-            <Text>  {chalk.green('✓')} Project ID: {projectId}</Text>
-            <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>
+            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
+            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
         </Box>
     );
 
@@ -136,7 +135,7 @@ const InitializationScreen = () => {
             <Box flexDirection="column" marginTop={1}>
                 {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
                 <Box flexDirection="column" marginTop={1}>
-                    <Text>{chalk.cyan('>')} The .relay/ directory is usually ignored by git.</Text>
+                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
                     <Text>  Do you want to share its state with your team by committing it?</Text>
                 </Box>
             </Box>
@@ -156,15 +155,15 @@ const InitializationScreen = () => {
                 <Text bold color="green"> SYSTEM READY</Text>
                 <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
                     <Box flexDirection="column">
-                        <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>
+                        <Text><Text color="green">✓</Text> Config:   relay.config.json created.</Text>
                         <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
                     </Box>
                     <Box flexDirection="column">
-                        <Text>{chalk.green('✓')} State:    {stateText}</Text>
+                        <Text><Text color="green">✓</Text> State:    {stateText}</Text>
                         {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
                     </Box>
                     <Box flexDirection="column">
-                        <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
+                        <Text><Text color="green">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
                         <Text color="gray" italic>          › Copied to clipboard. Paste into your AI's custom instructions.</Text>
                     </Box>
                 </Box>
@@ -185,8 +184,8 @@ const InitializationScreen = () => {
     switch (phase) {
         case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
         case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
-        case 'INTERACTIVE': footerText = <Text>({chalk.cyan.bold('Enter')}) No, ignore it (default)      ({chalk.cyan.bold('S')}) Yes, share it</Text>; break;
-        case 'FINALIZE': footerText = <Text>({chalk.cyan.bold('W')})atch for Patches · ({chalk.cyan.bold('L')})View Logs · ({chalk.cyan.bold('Q')})uit</Text>; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
     }
 
     return (

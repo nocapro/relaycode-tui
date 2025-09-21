@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
-import chalk from 'chalk';
 import Separator from './Separator';
 
 const SplashScreen = () => {
@@ -42,7 +41,7 @@ const SplashScreen = () => {
             <Text color="cyan">{logo}</Text>
             <Box flexDirection="column" alignItems="center">
                 <Text italic>A zero-friction, AI-native patch engine.</Text>
-                <Text italic color="gray">Built by Arman and contributors · {chalk.underline('https://relay.noca.pro')}</Text>
+                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
             </Box>
             
             <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
@@ -65,13 +64,13 @@ const SplashScreen = () => {
             </Box>
             
             <Box marginTop={1}><Separator /></Box>
-            <Text>If you love this workflow, check out {chalk.underline('https://www.noca.pro')} for the full</Text>
+            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
             <Text>web app with repo-wide visual context, history, and rollback.</Text>
-            <Text>{chalk.cyan.bold('(V)')}isit noca.pro</Text>
+            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
             <Separator />
-            <Text>Follow {chalk.cyan.bold('(X)')} · Join {chalk.cyan.bold('(D)')}iscord · Star on {chalk.cyan.bold('(G)')}itHub</Text>
+            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
             <Separator />
-            <Text>Loading... {countdown} ({chalk.gray('Press any key to skip')})</Text>
+            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
         </Box>
     );
 };

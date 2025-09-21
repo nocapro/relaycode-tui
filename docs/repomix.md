@@ -1,5 +1,10 @@
 # Directory Structure
 ```
+docs/
+  relaycode-tui/
+    diff-screen.readme.md
+    reason-screen.readme.md
+    review-screen.readme.md
 src/
   components/
     DashboardScreen.tsx
@@ -20,8 +25,685 @@ tsconfig.json
 
 # Files
 
+## File: docs/relaycode-tui/diff-screen.readme.md
+````markdown
+# DIFF-VIEW.README.MD
+
+## Relaycode TUI: The Interactive Diff View Component
+
+This document specifies the design and behavior of the interactive Diff View. This is not a standalone screen, but a stateful **component** that is rendered within the Body of parent screens like the **Review Screen** and **Transaction Details Screen**.
+
+### 1. Core Philosophy
+
+A diff is the most critical piece of evidence in a code change. This component's philosophy is to present that evidence with absolute **clarity, context, and control**.
+
+-   **Clarity:** The diff must be clean, readable, and feature syntax highlighting to help the user instantly parse the changes.
+-   **Context:** The user must never be confused about *which* file they are viewing. A persistent header provides this crucial context.
+-   **Control:** A raw text dump is insufficient for large changes. The user is given powerful keyboard tools to navigate, expand, and collapse the diff, allowing them to focus on what matters.
+
+### 2. Context of Use
+
+The Diff View is activated and rendered within the Body of a parent screen when the user requests to see the changes for a specific file, typically by pressing `(D)`. It replaces any previous content in the Body.
+
+### 3. UI Layout & Components
+
+1.  **Header:** A single, static line providing the context of the file being viewed. Example: `DIFF: src/core/transaction.ts`.
+2.  **Content Area:** The main rendering surface for the diff itself. It uses standard `+` (additions) and `-` (deletions) prefixes and supports color and syntax highlighting.
+3.  **Truncation Hint (Conditional):** For large diffs, a line indicating that content is hidden is displayed. Example: `... 23 lines hidden ...`.
+
+### 4. States & Interactions
+
+The Diff View has several states, primarily related to content display and navigation.
+
+#### **State 4.1: Default / Collapsed View (for large diffs)**
+
+When a diff exceeds a certain line count (e.g., 20 lines), it initially renders in a collapsed state to avoid overwhelming the user.
+
+```
+ ... (Parent Screen Navigator) ...
+ ──────────────────────────────────────────────────────────────────────────────
+  DIFF: src/core/transaction.ts
+
+   export const restoreSnapshot = async (snapshot: FileSnapshot, ...): ... => {
+     ...
+-    for (const [filePath, content] of entries) {
+-        if (content === null) {
+-            await deleteFile(filePath, cwd);
+-        }
+-    }
++    const restoreErrors: { path: string, error: unknown }[] = [];
++
++    await Promise.all(entries.map(async ([filePath, content]) => {
++        try {
+   ... 23 lines hidden ...
++        } catch (error) {
++          restoreErrors.push({ path: filePath, error });
++        }
++    }));
++
++    if (restoreErrors.length > 0) { ... }
+   }
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) File Nav · (X)pand Diff · (J↓/K↑) Hunk Nav · (D)Collapse View
+```
+-   **Behavior:** The view intelligently shows the beginning and end of the diff, hiding the middle.
+-   **Interactions:** The primary action is `(X)pand Diff`.
+
+#### **State 4.2: Expanded View**
+
+**Trigger:** User presses `(X)`.
+
+The full, unabridged diff is rendered in the Content Area. The truncation hint is removed. The footer might update to show `(X)ollapse Diff`.
+
+#### **State 4.3: Hunk Navigation (The "Advanced" Interaction)**
+
+For very large, expanded diffs, users can navigate between distinct change blocks ("hunks").
+
+```
+ ... (Parent Screen Navigator) ...
+ ──────────────────────────────────────────────────────────────────────────────
+  DIFF: src/core/transaction.ts
+
+> @@ -45,7 +45,9 @@ export const restoreSnapshot = ...
+   ... (first hunk content) ...
+
+  @@ -92,6 +94,12 @@ export const restoreSnapshot = ...
+   ... (second hunk content, not focused) ...
+```
+-   **Trigger:** User presses `(J)` (next hunk) or `(K)` (previous hunk).
+-   **Behavior:**
+    *   A `>` indicator appears next to the `@@ ... @@` line of the currently active hunk.
+    *   The view automatically scrolls to bring the active hunk into the viewport.
+    *   This allows the user to quickly jump between separate changes within the same file without tedious line-by-line scrolling.
+-   **Parent Interaction:** The parent screen's file navigation `(↑↓)` remains active. If the user selects a new file, the Diff View component will instantly re-render with the new file's diff, resetting to its default collapsed state.
+
+### 5. Implementation Notes
+
+-   **Syntax Highlighting:** A terminal-compatible syntax highlighting library should be used to parse and colorize the diff content for the appropriate language.
+-   **Collapsing Logic:** The logic for collapsing large diffs should be configurable but default to a sensible value (e.g., show the first 10 and last 10 lines).
+-   **Focus Management:** The parent screen is responsible for routing keyboard inputs. When the Diff View is active, it should listen for `(X)`, `(J)`, and `(K)` and delegate those actions to the Diff View component.
+-   **State:** The parent screen's state must track which file is being viewed and whether its diff is expanded or collapsed.
+
+***
+````
+
+## File: docs/relaycode-tui/reason-screen.readme.md
+````markdown
+# REASONING-VIEW.README.MD
+
+## Relaycode TUI: The Reasoning View Component
+
+This document specifies the design and behavior of the Reasoning View. This is a simple but essential **component** for displaying the AI's step-by-step thought process. It renders within the Body of parent screens like the **Review Screen** and **Transaction Details Screen**.
+
+### 1. Core Philosophy
+
+The reasoning behind a change is as important as the change itself. The philosophy of this component is to present the AI's narrative with maximum **readability and clarity**.
+
+-   **Readability:** The text should be formatted cleanly, respecting newlines and list structures from the source data to be easily digestible.
+-   **Clarity:** The view should be uncluttered, presenting only the reasoning text under a clear header, free from other UI noise.
+-   **Focus:** When active, the component should allow for focused interaction (scrolling) without interference from the parent screen's navigation.
+
+### 2. Context of Use
+
+The Reasoning View is activated and rendered within the Body of a parent screen when the user requests to see the AI's reasoning, typically by pressing `(R)`. It replaces any previous content in the Body.
+
+### 3. UI Layout & Components
+
+1.  **Header:** A single, static line: `REASONING`.
+2.  **Content Area:** The main rendering surface for the reasoning text. It displays formatted, multi-line text.
+
+### 4. States & Interactions
+
+The Reasoning View is simpler than the Diff View and has two primary interactive states.
+
+#### **State 4.1: Expanded View**
+
+This is the primary state of the component when it is active.
+
+```
+ ... (Parent Screen Navigator, Reasoning section shows '▾') ...
+ ──────────────────────────────────────────────────────────────────────────────
+  REASONING
+
+  1. Identified a potential uncaught exception in the `restoreSnapshot` function
+     if a file operation fails midway through a loop of many files. This could
+     leave the project in a partially-reverted, inconsistent state.
+
+  2. Wrapped the file restoration loop in a `Promise.all` and added a dedicated
+     error collection array. This ensures that all file operations are
+     attempted and that a comprehensive list of failures is available
+     afterward for better error reporting or partial rollback logic.
+
+  3. Improved the `getErrorMessage` utility to handle non-Error objects more
+     gracefully, as this was a related minor issue found during analysis of
+     the error handling pathways.
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Scroll Text · (R)Collapse View · (C)opy Mode
+```
+-   **Behavior:** The component renders the full reasoning text, preserving formatting like numbered lists and paragraph breaks from the transaction file.
+-   **Footer Update:** The parent screen's footer updates to show that `(↑↓)` keys are now repurposed for scrolling.
+
+#### **State 4.2: Scrolling Content**
+
+**Trigger:** The reasoning text is too long to fit in the available space, and the user presses `(↑)` or `(↓)`.
+
+-   **Behavior:** The text within the Content Area scrolls up or down. The rest of the UI (parent navigator, headers, footer) remains static. This provides a seamless reading experience for long explanations.
+-   **Focus Management:** While the Reasoning View is active, it "captures" the arrow keys for scrolling. Pressing `(R)` again or `(Esc)` would release this capture, returning arrow key control to the parent screen's file navigator.
+
+### 5. Implementation Notes
+
+-   **Data Formatting:** The component should expect the reasoning data as an array of strings or a single multi-line string and be responsible for rendering it with correct line breaks.
+-   **Scrolling Logic:** A state variable will need to track the current scroll position (the top visible line). Re-rendering will slice the full text array/string to display the correct "viewport" of text.
+-   **Copy Integration:** When the user enters `(C)opy Mode`, one of the available options must be to copy the *entire* reasoning text to the clipboard with a single keystroke.
+````
+
+## File: docs/relaycode-tui/review-screen.readme.md
+````markdown
+# REVIEW-SCREEN.README.MD
+
+## Relaycode TUI: The Stateful Apply & Review Screen
+
+This document specifies the design and behavior of the stateful **Apply & Review Screen**. This screen is the interactive core of the Relaycode workflow, appearing immediately after a patch is detected and applied to the filesystem. It is a command center for analysis, granular control, data extraction, and iterative repair.
+
+### 1. Core Philosophy
+
+The Review screen is not a simple "accept/reject" dialog. It is a strategic workspace designed to give the user complete control and insight over incoming code changes.
+
+-   **Live Feedback Loop:** The screen provides real-time progress during patch application, giving the user confidence that the system is working and transparency into its performance.
+-   **Information Supremacy:** The UI provides all necessary context at a glance: high-level stats, the AI's reasoning, post-script results, the patch strategy used per file, and deep-dive diffs. Nothing is hidden.
+-   **Granular Control:** The user is empowered to make decisions on a per-file basis. The UI dynamically recalculates and reflects the impact of these decisions in real-time.
+-   **Iterative Repair Workflow:** Failure is treated as a temporary state, not an endpoint. The UI provides a powerful suite of tools—from AI-driven prompts to manual overrides—to handle even complex, multi-file failures gracefully.
+-   **Data Accessibility:** Every piece of information (prompts, diffs, reasoning, script outputs) is easily copyable, respecting the user's need to use this data in other contexts.
+
+### 2. UI Layout Components
+
+1.  **Header:** `▲ relaycode apply` (during application) transitioning to `▲ relaycode review`.
+2.  **Navigator:** The top section, acting as a command-and-control center. It contains the transaction summary, global stats, expandable reasoning/prompt, script results, and the file list.
+3.  **Body:** A dynamic viewport that renders detailed content—like diffs or script outputs—based on the user's focus in the Navigator.
+4.  **Footer:** The contextual action bar, showing available keyboard shortcuts that change constantly based on the UI's state and focus.
+
+### 3. The State Machine & Workflow
+
+The screen flows through several distinct states, from initial application to final resolution.
+
+---
+
+#### **State 3.1: Live Application (Success Case)**
+
+This is the initial, ephemeral state shown while Relaycode processes a patch that applies cleanly.
+
+```
+ ▲ relaycode apply
+ ──────────────────────────────────────────────────────────────────────────────
+ Applying patch 4b9d8f03... (refactor: simplify clipboard logic)
+
+ (●) Reading initial file snapshot... (0.1s)
+ (●) Applying operations to memory... (0.3s)
+     └─ [✓] write: src/core/clipboard.ts (strategy: replace)
+     └─ [✓] write: src/utils/shell.ts (strategy: standard-diff)
+ (●) Running post-command script... (2.3s)
+     └─ `bun run test` ... Passed
+ (●) Analyzing changes with linter... (1.2s)
+     └─ `bun run lint` ... 0 Errors
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Elapsed: 3.9s · Processing... Please wait.
+```
+-   **Behavior:** Each line updates its status symbol `( ) → (●) → [✓]`. Timings appear as each step completes. The specific patch strategy used for each file is displayed.
+-   **Transition:** Upon completion, seamlessly transitions into the **Interactive Review** state (see State 3.5).
+
+---
+
+#### **State 3.2: Live Application (Partial Failure Case)**
+
+This state is shown when one or more file operations fail. It demonstrates the **Golden Rule**: post-application scripts are **skipped** if the patch does not apply cleanly.
+
+```
+ ▲ relaycode apply
+ ──────────────────────────────────────────────────────────────────────────────
+ Applying patch e4a7c112... (refactor: rename core utility function)
+
+ (●) Reading initial file snapshot... (0.1s)
+ (●) Applying operations to memory... (0.5s)
+     └─ [✓] write: src/core/transaction.ts (strategy: replace)
+     └─ [!] failed: src/utils/logger.ts (Hunk #1 failed to apply)
+     └─ [!] failed: src/commands/apply.ts (Context mismatch at line 92)
+ (-) SKIPPED Post-command script...
+     └─ Skipped due to patch application failure
+ (-) SKIPPED Analyzing changes with linter...
+     └─ Skipped due to patch application failure
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Elapsed: 0.6s · Transitioning to repair workflow...
+```
+-   **Behavior:** Failed operations are marked with `[!]`. Subsequent steps are marked `(-) SKIPPED` with a clear explanation, preventing false results and saving resources.
+-   **Transition:** Immediately transitions to the **Failed Application & Repair Workflow** state.
+
+---
+
+#### **State 3.3: Interactive Review (Multi-File Failure)**
+
+The screen has transitioned from State 3.2 and is now waiting for user intervention.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+  e4a7c112 · refactor: rename core utility function
+  (+18/-5) · 1/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+
+ (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+ (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+ ──────────────────────────────────────────────────────────────────────────────
+ FILES
+   [✓] MOD src/core/transaction.ts (+18/-5) [replace]
+ > [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
+   [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Esc) Reject All
+```
+-   **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`. The footer presents both single-file `(T)` and `(Shift+T)` bulk repair options.
+
+---
+
+#### **State 3.4: Granular File Rejection & Dynamic Recalculation**
+
+The user decides one of the successful changes is undesirable and rejects it.
+
+**Trigger:** User navigates to `src/core/transaction.ts` and presses `(Space)`.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+  e4a7c112 · refactor: rename core utility function
+  (0/0) · 0/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+
+ (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+ (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+ ──────────────────────────────────────────────────────────────────────────────
+ FILES
+ > [✗] MOD src/core/transaction.ts (+18/-5) [replace]
+   [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
+   [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Spc) Toggle · (D)iff · (Esc) Reject All
+```
+-   **Behavior:** The UI instantly recalculates. The file icon changes to `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect the new reality. The footer updates as there are no longer any approved files to commit.
+
+---
+
+#### **State 3.5: Interactive Review (Success Case with Script Results)**
+
+This is the state after a fully successful application (from State 3.1).
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+  4b9d8f03 · refactor: simplify clipboard logic
+  (+22/-11) · 2 Files · 3.9s
+
+ (P)rompt ▸ Simplify the clipboard logic using an external library...
+ (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
+ ──────────────────────────────────────────────────────────────────────────────
+  ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
+  ✗ Linter: `bun run lint` (1.2s) ▸ 1 Error, 3 Warnings
+ ──────────────────────────────────────────────────────────────────────────────
+ FILES
+ > [✓] MOD src/core/clipboard.ts (+15/-8) [replace]
+   [✓] MOD src/utils/shell.ts     (+7/-3)  [diff]
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Spc) Toggle · (D)iff · (Ent) Expand Details · (C)opy · (A)pprove
+```
+-   **Behavior:** New, expandable sections appear for each post-application script, providing an at-a-glance summary of their results (`✓`/`✗`).
+
+---
+
+#### **State 3.6: Expanding Script Results (Body View)**
+
+**Trigger:** User navigates to the Linter line and presses `(Enter)`.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+  4b9d8f03 · refactor: simplify clipboard logic
+  (+22/-11) · 2 Files · 3.9s
+
+ (P)rompt ▸ Simplify the clipboard logic using an external library...
+ (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
+ ──────────────────────────────────────────────────────────────────────────────
+  ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
+> ✗ Linter: `bun run lint` (1.2s) ▾ 1 Error, 3 Warnings
+ ──────────────────────────────────────────────────────────────────────────────
+  LINTER OUTPUT: `bun run lint`
+
+  src/core/clipboard.ts
+    45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+    88:5   Warning  Unexpected console statement. (no-console)
+
+  src/utils/shell.ts
+    23:9   Warning  'result' is never reassigned. Use 'const' instead. (prefer-const)
+    25:1   Warning  Empty block statement. (no-empty)
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Enter) Collapse · (J↓/K↑) Next/Prev Error · (C)opy Output
+```
+-   **Behavior:** The Body viewport is replaced with the detailed, formatted output from the linter. The footer provides contextual navigation hotkeys (`J/K`) to jump between errors.
+
+---
+
+#### **State 3.7: Copy Mode**
+
+**Trigger:** User presses `(C)` from any primary review state.
+
+```
+ ▲ relaycode review · copy mode
+ ──────────────────────────────────────────────────────────────────────────────
+ Select item to copy to clipboard:
+
+ > [U] UUID:        e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+   [M] Git Message: refactor: rename core utility function
+   [P] Prompt:      Rename the `calculateChanges` utility to...
+   [R] Reasoning:   1. Renamed the function in its definition...
+ ──────────────────────────────────────────────────────────────────────────────
+   [F] Diff for:    src/core/transaction.ts
+   [A] All Diffs (3 files)
+ ──────────────────────────────────────────────────────────────────────────────
+  ✓ Copied UUID to clipboard.
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C)opy/Exit
+```
+-   **Behavior:** A modal overlay appears, allowing the user to copy any piece of metadata related to the transaction to their clipboard with single keystrokes.
+
+### 4. The Advanced Repair Workflow
+
+---
+
+#### **State 4.1: Initiating Bulk Repair**
+
+**Trigger:** From the multi-failure state (3.3), the user presses `(Shift+T)`.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+ ... (Navigator remains the same) ...
+ ──────────────────────────────────────────────────────────────────────────────
+  BULK REPAIR ACTION
+
+  The following 2 files failed to apply:
+  - src/utils/logger.ts
+  - src/commands/apply.ts
+
+  How would you like to proceed?
+
+> (1) Copy Bulk Re-apply Prompt (for single-shot AI)
+  (2) Bulk Change Strategy & Re-apply
+  (3) Handoff to External Agent
+  (4) Bulk Abandon All Failed Files
+  (Esc) Cancel
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Choose an option [1-4, Esc]:
+```
+-   **Behavior:** A blocking modal appears, presenting four distinct repair strategies that will apply to all failed files simultaneously.
+
+---
+
+#### **Flow 4.2.A: The "Re-apply Prompt" (AI-driven Repair)**
+
+**Trigger:** User selects option `(1)`. A detailed prompt is copied to the clipboard, and the UI enters a waiting state.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+  e4a7c112 · refactor: rename core utility function
+  (+18/-5) · 1/3 Files · 0.6s · AWAITING PATCH
+
+ (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+ (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+ ──────────────────────────────────────────────────────────────────────────────
+ FILES
+   [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+ > [●] AWAITING src/utils/logger.ts    (Bulk re-apply prompt copied!)
+   [●] AWAITING src/commands/apply.ts
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (D)iff · (C)opy · (Esc) Abandon & Commit Approved
+```
+
+**Generated Prompt (Copied to Clipboard):**
+```text
+The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+
+IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
+
+--- FILE: src/utils/logger.ts ---
+Strategy: standard-diff
+Error: Hunk #1 failed to apply
+
+ORIGINAL CONTENT:
+---
+import chalk from 'chalk';
+// ... entire original content of logger.ts ...
+---
+
+FAILED PATCH:
+---
+--- a/src/utils/logger.ts
++++ b/src/utils/logger.ts
+// ... the failed diff block ...
+---
+
+
+--- FILE: src/commands/apply.ts ---
+Strategy: standard-diff
+Error: Context mismatch at line 92
+
+ORIGINAL CONTENT:
+---
+import { applyPatch } from 'relaycode-core';
+// ... entire original content of apply.ts ...
+---
+
+FAILED PATCH:
+---
+--- a/src/commands/apply.ts
++++ b/src/commands/apply.ts
+// ... the second failed diff block ...
+---
+
+Please analyze all failed files and provide a complete, corrected response.
+```
+
+---
+
+#### **Flow 4.2.B: The "Change Strategy" (User-driven Repair)**
+
+**Trigger:** User selects option `(2)` and chooses a new strategy (e.g., `replace`). The system re-applies the original patches with the new strategy, providing live feedback.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+ ... (Navigator) ... · BULK RE-APPLYING...
+ ──────────────────────────────────────────────────────────────────────────────
+ FILES
+   [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+ > [●] RE-APPLYING... src/utils/logger.ts (using 'replace' strategy)
+   [ ] PENDING...     src/commands/apply.ts
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Re-applying failed patches...
+```
+
+**Resolution (Mixed Result):**
+The re-application finishes with one success and one failure.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+  e4a7c112 · refactor: rename core utility function
+  (+27/-7) · 2/3 Files · 0.6s · PATCH FAILED
+
+ ... (Navigator) ...
+ ──────────────────────────────────────────────────────────────────────────────
+ FILES
+   [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+ > [✓] MOD src/utils/logger.ts    (+9/-2) [replace]
+   [!] FAILED src/commands/apply.ts   ('replace' failed: markers not found)
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Spc) Toggle · (T)ry Repair · (C)opy · (Ent) Confirm & Commit
+```
+
+---
+
+#### **Flow 4.2.C: The "Handoff" (Agentic Repair)**
+
+**Trigger:** User selects option `(3)`. A confirmation modal appears first. Upon confirmation, a specialized prompt is copied, and the transaction is finalized with a `Handoff` status.
+
+```
+ ▲ relaycode review
+ ──────────────────────────────────────────────────────────────────────────────
+  HANDOFF TO EXTERNAL AGENT
+
+  This action will:
+  1. Copy a detailed prompt to your clipboard for an agentic AI.
+  2. Mark the current transaction as 'Handoff' and close this review.
+  3. Assume that you and the external agent will complete the work.
+
+  Relaycode will NOT wait for a new patch. This is a final action.
+
+  Are you sure you want to proceed?
+ ──────────────────────────────────────────────────────────────────────────────
+ (Enter) Confirm Handoff      (Esc) Cancel
+```
+
+**Resolution (Dashboard View):**
+After handoff, the user is returned to the dashboard, which now logs the action.
+
+```
+ ▲ relaycode dashboard
+ ──────────────────────────────────────────────────────────────────────────────
+ STATUS: ● LISTENING · APPROVALS: 00 · COMMITS: 04
+
+  EVENT STREAM (Last 15 minutes)
+
+  > -5s    → HANDOFF   e4a7c112 · refactor: rename core utility function
+    -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+    ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Enter) View Details · (P)ause · (Q)uit
+```
+-   **Behavior:** A new `→ HANDOFF` icon and status provide a permanent record. The transaction is considered "done" by Relaycode's automated systems, and responsibility is now with the user and their external agent.
+
+
+
+
+## The Handoff Prompt: Design & Specification
+
+The "Handoff Prompt" is a specialized, machine-generated text block copied to the user's clipboard during the Handoff workflow. It is not a simple error message; it is a carefully engineered "briefing document" designed to transfer the entire context of a failed Relaycode transaction to an external, conversational AI assistant (like Claude, GPT-4, or an IDE-integrated agent).
+
+### Core Design Principles
+
+1.  **Context is King:** The prompt's primary goal is to eliminate the need for the user to manually explain the situation. It must contain the *goal*, the *plan*, the *partial results*, and the *failures* of the original transaction.
+2.  **Clear Separation of Concerns:** The prompt must unambiguously distinguish between what has already been successfully applied to the filesystem and what remains broken. This prevents the external agent from re-doing completed work.
+3.  **Actionable & Conversational:** It should not be a passive data dump. The prompt must end with a clear call to action that initiates a collaborative, turn-by-turn repair session.
+4.  **Pointer to the Source of Truth:** For maximum fidelity, it must reference the on-disk transaction YAML file. This allows an advanced agent (or the user) to consult the original, detailed plan if the summary is insufficient.
+
+---
+
+### Handoff Prompt Template
+
+This is the template used by Relaycode to generate the prompt. It dynamically fills in the placeholders with data from the current failed transaction.
+
+```text
+I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
+
+The full plan for this transaction is detailed in the YAML file located at: `.relay/transactions/{{TRANSACTION_UUID}}.yml`. Please use this file as your primary source of truth for the overall goal.
+
+Here is the current status of the transaction:
+
+--- TRANSACTION SUMMARY ---
+Goal: {{GIT_COMMIT_MESSAGE}}
+Reasoning:
+{{AI_REASONING_STEPS}}
+
+--- CURRENT FILE STATUS ---
+SUCCESSFUL CHANGES (already applied, no action needed):
+{{#each successful_files}}
+- {{operation}}: {{path}}
+{{/each}}
+
+FAILED CHANGES (these are the files you need to fix):
+{{#each failed_files}}
+- FAILED: {{path}} (Error: {{error_message}})
+{{/each}}
+
+Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.
+```
+
+---
+
+### Concrete Example
+
+Let's use the multi-file failure scenario from the main `README.MD`.
+
+-   **Transaction UUID:** `e4a7c112`
+-   **Goal:** `refactor: rename core utility function`
+-   **Reasoning:**
+    1.  Renamed the function in its definition file, `src/core/transaction.ts`.
+    2.  Attempted to update all call sites for the renamed function.
+-   **Successful Files:**
+    -   `MODIFIED: src/core/transaction.ts`
+-   **Failed Files:**
+    -   `FAILED: src/utils/logger.ts` (Error: Hunk #1 failed to apply)
+    -   `FAILED: src/commands/apply.ts` (Error: Context mismatch at line 92)
+
+When the user confirms the Handoff action, the following text is copied directly to their clipboard:
+
+```text
+I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
+
+The full plan for this transaction is detailed in the YAML file located at: `.relay/transactions/e4a7c112.yml`. Please use this file as your primary source of truth for the overall goal.
+
+Here is the current status of the transaction:
+
+--- TRANSACTION SUMMARY ---
+Goal: refactor: rename core utility function
+Reasoning:
+1. Renamed the function in its definition file, `src/core/transaction.ts`.
+2. Attempted to update all call sites for the renamed function.
+
+--- CURRENT FILE STATUS ---
+SUCCESSFUL CHANGES (already applied, no action needed):
+- MODIFIED: src/core/transaction.ts
+
+FAILED CHANGES (these are the files you need to fix):
+- FAILED: src/utils/logger.ts (Error: Hunk #1 failed to apply)
+- FAILED: src/commands/apply.ts (Error: Context mismatch at line 92)
+
+Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.
+```
+
+### How It Works in Practice
+
+1.  The user's Relaycode screen shows the multi-file failure.
+2.  They choose the `(4) Handoff to External Agent` option.
+3.  The text above is copied to their clipboard. Relaycode closes the review and marks the transaction as `HANDOFF`.
+4.  The user switches to their preferred chat-based AI tool (e.g., a Claude or GPT-4 chat window).
+5.  They paste the entire block of text and send it.
+6.  The AI assistant, now fully briefed, responds with something like:
+    > "Understood. It looks like we've successfully renamed the function in `src/core/transaction.ts`, but the updates failed in `logger.ts` and `apply.ts`. Which of the failed files would you like to work on first?"
+
+The user is now seamlessly engaged in a productive, context-aware repair session, having spent zero time explaining the problem. This workflow transforms Relaycode from just a patch tool into a powerful orchestrator for more complex, agent-driven development.
+````
+
 ## File: src/components/DashboardScreen.tsx
-```typescript
+````typescript
 import React, { useMemo } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import chalk from 'chalk';
@@ -63,7 +745,7 @@ const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction
     
     const content = (
         <Text>
-            {time} {icon} {statusText} {transaction.hash} · {message}
+            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {message}
         </Text>
     );
 
@@ -76,7 +758,7 @@ const ConfirmationContent = ({ status, transactionsToConfirm }: { status: Dashbo
     
     return (
         <Box flexDirection="column" marginY={1} paddingLeft={2}>
-            <Text bold>{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
             <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>
             <Box flexDirection="column" paddingLeft={1} marginTop={1}>
                 {transactionsToConfirm.map(tx => (
@@ -155,11 +837,17 @@ const DashboardScreen = () => {
     }
 
     const renderFooter = () => {
-        if (isModal) return <Text>(Enter) Confirm      (Esc) Cancel</Text>;
+        if (isModal) return (
+            <Text>
+                ({chalk.cyan.bold('Enter')}) Confirm      ({chalk.cyan.bold('Esc')}) Cancel
+            </Text>
+        );
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
-        const pauseAction = status === 'PAUSED' ? '(R)esume' : '(P)ause';
-        return <Text>(↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · {pauseAction} · (Q)uit</Text>;
+        const pauseAction = status === 'PAUSED' ? `(${chalk.cyan.bold('R')})esume` : `(${chalk.cyan.bold('P')})ause`;;
+        return <Text color="gray">
+            ({chalk.cyan.bold('↑↓')}) Nav · ({chalk.cyan.bold('Enter')}) Review · ({chalk.cyan.bold('A')})pprove All · ({chalk.cyan.bold('C')})ommit All · {pauseAction} · ({chalk.cyan.bold('Q')})uit
+        </Text>
     }
     
     const transactionsToConfirm = useMemo(() => {
@@ -173,7 +861,7 @@ const DashboardScreen = () => {
             {showHelp && <GlobalHelpScreen />}
 
             <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
-                <Text>▲ relaycode dashboard</Text>
+                <Text color="cyan">▲ relaycode dashboard</Text>
                 <Separator />
                 <Box marginY={1}>
                     {renderStatusBar()}
@@ -186,7 +874,7 @@ const DashboardScreen = () => {
                     </>
                 )}
                 
-                <Text> EVENT STREAM (Last 15 minutes)</Text>
+                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
                 <Box flexDirection="column" marginTop={1}>
                     {transactions.map((tx, index) => (
                         <EventStreamItem 
@@ -198,19 +886,20 @@ const DashboardScreen = () => {
                 </Box>
 
                 <Box marginTop={1}><Separator /></Box>
-                <Text>{renderFooter()}</Text>
+                {renderFooter()}
             </Box>
         </Box>
     );
 };
 
 export default DashboardScreen;
-```
+````
 
 ## File: src/components/GlobalHelpScreen.tsx
-```typescript
+````typescript
 import React from 'react';
 import { Box, Text } from 'ink';
+import chalk from 'chalk';
 
 const GlobalHelpScreen = () => {
     return (
@@ -229,43 +918,78 @@ const GlobalHelpScreen = () => {
                 width="80%"
             >
                 <Box justifyContent="center" marginBottom={1}>
-                    <Text bold>▲ relaycode · keyboard shortcuts</Text>
+                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
                 </Box>
                 <Box flexDirection="column" gap={1}>
                     <Box flexDirection="column">
-                        <Text bold>GLOBAL</Text>
-                        <Text>  ?        Toggle this help screen</Text>
-                        <Text>  Q        Quit to terminal (from main screens)</Text>
+                        <Text bold color="cyan">GLOBAL</Text>
+                        <Text>  {chalk.cyan.bold('?')}        Toggle this help screen</Text>
+                        <Text>  {chalk.cyan.bold('Q')}        Quit to terminal (from main screens)</Text>
                     </Box>
                     <Box flexDirection="column">
-                        <Text bold>DASHBOARD (watch)</Text>
-                        <Text>  ↑↓       Navigate event stream</Text>
-                        <Text>  P        Pause / Resume clipboard watcher</Text>
-                        <Text>  A        Approve all pending transactions</Text>
-                        <Text>  C        Commit all applied transactions to git</Text>
+                        <Text bold color="cyan">DASHBOARD (watch)</Text>
+                        <Text>  {chalk.cyan.bold('↑↓')}       Navigate event stream</Text>
+                        <Text>  {chalk.cyan.bold('P')}        Pause / Resume clipboard watcher</Text>
+                        <Text>  {chalk.cyan.bold('A')}        Approve all pending transactions</Text>
+                        <Text>  {chalk.cyan.bold('C')}        Commit all applied transactions to git</Text>
                     </Box>
                     <Box flexDirection="column">
-                        <Text bold>REVIEW & DETAILS SCREENS</Text>
-                        <Text>  D        Show / Collapse file diff</Text>
-                        <Text>  R        Show / Collapse reasoning steps</Text>
-                        <Text>  C        Enter / Exit Copy Mode (Details Screen)</Text>
-                        <Text>  U        Undo / Revert Transaction</Text>
-                        <Text>  Space    Toggle approval state of a file (Review Screen)</Text>
+                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                        <Text>  {chalk.cyan.bold('D')}        Show / Collapse file diff</Text>
+                        <Text>  {chalk.cyan.bold('R')}        Show / Collapse reasoning steps</Text>
+                        <Text>  {chalk.cyan.bold('C')}        Enter / Exit Copy Mode (Details Screen)</Text>
+                        <Text>  {chalk.cyan.bold('U')}        Undo / Revert Transaction</Text>
+                        <Text>  {chalk.cyan.bold('Space')}    Toggle approval state of a file (Review Screen)</Text>
                     </Box>
                 </Box>
             </Box>
             <Box marginTop={1}>
-                <Text bold>(Press ? or Esc to close)</Text>
+                <Text bold>(Press {chalk.cyan.bold('?')} or {chalk.cyan.bold('Esc')} to close)</Text>
             </Box>
         </Box>
     );
 };
 
 export default GlobalHelpScreen;
-```
+````
+
+## File: src/components/Separator.tsx
+````typescript
+import React, { useState, useEffect } from 'react';
+import {Text} from 'ink';
+
+const useStdoutDimensions = () => {
+	const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
+
+	useEffect(() => {
+		const updateDimensions = () => {
+			setDimensions({
+				columns: process.stdout.columns || 80,
+				rows: process.stdout.rows || 24
+			});
+		};
+
+		updateDimensions();
+		process.stdout.on('resize', updateDimensions);
+
+		return () => {
+			process.stdout.off('resize', updateDimensions);
+		};
+	}, []);
+
+	return [dimensions.columns, dimensions.rows];
+};
+
+const Separator = () => {
+	const [columns] = useStdoutDimensions();
+	return <Text>{'─'.repeat(columns || 80)}</Text>;
+};
+
+export default Separator;
+````
 
 ## File: src/stores/app.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 
 export type AppScreen = 'splash' | 'init' | 'dashboard';
@@ -285,10 +1009,10 @@ export const useAppStore = create<AppState>((set) => ({
         showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
     },
 }));
-```
+````
 
 ## File: src/stores/dashboard.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 import { sleep } from '../utils';
 
@@ -424,10 +1148,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         },
     },
 }));
-```
+````
 
 ## File: src/stores/init.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 
 // Types
@@ -503,16 +1227,49 @@ export const useInitStore = create<InitState>((set) => ({
         }),
     },
 }));
-```
+````
 
 ## File: src/utils.ts
-```typescript
+````typescript
 // Utility for simulation
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-```
+````
+
+## File: tsconfig.json
+````json
+{
+  "compilerOptions": {
+    // Environment setup & latest features
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "allowJs": true,
+
+    // Bundler mode
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
+    // Best practices
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    // Some stricter flags (disabled by default)
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noPropertyAccessFromIndexSignature": false
+  }
+}
+````
 
 ## File: src/components/InitializationScreen.tsx
-```typescript
+````typescript
 import React, { useEffect } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
@@ -537,7 +1294,7 @@ const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: strin
 				{symbol} {title}
 			</Text>
 			{task.subtext && task.status !== 'done' && (
-				<Text>
+				<Text italic color="gray">
 					{'     └─ '}{task.subtext}
 				</Text>
 			)}
@@ -619,7 +1376,7 @@ const InitializationScreen = () => {
 
     const renderAnalyze = () => (
         <Box flexDirection="column">
-            <Text bold>PHASE 1: ANALYZE</Text>
+            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
             <Box flexDirection="column" marginTop={1} gap={1}>
                 {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
             </Box>
@@ -628,7 +1385,7 @@ const InitializationScreen = () => {
 
     const renderContext = () => (
         <Box flexDirection="column" marginBottom={1}>
-            <Text bold>CONTEXT</Text>
+            <Text bold color="cyan">CONTEXT</Text>
             <Text>  {chalk.green('✓')} Project ID: {projectId}</Text>
             <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>
         </Box>
@@ -637,7 +1394,7 @@ const InitializationScreen = () => {
     const renderConfigure = () => (
         <Box flexDirection="column">
             {renderContext()}
-            <Text bold>PHASE 2: CONFIGURE</Text>
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
             <Box flexDirection="column" marginTop={1} gap={1}>
                 {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
             </Box>
@@ -647,7 +1404,7 @@ const InitializationScreen = () => {
     const renderInteractive = () => (
         <Box flexDirection="column">
             {renderContext()}
-            <Text bold>PHASE 2: CONFIGURE</Text>
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
             <Box flexDirection="column" marginTop={1}>
                 {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
                 <Box flexDirection="column" marginTop={1}>
@@ -668,19 +1425,19 @@ const InitializationScreen = () => {
         
         return (
             <Box flexDirection="column">
-                <Text bold> SYSTEM READY</Text>
+                <Text bold color="green"> SYSTEM READY</Text>
                 <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
                     <Box flexDirection="column">
                         <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>
-                        <Text>          {chalk.gray('›')} Edit this file to tune linters, git integration, etc.</Text>
+                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
                     </Box>
                     <Box flexDirection="column">
                         <Text>{chalk.green('✓')} State:    {stateText}</Text>
-                        {stateSubText && <Text>          {chalk.gray('›')} {stateSubText}</Text>}
+                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
                     </Box>
                     <Box flexDirection="column">
                         <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
-                        <Text>          {chalk.gray('›')} Copied to clipboard. Paste into your AI's custom instructions.</Text>
+                        <Text color="gray" italic>          › Copied to clipboard. Paste into your AI's custom instructions.</Text>
                     </Box>
                 </Box>
             </Box>
@@ -700,61 +1457,26 @@ const InitializationScreen = () => {
     switch (phase) {
         case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
         case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
-        case 'INTERACTIVE': footerText = `(${chalk.bold('Enter')}) No, ignore it (default)      (${chalk.bold('S')}) Yes, share it`; break;
-        case 'FINALIZE': footerText = `(${chalk.bold('W')})atch for Patches · (${chalk.bold('L')})View Logs · (${chalk.bold('Q')})uit`; break;
+        case 'INTERACTIVE': footerText = <Text>({chalk.cyan.bold('Enter')}) No, ignore it (default)      ({chalk.cyan.bold('S')}) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>({chalk.cyan.bold('W')})atch for Patches · ({chalk.cyan.bold('L')})View Logs · ({chalk.cyan.bold('Q')})uit</Text>; break;
     }
 
     return (
         <Box flexDirection="column">
-            <Text>{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
+            <Text color="cyan">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
             <Separator />
             <Box marginY={1}>{renderPhase()}</Box>
             <Separator />
-            <Text>{footerText}</Text>
+            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
         </Box>
     );
 };
 
 export default InitializationScreen;
-```
-
-## File: src/components/Separator.tsx
-```typescript
-import React, { useState, useEffect } from 'react';
-import {Text} from 'ink';
-
-const useStdoutDimensions = () => {
-	const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
-
-	useEffect(() => {
-		const updateDimensions = () => {
-			setDimensions({
-				columns: process.stdout.columns || 80,
-				rows: process.stdout.rows || 24
-			});
-		};
-
-		updateDimensions();
-		process.stdout.on('resize', updateDimensions);
-
-		return () => {
-			process.stdout.off('resize', updateDimensions);
-		};
-	}, []);
-
-	return [dimensions.columns, dimensions.rows];
-};
-
-const Separator = () => {
-	const [columns] = useStdoutDimensions();
-	return <Text>{'─'.repeat(columns || 80)}</Text>;
-};
-
-export default Separator;
-```
+````
 
 ## File: src/components/SplashScreen.tsx
-```typescript
+````typescript
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
@@ -794,12 +1516,12 @@ const SplashScreen = () => {
 
     return (
         <Box flexDirection="column">
-            <Text>▲ relaycode</Text>
+            <Text color="cyan">▲ relaycode</Text>
             <Separator />
-            <Text>{logo}</Text>
+            <Text color="cyan">{logo}</Text>
             <Box flexDirection="column" alignItems="center">
-                <Text>A zero-friction, AI-native patch engine.</Text>
-                <Text>Built by Arman and contributors · https://relay.noca.pro</Text>
+                <Text italic>A zero-friction, AI-native patch engine.</Text>
+                <Text italic color="gray">Built by Arman and contributors · {chalk.underline('https://relay.noca.pro')}</Text>
             </Box>
             
             <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
@@ -822,22 +1544,22 @@ const SplashScreen = () => {
             </Box>
             
             <Box marginTop={1}><Separator /></Box>
-            <Text>If you love this workflow, check out https://www.noca.pro for the full</Text>
+            <Text>If you love this workflow, check out {chalk.underline('https://www.noca.pro')} for the full</Text>
             <Text>web app with repo-wide visual context, history, and rollback.</Text>
-            <Text>{chalk.bold('(V)')}isit noca.pro</Text>
+            <Text>{chalk.cyan.bold('(V)')}isit noca.pro</Text>
             <Separator />
-            <Text>Follow {chalk.bold('(X)')} · Join {chalk.bold('(D)')}iscord · Star on {chalk.bold('(G)')}itHub</Text>
+            <Text>Follow {chalk.cyan.bold('(X)')} · Join {chalk.cyan.bold('(D)')}iscord · Star on {chalk.cyan.bold('(G)')}itHub</Text>
             <Separator />
-            <Text>Loading... {countdown} (Press any key to skip)</Text>
+            <Text>Loading... {countdown} ({chalk.gray('Press any key to skip')})</Text>
         </Box>
     );
 };
 
 export default SplashScreen;
-```
+````
 
 ## File: src/App.tsx
-```typescript
+````typescript
 import React, { useEffect } from 'react';
 import { useAppStore } from './stores/app.store';
 import SplashScreen from './components/SplashScreen';
@@ -869,43 +1591,10 @@ const App = () => {
 };
 
 export default App;
-```
-
-## File: tsconfig.json
-```json
-{
-  "compilerOptions": {
-    // Environment setup & latest features
-    "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "Preserve",
-    "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "allowJs": true,
-
-    // Bundler mode
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-
-    // Best practices
-    "strict": true,
-    "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-
-    // Some stricter flags (disabled by default)
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
-  }
-}
-```
+````
 
 ## File: index.tsx
-```typescript
+````typescript
 import React from 'react';
 import { render } from 'ink';
 import App from './src/App';
@@ -917,10 +1606,10 @@ if (process.stdin.isTTY && process.stdout.isTTY) {
     console.log('Interactive terminal required. Please run in a terminal that supports raw input mode.');
     process.exit(1);
 }
-```
+````
 
 ## File: package.json
-```json
+````json
 {
   "name": "relaycode-tui",
   "module": "index.tsx",
@@ -947,4 +1636,4 @@ if (process.stdin.isTTY && process.stdout.isTTY) {
     "typescript": "^5"
   }
 }
-```
+````

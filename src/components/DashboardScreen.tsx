@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
-import chalk from 'chalk';
 import Spinner from 'ink-spinner';
 import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
 import Separator from './Separator';
@@ -10,13 +9,13 @@ import GlobalHelpScreen from './GlobalHelpScreen';
 
 const getStatusIcon = (status: TransactionStatus) => {
     switch (status) {
-        case 'PENDING': return chalk.yellow('?');
-        case 'APPLIED': return chalk.green('✓');
-        case 'COMMITTED': return chalk.blue('→');
-        case 'FAILED': return chalk.red('✗');
-        case 'REVERTED': return chalk.gray('↩');
+        case 'PENDING': return <Text color="yellow">?</Text>;
+        case 'APPLIED': return <Text color="green">✓</Text>;
+        case 'COMMITTED': return <Text color="blue">→</Text>;
+        case 'FAILED': return <Text color="red">✗</Text>;
+        case 'REVERTED': return <Text color="gray">↩</Text>;
         case 'IN-PROGRESS': return <Spinner type="dots" />;
-        default: return ' ';
+        default: return <Text> </Text>;
     }
 };
 
@@ -32,14 +31,13 @@ const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction
     const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
     const statusText = transaction.status.padEnd(11, ' ');
     
-    let message = transaction.message;
-    if (transaction.status === 'IN-PROGRESS') {
-        message = chalk.cyan(message);
-    }
+    const messageNode = transaction.status === 'IN-PROGRESS' 
+        ? <Text color="cyan">{transaction.message}</Text> 
+        : transaction.message;
     
     const content = (
         <Text>
-            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {message}
+            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
         </Text>
     );
 
@@ -106,22 +104,23 @@ const DashboardScreen = () => {
     });
 
     const renderStatusBar = () => {
-        let statusText, statusIcon;
+        let statusText: string;
+        let statusIcon: React.ReactNode;
         switch (status) {
-            case 'LISTENING': statusText = 'LISTENING'; statusIcon = chalk.green('●'); break;
-            case 'PAUSED': statusText = 'PAUSED'; statusIcon = chalk.yellow('||'); break;
-            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
-            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
-            default: statusText = 'LISTENING'; statusIcon = chalk.green('●');
+            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
         }
 
-        let approvalStr = String(pendingApprovals).padStart(2, '0');
-        let commitStr = String(pendingCommits).padStart(2, '0');
+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
+        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
 
-        if (status === 'APPROVING') approvalStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
-        if (status === 'COMMITTING') commitStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
-        if (status === 'CONFIRM_APPROVE') approvalStr = chalk.bold.yellow(`┌ ${approvalStr} ┐`);
-        if (status === 'CONFIRM_COMMIT') commitStr = chalk.bold.yellow(`┌ ${commitStr} ┐`);
+        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'COMMITTING') commitStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'CONFIRM_APPROVE') approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        if (status === 'CONFIRM_COMMIT') commitStr = <Text bold color="yellow">┌ {commitStr} ┐</Text>;
         
         return (
             <Text>
@@ -133,15 +132,17 @@ const DashboardScreen = () => {
     const renderFooter = () => {
         if (isModal) return (
             <Text>
-                ({chalk.cyan.bold('Enter')}) Confirm      ({chalk.cyan.bold('Esc')}) Cancel
+                (<Text color="cyan" bold>Enter</Text>) Confirm      (<Text color="cyan" bold>Esc</Text>) Cancel
             </Text>
         );
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
-        const pauseAction = status === 'PAUSED' ? `(${chalk.cyan.bold('R')})esume` : `(${chalk.cyan.bold('P')})ause`;;
-        return <Text color="gray">
-            ({chalk.cyan.bold('↑↓')}) Nav · ({chalk.cyan.bold('Enter')}) Review · ({chalk.cyan.bold('A')})pprove All · ({chalk.cyan.bold('C')})ommit All · {pauseAction} · ({chalk.cyan.bold('Q')})uit
-        </Text>
+        const pauseAction = status === 'PAUSED'
+			? <Text>(<Text color="cyan" bold>R</Text>)esume</Text>
+			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
+		return <Text color="gray">
+			(<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
+		</Text>
     }
     
     const transactionsToConfirm = useMemo(() => {
