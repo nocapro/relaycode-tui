@@ -1,22 +1,9 @@
 # Directory Structure
 ```
-src/
-  components/
-    CommandBar.tsx
-    ConfirmationDialog.tsx
-    DiffView.tsx
-    FileListView.tsx
-    Panel.tsx
-    StatusBar.tsx
-    TransactionListView.tsx
-  views/
-    HistoryView.tsx
-    ReadyView.tsx
-    ReviewView.tsx
-    WorkingView.tsx
-  App.tsx
-  constants.ts
-  store.ts
+docs/
+  relaycode-tui/
+    initialization-screen.readme.md
+    splash-screen.readme.md
 index.tsx
 package.json
 tsconfig.json
@@ -24,207 +11,319 @@ tsconfig.json
 
 # Files
 
-## File: src/components/ConfirmationDialog.tsx
-```typescript
-import React, { type PropsWithChildren } from 'react';
-import { Box, Text, useInput } from 'ink';
+## File: docs/relaycode-tui/initialization-screen.readme.md
+````markdown
+# INITIALIZATION-SCREEN.README.MD
 
-interface ConfirmationDialogProps {
-  onConfirm: () => void;
-  onCancel: () => void;
-}
+## Relaycode TUI: The Stateful Initialization Screen
 
-export default function ConfirmationDialog({ onConfirm, onCancel, children }: PropsWithChildren<ConfirmationDialogProps>) {
-  useInput((input, key) => {
-    if (input.toLowerCase() === 'y') onConfirm();
-    if (input.toLowerCase() === 'n' || key.escape) onCancel();
-  });
+This document specifies the design and behavior of the stateful initialization screen for Relaycode, triggered by the `relay init` command.
 
-  // Use a Box that covers the whole screen to trap focus, though Ink doesn't really have focus trapping.
-  // The absolute positioning and high-level rendering will make it appear on top.
-  return (
-    <Box
-      position="absolute"
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      justifyContent="center"
-      alignItems="center"
-    >
-        <Box
-          borderStyle="double"
-          borderColor="yellow"
-          flexDirection="column"
-          padding={1}
-          width="50%"
-        >
-          <Text bold>{children}</Text>
-          <Text color="gray" marginTop={1}>
-            Confirm? (Y/N)
-          </Text>
-        </Box>
-    </Box>
-  );
-}
+### 1. Core Philosophy
+
+The initialization process is the user's first true impression of the Relaycode application. It must be more than a simple script that prints sequential log lines. Our philosophy is to treat it as a **guided bootstrap sequence**.
+
+-   **Application-like Experience:** The screen has a persistent frame, and content updates in-place, creating the feel of a desktop installer rather than a command-line utility.
+-   **Transparency and Confidence:** The user sees what the system is analyzing, what it's about to do, and the results of its actions in real-time. This builds trust and demystifies the setup process.
+-   **Stateful Context:** Information discovered in early phases (like the Project ID) is persisted on-screen, providing context for later steps.
+-   **Interactive & Intelligent:** The process can pause to ask for user input on key decisions, using sensible defaults and providing clear choices.
+
+### 2. UI Layout Components
+
+The screen maintains a consistent single-column layout, divided into three key regions:
+
+1.  **Header:** `▲ relaycode bootstrap` - A static title that changes to `▲ relaycode bootstrap complete` upon success.
+2.  **Body:** The primary dynamic content area. It displays the current phase, analysis results, interactive prompts, and the final summary report.
+3.  **Footer / Status Bar:** A single line at the bottom that provides context on the current operation or displays the available keyboard actions.
+
+### 3. The State Machine: A Four-Phase Flow
+
+The initialization process is a state machine that progresses through four distinct phases.
+
+---
+
+#### **Phase 1: Analyze**
+
+The sequence begins by scanning the project environment to gather context. The UI shows this as a live checklist.
+
+**State 1.1: Initial Analysis**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ PHASE 1: ANALYZE
+
+ (●) Scanning project structure...
+     └─ Finding package.json
+ ( ) Determining Project ID
+ ( ) Checking for existing .gitignore
+
+ ──────────────────────────────────────────────────────────────────────────────
+ This utility will configure relaycode for your project.
+```
+-   **Behavior:** The system performs its initial checks. The `(●)` symbol can act as a spinner or simply indicate the current task.
+-   **Transition:** Upon completion, the screen seamlessly transitions to Phase 2.
+
+---
+
+#### **Phase 2: Configure**
+
+The results from the analysis are now displayed in a persistent `CONTEXT` panel. The body of the screen updates to show the configuration tasks the system is now performing.
+
+**State 2.1: Configuration in Progress**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode' (from package.json)
+   ✓ Gitignore:  Found at ./
+
+ PHASE 2: CONFIGURE
+
+ (●) Creating relay.config.json...
+     └─ Writing default configuration with Project ID
+ ( ) Initializing .relay state directory
+ ( ) Generating system prompt template
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Applying configuration based on project analysis...
+```
+-   **Behavior:** The `CONTEXT` panel shows the outcome of Phase 1. The main list shows the file system modifications as they happen.
+-   **Transition:** The process may pause and transition to Phase 3 if user input is required. Otherwise, it proceeds directly to Phase 4.
+
+---
+
+#### **Phase 3: Interactive Choice**
+
+This is a blocking state that halts the automated process to request user input. This makes the tool feel intelligent and respectful of user preferences.
+
+**State 3.1: Awaiting User Input**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode'
+   ✓ Gitignore:  Found at ./
+
+ PHASE 2: CONFIGURE
+
+ [✓] Created relay.config.json
+ [✓] Initialized .relay state directory
+ > The .relay/ directory is usually ignored by git.
+   Do you want to share its state with your team by committing it?
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (Enter) No, ignore it (default)      (S) Yes, share it
+```
+-   **Behavior:** The focus shifts to the prompt, indicated by `>`. The footer transforms into a contextual action bar, clearly showing the default action (`Enter`) and alternative keyboard shortcuts.
+-   **Transition:** Resumes the flow to Phase 4 after receiving valid user input (`Enter` or `S`).
+
+---
+
+#### **Phase 4: Finalize & Hand-off**
+
+The final state. The screen transforms into a summary report, providing confirmation of the setup and clear instructions for the user's next steps. The content of this report is *dynamically generated* based on the choices made in previous phases.
+
+**State 4.1: Success Report (Default Choice)**
+```
+ ▲ relaycode bootstrap complete
+ ──────────────────────────────────────────────────────────────────────────────
+  SYSTEM READY
+
+  ✓ Config:   relay.config.json created.
+              › Edit this file to tune linters, git integration, etc.
+
+  ✓ State:    .relay/ directory initialized and added to .gitignore.
+              › Local transaction history will be stored here.
+
+  ✓ Prompt:   System prompt generated at .relay/prompts/system-prompt.md.
+              › Copied to clipboard. Paste into your AI's custom instructions.
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (W)atch for Patches · (L)View Logs · (Q)uit
+```
+-   **Behavior:** The header updates to `...complete`. The Body provides a scannable summary. Crucially, the footer now becomes a menu, guiding the user to the next logical actions within the Relaycode ecosystem.
+-   **Dynamic Content:** If the user had chosen to *share* the state in Phase 3, the `State` line would dynamically change to: `✓ State: .relay/ directory initialized. It will be committed to git.`
+
+### 4. Edge Cases & Alternate Flows
+
+A robust TUI must gracefully handle pre-existing conditions.
+
+-   **Scenario: Config File Already Exists**
+    -   In Phase 1, the analysis will detect `relay.config.json`.
+    -   The flow skips creating the file and instead verifies its contents.
+    -   The final report will reflect this: `✓ Config: relay.config.json verified.` The header might say `bootstrap verified`.
+
+-   **Scenario: `package.json` Not Found**
+    -   In Phase 1, the analysis fails to find `package.json`.
+    -   The system falls back to using the current directory name as the Project ID.
+    -   The `CONTEXT` panel in Phase 2 will display: `✓ Project ID: 'my-project' (from directory name)`.
+
+### 5. UI Symbol Legend
+
+| Symbol | Meaning | State |
+| :--- | :--- | :--- |
+| `▲` | Application Header | Static |
+| `( )` | Task Pending | In-Progress |
+| `(●)` | Task Active / In-Progress | In-Progress |
+| `[✓]` | Task Completed (File Operation) | In-Progress |
+| `✓` | Item OK / Verified / Completed | Static / Final |
+| `>` | Focused Item / User Prompt | Interactive |
+| `›` | Informational Sub-point | Static |
+| `─` | Horizontal Separator | Static |
+````
+
+## File: docs/relaycode-tui/splash-screen.readme.md
+````markdown
+# SPLASH-SCREEN.README.MD
+
+## Relaycode TUI: The Startup Splash Screen
+
+This document specifies the design and behavior of the timed, auto-dismissing splash screen that appears every time the Relaycode application starts.
+
+### 1. Core Philosophy
+
+The splash screen is the very first visual element a user sees. Its purpose is threefold:
+
+1.  **Brand Reinforcement:** It immediately presents the Relaycode name, ASCII art logo, and tagline, establishing a strong and professional brand identity from the first moment.
+2.  **Instantaneous Feedback:** It confirms to the user that the command was successful and the application is loading. This is crucial for a fast CLI tool, as it bridges the "empty terminal" gap between command execution and the first interactive screen.
+3.  **User-Friendly & Non-Blocking:** The screen is designed to be ephemeral. It provides its information and then gets out of the way *automatically*, requiring no user interaction. It respects the user's time while still serving its purpose. It also provides an explicit "skip" option for power users.
+
+### 2. UI Layout Components
+
+The splash screen is a single, static view with one dynamic element.
+
+1.  **Header:** `▲ relaycode` - The application's root title.
+2.  **Body:** A multi-section area containing:
+    *   The primary ASCII art logo.
+    *   The application tagline and author/community credits.
+    *   A structured "About" section with version and build timestamp information.
+    *   A promotional section for the `noca.pro` web application.
+    *   A community links section (X, Discord, GitHub).
+3.  **Footer / Status Bar:** The final line of the screen. This is the only dynamic component, displaying the countdown timer and the prompt to skip.
+
+### 3. Visual Design & States
+
+The screen has a primary visual state and a simple, time-based progression.
+
+#### **State 3.1: Initial Render (T-5 seconds)**
+
+This is the complete view rendered at the moment of application startup.
+
+```
+ ▲ relaycode
+ ──────────────────────────────────────────────────────────────────────────────
+
+         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+
+  A zero-friction, AI-native patch engine.
+  Built by Arman and contributors · https://relay.noca.pro
+
+  Version 1.1.5                         Build Timestamps
+  ─────────────────────────             ─────────────────────────
+  relaycode                             2025-09-20 13:58:05
+  relaycode-core                        2025-09-20 10:59:05
+  apply-multi-diff                      (versioned)
+  konro                                 (versioned)
+
+ ──────────────────────────────────────────────────────────────────────────────
+  If you love this workflow, check out https://www.noca.pro for the full
+  web app with repo-wide visual context, history, and rollback.
+  (V)isit noca.pro
+ ──────────────────────────────────────────────────────────────────────────────
+ Follow (X) · Join (D)iscord · Star on (G)itHub
+ ──────────────────────────────────────────────────────────────────────────────
+  Loading... 5 (Press any key to skip)
 ```
 
-## File: src/components/CommandBar.tsx
-```typescript
-import React from 'react';
-import {Box, Text} from 'ink';
-import chalk from 'chalk';
+#### **State 3.2: Countdown Progression (T-4 to T-1 seconds)**
 
-interface Command {
-  key: string;
-  label: string;
-}
+The screen remains visually identical except for the final line, which updates every second.
 
-interface CommandBarProps {
-  commands: Command[];
-}
-
-export default function CommandBar({commands}: CommandBarProps) {
-  return (
-    <Box>
-      {commands.map((cmd, i) => (
-        <Box key={cmd.key} marginLeft={i > 0 ? 4 : 0}>
-          <Text>{chalk.inverse(` ${cmd.key} `)}</Text>
-          <Text> {cmd.label}</Text>
-        </Box>
-      ))}
-    </Box>
-  );
-}
+**Example at T-2 seconds:**
+```
+... (rest of the screen is unchanged) ...
+ ──────────────────────────────────────────────────────────────────────────────
+  Loading... 2 (Press any key to skip)
 ```
 
-## File: src/components/DiffView.tsx
-```typescript
-import React from 'react';
-import {Box, Text} from 'ink';
+### 4. Behavior & Technical Implementation
 
-const DiffView = ({diff}: {diff: string}) => {
-  const lines = diff.split('\n');
-  return (
-    <Box flexDirection="column">
-      {lines.map((line, index) => {
-        let color: string | undefined = undefined;
-        if (line.startsWith('+')) {
-          color = 'green';
-        } else if (line.startsWith('-')) {
-          color = 'red';
-        } else if (line.startsWith('@@') || line.startsWith('diff --git')) {
-          color = 'cyan';
-        }
-        return (
-          <Text key={index} color={color}>
-            {line}
-          </Text>
-        );
-      })}
-    </Box>
-  );
-};
-export default DiffView;
-```
+The screen's behavior is governed by a simple timer and a keyboard listener.
 
-## File: src/components/FileListView.tsx
-```typescript
-import React from 'react';
-import {Box, Text} from 'ink';
+#### **4.1. Implementation Flow**
 
-const getDiffStats = (diff: string) => {
-  if (!diff) return {added: 0, removed: 0};
-  const lines = diff.split('\n');
-  const added = lines.filter(l => l.startsWith('+') && !l.startsWith('+++')).length;
-  const removed = lines.filter(l => l.startsWith('-') && !l.startsWith('---')).length;
-  return {added, removed};
-};
+1.  **On Startup:** The application's entry point immediately clears the terminal screen.
+2.  **Render Static Content:** The entire multi-line string for the splash screen (Header, Body, and initial Footer) is printed to stdout *once*.
+3.  **Initialize Timers & Listeners:**
+    *   A `setInterval` function is started with a 1000ms interval to handle the countdown.
+    *   A raw keyboard input listener is activated to detect any key press.
+4.  **Countdown Loop (on `setInterval` tick):**
+    *   The countdown variable is decremented (e.g., `5` becomes `4`).
+    *   The code uses terminal control sequences to move the cursor to the beginning of the *last line*.
+    *   It clears the last line.
+    *   It re-renders the footer string with the new countdown number (e.g., `Loading... 4 (Press any key to skip)`).
+    *   **Crucially, it does not re-render the entire screen.** This is efficient and prevents any flickering.
+5.  **Termination Conditions:** The loop terminates when one of two conditions is met:
+    *   **Timeout:** The countdown variable reaches `0`.
+    *   **User Skip:** The keyboard listener detects *any* key press.
+6.  **Cleanup & Transition:** Upon termination:
+    *   The `setInterval` timer is cleared (`clearInterval`).
+    *   The keyboard listener is detached.
+    *   The application proceeds to its next logical state (e.g., rendering the Dashboard or the appropriate command's UI).
 
-const getFileColor = (type: string) => {
-  switch (type) {
-    case 'A':
-      return 'green';
-    case 'M':
-      return 'yellow';
-    case 'D':
-      return 'red';
-    default:
-      return 'white';
-  }
-};
+#### **4.2. Codebase Integration**
 
-interface FileListProps {
-  files: {type: string; path: string; diff: string}[];
-  selectedIndex: number;
-}
+-   The version numbers (`1.1.5`, etc.) and timestamps should be dynamically imported from the respective `package.json` and build-time constant files (e.g., `__LAST_MODIFIED__`) to ensure they are always up-to-date.
+-   The logic for handling "(versioned)" packages should check if a timestamp constant exists; if not, it displays the placeholder text.
+-   This splash screen logic should wrap the main application router/dispatcher in `cli.ts`.
 
-export default function FileListView({files, selectedIndex}: FileListProps) {
-  return (
-    <Box flexDirection="column">
-      {files.map((file, index) => {
-        const {added, removed} = getDiffStats(file.diff);
-        return (
-          <Box key={file.path} backgroundColor={index === selectedIndex ? 'gray' : undefined} paddingX={1}>
-            <Box flexGrow={1}>
-              <Text color={getFileColor(file.type)} bold>
-                {file.type}{' '}
-              </Text>
-              <Text>{file.path}</Text>
-            </Box>
-            <Box>
-              {added > 0 && <Text color="green"> +{added}</Text>}
-              {removed > 0 && <Text color="red"> -{removed}</Text>}
-            </Box>
-          </Box>
-        );
-      })}
-    </Box>
-  );
-}
-```
-
-## File: src/components/Panel.tsx
-```typescript
-import React, {type PropsWithChildren} from 'react';
-import {Box, Text} from 'ink';
-
-interface PanelProps {
-  title: string;
-}
-
-export default function Panel({
-  title,
-  children,
-}: PropsWithChildren<PanelProps>) {
-  return (
-    <Box
-      borderStyle="round"
-      borderColor="gray"
-      flexDirection="column"
-      paddingX={1}
-      flexGrow={1}
-    >
-      <Box marginTop={-1} marginLeft={1}>
-        <Text color="cyan"> {title} </Text>
-      </Box>
-      <Box flexGrow={1}>{children}</Box>
-    </Box>
-  );
-}
-```
+This design ensures a professional, informative, and user-respectful startup experience that strengthens the Relaycode brand and smoothly onboards the user into the application.
+````
 
 ## File: index.tsx
-```typescript
+````typescript
 import React from 'react';
 import { render } from 'ink';
 import App from './src/App.tsx';
 
 render(<App />);
-```
+````
+
+## File: package.json
+````json
+{
+  "name": "relaycode-tui",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.tsx",
+    "dev": "bun run --watch index.tsx"
+  },
+  "dependencies": {
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
+    "ink-use-stdout-dimensions": "^1.0.1",
+    "ink-text-input": "^4.0.3",
+    "ink-select-input": "^4.2.2",
+    "ink-spinner": "^5.0.0",
+    "chalk": "^5.3.0",
+    "clipboardy": "^4.0.0",
+    "zustand": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.2.22",
+    "@types/node": "^20.5.9",
+    "typescript": "^5"
+  }
+}
+````
 
 ## File: tsconfig.json
-```json
+````json
 {
   "compilerOptions": {
     // Environment setup & latest features
@@ -232,7 +331,7 @@ render(<App />);
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
-    "jsx": "react",
+    "jsx": "react-jsx",
     "allowJs": true,
 
     // Bundler mode
@@ -254,662 +353,4 @@ render(<App />);
     "noPropertyAccessFromIndexSignature": false
   }
 }
-```
-
-## File: src/components/StatusBar.tsx
-```typescript
-import React from 'react';
-import {Box, Text} from 'ink';
-import {useStore} from '../store';
-import chalk from 'chalk';
-
-export default function StatusBar() {
-  const statusMessage = useStore(state => state.statusMessage);
-
-  let statusColor = 'gray';
-  let finalMessage = statusMessage;
-  let boxColor = 'gray';
-
-  const lowerCaseMessage = statusMessage.toLowerCase();
-
-  if (lowerCaseMessage.startsWith('[watching]')) {
-    statusColor = 'cyan';
-    boxColor = 'cyan';
-    finalMessage = chalk.bold(statusMessage);
-  } else if (lowerCaseMessage.startsWith('[confirmation]')) {
-    statusColor = 'yellow';
-    boxColor = 'yellow';
-  } else if (lowerCaseMessage.startsWith('[error]')) {
-    statusColor = 'red';
-    boxColor = 'red';
-  } else if (lowerCaseMessage.startsWith('[success]')) {
-    statusColor = 'green';
-    boxColor = 'green';
-  } else if (lowerCaseMessage.startsWith('[pending]')) {
-    statusColor = 'gray';
-    boxColor = 'gray';
-  }
-
-  return (
-    <Box borderStyle="round" borderColor={boxColor} paddingX={1} flexDirection="row">
-      <Box marginRight={2}>
-        <Text color="gray">relaycode-tui | main</Text>
-      </Box>
-      <Text color={statusColor} flexGrow={1}>{finalMessage}</Text>
-    </Box>
-  );
-}
-```
-
-## File: src/views/WorkingView.tsx
-```typescript
-import React, {useState, useEffect} from 'react';
-import {Box, Text, useInput} from 'ink';
-import Spinner from 'ink-spinner';
-import {useStore} from '../store';
-import Panel from '../components/Panel';
-
-const steps = [
-  '[1/5] Taking file snapshot...',
-  '      Snapshot created for 3 files.',
-  '[2/5] Applying file operations...',
-  '[3/5] Running pre-commit command: `bun tsc --noEmit`...',
-  '      Linter found 0 errors. Build successful.',
-  '[4/5] Committing transaction...',
-  '[5/5] ✅ Patch applied successfully!',
-];
-
-export default function WorkingView() {
-    const {returnToReady} = useStore(state => state.actions);
-    const [output, setOutput] = useState<string[]>([]);
-    const [stepIndex, setStepIndex] = useState(0);
-    const [done, setDone] = useState(false);
-
-    useEffect(() => {
-        if (stepIndex >= steps.length) {
-            setDone(true);
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            setOutput(prev => [...prev, steps[stepIndex] || '']);
-            setStepIndex(stepIndex + 1);
-        }, Math.random() * 500 + 200);
-
-        return () => clearTimeout(timeout);
-    }, [stepIndex]);
-
-    useInput(() => {
-        if (done) {
-            returnToReady();
-        }
-    });
-
-    return (
-      <Panel title="Applying Patch...">
-        <Box flexDirection="column">
-          {output.map((line, index) => (
-            <Text key={index}>{line}</Text>
-          ))}
-          {!done && <Text><Spinner type="dots" /> Running...</Text>}
-          {done && (
-              <Box marginTop={1}>
-                  <Text color="gray">Press any key to return to the main screen.</Text>
-              </Box>
-          )}
-        </Box>
-      </Panel>
-    );
-}
-```
-
-## File: src/App.tsx
-```typescript
-import React from 'react';
-import {useApp, useInput, Box} from 'ink';
-import {useStore} from './store';
-import ReadyView from './views/ReadyView';
-import ReviewView from './views/ReviewView';
-import WorkingView from './views/WorkingView';
-import HistoryView from './views/HistoryView';
-import StatusBar from './components/StatusBar';
-
-export default function App() {
-  const mode = useStore(state => state.mode);
-  const {exit} = useApp();
-
-  useInput((input, key) => {
-    // Global quit handlers
-    if (input === 'q' && (mode === 'ready' || mode === 'working')) {
-      exit();
-    }
-    if (key.ctrl && input === 'c') {
-      exit();
-    }
-  });
-
-  let view;
-  switch (mode) {
-    case 'ready':
-      view = <ReadyView />;
-      break;
-    case 'review':
-      view = <ReviewView />;
-      break;
-    case 'working':
-      view = <WorkingView />;
-      break;
-    case 'history':
-      view = <HistoryView />;
-      break;
-    default:
-      view = null;
-  }
-
-  return (
-    <Box paddingX={1} paddingTop={1} width="100%" height="100%" flexDirection="column">
-      <Box flexGrow={1}>
-        {view}
-      </Box>
-      <StatusBar />
-    </Box>
-  );
-}
-```
-
-## File: package.json
-```json
-{
-  "name": "relaycode-tui",
-  "module": "index.tsx",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "start": "bun run index.tsx",
-    "dev": "bun run --watch index.tsx"
-  },
-  "dependencies": {
-    "ink": "^4.4.1",
-    "react": "^18.2.0",
-    "react-reconciler": "^0.29.0",
-    "ink-use-stdout-dimensions": "^1.0.1",
-    "ink-text-input": "^4.0.3",
-    "ink-select-input": "^4.2.2",
-    "ink-spinner": "^5.0.0",
-    "chalk": "^5.3.0",
-    "clipboardy": "^4.0.0",
-    "zustand": "^4.4.1"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^18.2.22",
-    "@types/node": "^20.5.9",
-    "typescript": "^5"
-  }
-}
-```
-
-## File: src/components/TransactionListView.tsx
-```typescript
-import React from 'react';
-import {Box, Text} from 'ink';
-import {type MockTransaction} from '../constants';
-
-interface TransactionListProps {
-  transactions: MockTransaction[];
-  selectedIndex: number;
-}
-
-export default function TransactionListView({transactions, selectedIndex}: TransactionListProps) {
-  const revertedUuids = new Set(transactions.map(tx => tx.revertedFrom).filter(Boolean));
-
-  return (
-    <Box flexDirection="column">
-      {transactions.map((tx, index) => {
-        const isReverted = revertedUuids.has(tx.uuid);
-        return (
-          <Box 
-            key={tx.uuid} 
-            flexDirection="column" 
-            paddingY={index === selectedIndex ? 0 : 1}
-            paddingX={1}
-            borderStyle={index === selectedIndex ? 'round' : undefined}
-            borderColor={index === selectedIndex ? 'cyan' : undefined}
-          >
-            <Text bold color={index === selectedIndex ? 'cyan' : (isReverted ? 'gray' : undefined)}>
-              {isReverted ? (
-                  <Text strikethrough>
-                    <Text color="gray">↩️ Reverted: </Text>{tx.commit}
-                  </Text>
-              ) : (
-                <Text>
-                  {tx.type === 'revert' && <Text color="yellow">⮂ Revert: </Text>}
-                  {tx.commit}
-                </Text>
-              )}
-               {' '}{tx.committed && !isReverted && (
-                <Text color="green" bold>✓ git</Text>
-              )}
-            </Text>
-            <Text color={isReverted ? 'gray' : 'gray'}>{tx.date}</Text>
-          </Box>
-        )
-      })}
-    </Box>
-  );
-}
-```
-
-## File: src/views/ReadyView.tsx
-```typescript
-import React from 'react';
-import {Box, Text, useInput} from 'ink';
-import {useStore} from '../store';
-import Panel from '../components/Panel';
-import TransactionListView from '../components/TransactionListView';
-import CommandBar from '../components/CommandBar';
-
-export default function ReadyView() {
-  const {actions, history} = useStore(state => ({actions: state.actions, history: state.history}));
-  const recentHistory = history.slice(0, 4);
-
-  useInput(input => {
-    if (input === 'p') {
-      actions.pasteFromClipboard();
-    }
-    if (input === 'h') {
-      actions.viewHistory();
-    }
-  });
-
-  const commands = [
-    {key: 'P', label: 'Paste from Clipboard'},
-    {key: 'H', label: 'View Full History'},
-    {key: 'Q', label: 'Quit'},
-  ];
-
-  return (
-    <Box flexDirection="column" flexGrow={1}>
-      <Box flexGrow={1} flexDirection="row">
-        <Box flexDirection="column" width="40%" marginRight={1}>
-          <Panel title="ℹ️ Project Info">
-            <Box flexDirection="column">
-              <Text><Text bold>Path:</Text> {process.cwd()}</Text>
-              <Text><Text bold>Git Branch:</Text> main</Text>
-              <Text><Text bold>Config:</Text> Auto-approve: off, Linter: `bun tsc`</Text>
-            </Box>
-          </Panel>
-        </Box>
-        <Box flexGrow={1}>
-          <Panel title="Recent Transactions">
-            <TransactionListView transactions={recentHistory} selectedIndex={-1} />
-          </Panel>
-        </Box>
-      </Box>
-      <Box marginTop={1}>
-        <CommandBar commands={commands} />
-      </Box>
-    </Box>
-  );
-}
-```
-
-## File: src/constants.ts
-```typescript
-type CheckStatus = 'success' | 'error' | 'warning';
-
-export const MOCK_PATCH = {
-  summary: {
-    reasoning: 'Refactored the main logic to improve performance.',
-    gitCommit: 'feat: Optimize core processing loop',
-  },
-  preflight: {
-    linter: {
-      status: 'error' as CheckStatus,
-      output: 'Linter Dry-Run: Found 2 errors in `src/core/transaction.ts`.',
-    },
-    build: {
-      status: 'success' as CheckStatus,
-      output: 'Build Check: OK',
-    },
-    warnings: ['1 code block ignored (malformed header).'],
-  },
-  changes: [
-    {
-      type: 'M',
-      path: 'src/core/transaction.ts',
-      diff: `diff --git a/src/core/transaction.ts b/src/core/transaction.ts
-index 123..456 100644
---- a/src/core/transaction.ts
-+++ b/src/core/transaction.ts
-@@ -50,7 +50,8 @@
- const snapshot = await createSnapshot(affectedFilePaths, cwd);
- const stateFile: StateFile = {
-   uuid,
--  approved: false,
-+  approved: false, // Default state
-+  status: 'pending',
- };
- 
- try {`,
-    },
-    {
-      type: 'A',
-      path: 'src/utils/new-helper.ts',
-      diff: `diff --git a/src/utils/new-helper.ts b/src/utils/new-helper.ts
-new file mode 100644
-index 0000000..abcdef
---- /dev/null
-+++ b/src/utils/new-helper.ts
-@@ -0,0 +1,5 @@
-+export function newHelper() {
-+  // This is a new helper function
-+  return true;
-+}
-+`,
-    },
-    {
-      type: 'D',
-      path: 'src/old.ts',
-      diff: `diff --git a/src/old.ts b/src/old.ts
-deleted file mode 100644
-index 1234567..0000000
---- a/src/old.ts
-+++ /dev/null
-@@ -1,3 +0,0 @@
--function oldFunction() {
--  console.log("I am old");
--}
--`,
-    },
-  ],
-};
-
-export const MOCK_HISTORY = [
-    {
-        type: 'apply' as const,
-        uuid: 'a1b2c3d4',
-        commit: 'fix: Correctly handle user logout',
-        date: '2023-10-27 10:30:15',
-        patch: MOCK_PATCH,
-        committed: true,
-    },
-    {
-        type: 'apply' as const,
-        uuid: 'e5f6g7h8',
-        commit: 'feat: Add new dashboard component',
-        date: '2023-10-26 15:12:45',
-        patch: MOCK_PATCH, // Using same patch for demo purposes
-        committed: true,
-    },
-    {
-        type: 'revert' as const,
-        uuid: 'i9j10k11',
-        commit: 'revert: feat: Add broken feature',
-        date: '2023-10-25 11:00:00',
-        patch: MOCK_PATCH,
-        revertedFrom: 'z2y3x4w5',
-        committed: false,
-    },
-    {
-        type: 'apply' as const,
-        uuid: 'z2y3x4w5',
-        commit: 'feat: Add broken feature',
-        date: '2023-10-24 09:00:00',
-        patch: MOCK_PATCH,
-        committed: false,
-    },
-];
-
-export type MockTransaction = (typeof MOCK_HISTORY)[0] & {
-    revertedFrom?: string;
-    committed?: boolean;
-};
-```
-
-## File: src/store.ts
-```typescript
-import {create} from 'zustand';
-import {MOCK_PATCH, MOCK_HISTORY, type MockTransaction} from './constants';
-
-type AppMode = 'ready' | 'review' | 'working' | 'history';
-
-interface AppState {
-  mode: AppMode;
-  statusMessage: string;
-  patch: typeof MOCK_PATCH | null;
-  history: typeof MOCK_HISTORY;
-  actions: {
-    setStatusMessage: (message: string) => void;
-    pasteFromClipboard: () => void;
-    approvePatch: () => void;
-    rejectPatch: () => void;
-    revertTransaction: (uuid: string) => void;
-    viewHistory: () => void;
-    returnToReady: () => void;
-  };
-}
-
-export const useStore = create<AppState>(set => ({
-  mode: 'ready',
-  statusMessage: '[WATCHING] Ready for patch from clipboard...',
-  patch: null,
-  history: MOCK_HISTORY,
-  actions: {
-    setStatusMessage: (message: string) => set({ statusMessage: message }),
-    pasteFromClipboard: () => set({mode: 'review', patch: MOCK_PATCH, statusMessage: 'Patch loaded. Reviewing changes...'}),
-    approvePatch: () => set({mode: 'working', statusMessage: 'Patch approved. Applying changes...'}),
-    rejectPatch: () => set({mode: 'ready', patch: null, statusMessage: '[WATCHING] Patch rejected. Ready for new patch...' }),
-    revertTransaction: (uuid: string) => set(state => {
-      const txToRevert = state.history.find(tx => tx.uuid === uuid);
-      if (!txToRevert) return {};
-
-      const revertCommitMsg = `revert: ${txToRevert.commit}`;
-      const newRevertTx: MockTransaction = {
-        type: 'revert',
-        uuid: `revert-${txToRevert.uuid}-${Math.random()}`, // Mock UUID
-        commit: revertCommitMsg,
-        date: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        patch: txToRevert.patch, // In reality, this would be an inverse patch
-        revertedFrom: txToRevert.uuid,
-        committed: false,
-      };
-
-      return {
-        history: [newRevertTx, ...state.history],
-        statusMessage: `[SUCCESS] Reverted "${txToRevert.commit}"`
-      };
-    }),
-    viewHistory: () => set({mode: 'history', statusMessage: 'Viewing transaction history.'}),
-    returnToReady: () => set({mode: 'ready', patch: null, statusMessage: '[WATCHING] Ready for patch from clipboard...'}),
-  },
-}));
-```
-
-## File: src/views/HistoryView.tsx
-```typescript
-import React, {useState} from 'react';
-import {Box, useInput} from 'ink';
-import {useStore} from '../store';
-import Panel from '../components/Panel';
-import CommandBar from '../components/CommandBar';
-import DiffView from '../components/DiffView';
-import TransactionListView from '../components/TransactionListView';
-import ConfirmationDialog from '../components/ConfirmationDialog';
-
-export default function HistoryView() {
-    const {history, actions} = useStore(state => ({history: state.history, actions: state.actions}));
-    const setStatusMessage = useStore(state => state.actions.setStatusMessage);
-    const [selectedTxIndex, setSelectedTxIndex] = useState(0);
-    const [isConfirmingRevert, setIsConfirmingRevert] = useState(false);
-
-    const selectedTx = history[selectedTxIndex];
-    const fullDiff = selectedTx?.patch.changes.map(c => c.diff).join('\n\n') || '';
-
-    useInput((input, key) => {
-        // Disable main input when confirming
-        if (isConfirmingRevert) return;
-
-        if (key.upArrow || input === 'k') {
-          setSelectedTxIndex(Math.max(0, selectedTxIndex - 1));
-        } else if (key.downArrow || input === 'j') {
-          setSelectedTxIndex(Math.min(history.length - 1, selectedTxIndex + 1));
-        } else if (input === 'u') {
-          if (selectedTx) {
-            setIsConfirmingRevert(true);
-            setStatusMessage(`[CONFIRMATION] Revert "${selectedTx.commit}"? (Y/N)`);
-          }
-        } else if (input === 'q') {
-          actions.returnToReady();
-        }
-    });
-
-    const handleRevertConfirm = () => {
-      if (selectedTx) {
-          setStatusMessage(`[PENDING] Reverting transaction: ${selectedTx.commit}...`);
-          actions.revertTransaction(selectedTx.uuid);
-      }
-      setIsConfirmingRevert(false);
-    };
-
-    const handleRevertCancel = () => {
-        setIsConfirmingRevert(false);
-        setStatusMessage('Revert cancelled.');
-    };
-    
-    const commands = isConfirmingRevert ? [
-        {key: 'Y', label: 'Yes, Revert'},
-        {key: 'N', label: 'No, Cancel'},
-    ] : [
-        {key: 'U', label: 'Undo/Revert'},
-        {key: '↑↓/JK', label: 'Navigate'},
-        {key: 'Q', label: 'Quit to Main'},
-    ];
-
-    return (
-      <>
-        <Box flexDirection="column" flexGrow={1}>
-            <Box flexGrow={1} flexDirection="row">
-                <Box width="40%" marginRight={1}>
-                    <Panel title={isConfirmingRevert ? `Revert "${selectedTx?.commit || ''}"?` : `Transactions (${selectedTxIndex + 1}/${history.length})`}>
-                        <TransactionListView transactions={history} selectedIndex={selectedTxIndex} />
-                    </Panel>
-                </Box>
-                <Box flexGrow={1}>
-                    <Panel title={`Diff for: ${selectedTx?.commit || ''}`}>
-                        <DiffView diff={fullDiff} />
-                    </Panel>
-                </Box>
-            </Box>
-            <Box marginTop={1}>
-                <CommandBar commands={commands} />
-            </Box>
-        </Box>
-        {isConfirmingRevert && selectedTx && (
-            <ConfirmationDialog onConfirm={handleRevertConfirm} onCancel={handleRevertCancel}>
-                Are you sure you want to revert transaction "{selectedTx.commit}"?
-            </ConfirmationDialog>
-        )}
-      </>
-    );
-}
-```
-
-## File: src/views/ReviewView.tsx
-```typescript
-import React, {useState} from 'react';
-import {Box, Text, useInput} from 'ink';
-import {useStore} from '../store';
-import Panel from '../components/Panel';
-import CommandBar from '../components/CommandBar';
-import DiffView from '../components/DiffView';
-import FileListView from '../components/FileListView';
-
-export default function ReviewView() {
-    const {patch, actions} = useStore(state => ({patch: state.patch, actions: state.actions}));
-    const [selectedIndex, setSelectedIndex] = useState(0);
-
-    const changes = patch?.changes || [];
-
-    useInput((input, key) => {
-        if (key.upArrow) {
-            setSelectedIndex(Math.max(0, selectedIndex - 1));
-        }
-        if (key.downArrow) {
-            setSelectedIndex(Math.min(changes.length - 1, selectedIndex + 1));
-        }
-        if (input === 'a') {
-            actions.approvePatch();
-        }
-        if (input === 'r') {
-            actions.rejectPatch();
-        }
-        if (input === 'q') {
-            actions.returnToReady();
-        }
-    });
-
-    if (!patch) {
-        return <Text>Loading patch...</Text>;
-    }
-    
-    const selectedChange = changes[selectedIndex];
-
-    const commands = [
-        {key: 'A', label: 'Approve & Apply'},
-        {key: 'R', label: 'Reject'},
-        {key: '↑↓', label: 'Navigate'},
-        {key: 'Q', label: 'Quit to Main'},
-    ];
-
-    return (
-        <Box flexDirection="column" flexGrow={1}>
-            <Box flexGrow={1} flexDirection="row">
-                <Box width="40%" marginRight={1} flexDirection="column">
-                    <Box height="35%" marginBottom={1}>
-                         <Panel title="Pre-flight Checks">
-                            <Box flexDirection="column">
-                                <Text color={patch.preflight.build.status === 'success' ? 'green' : 'red'}>
-                                    {patch.preflight.build.status === 'success' ? '✓' : '✗'} {patch.preflight.build.output}
-                                </Text>
-                                <Text color={patch.preflight.linter.status === 'success' ? 'green' : patch.preflight.linter.status === 'error' ? 'red' : 'yellow'}>
-                                    {patch.preflight.linter.status === 'success' 
-                                        ? '✓' 
-                                        : patch.preflight.linter.status === 'error' 
-                                        ? '✗' 
-                                        : '!'} {patch.preflight.linter.output}
-                                </Text>
-                                
-                                {patch.preflight.warnings.map((warning, i) => (
-                                    <Text key={i} color="yellow">  ! Warning: {warning}</Text>
-                                ))}
-                            </Box>
-                        </Panel>
-                    </Box>
-                    <Box flexGrow={1}>
-                        <Panel title={`Changes (${selectedIndex + 1}/${changes.length})`}>
-                            <FileListView files={changes} selectedIndex={selectedIndex} />
-                        </Panel>
-                    </Box>
-                </Box>
-                <Box flexGrow={1} flexDirection="column">
-                    <Box height="25%" marginBottom={1}>
-                        <Panel title="Patch Summary">
-                            <Box flexDirection="column">
-                                <Text><Text bold>Reasoning: </Text>{patch.summary.reasoning}</Text>
-                                <Text><Text bold>Git Commit: </Text>{patch.summary.gitCommit}</Text>
-                            </Box>
-                        </Panel>
-                    </Box>
-                    <Panel title={`Diff: ${selectedChange?.path || ''}`}>
-                        <DiffView diff={selectedChange?.diff || ''} />
-                    </Panel>
-                </Box>
-            </Box>
-            <Box marginTop={1}>
-                <CommandBar commands={commands} />
-            </Box>
-        </Box>
-    );
-}
-```
+````

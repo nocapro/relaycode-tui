@@ -22,7 +22,14 @@
       "includeDiffs": false
     }
   },
-  "include": ["package.json", "tsconfig.json", "index.tsx", "src"],
+  "include": [
+    "package.json",
+    "tsconfig.json",
+    "index.tsx",
+    "src",
+    "docs/relaycode-tui/splash-screen.readme.md",
+    "docs/relaycode-tui/initialization-screen.readme.md"
+  ],
   "ignore": {
     "useGitignore": true,
     "useDefaultPatterns": true,
