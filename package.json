@@ -1,0 +1,27 @@
+{
+  "name": "relaycode-tui",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.tsx",
+    "dev": "bun run --watch index.tsx"
+  },
+  "dependencies": {
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
+    "ink-use-stdout-dimensions": "^1.0.1",
+    "ink-text-input": "^4.0.3",
+    "ink-select-input": "^4.2.2",
+    "ink-spinner": "^5.0.0",
+    "chalk": "^5.3.0",
+    "clipboardy": "^4.0.0",
+    "zustand": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.2.22",
+    "@types/node": "^20.5.9",
+    "typescript": "^5"
+  }
+}
