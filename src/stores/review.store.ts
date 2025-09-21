@@ -2,12 +2,14 @@ import { create } from 'zustand';
 
 // --- Types ---
 
-export type FileStatus = 'MODIFIED' | 'FAILED' | 'APPROVED' | 'REJECTED';
+export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED';
 export interface FileItem {
     id: string;
     path: string;
     status: FileStatus;
     diff: string;
+    linesAdded: number;
+    linesRemoved: number;
     error?: string;
     strategy: 'replace' | 'standard-diff';
 }
@@ -21,6 +23,7 @@ export interface ScriptResult {
 }
 
 export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'none';
+export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
 
 interface ReviewState {
     // Transaction Info
@@ -28,11 +31,15 @@ interface ReviewState {
     message: string;
     prompt: string;
     reasoning: string;
-    
+    linesAdded: number;
+    linesRemoved: number;
+    duration: number;
+    patchStatus: PatchStatus;
+
     // File & Script Info
     files: FileItem[];
     scripts: ScriptResult[];
-    
+
     // UI State
     selectedItemIndex: number; // Can be file or script
     bodyView: BodyView;
@@ -42,17 +49,19 @@ interface ReviewState {
         moveSelectionUp: () => void;
         moveSelectionDown: () => void;
         toggleFileApproval: () => void;
+        rejectAllFiles: () => void;
         toggleDiffView: () => void;
         toggleReasoningView: () => void;
-        toggleScriptView: (index: number) => void;
+        toggleScriptView: () => void;
         expandDiff: () => void;
+        approve: () => void;
     };
 }
 
 // --- Mock Data ---
 
 const mockFiles: FileItem[] = [
-    { id: '1', path: 'src/core/clipboard.ts', status: 'APPROVED', diff: `--- a/src/core/clipboard.ts
+    { id: '1', path: 'src/core/clipboard.ts', status: 'APPROVED', linesAdded: 15, linesRemoved: 8, diff: `--- a/src/core/clipboard.ts
 +++ b/src/core/clipboard.ts
 @@ -1,5 +1,6 @@
  import { copy as copyToClipboard } from 'clipboardy';
@@ -68,7 +77,7 @@ const mockFiles: FileItem[] = [
 +    return { success: false, error: getErrorMessage(error) };
    }
  };`, strategy: 'replace' },
-    { id: '2', path: 'src/utils/shell.ts', status: 'APPROVED', diff: `--- a/src/utils/shell.ts
+    { id: '2', path: 'src/utils/shell.ts', status: 'APPROVED', linesAdded: 7, linesRemoved: 3, diff: `--- a/src/utils/shell.ts
 +++ b/src/utils/shell.ts
 @@ -10,3 +10,11 @@
  export const executeCommand = async (command: string): Promise<string> => {
@@ -81,8 +90,8 @@ const mockFiles: FileItem[] = [
 +  }
 +  return String(error);
 +};
-`, strategy: 'standard-diff' },
-    { id: '3', path: 'src/components/Button.tsx', status: 'FAILED', diff: '', error: 'Hunk #1 failed to apply', strategy: 'standard-diff' },
+`, strategy: 'standard-diff' }, // In the spec, this is called 'diff' in brackets. our enum is 'standard-diff'. I'll keep the enum and adjust display.
+    { id: '3', path: 'src/components/Button.tsx', status: 'FAILED', linesAdded: 0, linesRemoved: 0, diff: '', error: 'Hunk #1 failed to apply', strategy: 'standard-diff' },
 ];
 
 const mockScripts: ScriptResult[] = [
@@ -103,12 +112,16 @@ const mockReasoning = `1. Identified a potential uncaught exception in the \`res
 
 // --- Store Implementation ---
 
-export const useReviewStore = create<ReviewState>((set, get) => ({
+export const useReviewStore = create<ReviewState>((set) => ({
     // Transaction Info
     hash: '4b9d8f03',
     message: 'refactor: simplify clipboard logic',
     prompt: 'Simplify the clipboard logic using an external library...',
     reasoning: mockReasoning,
+    linesAdded: 22,
+    linesRemoved: 11,
+    duration: 3.9,
+    patchStatus: 'PARTIAL_FAILURE',
 
     // File & Script Info
     files: mockFiles,
@@ -121,10 +134,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
     actions: {
         moveSelectionUp: () => set(state => ({
-            selectedItemIndex: Math.max(0, state.selectedItemIndex - 1)
+            selectedItemIndex: Math.max(0, state.selectedItemIndex - 1),
         })),
         moveSelectionDown: () => set(state => ({
-            selectedItemIndex: Math.min(state.files.length + state.scripts.length - 1, state.selectedItemIndex + 1)
+            selectedItemIndex: Math.min(state.files.length + state.scripts.length - 1, state.selectedItemIndex + 1),
         })),
         toggleFileApproval: () => set(state => {
             const { selectedItemIndex, files } = state;
@@ -141,27 +154,36 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             }
             return { files: newFiles };
         }),
+        rejectAllFiles: () => set(state => {
+            const newFiles = state.files.map(file => {
+                if (file.status === 'APPROVED') {
+                    return { ...file, status: 'REJECTED' as const };
+                }
+                return file;
+            });
+            return { files: newFiles };
+        }),
         toggleDiffView: () => set(state => {
             const { bodyView } = state;
             if (state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
             return {
                 bodyView: bodyView === 'diff' ? 'none' : 'diff',
-                isDiffExpanded: false // Always start collapsed
+                isDiffExpanded: false, // Always start collapsed
             };
         }),
         toggleReasoningView: () => set(state => {
             const { bodyView } = state;
             return {
-                bodyView: bodyView === 'reasoning' ? 'none' : 'reasoning'
+                bodyView: bodyView === 'reasoning' ? 'none' : 'reasoning',
             };
         }),
-        toggleScriptView: (index: number) => set(state => {
-            const { bodyView, selectedItemIndex } = state;
-            if (bodyView === 'script_output' && selectedItemIndex === index) {
-                return { bodyView: 'none' };
-            }
-            return { bodyView: 'script_output' };
+        toggleScriptView: () => set(state => {
+            const { bodyView } = state;
+            return {
+                bodyView: bodyView === 'script_output' ? 'none' : 'script_output',
+            };
         }),
         expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
-    }
+        approve: () => { /* NOP for now, would trigger commit and screen change */ },
+    },
 }));

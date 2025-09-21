@@ -26,19 +26,24 @@
     "package.json",
     "tsconfig.json",
     "index.tsx",
-    "src",
+    "src"
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"
     // "docs/relaycode-tui/dashboard-screen.readme.md",
     // "docs/relaycode-tui/global-help-screen.readme.md"
-    "docs/relaycode-tui/review-screen.readme.md",
-    "docs/relaycode-tui/diff-screen.readme.md",
-    "docs/relaycode-tui/reason-screen.readme.md"
+    // "docs/relaycode-tui/review-screen.readme.md",
+    // "docs/relaycode-tui/diff-screen.readme.md",
+    // "docs/relaycode-tui/reason-screen.readme.md"
   ],
   "ignore": {
     "useGitignore": true,
     "useDefaultPatterns": true,
-    "customPatterns": []
+    "customPatterns": [
+      // "src/components/GlobalHelpScreen.tsx",
+      // "src/components/DashboardScreen.tsx",
+      // // "src/components/InitializationScreen.tsx",
+      // "src/components/SplashScreen.tsx"
+    ]
   },
   "security": {
     "enableSecurityCheck": true

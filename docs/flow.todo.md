@@ -1,11 +1,12 @@
 
 ===
 
-review screen
+review screen current layout, UI, UX not identical to readme
 
 1. make current implementation comply docs/relaycode-tui/review-screen.readme.md
 2. need reject all action
 3. need back/esc action
+4. no all possible state simulation
 
 dont forget to update docs/relaycode-tui/review-screen.readme.md if you have updated design
 

@@ -11,6 +11,7 @@ const App = () => {
     useEffect(() => {
         // Clear the terminal when the screen changes to ensure a clean view.
         // This is especially important when transitioning from the splash screen.
+        // eslint-disable-next-line no-console
         console.clear();
     }, [currentScreen]);
     

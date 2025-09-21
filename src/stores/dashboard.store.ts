@@ -53,13 +53,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     showHelp: false,
     actions: {
         togglePause: () => set(state => ({
-            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING'
+            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
         })),
         moveSelectionUp: () => set(state => ({
-            selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1)
+            selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1),
         })),
         moveSelectionDown: () => set(state => ({
-            selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1)
+            selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1),
         })),
         startApproveAll: () => set(state => ({
             status: 'CONFIRM_APPROVE',
@@ -78,7 +78,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
                 set({ status: 'APPROVING' });
 
                 // Find pending transactions and mark them as in-progress
-                let pendingTxIds: string[] = [];
+                const pendingTxIds: string[] = [];
                 set(state => {
                     const newTxs = state.transactions.map(tx => {
                         if (tx.status === 'PENDING') {
@@ -105,7 +105,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             } else if (status === 'CONFIRM_COMMIT') {
                 set({ status: 'COMMITTING' });
                  // Find applied transactions and mark them as in-progress
-                 let appliedTxIds: string[] = [];
+                 const appliedTxIds: string[] = [];
                  set(state => {
                      const newTxs = state.transactions.map(tx => {
                          if (tx.status === 'APPLIED') {

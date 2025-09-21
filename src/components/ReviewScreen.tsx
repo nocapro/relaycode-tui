@@ -1,6 +1,7 @@
-import React from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useMemo } from 'react';
+import { Box, Text, useInput, useApp } from 'ink';
 import { useReviewStore, type FileItem, type ScriptResult } from '../stores/review.store';
+import { useAppStore } from '../stores/app.store';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
@@ -14,56 +15,93 @@ const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean
         case 'APPROVED': icon = '[✓]'; color = 'green'; break;
         case 'REJECTED': icon = '[✗]'; color = 'red'; break;
         case 'FAILED': icon = '[!]'; color = 'red'; break;
-        case 'MODIFIED': icon = '[~]'; color = 'yellow'; break;
     }
 
-    const fileDetails = <Text color={color}>{icon} MOD {file.path}</Text>;
-    const strategyDetails = file.error ? <Text color="red">({file.error})</Text> : <Text>[{file.strategy}]</Text>;
+    const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+    const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+
+    const fileDetails = <Text color={color}>{icon} MOD {file.path}</Text>;;
+    const strategyDetails = file.error ?
+        (<Text color="red">({file.error})</Text>) :
+        (<Text>{diffStats} [{strategy}]</Text>);
 
     return (
         <Box>
             <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>{isSelected ? '> ' : '  '}{fileDetails}</Text>
             <Box flexGrow={1} />
-            <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>{strategyDetails}</Text>
+            <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}> {strategyDetails}</Text>
         </Box>
     );
-}
+};
 
-const ScriptItemRow = ({ script, isSelected, isExpanded }: { script: ScriptResult, isSelected: boolean, isExpanded: boolean }) => {
+const ScriptItemRow = ({
+    script,
+    isSelected,
+    isExpanded,
+}: {
+    script: ScriptResult;
+    isSelected: boolean;
+    isExpanded: boolean;
+}) => {
     const icon = script.success ? <Text color="green">✓</Text> : <Text color="red">✗</Text>;
     const arrow = isExpanded ? '▾' : '▸';
 
-    const content = <Text>{icon} {script.command} ({script.duration}s) {arrow} {script.summary}</Text>;
+    const content = (
+        <Text>
+            {icon} {script.command} ({script.duration}s) {arrow} {script.summary}
+        </Text>
+    );
     return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
-}
+};
 
 // --- Main Component ---
 
 const ReviewScreen = () => {
+    const { exit } = useApp();
     const store = useReviewStore();
-    const { 
-        hash, message, reasoning, files, scripts, 
-        selectedItemIndex, bodyView, isDiffExpanded 
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const {
+        hash, message, prompt, reasoning, files, scripts, patchStatus,
+        linesAdded, linesRemoved, duration,
+        selectedItemIndex, bodyView, isDiffExpanded,
     } = store;
-    const { 
-        moveSelectionUp, moveSelectionDown, toggleFileApproval, 
-        toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff
+    const {
+        moveSelectionUp, moveSelectionDown, toggleFileApproval,
+        toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+        rejectAllFiles, approve,
     } = store.actions;
-    
+
     const numFiles = files.length;
+    const approvedFilesCount = useMemo(() => files.filter(f => f.status === 'APPROVED').length, [files]);
+    const canBeRejected = useMemo(() => files.some(f => f.status === 'APPROVED'), [files]);
     
     useInput((input, key) => {
+        if (input.toLowerCase() === 'q') exit();
+
+        if (key.escape) {
+            if (bodyView !== 'none') {
+                if (bodyView === 'diff') toggleDiffView();
+                if (bodyView === 'reasoning') toggleReasoningView();
+                if (bodyView === 'script_output') toggleScriptView();
+            } else if (canBeRejected) {
+                rejectAllFiles();
+            } else {
+                showDashboardScreen(); // Go back if nothing to reject
+            }
+            return;
+        }
+
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
 
         if (input.toLowerCase() === 'r') toggleReasoningView();
-        
+
         if (input === ' ') {
             if (selectedItemIndex < numFiles) {
                 toggleFileApproval();
             }
         }
-        
+
         if (input.toLowerCase() === 'd') {
             if (selectedItemIndex < numFiles) {
                 toggleDiffView();
@@ -76,8 +114,13 @@ const ReviewScreen = () => {
 
         if (key.return) { // Enter key
              if (selectedItemIndex >= numFiles) { // It's a script
-                toggleScriptView(selectedItemIndex);
+                toggleScriptView();
             }
+        }
+
+        if (input.toLowerCase() === 'a') {
+            if (approvedFilesCount > 0) approve();
+            showDashboardScreen();
         }
     });
 
@@ -91,7 +134,13 @@ const ReviewScreen = () => {
         if (bodyView === 'diff') {
             const selectedFile = files[selectedItemIndex];
             if (!selectedFile) return null;
-            return <DiffScreen filePath={selectedFile.path} diffContent={selectedFile.diff} isExpanded={isDiffExpanded} />;
+            return (
+                <DiffScreen
+                    filePath={selectedFile.path}
+                    diffContent={selectedFile.diff}
+                    isExpanded={isDiffExpanded}
+                />
+            );
         }
 
         if (bodyView === 'script_output') {
@@ -104,36 +153,49 @@ const ReviewScreen = () => {
                     <Box marginTop={1}><Text>{selectedScript.output}</Text></Box>
                 </Box>
              );
-        }
+        };
         
         return null;
-    }
+    };
 
     const renderFooter = () => {
-        let actions = ["(↑↓) Nav", "(Spc) Toggle"];
-        
+        // Contextual footer for body views
         if (bodyView === 'diff') {
-            actions.push(isDiffExpanded ? "(X)Collapse" : "(X)pand Diff");
-            actions.push("(D)Collapse View");
-        } else if (selectedItemIndex < numFiles) {
-            actions.push("(D)iff");
+            return <Text>(↑↓) Nav · {isDiffExpanded ? '(X)Collapse' : '(X)pand Diff'} · (D/Esc)Collapse View</Text>;
         }
-        
-        if (bodyView === 'reasoning') {
-            actions.push("(R)Collapse View");
-        } else {
-            actions.push("(R)easoning");
+        if (bodyView === 'reasoning') return <Text>(↑↓) Scroll (not implemented) · (R/Esc)Collapse View</Text>;
+        if (bodyView === 'script_output') return <Text>(↑↓) Nav · (Ent/Esc)Collapse</Text>;
+
+        // Main footer
+        if (bodyView !== 'none') return null; // Should be handled by contextual footers above
+
+        const actions = ['(↑↓) Nav'];
+
+        const isFileSelected = selectedItemIndex < numFiles;
+        if (isFileSelected) {
+            const selectedFile = files[selectedItemIndex];
+            if (selectedFile && selectedFile.status !== 'FAILED') {
+                actions.push('(Spc) Toggle');
+            }
+            actions.push('(D)iff');
+        } else { // script selected
+             const isExpanded = selectedItemIndex >= numFiles; // We know bodyView is 'none' here
+             actions.push(isExpanded ? '(Ent)Collapse' : '(Ent)Expand');
         }
 
-        if (selectedItemIndex >= numFiles) {
-             const isExpanded = bodyView === 'script_output' && selectedItemIndex >= numFiles;
-             actions.push(isExpanded ? "(Ent)Collapse" : "(Ent)Expand");
+        actions.push('(R)easoning');
+
+        if (approvedFilesCount > 0) {
+            actions.push('(A)pprove');
         }
-        
-        actions.push("(A)pprove");
-        
-        return <Text>{actions.join(' · ')}</Text>
-    }
+        if (canBeRejected) {
+            actions.push('(Esc)Reject All');
+        }
+
+        actions.push('(Q)uit');
+
+        return <Text>{actions.join(' · ')}</Text>;
+    };
 
     return (
         <Box flexDirection="column">
@@ -142,10 +204,20 @@ const ReviewScreen = () => {
             
             {/* Navigator */}
             <Box flexDirection="column" marginY={1}>
-                <Text>{hash} · {message}</Text>
-                <Text>(+22/-11) · 2/3 Files · 3.9s</Text>
+                <Box>
+                    <Text>{hash} · {message}</Text>
+                    {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                </Box>
+                <Text>
+                    <Text color="green">+{linesAdded}</Text>/<Text color="red">-{linesRemoved}</Text>
+                    {' · '}
+                    {approvedFilesCount}/{numFiles} Files
+                    {' · '}
+                    {duration}s
+                </Text>
                 <Box marginY={1}>
-                    <Text>{bodyView === 'reasoning' ? '▾' : '▸'} (R)easoning (3 steps)</Text>
+                    <Text>{'▸'} (P)rompt: {prompt.substring(0, 50)}...</Text>
+                    <Text>{bodyView === 'reasoning' ? '▾' : '▸'} (R)easoning ({reasoning.split('\n\n').length} steps): {reasoning.split('\n')[0]}</Text>
                 </Box>
                 <Separator/>
                 {scripts.map((script, index) => (

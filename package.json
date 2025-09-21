@@ -5,7 +5,9 @@
   "private": true,
   "scripts": {
     "start": "bun run index.tsx",
-    "dev": "bun run --watch index.tsx"
+    "dev": "bun run --watch index.tsx",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "ink": "^4.4.1",
@@ -18,8 +20,13 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/react": "^18.2.22",
     "@types/node": "^20.5.9",
+    "@types/react": "^18.2.22",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "typescript": "^5"
   }
 }

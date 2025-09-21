@@ -99,7 +99,7 @@ The screen has transitioned from State 3.2 and is now waiting for user intervent
    [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Esc) Reject All
+ (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Esc) Reject All · (Q)uit
 ```
 -   **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`. The footer presents both single-file `(T)` and `(Shift+T)` bulk repair options.
 
@@ -126,7 +126,7 @@ The user decides one of the successful changes is undesirable and rejects it.
    [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (D)iff · (Esc) Reject All
+ (↑↓) Nav · (Spc) Toggle · (D)iff · (Esc) Reject All · (Q)uit
 ```
 -   **Behavior:** The UI instantly recalculates. The file icon changes to `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect the new reality. The footer updates as there are no longer any approved files to commit.
 
@@ -153,7 +153,7 @@ This is the state after a fully successful application (from State 3.1).
    [✓] MOD src/utils/shell.ts     (+7/-3)  [diff]
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (D)iff · (Ent) Expand Details · (C)opy · (A)pprove
+ (↑↓) Nav · (Spc) Toggle · (D)iff · (Ent) Expand Details · (C)opy · (A)pprove · (Q)uit
 ```
 -   **Behavior:** New, expandable sections appear for each post-application script, providing an at-a-glance summary of their results (`✓`/`✗`).
 
@@ -186,7 +186,7 @@ This is the state after a fully successful application (from State 3.1).
     25:1   Warning  Empty block statement. (no-empty)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) Collapse · (J↓/K↑) Next/Prev Error · (C)opy Output
+ (↑↓) Nav · (Enter) Collapse · (J↓/K↑) Next/Prev Error · (C)opy Output · (Esc) Back
 ```
 -   **Behavior:** The Body viewport is replaced with the detailed, formatted output from the linter. The footer provides contextual navigation hotkeys (`J/K`) to jump between errors.
 
@@ -212,7 +212,7 @@ This is the state after a fully successful application (from State 3.1).
   ✓ Copied UUID to clipboard.
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C)opy/Exit
+ (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit
 ```
 -   **Behavior:** A modal overlay appears, allowing the user to copy any piece of metadata related to the transaction to their clipboard with single keystrokes.
 

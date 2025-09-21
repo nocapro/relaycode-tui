@@ -35,11 +35,11 @@ interface InitState {
     interactiveChoice: GitignoreChoice | null;
 
     actions: {
-        setPhase: (phase: InitPhase) => void;
-        updateAnalyzeTask: (id: string, status: TaskStatus) => void;
-        setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
-        updateConfigureTask: (id: string, status: TaskStatus) => void;
-        setInteractiveChoice: (choice: GitignoreChoice) => void;
+        setPhase: (_phase: InitPhase) => void;
+        updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
+        setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
+        updateConfigureTask: (_id: string, _status: TaskStatus) => void;
+        setInteractiveChoice: (_choice: GitignoreChoice) => void;
         resetInit: () => void;
     };
 }
@@ -56,11 +56,11 @@ export const useInitStore = create<InitState>((set) => ({
     actions: {
         setPhase: (phase) => set({ phase }),
         updateAnalyzeTask: (id, status) => set(state => ({
-            analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t)
+            analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
         })),
         setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
         updateConfigureTask: (id, status) => set(state => ({
-            configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t)
+            configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
         })),
         setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
         resetInit: () => set({

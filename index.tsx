@@ -6,6 +6,6 @@ import App from './src/App';
 if (process.stdin.isTTY && process.stdout.isTTY) {
     render(<App />);
 } else {
-    console.log('Interactive terminal required. Please run in a terminal that supports raw input mode.');
+    process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
     process.exit(1);
 }

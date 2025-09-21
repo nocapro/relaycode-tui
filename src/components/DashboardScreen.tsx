@@ -32,8 +32,8 @@ const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction
     const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
     const statusText = transaction.status.padEnd(11, ' ');
     
-    const messageNode = transaction.status === 'IN-PROGRESS' 
-        ? <Text color="cyan">{transaction.message}</Text> 
+    const messageNode = transaction.status === 'IN-PROGRESS'
+        ? <Text color="cyan">{transaction.message}</Text>
         : transaction.message;
     
     const content = (
@@ -45,14 +45,22 @@ const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction
     return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
 };
 
-const ConfirmationContent = ({ status, transactionsToConfirm }: { status: DashboardStatus, transactionsToConfirm: Transaction[] }) => {
+const ConfirmationContent = ({
+    status,
+    transactionsToConfirm,
+}: {
+    status: DashboardStatus;
+    transactionsToConfirm: Transaction[];
+}) => {
     const isApprove = status === 'CONFIRM_APPROVE';
     const actionText = isApprove ? 'APPROVE' : 'COMMIT';
     
     return (
         <Box flexDirection="column" marginY={1} paddingLeft={2}>
             <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
-            <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>
+            <Text>
+                The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:
+            </Text>
             <Box flexDirection="column" paddingLeft={1} marginTop={1}>
                 {transactionsToConfirm.map(tx => (
                     <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
@@ -66,7 +74,16 @@ const ConfirmationContent = ({ status, transactionsToConfirm }: { status: Dashbo
 
 const DashboardScreen = () => {
     const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
-    const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
+    const {
+        togglePause,
+        moveSelectionUp,
+        moveSelectionDown,
+        startApproveAll,
+        startCommitAll,
+        confirmAction,
+        cancelAction,
+        toggleHelp,
+    } = useDashboardStore(s => s.actions);
     const { exit } = useApp();
     const showReviewScreen = useAppStore(s => s.actions.showReviewScreen);
 
@@ -125,15 +142,19 @@ const DashboardScreen = () => {
 
         if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
         if (status === 'COMMITTING') commitStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === 'CONFIRM_APPROVE') approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
-        if (status === 'CONFIRM_COMMIT') commitStr = <Text bold color="yellow">┌ {commitStr} ┐</Text>;
+        if (status === 'CONFIRM_APPROVE') {
+            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        }
+        if (status === 'CONFIRM_COMMIT') {
+            commitStr = <Text bold color="yellow">┌ {commitStr} ┐</Text>;
+        }
         
         return (
             <Text>
                 STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
             </Text>
-        )
-    }
+        );
+    };
 
     const renderFooter = () => {
         if (isModal) return (
@@ -146,10 +167,12 @@ const DashboardScreen = () => {
         const pauseAction = status === 'PAUSED'
 			? <Text>(<Text color="cyan" bold>R</Text>)esume</Text>
 			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
-		return <Text color="gray">
-			(<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
-		</Text>
-    }
+		return (
+            <Text color="gray">
+                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
+            </Text>
+        );
+    };
     
     const transactionsToConfirm = useMemo(() => {
         if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');

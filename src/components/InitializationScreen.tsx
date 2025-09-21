@@ -65,7 +65,7 @@ const InitializationScreen = () => {
                 await sleep(800);
                 actions.updateAnalyzeTask(task.id, 'done');
             }
-            actions.setAnalysisResults(`'relaycode' (from package.json)`, true);
+            actions.setAnalysisResults('relaycode (from package.json)', true);
             await sleep(500);
 
             actions.setPhase('CONFIGURE');
@@ -81,7 +81,7 @@ const InitializationScreen = () => {
         };
 
         runSimulation();
-    }, []);
+    }, [actions]);
 
     useEffect(() => {
         if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
@@ -123,7 +123,7 @@ const InitializationScreen = () => {
             {renderContext()}
             <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
             <Box flexDirection="column" marginTop={1} gap={1}>
-                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
+                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
             </Box>
         </Box>
     );
@@ -133,7 +133,7 @@ const InitializationScreen = () => {
             {renderContext()}
             <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
             <Box flexDirection="column" marginTop={1}>
-                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
+                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
                 <Box flexDirection="column" marginTop={1}>
                     <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
                     <Text>  Do you want to share its state with your team by committing it?</Text>
@@ -144,11 +144,11 @@ const InitializationScreen = () => {
 
     const renderFinalize = () => {
         const stateText = interactiveChoice === 'share'
-            ? ".relay/ directory initialized. It will be committed to git."
-            : ".relay/ directory initialized and added to .gitignore.";
+            ? '.relay/ directory initialized. It will be committed to git.'
+            : '.relay/ directory initialized and added to .gitignore.';
         const stateSubText = interactiveChoice === 'share'
             ? undefined
-            : "Local transaction history will be stored here.";
+            : 'Local transaction history will be stored here.';
         
         return (
             <Box flexDirection="column">
@@ -164,7 +164,7 @@ const InitializationScreen = () => {
                     </Box>
                     <Box flexDirection="column">
                         <Text><Text color="green">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
-                        <Text color="gray" italic>          › Copied to clipboard. Paste into your AI's custom instructions.</Text>
+                        <Text color="gray" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
                     </Box>
                 </Box>
             </Box>
