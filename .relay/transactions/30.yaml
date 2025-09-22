@@ -1,0 +1,191 @@
+uuid: c25700b3-f66f-402a-995f-9721796d11e5
+projectId: relaycode-tui
+createdAt: '2025-09-22T01:48:29.836Z'
+gitCommitMsg: >-
+  feat: add debug mode to launch screens from CLI
+
+  Introduces a command-line flag `debug-screen` to allow developers to launch a
+  specific application screen directly. This is useful for UI debugging and
+  development without needing to navigate through the application flow.
+
+  - Modifies `index.tsx` to parse `process.argv` for the debug flag. -
+  Initializes the required stores with mock data for the target screen. - Adds a
+  `debug-screen` script to `package.json` for convenience.
+
+  Usage: `bun start debug-screen <ScreenComponent.tsx>` or `bun run debug-screen
+  <ScreenComponent.tsx>`
+promptSummary: >-
+  I want to add a debug feature to run a specific screen from the command line,
+  for example `bun start debug-screen TransactionDetailScreen.tsx`.
+reasoning:
+  - >-
+    Of course. As an expert AI programmer, I'll add the requested debug feature.
+    This will involve modifying the application's entry point to parse
+    command-line arguments and adding a new script to `package.json` for
+    convenience.
+  - '### Step-by-step Reasoning'
+  - >-
+    1.  **Modify `index.tsx`**: I'll update the main entry point to read
+    `process.argv`. If it finds the `debug-screen` command, it will parse the
+    specified screen component name.
+  - >-
+    2.  **State Initialization**: A `switch` statement will map the screen name
+    to the necessary actions to display it. This includes setting the current
+    screen in the `app.store` and calling any prerequisite actions on other
+    stores (e.g., loading data for the `TransactionDetailScreen` or preparing
+    data for the `GitCommitScreen`).
+  - >-
+    3.  **Graceful Fallback**: If no debug arguments are provided, the
+    application will start normally. An error message will be shown for unknown
+    screen names.
+  - >-
+    4.  **Add `package.json` Script**: For better developer experience and
+    discoverability, I'll add a `debug-screen` script to `package.json`. This
+    allows running `bun run debug-screen <ScreenName>` as a dedicated command.
+  - 'Here are the changes:'
+  - >-
+    I'll start by modifying `index.tsx` to implement the core logic for
+    launching a specific screen.
+  - >-
+    Next, I'll add a convenience script to `package.json` to make this feature
+    easier to use.
+  - >-
+    These changes introduce the requested debug functionality, allowing any
+    major screen to be opened directly from the command line for easier UI
+    development and testing.
+operations:
+  - type: write
+    path: index.tsx
+    content: >-
+      import React from 'react';
+
+      import { render } from 'ink';
+
+      import App from './src/App';
+
+      import { useAppStore } from './src/stores/app.store';
+
+      import { useCommitStore } from './src/stores/commit.store';
+
+      import { useReviewStore } from './src/stores/review.store';
+
+      import { useTransactionDetailStore } from
+      './src/stores/transaction-detail.store';
+
+
+      const main = () => {
+          const args = process.argv.slice(2);
+
+          if (args[0] === 'debug-screen' && args[1]) {
+              const screenName = args[1].replace(/\.tsx$/, '');
+              const { actions: appActions } = useAppStore.getState();
+
+              switch (screenName) {
+                  case 'DashboardScreen':
+                      appActions.showDashboardScreen();
+                      break;
+                  case 'GitCommitScreen':
+                      useCommitStore.getState().actions.prepareCommitScreen();
+                      appActions.showGitCommitScreen();
+                      break;
+                  case 'ReviewProcessingScreen':
+                      useReviewStore.getState().actions.simulateFailureScenario();
+                      appActions.showReviewProcessingScreen();
+                      break;
+                  case 'ReviewScreen':
+                      useReviewStore.getState().actions.simulateFailureScenario();
+                      appActions.showReviewScreen();
+                      break;
+                  case 'TransactionDetailScreen':
+                      useTransactionDetailStore.getState().actions.loadTransaction('3');
+                      appActions.showTransactionDetailScreen();
+                      break;
+                  case 'InitializationScreen':
+                       appActions.showInitScreen();
+                       break;
+                  case 'SplashScreen':
+                       appActions.showSplashScreen();
+                       break;
+                  default:
+                      process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                      process.exit(1);
+              }
+          }
+
+          // Check if we're running in an interactive terminal
+          if (process.stdin.isTTY && process.stdout.isTTY) {
+              render(<App />);
+          } else {
+              process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+              process.exit(1);
+          }
+      };
+
+
+      main();
+    patchStrategy: replace
+  - type: write
+    path: package.json
+    content: |
+      <<<<<<< SEARCH
+          "start": "bun run index.tsx",
+          "dev": "bun run --watch index.tsx",
+      =======
+          "start": "bun run index.tsx",
+          "dev": "bun run --watch index.tsx",
+          "debug-screen": "bun run index.tsx debug-screen",
+      >>>>>>> REPLACE
+    patchStrategy: search-replace
+snapshot:
+  index.tsx: |
+    import React from 'react';
+    import { render } from 'ink';
+    import App from './src/App';
+
+    // Check if we're running in an interactive terminal
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+        render(<App />);
+    } else {
+        process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+        process.exit(1);
+    }
+  package.json: |
+    {
+      "name": "relaycode-tui",
+      "module": "index.tsx",
+      "type": "module",
+      "private": true,
+      "scripts": {
+        "start": "bun run index.tsx",
+        "dev": "bun run --watch index.tsx",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix"
+      },
+      "dependencies": {
+        "ink": "^4.4.1",
+        "react": "^18.2.0",
+        "ink-text-input": "^4.0.3",
+        "ink-select-input": "^4.2.2",
+        "ink-spinner": "^5.0.0",
+        "clipboardy": "^4.0.0",
+        "zustand": "^4.4.1"
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^20.5.9",
+        "@types/react": "^18.2.22",
+        "@typescript-eslint/eslint-plugin": "^8.44.0",
+        "@typescript-eslint/parser": "^8.44.0",
+        "eslint": "^9.36.0",
+        "eslint-plugin-react": "^7.37.5",
+        "eslint-plugin-react-hooks": "^5.2.0",
+        "typescript": "^5"
+      }
+    }
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 30

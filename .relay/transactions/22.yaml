@@ -1,0 +1,1643 @@
+uuid: c258079a-a22c-473d-9d5f-9f44a390453d
+projectId: relaycode-tui
+createdAt: '2025-09-22T01:00:27.265Z'
+gitCommitMsg: >-
+  refactor(review): Align ReviewScreen with documentation
+
+  This commit refactors the ReviewScreen component to bring it in line with the
+  specifications in `review-screen.readme.md`.
+
+  - **Dynamic Stats:** The header now dynamically calculates and displays stats
+  (lines added/removed, file counts) based on the currently approved files,
+  providing immediate feedback. - **Componentization:** The inline reasoning
+  view is now encapsulated in the `ReasonScreen` component, which has been
+  enhanced to support scrolling. - **UX/Keybindings:** The `Escape` key now
+  consistently acts as a "back" or "cancel" command. The "Reject All" action has
+  been moved to a more intentional `Shift+R` hotkey. - **Bugfix:** Corrected an
+  issue where pressing `Shift+T` would erroneously trigger both single and bulk
+  repair actions. - **Docs:** The `review-screen.readme.md` has been updated to
+  reflect the new keybindings.
+promptSummary: >-
+  Update the TUI review screen to match the design specifications in the
+  documentation, including UI layout, component usage, and keybinding behavior.
+reasoning:
+  - >-
+    Based on your request, I will update the TUI's review screen to align with
+    the specifications outlined in the `review-screen.readme.md` documentation.
+    This involves several changes:
+  - >-
+    1.  **UI/UX Alignment**: I will adjust the `ReviewScreen` component to
+    dynamically calculate and display statistics for approved files (lines
+    added/removed, file counts), ensuring the UI instantly reflects user actions
+    like toggling a file's approval status.
+  - >-
+    2.  **Component Refactoring**: The inline reasoning view within the
+    `ReviewScreen` will be replaced with the dedicated `ReasonScreen` component,
+    which I'll modify to support text scrolling. This improves componentization
+    and adheres to the design docs.
+  - >-
+    3.  **Keybinding Correction**: As requested, I'll change the behavior of the
+    `Escape` key to serve as a "Back" or "Cancel" action, navigating away from
+    views or back to the dashboard. The "Reject All" functionality will be moved
+    to a new `Shift+R` hotkey.
+  - >-
+    4.  **Documentation Update**: I will update
+    `docs/relaycode-tui/review-screen.readme.md` to reflect the new keybinding
+    for "Reject All" (`Shift+R`) and the updated behavior of the `Escape` key,
+    ensuring the documentation remains accurate.
+  - >-
+    5.  **Bug Fix**: I noticed and will fix a bug where pressing `Shift+T` for
+    bulk repair would incorrectly trigger both the single-file repair and bulk
+    repair actions.
+  - >-
+    These changes will bring the component's behavior and appearance in line
+    with the specified design, improve user experience with more intuitive
+    controls, and increase code modularity.
+  - First, I'll update the documentation to reflect the keybinding changes.
+  - >-
+    - **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`. The
+    footer presents both single-file `(T)` and `(Shift+T)` bulk repair options.
+  - '@@ -87,7 +87,7 @@'
+  - '[!] FAILED src/commands/apply.ts   (Context mismatch at line 92)'
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - '- (↑↓) Nav · (Spc) Toggle · (D)iff · (Esc) Reject All · (Q)uit'
+  - + (↑↓) Nav · (Spc) Toggle · (D)iff · (Shift+R) Reject All · (Esc) Back
+  - >-
+    Next, I'll update the `ReasonScreen` component to handle scrolling, making
+    it more reusable as per the design documents.
+  - >-
+    Now, I will implement the main logic changes in the `ReviewScreen`
+    component.
+operations:
+  - type: write
+    path: docs/relaycode-tui/review-screen.readme.md
+    content: >-
+      --- docs/relaycode-tui/review-screen.readme.md
+
+      +++ docs/relaycode-tui/review-screen.readme.md
+
+      @@ -62,7 +62,7 @@
+          [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
+       
+        ──────────────────────────────────────────────────────────────────────────────
+      - (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Esc) Reject
+      All · (Q)uit
+
+      + (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Shift+R)
+      Reject All · (Esc) Back
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: >-
+      - **Behavior:** The UI instantly recalculates. The file icon changes to
+      `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect
+      the new reality. The footer updates as there are no longer any approved
+      files to commit.
+    content: |2
+       
+    patchStrategy: replace
+  - type: write
+    path: src/components/ReasonScreen.tsx
+    content: >+
+      --- src/components/ReasonScreen.tsx
+
+      +++ src/components/ReasonScreen.tsx
+
+      @@ -2,15 +2,21 @@
+       import { Box, Text } from 'ink';
+       
+       interface ReasonScreenProps {
+      -    reasoning: string;
+
+      +    reasoning: string,
+
+      +    scrollIndex?: number,
+
+      +    visibleLinesCount?: number,
+       }
+       
+      -const ReasonScreen = ({ reasoning }: ReasonScreenProps) => {
+
+      +const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount =
+      10 }: ReasonScreenProps) => {
+
+      +    const lines = reasoning.split('\n');
+
+      +    const visibleLines = lines.slice(scrollIndex, scrollIndex +
+      visibleLinesCount);
+
+      +
+           return (
+               <Box flexDirection="column">
+                   <Text>REASONING</Text>
+                   <Box flexDirection="column" marginTop={1}>
+      -                <Text>{reasoning}</Text>
+
+      +                {visibleLines.map((line, index) => <Text
+      key={index}>{line}</Text>)}
+                   </Box>
+               </Box>
+           );
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: >+
+      --- src/components/ReviewScreen.tsx
+
+      +++ src/components/ReviewScreen.tsx
+
+      @@ -107,7 +107,6 @@
+           const { exit } = useApp();
+           const store = useReviewStore();
+           const { showDashboardScreen } = useAppStore(s => s.actions);
+      -    const {
+
+      -        hash, message, prompt, reasoning, files, scripts, patchStatus,
+
+      -        linesAdded, linesRemoved, duration,
+
+      -        selectedItemIndex, bodyView, isDiffExpanded,
+
+      -        copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex,
+      scriptErrorIndex,
+
+      -    } = store;
+
+      +    const { hash, message, prompt, reasoning, files, scripts,
+      patchStatus, duration, selectedItemIndex, bodyView, isDiffExpanded,
+      copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex,
+      scriptErrorIndex } = store;
+           const {
+               moveSelectionUp, moveSelectionDown, toggleFileApproval,
+               toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+      @@ -120,8 +119,16 @@
+               scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+           } = store.actions;
+       
+      -    const numFiles = files.length;
+
+      -    const approvedFilesCount = useMemo(() => files.filter(f => f.status
+      === 'APPROVED').length, [files]);
+
+      -    const canBeRejected = useMemo(() => files.some(f => f.status ===
+      'APPROVED'), [files]);
+
+      +    const {
+
+      +        numFiles,
+
+      +        approvedFilesCount,
+
+      +        approvedLinesAdded,
+
+      +        approvedLinesRemoved,
+
+      +    } = useMemo(() => {
+
+      +        const approvedFiles = files.filter(f => f.status === 'APPROVED');
+
+      +        return {
+
+      +            numFiles: files.length, approvedFilesCount:
+      approvedFiles.length, approvedLinesAdded: approvedFiles.reduce((sum, f) =>
+      sum + f.linesAdded, 0), approvedLinesRemoved: approvedFiles.reduce((sum,
+      f) => sum + f.linesRemoved, 0),
+
+      +        };
+
+      +    }, [files]);
+       
+           useInput((input, key) => {
+               // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+      @@ -145,8 +152,6 @@
+                       if (bodyView === 'diff') toggleDiffView();
+                       if (bodyView === 'reasoning') toggleReasoningView();
+                       if (bodyView === 'script_output') toggleScriptView();
+      -            } else if (canBeRejected) {
+
+      -                rejectAllFiles();
+                   } else {
+                       showDashboardScreen();
+                   }
+      @@ -194,6 +199,20 @@
+                   return;
+               }
+       
+      +        // Handle Shift+R for reject all
+
+      +        if (key.shift && input.toLowerCase() === 'r') {
+
+      +            if (approvedFilesCount > 0) {
+
+      +                rejectAllFiles();
+
+      +            }
+
+      +            return;
+
+      +        }
+
+      +
+
+      +        if (input.toLowerCase() === 'r') {
+
+      +            toggleReasoningView();
+
+      +            return;
+
+      +        }
+
+      +
+
+      +
+               // Main View Navigation
+               if (key.upArrow) moveSelectionUp();
+               if (key.downArrow) moveSelectionDown();
+      -
+
+      -        if (input.toLowerCase() === 'r') toggleReasoningView();
+       
+               if (input === ' ') {
+                   if (selectedItemIndex < numFiles) {
+      @@ -226,20 +245,21 @@
+                   toggleCopyMode();
+               }
+       
+      -        if (input.toLowerCase() === 't') {
+
+      -            if (selectedItemIndex < numFiles) {
+
+      -                const file = files[selectedItemIndex];
+
+      -                if (file && file.status === 'FAILED') {
+
+      -                    tryRepairFile();
+
+      +        // Handle T for single repair and Shift+T for bulk repair
+
+      +        if (input.toLowerCase() === 't') {
+
+      +            if (key.shift) {
+
+      +                const hasFailedFiles = files.some(f => f.status ===
+      'FAILED');
+
+      +                if (hasFailedFiles) {
+
+      +                    showBulkRepair();
+
+      +                }
+
+      +            } else {
+
+      +                if (selectedItemIndex < numFiles) {
+
+      +                    const file = files[selectedItemIndex];
+
+      +                    if (file && file.status === 'FAILED') {
+
+      +                        tryRepairFile();
+
+      +                    }
+                       }
+                   }
+      -        }
+
+      -
+
+      -        // Handle Shift+T for bulk repair
+
+      -        if (key.shift && input.toLowerCase() === 't') {
+
+      -            const hasFailedFiles = files.some(f => f.status ===
+      'FAILED');
+
+      -            if (hasFailedFiles) {
+
+      -                showBulkRepair();
+
+      -            }
+               }
+       
+               if (input.toLowerCase() === 'q') {
+      @@ -252,22 +272,20 @@
+               if (bodyView === 'none') return null;
+       
+               if (bodyView === 'reasoning') {
+      -            const reasoningLines = reasoning.split('\n');
+
+      -            const visibleLines =
+      reasoningLines.slice(reasoningScrollIndex, reasoningScrollIndex + 10);
+
+      +            const reasoningLinesCount = reasoning.split('\n').length;
+
+      +            const visibleLinesCount = 10;
+                   return (
+                       <Box flexDirection="column">
+      -                    <Text>REASONING DETAILS</Text>
+
+      -                    <Box marginTop={1}>
+
+      -                        {visibleLines.map((line, index) => (
+
+      -                            <Text key={index}>{line}</Text>
+
+      -                        ))}
+
+      -                    </Box>
+
+      -                    {reasoningLines.length > 10 && (
+
+      +                    <ReasonScreen
+
+      +                        reasoning={reasoning}
+
+      +                        scrollIndex={reasoningScrollIndex}
+
+      +                        visibleLinesCount={visibleLinesCount}
+
+      +                    />
+
+      +                    {reasoningLinesCount > visibleLinesCount && (
+                               <Text color="gray">
+      -                            Showing lines {reasoningScrollIndex +
+      1}-{Math.min(reasoningScrollIndex + 10, reasoningLines.length)}{' '}
+
+      -                            of {reasoningLines.length}
+
+      +                            Showing lines {reasoningScrollIndex +
+      1}-{Math.min(reasoningScrollIndex + visibleLinesCount,
+      reasoningLinesCount)}{' '}
+
+      +                            of {reasoningLinesCount}
+                               </Text>
+                           )}
+                       </Box>
+      @@ -434,13 +452,14 @@
+       
+               if (approvedFilesCount > 0) {
+                   actions.push('(A)pprove');
+      -        }
+
+      -        
+
+      -        actions.push('(Esc) Reject All');
+
+      +            actions.push('(Shift+R) Reject All');
+
+      +        }
+
+      +        
+
+      +        actions.push('(Esc) Back');
+               actions.push('(Q)uit');
+       
+               return <Text>{actions.join(' · ')}</Text>;
+           };
+       
+       
+           return (
+      @@ -455,7 +474,7 @@
+                           <Text>{hash} · {message}</Text>
+                       </Box>
+                       <Box>
+      -                    <Text>(<Text color="green">+{linesAdded}</Text>/<Text
+      color="red">-{linesRemoved}</Text>) · {approvedFilesCount}/{numFiles}
+      Files · {duration}s</Text>
+
+      +                    <Text>(<Text
+      color="green">+{approvedLinesAdded}</Text>/<Text
+      color="red">-{approvedLinesRemoved}</Text>) ·
+      {approvedFilesCount}/{numFiles} Files · {duration}s</Text>
+                           {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                           {scripts.length === 0 && patchStatus === 'PARTIAL_FAILURE' && <Text> · Scripts: SKIPPED</Text>}
+                       </Box>
+
+    patchStrategy: standard-diff
+snapshot:
+  '- **Behavior:** The UI instantly recalculates. The file icon changes to `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect the new reality. The footer updates as there are no longer any approved files to commit.': null
+  docs/relaycode-tui/review-screen.readme.md: >
+    # REVIEW-SCREEN.README.MD
+
+
+    ## Relaycode TUI: The Stateful Apply & Review Screen
+
+
+    This document specifies the design and behavior of the stateful **Apply &
+    Review Screen**. This screen is the interactive core of the Relaycode
+    workflow, appearing immediately after a patch has been processed and applied
+    to the filesystem. It is a command center for analysis, granular control,
+    data extraction, and iterative repair.
+
+
+    ### 1. Core Philosophy
+
+
+    The Review screen is not a simple "accept/reject" dialog. It is a strategic
+    workspace designed to give the user complete control and insight over
+    incoming code changes.
+
+
+    -   **Information Supremacy:** The UI provides all necessary context at a
+    glance: high-level stats, the AI's reasoning, post-script results, the patch
+    strategy used per file, and deep-dive diffs. Nothing is hidden.
+
+    -   **Granular Control:** The user is empowered to make decisions on a
+    per-file basis. The UI dynamically recalculates and reflects the impact of
+    these decisions in real-time.
+
+    -   **Iterative Repair Workflow:** Failure is treated as a temporary state,
+    not an endpoint. The UI provides a powerful suite of tools—from AI-driven
+    prompts to manual overrides—to handle even complex, multi-file failures
+    gracefully.
+
+    -   **Data Accessibility:** Every piece of information (prompts, diffs,
+    reasoning, script outputs) is easily copyable, respecting the user's need to
+    use this data in other contexts.
+
+
+    ### 2. UI Layout Components
+
+
+    1.  **Header:** `▲ relaycode review`.
+
+    2.  **Navigator:** The top section, acting as a command-and-control center.
+    It contains the transaction summary, global stats, expandable
+    reasoning/prompt, script results, and the file list.
+
+    3.  **Body:** A dynamic viewport that renders detailed content—like diffs or
+    script outputs—based on the user's focus in the Navigator.
+
+    4.  **Footer:** The contextual action bar, showing available keyboard
+    shortcuts that change constantly based on the UI's state and focus.
+
+
+    ### 3. The Interactive States & Workflow
+
+
+    This screen is the interactive workspace that appears after the initial
+    patch application is complete (whether successful or not). It allows the
+    user to review, repair, and resolve the transaction.
+
+
+    ---
+
+
+    #### **State 3.1: Interactive Review (Multi-File Failure)**
+
+
+    This state appears after a partial failure during the live application
+    phase. The screen is now waiting for user intervention.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (+18/-5) · 1/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+
+     (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+     (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts (+18/-5) [replace]
+     > [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
+       [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Esc) Reject All · (Q)uit
+    ```
+
+    -   **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`.
+    The footer presents both single-file `(T)` and `(Shift+T)` bulk repair
+    options.
+
+
+    ---
+
+
+    #### **State 3.2: Granular File Rejection & Dynamic Recalculation**
+
+
+    The user decides one of the successful changes is undesirable and rejects
+    it.
+
+
+    **Trigger:** User navigates to `src/core/transaction.ts` and presses
+    `(Space)`.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (0/0) · 0/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+
+     (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+     (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+     > [✗] MOD src/core/transaction.ts (+18/-5) [replace]
+       [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
+       [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Spc) Toggle · (D)iff · (Esc) Reject All · (Q)uit
+    ```
+
+    -   **Behavior:** The UI instantly recalculates. The file icon changes to
+    `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect
+    the new reality. The footer updates as there are no longer any approved
+    files to commit.
+
+
+    ---
+
+
+    #### **State 3.3: Interactive Review (Success Case with Script Results)**
+
+
+    This is the state after a fully successful patch application.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      4b9d8f03 · refactor: simplify clipboard logic
+      (+22/-11) · 2 Files · 3.9s
+
+     (P)rompt ▸ Simplify the clipboard logic using an external library...
+     (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
+     ──────────────────────────────────────────────────────────────────────────────
+      ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
+      ✗ Linter: `bun run lint` (1.2s) ▸ 1 Error, 3 Warnings
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+     > [✓] MOD src/core/clipboard.ts (+15/-8) [replace]
+       [✓] MOD src/utils/shell.ts     (+7/-3)  [diff]
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Spc) Toggle · (D)iff · (Ent) Expand Details · (C)opy · (A)pprove · (Q)uit
+    ```
+
+    -   **Behavior:** New, expandable sections appear for each post-application
+    script, providing an at-a-glance summary of their results (`✓`/`✗`).
+
+
+    ---
+
+
+    #### **State 3.4: Expanding Script Results (Body View)**
+
+
+    **Trigger:** User navigates to the Linter line and presses `(Enter)`.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      4b9d8f03 · refactor: simplify clipboard logic
+      (+22/-11) · 2 Files · 3.9s
+
+     (P)rompt ▸ Simplify the clipboard logic using an external library...
+     (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
+     ──────────────────────────────────────────────────────────────────────────────
+      ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
+    > ✗ Linter: `bun run lint` (1.2s) ▾ 1 Error, 3 Warnings
+     ──────────────────────────────────────────────────────────────────────────────
+      LINTER OUTPUT: `bun run lint`
+
+      src/core/clipboard.ts
+        45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+        88:5   Warning  Unexpected console statement. (no-console)
+
+      src/utils/shell.ts
+        23:9   Warning  'result' is never reassigned. Use 'const' instead. (prefer-const)
+        25:1   Warning  Empty block statement. (no-empty)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) Collapse · (J↓/K↑) Next/Prev Error · (C)opy Output · (Esc) Back
+    ```
+
+    -   **Behavior:** The Body viewport is replaced with the detailed, formatted
+    output from the linter. The footer provides contextual navigation hotkeys
+    (`J/K`) to jump between errors.
+
+
+    ---
+
+
+    #### **State 3.5: Copy Mode**
+
+
+    **Trigger:** User presses `(C)` from any primary review state.
+
+
+    ```
+     ▲ relaycode review · copy mode
+     ──────────────────────────────────────────────────────────────────────────────
+     Select item to copy to clipboard:
+
+     > [U] UUID:        e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+       [M] Git Message: refactor: rename core utility function
+       [P] Prompt:      Rename the `calculateChanges` utility to...
+       [R] Reasoning:   1. Renamed the function in its definition...
+     ──────────────────────────────────────────────────────────────────────────────
+       [F] Diff for:    src/core/transaction.ts
+       [A] All Diffs (3 files)
+     ──────────────────────────────────────────────────────────────────────────────
+      ✓ Copied UUID to clipboard.
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit
+    ```
+
+    -   **Behavior:** A modal overlay appears, allowing the user to copy any
+    piece of metadata related to the transaction to their clipboard with single
+    keystrokes.
+
+
+    ### 4. The Advanced Repair Workflow
+
+
+    ---
+
+
+    #### **State 4.1: Initiating Bulk Repair**
+
+
+    **Trigger:** From the multi-failure state (3.1), the user presses
+    `(Shift+T)`.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+     ... (Navigator remains the same) ...
+     ──────────────────────────────────────────────────────────────────────────────
+      BULK REPAIR ACTION
+
+      The following 2 files failed to apply:
+      - src/utils/logger.ts
+      - src/commands/apply.ts
+
+      How would you like to proceed?
+
+    > (1) Copy Bulk Re-apply Prompt (for single-shot AI)
+      (2) Bulk Change Strategy & Re-apply
+      (3) Handoff to External Agent
+      (4) Bulk Abandon All Failed Files
+      (Esc) Cancel
+
+     ──────────────────────────────────────────────────────────────────────────────
+     Choose an option [1-4, Esc]:
+    ```
+
+    -   **Behavior:** A blocking modal appears, presenting four distinct repair
+    strategies that will apply to all failed files simultaneously.
+
+
+    ---
+
+
+    #### **Flow 4.2: The "Re-apply Prompt" (AI-driven Repair)**
+
+
+    **Trigger:** User selects option `(1)`. A detailed prompt is copied to the
+    clipboard, and the UI enters a waiting state.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (+18/-5) · 1/3 Files · 0.6s · AWAITING PATCH
+
+     (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+     (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+     > [●] AWAITING src/utils/logger.ts    (Bulk re-apply prompt copied!)
+       [●] AWAITING src/commands/apply.ts
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (D)iff · (C)opy · (Esc) Abandon & Commit Approved
+    ```
+
+
+    **Generated Prompt (Copied to Clipboard):**
+
+    ```text
+
+    The previous patch failed to apply to MULTIPLE files. Please generate a new,
+    corrected patch that addresses all the files listed below.
+
+
+    IMPORTANT: The response MUST contain a complete code block for EACH file
+    that needs to be fixed.
+
+
+    --- FILE: src/utils/logger.ts ---
+
+    Strategy: standard-diff
+
+    Error: Hunk #1 failed to apply
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    import chalk from 'chalk';
+
+    // ... entire original content of logger.ts ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    --- a/src/utils/logger.ts
+
+    +++ b/src/utils/logger.ts
+
+    // ... the failed diff block ...
+
+    ---
+
+
+
+    --- FILE: src/commands/apply.ts ---
+
+    Strategy: standard-diff
+
+    Error: Context mismatch at line 92
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    import { applyPatch } from 'relaycode-core';
+
+    // ... entire original content of apply.ts ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    --- a/src/commands/apply.ts
+
+    +++ b/src/commands/apply.ts
+
+    // ... the second failed diff block ...
+
+    ---
+
+
+    Please analyze all failed files and provide a complete, corrected response.
+
+    ```
+
+
+    ---
+
+
+    #### **Flow 4.3: The "Change Strategy" (User-driven Repair)**
+
+
+    **Trigger:** User selects option `(2)` and chooses a new strategy (e.g.,
+    `replace`). The system re-applies the original patches with the new
+    strategy, providing live feedback.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+     ... (Navigator) ... · BULK RE-APPLYING...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+     > [●] RE-APPLYING... src/utils/logger.ts (using 'replace' strategy)
+       [ ] PENDING...     src/commands/apply.ts
+
+     ──────────────────────────────────────────────────────────────────────────────
+     Re-applying failed patches...
+    ```
+
+
+    **Resolution (Mixed Result):**
+
+    The re-application finishes with one success and one failure.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (+27/-7) · 2/3 Files · 0.6s · PATCH FAILED
+
+     ... (Navigator) ...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+     > [✓] MOD src/utils/logger.ts    (+9/-2) [replace]
+       [!] FAILED src/commands/apply.ts   ('replace' failed: markers not found)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Spc) Toggle · (T)ry Repair · (C)opy · (Ent) Confirm & Commit
+    ```
+
+
+    ---
+
+
+    #### **Flow 4.4: The "Handoff" (Agentic Repair)**
+
+
+    **Trigger:** User selects option `(3)`. A confirmation modal appears first.
+    Upon confirmation, a specialized prompt is copied, and the transaction is
+    finalized with a `Handoff` status.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      HANDOFF TO EXTERNAL AGENT
+
+      This action will:
+      1. Copy a detailed prompt to your clipboard for an agentic AI.
+      2. Mark the current transaction as 'Handoff' and close this review.
+      3. Assume that you and the external agent will complete the work.
+
+      Relaycode will NOT wait for a new patch. This is a final action.
+
+      Are you sure you want to proceed?
+     ──────────────────────────────────────────────────────────────────────────────
+     (Enter) Confirm Handoff      (Esc) Cancel
+    ```
+
+
+    **Resolution (Dashboard View):**
+
+    After handoff, the user is returned to the dashboard, which now logs the
+    action.
+
+
+    ```
+     ▲ relaycode dashboard
+     ──────────────────────────────────────────────────────────────────────────────
+     STATUS: ● LISTENING · APPROVALS: 00 · COMMITS: 04
+
+      EVENT STREAM (Last 15 minutes)
+
+      > -5s    → HANDOFF   e4a7c112 · refactor: rename core utility function
+        -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+        ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) View Details · (P)ause · (Q)uit
+    ```
+
+    -   **Behavior:** A new `→ HANDOFF` icon and status provide a permanent
+    record. The transaction is considered "done" by Relaycode's automated
+    systems, and responsibility is now with the user and their external agent.
+
+
+    ### 5. The Handoff Prompt: Design & Specification
+
+
+    The "Handoff Prompt" is a specialized, machine-generated text block copied
+    to the user's clipboard during the Handoff workflow. It is not a simple
+    error message; it is a carefully engineered "briefing document" designed to
+    transfer the entire context of a failed Relaycode transaction to an
+    external, conversational AI assistant (like Claude, GPT-4, or an
+    IDE-integrated agent).
+
+
+    #### Core Design Principles
+
+
+    1.  **Context is King:** The prompt's primary goal is to eliminate the need
+    for the user to manually explain the situation. It must contain the *goal*,
+    the *plan*, the *partial results*, and the *failures* of the original
+    transaction.
+
+    2.  **Clear Separation of Concerns:** The prompt must unambiguously
+    distinguish between what has already been successfully applied to the
+    filesystem and what remains broken. This prevents the external agent from
+    re-doing completed work.
+
+    3.  **Actionable & Conversational:** It should not be a passive data dump.
+    The prompt must end with a clear call to action that initiates a
+    collaborative, turn-by-turn repair session.
+
+    4.  **Pointer to the Source of Truth:** For maximum fidelity, it must
+    reference the on-disk transaction YAML file. This allows an advanced agent
+    (or the user) to consult the original, detailed plan if the summary is
+    insufficient.
+
+
+    ---
+
+
+    #### Handoff Prompt Template
+
+
+    This is the template used by Relaycode to generate the prompt. It
+    dynamically fills in the placeholders with data from the current failed
+    transaction.
+
+
+    ```text
+
+    I am handing off a failed automated code transaction to you. Your task is to
+    act as my programming assistant and complete the planned changes.
+
+
+    The full plan for this transaction is detailed in the YAML file located at:
+    `.relay/transactions/{{TRANSACTION_UUID}}.yml`. Please use this file as your
+    primary source of truth for the overall goal.
+
+
+    Here is the current status of the transaction:
+
+
+    --- TRANSACTION SUMMARY ---
+
+    Goal: {{GIT_COMMIT_MESSAGE}}
+
+    Reasoning:
+
+    {{AI_REASONING_STEPS}}
+
+
+    --- CURRENT FILE STATUS ---
+
+    SUCCESSFUL CHANGES (already applied, no action needed):
+
+    {{#each successful_files}}
+
+    - {{operation}}: {{path}}
+
+    {{/each}}
+
+
+    FAILED CHANGES (these are the files you need to fix):
+
+    {{#each failed_files}}
+
+    - FAILED: {{path}} (Error: {{error_message}})
+
+    {{/each}}
+
+
+    Your job is to now work with me to fix the FAILED files and achieve the
+    original goal of the transaction. Please start by asking me which file you
+    should work on first.
+
+    ```
+
+
+    ---
+
+
+    #### Concrete Example
+
+
+    Let's use the multi-file failure scenario from this document.
+
+
+    -   **Transaction UUID:** `e4a7c112`
+
+    -   **Goal:** `refactor: rename core utility function`
+
+    -   **Reasoning:**
+        1.  Renamed the function in its definition file, `src/core/transaction.ts`.
+        2.  Attempted to update all call sites for the renamed function.
+    -   **Successful Files:**
+        -   `MODIFIED: src/core/transaction.ts`
+    -   **Failed Files:**
+        -   `FAILED: src/utils/logger.ts` (Error: Hunk #1 failed to apply)
+        -   `FAILED: src/commands/apply.ts` (Error: Context mismatch at line 92)
+
+    When the user confirms the Handoff action, the following text is copied
+    directly to their clipboard:
+
+
+    ```text
+
+    I am handing off a failed automated code transaction to you. Your task is to
+    act as my programming assistant and complete the planned changes.
+
+
+    The full plan for this transaction is detailed in the YAML file located at:
+    `.relay/transactions/e4a7c112.yml`. Please use this file as your primary
+    source of truth for the overall goal.
+
+
+    Here is the current status of the transaction:
+
+
+    --- TRANSACTION SUMMARY ---
+
+    Goal: refactor: rename core utility function
+
+    Reasoning:
+
+    1. Renamed the function in its definition file, `src/core/transaction.ts`.
+
+    2. Attempted to update all call sites for the renamed function.
+
+
+    --- CURRENT FILE STATUS ---
+
+    SUCCESSFUL CHANGES (already applied, no action needed):
+
+    - MODIFIED: src/core/transaction.ts
+
+
+    FAILED CHANGES (these are the files you need to fix):
+
+    - FAILED: src/utils/logger.ts (Error: Hunk #1 failed to apply)
+
+    - FAILED: src/commands/apply.ts (Error: Context mismatch at line 92)
+
+
+    Your job is to now work with me to fix the FAILED files and achieve the
+    original goal of the transaction. Please start by asking me which file you
+    should work on first.
+
+    ```
+  src/components/ReasonScreen.tsx: |-
+    import React from 'react';
+    import { Box, Text } from 'ink';
+
+    interface ReasonScreenProps {
+        reasoning: string;
+    }
+
+    const ReasonScreen = ({ reasoning }: ReasonScreenProps) => {
+        return (
+            <Box flexDirection="column">
+                <Text>REASONING</Text>
+                <Box flexDirection="column" marginTop={1}>
+                    <Text>{reasoning}</Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default ReasonScreen;
+  src/components/ReviewScreen.tsx: >-
+    import React, { useMemo } from 'react';
+
+    import { Box, Text, useInput, useApp } from 'ink';
+
+    import { useReviewStore, type FileItem, type ScriptResult } from
+    '../stores/review.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+
+    // --- Sub-components ---
+
+
+    const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+    boolean }) => {
+        let icon;
+        let iconColor;
+        switch (file.status) {
+            case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
+            case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
+            case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+        }
+
+        const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+        const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+        const prefix = isSelected ? '> ' : '  ';
+
+        if (file.status === 'FAILED') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
+                        <Text color="red">    ({file.error})</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> MOD {file.path} {diffStats} [{strategy}]
+                </Text>
+            </Box>
+        );
+    };
+
+
+    const ScriptItemRow = ({
+        script,
+        isSelected,
+        isExpanded,
+    }: {
+        script: ScriptResult;
+        isSelected: boolean;
+        isExpanded: boolean;
+    }) => {
+        const icon = script.success ? '✓' : '✗';
+        const iconColor = script.success ? 'green' : 'red';
+        const arrow = isExpanded ? '▾' : '▸';
+        const prefix = isSelected ? '> ' : '  ';
+        
+        // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+        const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                          script.command.includes('lint') ? 'Linter' : 
+                          'Script';
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                    {script.summary}
+                </Text>
+            </Box>
+        );
+    };
+
+
+
+    // --- Main Component ---
+
+
+    const ReviewScreen = () => {
+        const { exit } = useApp();
+        const store = useReviewStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const {
+            hash, message, prompt, reasoning, files, scripts, patchStatus,
+            linesAdded, linesRemoved, duration,
+            selectedItemIndex, bodyView, isDiffExpanded,
+            copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
+        } = store;
+        const {
+            moveSelectionUp, moveSelectionDown, toggleFileApproval,
+            toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+            startApplySimulation,
+            rejectAllFiles, approve,
+            toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
+            copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
+            tryRepairFile, showBulkRepair, executeBulkRepairOption,
+            scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+        } = store.actions;
+
+        const numFiles = files.length;
+        const approvedFilesCount = useMemo(() => files.filter(f => f.status === 'APPROVED').length, [files]);
+        const canBeRejected = useMemo(() => files.some(f => f.status === 'APPROVED'), [files]);
+
+        useInput((input, key) => {
+            // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+            if (input === '1') {
+                startApplySimulation('success');
+                return;
+            }
+            if (input === '2') {
+                // The store's default is failure, but to re-trigger the processing screen
+                startApplySimulation('failure');
+                return;
+            }
+
+            if (input.toLowerCase() === 'q') exit();
+
+            // Handle Escape key - context-sensitive behavior
+            if (key.escape) {
+                if (bodyView === 'copy_mode') {
+                    toggleCopyMode();
+                } else if (bodyView === 'bulk_repair') {
+                    showBulkRepair(); // Close bulk repair modal
+                } else if (bodyView !== 'none') {
+                    if (bodyView === 'diff') toggleDiffView();
+                    if (bodyView === 'reasoning') toggleReasoningView();
+                    if (bodyView === 'script_output') toggleScriptView();
+                } else if (canBeRejected) {
+                    rejectAllFiles();
+                } else {
+                    showDashboardScreen();
+                }
+                return;
+            }
+
+            // Copy Mode Navigation
+            if (bodyView === 'copy_mode') {
+                if (key.upArrow) moveCopySelectionUp();
+                if (key.downArrow) moveCopySelectionDown();
+                if (key.return) copySelectedItem();
+                
+                // Hotkey shortcuts
+                if (input.toLowerCase() === 'u') copyUUID();
+                if (input.toLowerCase() === 'm') copyMessage();
+                if (input.toLowerCase() === 'p') copyPrompt();
+                if (input.toLowerCase() === 'r') copyReasoning();
+                if (input.toLowerCase() === 'f') copyFileDiff();
+                if (input.toLowerCase() === 'a') copyAllDiffs();
+                if (input.toLowerCase() === 'c') toggleCopyMode();
+                return;
+            }
+
+            // Bulk Repair Navigation
+            if (bodyView === 'bulk_repair') {
+                if (input >= '1' && input <= '4') {
+                    executeBulkRepairOption(parseInt(input));
+                }
+                return;
+            }
+
+            // Reasoning Scroll Navigation
+            if (bodyView === 'reasoning') {
+                if (key.upArrow) scrollReasoningUp();
+                if (key.downArrow) scrollReasoningDown();
+                if (input.toLowerCase() === 'r') toggleReasoningView();
+                return;
+            }
+
+            // Script Output Navigation
+            if (bodyView === 'script_output') {
+                if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+                if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+                if (key.return) toggleScriptView();
+                if (input.toLowerCase() === 'c') {
+                    // Copy script output
+                    const scriptIndex = selectedItemIndex - numFiles;
+                    const selectedScript = scripts[scriptIndex];
+                    if (selectedScript) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                    }
+                }
+                return;
+            }
+
+            // Diff View Navigation
+            if (bodyView === 'diff') {
+                if (input.toLowerCase() === 'x') expandDiff();
+                if (input.toLowerCase() === 'd') toggleDiffView();
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleReasoningView();
+
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status !== 'FAILED') {
+                        toggleFileApproval();
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleDiffView();
+                }
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleScriptView();
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                toggleCopyMode();
+            }
+
+            if (input.toLowerCase() === 't') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status === 'FAILED') {
+                        tryRepairFile();
+                    }
+                }
+            }
+
+            // Handle Shift+T for bulk repair
+            if (key.shift && input.toLowerCase() === 't') {
+                const hasFailedFiles = files.some(f => f.status === 'FAILED');
+                if (hasFailedFiles) {
+                    showBulkRepair();
+                }
+            }
+
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        const renderBody = () => {
+            if (bodyView === 'none') return null;
+
+            if (bodyView === 'reasoning') {
+                const reasoningLines = reasoning.split('\n');
+                const visibleLines = reasoningLines.slice(reasoningScrollIndex, reasoningScrollIndex + 10);
+                return (
+                    <Box flexDirection="column">
+                        <Text>REASONING DETAILS</Text>
+                        <Box marginTop={1}>
+                            {visibleLines.map((line, index) => (
+                                <Text key={index}>{line}</Text>
+                            ))}
+                        </Box>
+                        {reasoningLines.length > 10 && (
+                            <Text color="gray">
+                                Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + 10, reasoningLines.length)}{' '}
+                                of {reasoningLines.length}
+                            </Text>
+                        )}
+                    </Box>
+                );
+            }
+            
+            if (bodyView === 'diff') {
+                const selectedFile = files[selectedItemIndex];
+                if (!selectedFile) return null;
+                return (
+                    <DiffScreen
+                        filePath={selectedFile.path}
+                        diffContent={selectedFile.diff}
+                        isExpanded={isDiffExpanded}
+                    />
+                );
+            }
+
+            if (bodyView === 'script_output') {
+                 const scriptIndex = selectedItemIndex - numFiles;
+                 const selectedScript = scripts[scriptIndex];
+                 if (!selectedScript) return null;
+                 
+                 const outputLines = selectedScript.output.split('\n');
+                 const errorLines = outputLines.filter(line =>
+                    line.includes('Error') || line.includes('Warning'),
+                 );
+                 
+                 return (
+                    <Box flexDirection="column">
+                        <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                        <Box marginTop={1}>
+                            {outputLines.map((line, index) => {
+                                const isError = line.includes('Error');
+                                const isWarning = line.includes('Warning');
+                                const isHighlighted = errorLines[scriptErrorIndex] === line;
+                                
+                                return (
+                                    <Text 
+                                        key={index} 
+                                        color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                        bold={isHighlighted}
+                                        backgroundColor={isHighlighted ? 'blue' : undefined}
+                                    >
+                                        {line}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                        {errorLines.length > 0 && (
+                            <Text color="gray">
+                                Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                            </Text>
+                        )}
+                    </Box>
+                 );
+            }
+
+            if (bodyView === 'copy_mode') {
+                const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                const options = [
+                    { key: 'U', label: 'UUID', value: `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                    { key: 'M', label: 'Git Message', value: message },
+                    { key: 'P', label: 'Prompt', value: `${prompt.substring(0, 50)}...` },
+                    { key: 'R', label: 'Reasoning', value: `${reasoning.substring(0, 50)}...` },
+                    { key: 'F', label: 'Diff for', value: selectedFile ? selectedFile.path : 'N/A' },
+                    { key: 'A', label: 'All Diffs', value: `${files.length} files` },
+                ];
+
+                return (
+                    <Box flexDirection="column">
+                        <Text>Select item to copy to clipboard:</Text>
+                        <Box marginTop={1} />
+                        
+                        {options.map((option, index) => (
+                            <Text key={option.key} bold={index === copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                {index === copyModeSelectedIndex ? '> ' : '  '}
+                                [{option.key}] {option.label}: {option.value}
+                            </Text>
+                        ))}
+                        
+                        <Box marginTop={1} />
+                        {copyModeLastCopied && (
+                            <Text color="green">✓ Copied {copyModeLastCopied} to clipboard.</Text>
+                        )}
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'bulk_repair') {
+                const failedFiles = files.filter(f => f.status === 'FAILED');
+                
+                return (
+                    <Box flexDirection="column">
+                        <Text>BULK REPAIR ACTION</Text>
+                        <Box marginTop={1} />
+                        
+                        <Text>The following {failedFiles.length} files failed to apply:</Text>
+                        {failedFiles.map(file => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                        
+                        <Box marginTop={1} />
+                        <Text>How would you like to proceed?</Text>
+                        <Box marginTop={1} />
+                        
+                        <Text>{'> (1) Copy Bulk Re-apply Prompt (for single-shot AI)'}</Text>
+                        <Text>  (2) Bulk Change Strategy & Re-apply</Text>
+                        <Text>  (3) Handoff to External Agent</Text>
+                        <Text>  (4) Bulk Abandon All Failed Files</Text>
+                        <Text>  (Esc) Cancel</Text>
+                    </Box>
+                );
+            }
+            
+            return null;
+        };
+
+
+        const renderFooter = () => {
+            // Contextual footer for body views
+            if (bodyView === 'diff') {
+                return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
+            }
+            if (bodyView === 'reasoning') {
+                return <Text>(↑↓) Scroll · (R/Esc) Back</Text>;
+            }
+            if (bodyView === 'script_output') {
+                return (
+                    <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
+                );
+            }
+            if (bodyView === 'copy_mode') {
+                return <Text>(↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit</Text>;
+            }
+            if (bodyView === 'bulk_repair') {
+                return <Text>Choose an option [1-4, Esc]:</Text>;
+            }
+
+            // Main footer
+            const actions = ['(↑↓) Nav'];
+
+            const isFileSelected = selectedItemIndex < numFiles;
+            const hasFailedFiles = files.some(f => f.status === 'FAILED');
+            
+            if (isFileSelected) {
+                const selectedFile = files[selectedItemIndex];
+                if (selectedFile && selectedFile.status !== 'FAILED') {
+                    actions.push('(Spc) Toggle');
+                }
+                actions.push('(D)iff');
+                
+                // Add repair options for failed files
+                if (selectedFile && selectedFile.status === 'FAILED') {
+                    actions.push('(T)ry Repair');
+                }
+            } else { // script selected
+                actions.push('(Ent) Expand Details');
+            }
+
+            actions.push('(R)easoning');
+            
+            // Add bulk repair if there are failed files
+            if (hasFailedFiles) {
+                actions.push('(Shift+T) Bulk Repair');
+            }
+            
+            actions.push('(C)opy');
+
+            if (approvedFilesCount > 0) {
+                actions.push('(A)pprove');
+            }
+            
+            actions.push('(Esc) Reject All');
+            actions.push('(Q)uit');
+
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text color="cyan">▲ relaycode review{bodyView === 'copy_mode' ? ' · copy mode' : ''}</Text>
+                <Separator />
+                
+                {/* Navigator Section */}
+                <Box flexDirection="column">
+                    {/* Transaction summary */}
+                    <Box>
+                        <Text>{hash} · {message}</Text>
+                    </Box>
+                    <Box>
+                        <Text>(<Text color="green">+{linesAdded}</Text>/<Text color="red">-{linesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files · {duration}s</Text>
+                        {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                        {scripts.length === 0 && patchStatus === 'PARTIAL_FAILURE' && <Text> · Scripts: SKIPPED</Text>}
+                    </Box>
+                    
+                    <Box marginTop={1} />
+                    
+                    {/* Prompt and Reasoning */}
+                    <Text>(P)rompt ▸ {prompt.substring(0, 50)}...</Text>
+                    <Text>(R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                        {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
+                    </Text>
+                    
+                    <Separator/>
+                    
+                    {/* Script Results (if any) */}
+                    {scripts.length > 0 && (
+                        <>
+                            {scripts.map((script, index) => (
+                                <ScriptItemRow 
+                                    key={script.command} 
+                                    script={script}
+                                    isSelected={selectedItemIndex === numFiles + index}
+                                    isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                                />
+                            ))}
+                            <Separator/>
+                        </>
+                    )}
+                    
+                    {/* Files Section */}
+                    <Text>FILES</Text>
+                    {files.map((file, index) => (
+                        <FileItemRow 
+                            key={file.id} 
+                            file={file} 
+                            isSelected={selectedItemIndex === index}
+                        />
+                    ))}
+                </Box>
+                
+                <Separator/>
+                
+                {/* Body Viewport */}
+                {bodyView !== 'none' && (
+                    <>
+                        <Box marginY={1}>
+                            {renderBody()}
+                        </Box>
+                        <Separator />
+                    </>
+                )}
+
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default ReviewScreen;
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 22

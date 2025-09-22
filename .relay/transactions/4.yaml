@@ -1,0 +1,643 @@
+uuid: c258287d-8ebc-4c6e-8cdb-715bd7269e38
+projectId: relaycode-tui
+createdAt: '2025-09-21T21:37:14.217Z'
+gitCommitMsg: >-
+  feat: implement dashboard and global help screens
+
+  This commit introduces the primary dashboard UI and the global help overlay,
+  completing the core user-facing components of the application.
+
+  - A new `dashboard.store.ts` manages the complex state of the dashboard,
+  including simulated transactions and UI modes (listening, paused, confirming).
+  - `DashboardScreen.tsx` renders the dynamic UI, handling keyboard inputs for
+  navigation, actions, and state changes. - `GlobalHelpScreen.tsx` provides a
+  modal overlay with all keyboard shortcuts. - Application state and navigation
+  have been updated to incorporate the new dashboard screen, accessible after
+  the initialization flow.
+promptSummary: >-
+  The user wants to create the dashboard and global help screens for the TUI
+  application. The goal is to create a prototype with simulated behavior based
+  on the provided markdown documentation.
+reasoning:
+  - >-
+    This is a great request for prototyping the core UI of the Relaycode TUI. I
+    will focus on creating the visual components and simulating their state
+    changes as described in the documentation, without implementing the backend
+    logic.
+  - 'Here is my plan:'
+  - >-
+    1.  **Extend Application State**: I'll add a new `dashboard` screen to the
+    main application state manager (`app.store.ts`) so we can navigate to it.
+  - >-
+    2.  **Create Dashboard State**: I'll create a new state store,
+    `dashboard.store.ts`, to manage the complex state of the dashboard,
+    including its status (listening, paused, confirming), event list, and UI
+    modes. This will include some mock data to simulate a realistic event
+    stream.
+  - >-
+    3.  **Implement the Help Screen**: I'll create `GlobalHelpScreen.tsx` as a
+    static, reusable overlay component that displays all keyboard shortcuts, as
+    specified.
+  - >-
+    4.  **Build the Dashboard Screen**: I'll create the main
+    `DashboardScreen.tsx` component. This will be the most complex piece,
+    responsible for:
+  - '*   Rendering the header, status bar, event stream, and dynamic footer.'
+  - >-
+    *   Handling all keyboard inputs (`?` for help, `p` for pause, arrow keys
+    for navigation, etc.).
+  - >-
+    *   Displaying different UI states (e.g., confirmation modals, processing
+    spinners) based on the state from `dashboard.store.ts`.
+  - >-
+    5.  **Connect the Screens**: Finally, I'll update `InitializationScreen.tsx`
+    to transition to the new dashboard upon completion, and update `App.tsx` to
+    render the new screen.
+  - Let's start with the state management updates.
+  - '### 1. Update Application State'
+  - >-
+    I'll update the main app store to recognize and be able to switch to the new
+    `dashboard` screen.
+  - '### 2. Create Dashboard State Store'
+  - >-
+    This new file will manage the state for the dashboard UI, including a
+    simulated list of transactions. It will handle logic for pausing, confirming
+    actions, and processing events.
+  - '### 3. Create the Global Help Screen'
+  - >-
+    This component is a simple overlay that displays keyboard shortcuts. It will
+    be toggled by the dashboard.
+  - '### 4. Build the Dashboard Screen Component'
+  - >-
+    This is the main UI component that brings together the state and renders the
+    dashboard according to the specification.
+  - '### 5. Wire Up the New Components'
+  - >-
+    Finally, I'll update the main `App.tsx` to render the dashboard and the
+    `InitializationScreen.tsx` to provide the user a way to get there.
+  - >-
+    These changes introduce the dashboard and help screens as fully simulated,
+    state-driven components, matching the behavior outlined in the project
+    documentation.
+operations:
+  - type: write
+    path: src/stores/app.store.ts
+    content: |+
+      --- src/stores/app.store.ts
+      +++ src/stores/app.store.ts
+      @@ -1,15 +1,17 @@
+       import { create } from 'zustand';
+       
+      -export type AppScreen = 'splash' | 'init';
+      +export type AppScreen = 'splash' | 'init' | 'dashboard';
+       
+       interface AppState {
+           currentScreen: AppScreen;
+           actions: {
+               showInitScreen: () => void;
+      +        showDashboardScreen: () => void;
+           };
+       }
+       
+       export const useAppStore = create<AppState>((set) => ({
+           currentScreen: 'splash',
+           actions: {
+               showInitScreen: () => set({ currentScreen: 'init' }),
+      +        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+           },
+       }));
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: >-
+      import { create } from 'zustand';
+
+      import { sleep } from '../utils';
+
+
+      // --- Types ---
+
+      export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' |
+      'FAILED' | 'REVERTED' | 'IN-PROGRESS';
+
+
+      export interface Transaction {
+          id: string;
+          timestamp: number;
+          status: TransactionStatus;
+          hash: string;
+          message: string;
+          error?: string;
+      }
+
+
+      export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+      'CONFIRM_COMMIT' | 'APPROVING' | 'COMMITTING';
+
+
+      // --- Initial State (for simulation) ---
+
+      const createInitialTransactions = (): Transaction[] => [
+          { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+          { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+          { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+          { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+          { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+          { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+      ];
+
+
+      // --- Store Interface ---
+
+      interface DashboardState {
+          status: DashboardStatus;
+          previousStatus: DashboardStatus; // To handle cancel from confirmation
+          transactions: Transaction[];
+          selectedTransactionIndex: number;
+          showHelp: boolean;
+          actions: {
+              togglePause: () => void;
+              moveSelectionUp: () => void;
+              moveSelectionDown: () => void;
+              startApproveAll: () => void;
+              startCommitAll: () => void;
+              confirmAction: () => Promise<void>;
+              cancelAction: () => void;
+              toggleHelp: () => void;
+          };
+      }
+
+
+      // --- Store Implementation ---
+
+      export const useDashboardStore = create<DashboardState>((set, get) => ({
+          status: 'LISTENING',
+          previousStatus: 'LISTENING',
+          transactions: createInitialTransactions(),
+          selectedTransactionIndex: 0,
+          showHelp: false,
+          actions: {
+              togglePause: () => set(state => ({
+                  status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING'
+              })),
+              moveSelectionUp: () => set(state => ({
+                  selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1)
+              })),
+              moveSelectionDown: () => set(state => ({
+                  selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1)
+              })),
+              startApproveAll: () => set(state => ({
+                  status: 'CONFIRM_APPROVE',
+                  previousStatus: state.status,
+              })),
+              startCommitAll: () => set(state => ({
+                  status: 'CONFIRM_COMMIT',
+                  previousStatus: state.status,
+              })),
+              cancelAction: () => set(state => ({ status: state.previousStatus })),
+              toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+
+              confirmAction: async () => {
+                  const { status, previousStatus } = get();
+                  if (status === 'CONFIRM_APPROVE') {
+                      set({ status: 'APPROVING' });
+
+                      // Find pending transactions and mark them as in-progress
+                      let pendingTxIds: string[] = [];
+                      set(state => {
+                          const newTxs = state.transactions.map(tx => {
+                              if (tx.status === 'PENDING') {
+                                  pendingTxIds.push(tx.id);
+                                  return { ...tx, status: 'IN-PROGRESS' as const };
+                              }
+                              return tx;
+                          });
+                          return { transactions: newTxs };
+                      });
+
+                      await sleep(2000); // Simulate approval process
+
+                      // Mark them as applied
+                      set(state => {
+                          const newTxs = state.transactions.map(tx => {
+                              if (pendingTxIds.includes(tx.id)) {
+                                  return { ...tx, status: 'APPLIED' as const };
+                              }
+                              return tx;
+                          });
+                          return { transactions: newTxs, status: previousStatus };
+                      });
+                  } else if (status === 'CONFIRM_COMMIT') {
+                      set({ status: 'COMMITTING' });
+                       // Find applied transactions and mark them as in-progress
+                       let appliedTxIds: string[] = [];
+                       set(state => {
+                           const newTxs = state.transactions.map(tx => {
+                               if (tx.status === 'APPLIED') {
+                                  appliedTxIds.push(tx.id);
+                                   return { ...tx, status: 'IN-PROGRESS' as const };
+                               }
+                               return tx;
+                           });
+                           return { transactions: newTxs };
+                       });
+       
+                       await sleep(2000); // Simulate commit process
+       
+                       // Mark them as committed
+                       set(state => {
+                           const newTxs = state.transactions.map(tx => {
+                               if (appliedTxIds.includes(tx.id)) {
+                                   return { ...tx, status: 'COMMITTED' as const };
+                               }
+                               return tx;
+                           });
+                           return { transactions: newTxs, status: previousStatus };
+                       });
+                  }
+              },
+          },
+      }));
+    patchStrategy: replace
+  - type: write
+    path: src/components/GlobalHelpScreen.tsx
+    content: |-
+      import React from 'react';
+      import { Box, Text } from 'ink';
+
+      const GlobalHelpScreen = () => {
+          return (
+              <Box
+                  position="absolute"
+                  top={0}
+                  left={0}
+                  right={0}
+                  bottom={0}
+                  flexDirection="column"
+                  justifyContent="center"
+                  alignItems="center"
+              >
+                  <Box
+                      flexDirection="column"
+                      borderStyle="round"
+                      paddingX={2}
+                      paddingY={1}
+                      width="80%"
+                  >
+                      <Box justifyContent="center" marginBottom={1}>
+                          <Text bold>▲ relaycode · keyboard shortcuts</Text>
+                      </Box>
+                      <Box flexDirection="column" gap={1}>
+                          <Box flexDirection="column">
+                              <Text bold>GLOBAL</Text>
+                              <Text>  ?        Toggle this help screen</Text>
+                              <Text>  Q        Quit to terminal (from main screens)</Text>
+                          </Box>
+                          <Box flexDirection="column">
+                              <Text bold>DASHBOARD (watch)</Text>
+                              <Text>  ↑↓       Navigate event stream</Text>
+                              <Text>  P        Pause / Resume clipboard watcher</Text>
+                              <Text>  A        Approve all pending transactions</Text>
+                              <Text>  C        Commit all applied transactions to git</Text>
+                          </Box>
+                          <Box flexDirection="column">
+                              <Text bold>REVIEW & DETAILS SCREENS</Text>
+                              <Text>  D        Show / Collapse file diff</Text>
+                              <Text>  R        Show / Collapse reasoning steps</Text>
+                              <Text>  C        Enter / Exit Copy Mode (Details Screen)</Text>
+                              <Text>  U        Undo / Revert Transaction</Text>
+                              <Text>  Space    Toggle approval state of a file (Review Screen)</Text>
+                          </Box>
+                      </Box>
+                  </Box>
+                  <Text bold marginTop={1}>(Press ? or Esc to close)</Text>
+              </Box>
+          );
+      };
+
+      export default GlobalHelpScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: >-
+      import React, { useMemo } from 'react';
+
+      import { Box, Text, useApp, useInput } from 'ink';
+
+      import chalk from 'chalk';
+
+      import Spinner from 'ink-spinner';
+
+      import { useDashboardStore, type Transaction, type DashboardStatus, type
+      TransactionStatus } from '../stores/dashboard.store';
+
+      import Separator from './Separator';
+
+      import GlobalHelpScreen from './GlobalHelpScreen';
+
+
+      // --- Sub-components & Helpers ---
+
+
+      const getStatusIcon = (status: TransactionStatus) => {
+          switch (status) {
+              case 'PENDING': return chalk.yellow('?');
+              case 'APPLIED': return chalk.green('✓');
+              case 'COMMITTED': return chalk.blue('→');
+              case 'FAILED': return chalk.red('✗');
+              case 'REVERTED': return chalk.gray('↩');
+              case 'IN-PROGRESS': return <Spinner type="dots" />;
+              default: return ' ';
+          }
+      };
+
+
+      const formatTimeAgo = (timestamp: number) => {
+          const seconds = Math.floor((Date.now() - timestamp) / 1000);
+          if (seconds < 60) return `-${seconds}s`;
+          const minutes = Math.floor(seconds / 60);
+          return `-${minutes}m`;
+      };
+
+
+      const EventStreamItem = ({ transaction, isSelected }: { transaction:
+      Transaction, isSelected: boolean }) => {
+          const icon = getStatusIcon(transaction.status);
+          const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+          const statusText = transaction.status.padEnd(11, ' ');
+          
+          let message = transaction.message;
+          if (transaction.status === 'IN-PROGRESS') {
+              message = chalk.cyan(message);
+          }
+          
+          const content = (
+              <Text>
+                  {time} {icon} {statusText} {transaction.hash} · {message}
+              </Text>
+          );
+
+          return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+      };
+
+
+      const ConfirmationContent = ({ status, transactionsToConfirm }: { status:
+      DashboardStatus, transactionsToConfirm: Transaction[] }) => {
+          const isApprove = status === 'CONFIRM_APPROVE';
+          const actionText = isApprove ? 'APPROVE' : 'COMMIT';
+          
+          return (
+              <Box flexDirection="column" marginY={1} paddingLeft={2}>
+                  <Text bold>{actionText} ALL PENDING TRANSACTIONS?</Text>
+                  <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>
+                  <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                      {transactionsToConfirm.map(tx => (
+                          <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                      ))}
+                  </Box>
+              </Box>
+          );
+      };
+
+
+      // --- Main Component ---
+
+
+      const DashboardScreen = () => {
+          const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+          const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
+          const { exit } = useApp();
+
+          const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+          const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+          const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
+          const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
+          
+          useInput((input, key) => {
+              if (input === '?') {
+                  toggleHelp();
+                  return;
+              }
+
+              if (showHelp) {
+                  if (key.escape || input === '?') toggleHelp();
+                  return;
+              }
+
+              if (isModal) {
+                  if (key.return) confirmAction();
+                  if (key.escape) cancelAction();
+                  return;
+              }
+
+              if (isProcessing) return; // No input while processing
+              
+              if (input.toLowerCase() === 'q') exit();
+
+              if (key.upArrow) moveSelectionUp();
+              if (key.downArrow) moveSelectionDown();
+              
+              if (input.toLowerCase() === 'p') togglePause();
+              if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+              if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
+          });
+
+          const renderStatusBar = () => {
+              let statusText, statusIcon;
+              switch (status) {
+                  case 'LISTENING': statusText = 'LISTENING'; statusIcon = chalk.green('●'); break;
+                  case 'PAUSED': statusText = 'PAUSED'; statusIcon = chalk.yellow('||'); break;
+                  case 'APPROVING': statusText = 'APPROVING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
+                  case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
+                  default: statusText = 'LISTENING'; statusIcon = chalk.green('●');
+              }
+
+              let approvalStr = String(pendingApprovals).padStart(2, '0');
+              let commitStr = String(pendingCommits).padStart(2, '0');
+
+              if (status === 'APPROVING') approvalStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
+              if (status === 'COMMITTING') commitStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
+              if (status === 'CONFIRM_APPROVE') approvalStr = chalk.bold.yellow(`┌ ${approvalStr} ┐`);
+              if (status === 'CONFIRM_COMMIT') commitStr = chalk.bold.yellow(`┌ ${commitStr} ┐`);
+              
+              return (
+                  <Text>
+                      STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+                  </Text>
+              )
+          }
+
+          const renderFooter = () => {
+              if (isModal) return <Text>(Enter) Confirm      (Esc) Cancel</Text>;
+              if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+              const pauseAction = status === 'PAUSED' ? '(R)esume' : '(P)ause';
+              return <Text>(↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · {pauseAction} · (Q)uit</Text>;
+          }
+          
+          const transactionsToConfirm = useMemo(() => {
+              if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+              if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
+              return [];
+          }, [status, transactions]);
+
+          return (
+              <Box flexDirection="column" height="100%">
+                  {showHelp && <GlobalHelpScreen />}
+
+                  <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
+                      <Text>▲ relaycode dashboard</Text>
+                      <Separator />
+                      <Box marginY={1}>
+                          {renderStatusBar()}
+                      </Box>
+                      
+                      {isModal && (
+                          <>
+                              <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
+                              <Separator />
+                          </>
+                      )}
+                      
+                      <Text> EVENT STREAM (Last 15 minutes)</Text>
+                      <Box flexDirection="column" marginTop={1}>
+                          {transactions.map((tx, index) => (
+                              <EventStreamItem 
+                                  key={tx.id} 
+                                  transaction={tx} 
+                                  isSelected={!isModal && index === selectedTransactionIndex}
+                              />
+                          ))}
+                      </Box>
+
+                      <Box marginTop={1}><Separator /></Box>
+                      <Text>{renderFooter()}</Text>
+                  </Box>
+              </Box>
+          );
+      };
+
+
+      export default DashboardScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: >+
+      --- src/components/InitializationScreen.tsx
+
+      +++ src/components/InitializationScreen.tsx
+
+      @@ -3,6 +3,7 @@
+       import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
+       import chalk from 'chalk';
+       import Separator from './Separator';
+      +import { useAppStore } from '../stores/app.store';
+       import { sleep } from '../utils';
+       
+       const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+      @@ -37,6 +38,7 @@
+           const interactiveChoice = useInitStore(s => s.interactiveChoice);
+           const projectId = useInitStore(s => s.projectId);
+           const actions = useInitStore(s => s.actions);
+      +    const showDashboardScreen = useAppStore(s =>
+      s.actions.showDashboardScreen);
+           const { exit } = useApp();
+       
+           useInput((input, key) => {
+      @@ -49,6 +51,8 @@
+               if (phase === 'FINALIZE') {
+                   if (input.toLowerCase() === 'q') {
+                       exit();
+      +            } else if (input.toLowerCase() === 'w') {
+
+      +                showDashboardScreen();
+                   }
+               }
+           });
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/App.tsx
+    content: |+
+      --- src/App.tsx
+      +++ src/App.tsx
+      @@ -2,6 +2,7 @@
+       import { useAppStore } from './stores/app.store';
+       import SplashScreen from './components/SplashScreen';
+       import InitializationScreen from './components/InitializationScreen';
+      +import DashboardScreen from './components/DashboardScreen';
+       
+       const App = () => {
+           const currentScreen = useAppStore(state => state.currentScreen);
+      @@ -17,6 +18,10 @@
+               return <InitializationScreen />;
+           }
+       
+      +    if (currentScreen === 'dashboard') {
+      +        return <DashboardScreen />;
+      +    }
+      +
+           return null;
+       };
+       
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/dashboard.store.ts: null
+  src/components/GlobalHelpScreen.tsx: null
+  src/components/DashboardScreen.tsx: null
+  src/stores/app.store.ts: |-
+    import { create } from 'zustand';
+
+    export type AppScreen = 'splash' | 'init';
+
+    interface AppState {
+        currentScreen: AppScreen;
+        actions: {
+            showInitScreen: () => void;
+        };
+    }
+
+    export const useAppStore = create<AppState>((set) => ({
+        currentScreen: 'splash',
+        actions: {
+            showInitScreen: () => set({ currentScreen: 'init' }),
+        },
+    }));
+  src/components/InitializationScreen.tsx: "import React, { useEffect } from 'react';\nimport { Box, Text, useApp, useInput } from 'ink';\nimport { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';\nimport chalk from 'chalk';\nimport Separator from './Separator';\nimport { sleep } from '../utils';\n\nconst TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n\tlet symbol;\n\tswitch (task.status) {\n\t\tcase 'pending': symbol = '( )'; break;\n\t\tcase 'active': symbol = chalk.cyan('(●)'); break;\n\t\tcase 'done': symbol = chalk.green(doneSymbol); break;\n\t}\n\n\tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n\n\treturn (\n\t\t<Box flexDirection=\"column\">\n\t\t\t<Text>\n\t\t\t\t{symbol} {title}\n\t\t\t</Text>\n\t\t\t{task.subtext && task.status !== 'done' && (\n\t\t\t\t<Text>\n\t\t\t\t\t{'     └─ '}{task.subtext}\n\t\t\t\t</Text>\n\t\t\t)}\n\t\t</Box>\n\t);\n};\n\nconst InitializationScreen = () => {\n    const phase = useInitStore(s => s.phase);\n    const analyzeTasks = useInitStore(s => s.analyzeTasks);\n    const configureTasks = useInitStore(s => s.configureTasks);\n    const interactiveChoice = useInitStore(s => s.interactiveChoice);\n    const projectId = useInitStore(s => s.projectId);\n    const actions = useInitStore(s => s.actions);\n    const { exit } = useApp();\n\n    useInput((input, key) => {\n        if (phase === 'INTERACTIVE') {\n            if (key.return) {\n                actions.setInteractiveChoice('ignore');\n            } else if (input.toLowerCase() === 's') {\n                actions.setInteractiveChoice('share');\n            }\n        }\n        if (phase === 'FINALIZE') {\n            if (input.toLowerCase() === 'q') {\n                exit();\n            }\n        }\n    });\n\n    useEffect(() => {\n        actions.resetInit();\n        const runSimulation = async () => {\n            actions.setPhase('ANALYZE');\n            for (const task of initialAnalyzeTasks) {\n                actions.updateAnalyzeTask(task.id, 'active');\n                await sleep(800);\n                actions.updateAnalyzeTask(task.id, 'done');\n            }\n            actions.setAnalysisResults(`'relaycode' (from package.json)`, true);\n            await sleep(500);\n\n            actions.setPhase('CONFIGURE');\n            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);\n            for (const task of configTasksUntilInteractive) {\n                actions.updateConfigureTask(task.id, 'active');\n                await sleep(800);\n                actions.updateConfigureTask(task.id, 'done');\n            }\n            await sleep(500);\n\n            actions.setPhase('INTERACTIVE');\n        };\n\n        runSimulation();\n    }, []);\n\n    useEffect(() => {\n        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {\n            const resumeSimulation = async () => {\n                actions.setPhase('CONFIGURE');\n                const lastTask = initialConfigureTasks[2];\n                if (lastTask) {\n                    actions.updateConfigureTask(lastTask.id, 'active');\n                    await sleep(800);\n                    actions.updateConfigureTask(lastTask.id, 'done');\n                    await sleep(500);\n\n                    actions.setPhase('FINALIZE');\n                }\n            };\n            resumeSimulation();\n        }\n    }, [interactiveChoice, phase, actions]);\n\n    const renderAnalyze = () => (\n        <Box flexDirection=\"column\">\n            <Text bold>PHASE 1: ANALYZE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}\n            </Box>\n        </Box>\n    );\n\n    const renderContext = () => (\n        <Box flexDirection=\"column\" marginBottom={1}>\n            <Text bold>CONTEXT</Text>\n            <Text>  {chalk.green('✓')} Project ID: {projectId}</Text>\n            <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>\n        </Box>\n    );\n\n    const renderConfigure = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold>PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol=\"[✓]\" />)}\n            </Box>\n        </Box>\n    );\n\n    const renderInteractive = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold>PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol=\"[✓]\" />)}\n                <Box flexDirection=\"column\" marginTop={1}>\n                    <Text>{chalk.cyan('>')} The .relay/ directory is usually ignored by git.</Text>\n                    <Text>  Do you want to share its state with your team by committing it?</Text>\n                </Box>\n            </Box>\n        </Box>\n    );\n\n    const renderFinalize = () => {\n        const stateText = interactiveChoice === 'share'\n            ? \".relay/ directory initialized. It will be committed to git.\"\n            : \".relay/ directory initialized and added to .gitignore.\";\n        const stateSubText = interactiveChoice === 'share'\n            ? undefined\n            : \"Local transaction history will be stored here.\";\n        \n        return (\n            <Box flexDirection=\"column\">\n                <Text bold> SYSTEM READY</Text>\n                <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                    <Box flexDirection=\"column\">\n                        <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>\n                        <Text>          {chalk.gray('›')} Edit this file to tune linters, git integration, etc.</Text>\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text>{chalk.green('✓')} State:    {stateText}</Text>\n                        {stateSubText && <Text>          {chalk.gray('›')} {stateSubText}</Text>}\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n                        <Text>          {chalk.gray('›')} Copied to clipboard. Paste into your AI's custom instructions.</Text>\n                    </Box>\n                </Box>\n            </Box>\n        );\n    };\n\n    const renderPhase = () => {\n        switch (phase) {\n            case 'ANALYZE': return renderAnalyze();\n            case 'CONFIGURE': return renderConfigure();\n            case 'INTERACTIVE': return renderInteractive();\n            case 'FINALIZE': return renderFinalize();\n        }\n    };\n    \n    let footerText;\n    switch (phase) {\n        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;\n        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;\n        case 'INTERACTIVE': footerText = `(${chalk.bold('Enter')}) No, ignore it (default)      (${chalk.bold('S')}) Yes, share it`; break;\n        case 'FINALIZE': footerText = `(${chalk.bold('W')})atch for Patches · (${chalk.bold('L')})View Logs · (${chalk.bold('Q')})uit`; break;\n    }\n\n    return (\n        <Box flexDirection=\"column\">\n            <Text>{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>\n            <Separator />\n            <Box marginY={1}>{renderPhase()}</Box>\n            <Separator />\n            <Text>{footerText}</Text>\n        </Box>\n    );\n};\n\nexport default InitializationScreen;"
+  src/App.tsx: |-
+    import React, { useEffect } from 'react';
+    import { useAppStore } from './stores/app.store';
+    import SplashScreen from './components/SplashScreen';
+    import InitializationScreen from './components/InitializationScreen';
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+
+        useEffect(() => {
+            // Clear the terminal when the screen changes to ensure a clean view.
+            // This is especially important when transitioning from the splash screen.
+            console.clear();
+        }, [currentScreen]);
+        
+        if (currentScreen === 'splash') {
+            return <SplashScreen />;
+        }
+
+        if (currentScreen === 'init') {
+            return <InitializationScreen />;
+        }
+
+        return null;
+    };
+
+    export default App;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 4

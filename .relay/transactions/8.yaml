@@ -1,0 +1,599 @@
+uuid: c4086d79-3733-4f9e-a868-b7a42168345c
+projectId: relaycode-tui
+createdAt: '2025-09-21T22:04:17.921Z'
+gitCommitMsg: >-
+  refactor: remove chalk dependency and use Ink for styling
+
+  Replaced all usages of the `chalk` library with Ink's built-in `<Text>`
+  component props (e.g., `color`, `bold`, `underline`). This simplifies
+  dependencies and relies solely on the UI library for styling.
+
+  - Removed `chalk` from `package.json`. - Refactored `DashboardScreen` to use
+  `<Text>` for status icons and formatted strings. - Refactored
+  `GlobalHelpScreen` to style keyboard shortcuts with nested `<Text>`
+  components. - Refactored `InitializationScreen` to style status symbols and
+  prompts. - Refactored `SplashScreen` to handle styled links and hints.
+promptSummary: >-
+  The user requested to remove the `chalk` dependency and replace its usage with
+  Ink's built-in styling components.
+reasoning:
+  - >-
+    As an expert AI programmer, I'll remove the `chalk` dependency and refactor
+    the components to use Ink's built-in text styling capabilities, such as
+    `<Text color="...">` and the `bold` prop. This aligns with the request to
+    rely solely on Ink for terminal styling.
+  - First, I'll remove the `chalk` dependency from `package.json`.
+  - >-
+    Next, I'll refactor `DashboardScreen.tsx` to replace all `chalk` calls with
+    Ink's `<Text>` component and its props for coloring and styling. This
+    involves converting styled strings into JSX elements.
+  - >-
+    I'll do the same for the `GlobalHelpScreen.tsx`, updating the keyboard
+    shortcut hints to use nested `<Text>` components for styling.
+  - >-
+    Now, I'll update `InitializationScreen.tsx`, ensuring all status indicators
+    and prompts use Ink's styling components.
+  - >-
+    Finally, I'll refactor `SplashScreen.tsx` to remove the last instances of
+    `chalk`.
+operations:
+  - type: write
+    path: package.json
+    content: |+
+      --- package.json
+      +++ package.json
+      @@ -14,7 +14,6 @@
+           "ink-text-input": "^4.0.3",
+           "ink-select-input": "^4.2.2",
+           "ink-spinner": "^5.0.0",
+      -    "chalk": "^5.3.0",
+           "clipboardy": "^4.0.0",
+           "zustand": "^4.4.1"
+         },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: "--- src/components/DashboardScreen.tsx\n+++ src/components/DashboardScreen.tsx\n@@ -1,6 +1,5 @@\n import React, { useMemo } from 'react';\n import { Box, Text, useApp, useInput } from 'ink';\n-import chalk from 'chalk';\n import Spinner from 'ink-spinner';\n import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';\n import Separator from './Separator';\n@@ -10,13 +9,13 @@\n \n const getStatusIcon = (status: TransactionStatus) => {\n     switch (status) {\n-        case 'PENDING': return chalk.yellow('?');\n-        case 'APPLIED': return chalk.green('✓');\n-        case 'COMMITTED': return chalk.blue('→');\n-        case 'FAILED': return chalk.red('✗');\n-        case 'REVERTED': return chalk.gray('↩');\n+        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n+        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n+        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n+        case 'FAILED': return <Text color=\"red\">✗</Text>;\n+        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n         case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n-        default: return ' ';\n+        default: return <Text> </Text>;\n     }\n };\n \n@@ -32,15 +31,15 @@\n     const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n     const statusText = transaction.status.padEnd(11, ' ');\n     \n-    let message = transaction.message;\n-    if (transaction.status === 'IN-PROGRESS') {\n-        message = chalk.cyan(message);\n-    }\n+    const messageNode = transaction.status === 'IN-PROGRESS' \n+        ? <Text color=\"cyan\">{transaction.message}</Text> \n+        : transaction.message;\n     \n     const content = (\n         <Text>\n-            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {message}\n+            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n         </Text>\n     );\n \n@@ -105,39 +104,45 @@\n     });\n \n     const renderStatusBar = () => {\n-        let statusText, statusIcon;\n+        let statusText: string;\n+        let statusIcon: React.ReactNode;\n         switch (status) {\n-            case 'LISTENING': statusText = 'LISTENING'; statusIcon = chalk.green('●'); break;\n-            case 'PAUSED': statusText = 'PAUSED'; statusIcon = chalk.yellow('||'); break;\n-            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = chalk.cyan(<Spinner type=\"dots\"/>); break;\n-            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = chalk.cyan(<Spinner type=\"dots\"/>); break;\n-            default: statusText = 'LISTENING'; statusIcon = chalk.green('●');\n+            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n+            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n+            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n+            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n+            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n         }\n \n-        let approvalStr = String(pendingApprovals).padStart(2, '0');\n-        let commitStr = String(pendingCommits).padStart(2, '0');\n+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n+        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n \n-        if (status === 'APPROVING') approvalStr = `(${chalk.cyan(<Spinner type=\"dots\"/>)})`;\n-        if (status === 'COMMITTING') commitStr = `(${chalk.cyan(<Spinner type=\"dots\"/>)})`;\n-        if (status === 'CONFIRM_APPROVE') approvalStr = chalk.bold.yellow(`┌ ${approvalStr} ┐`);\n-        if (status === 'CONFIRM_COMMIT') commitStr = chalk.bold.yellow(`┌ ${commitStr} ┐`);\n+        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n+        if (status === 'COMMITTING') commitStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n+        if (status === 'CONFIRM_APPROVE') approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n+        if (status === 'CONFIRM_COMMIT') commitStr = <Text bold color=\"yellow\">┌ {commitStr} ┐</Text>;\n         \n         return (\n             <Text>\n                 STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n             </Text>\n         )\n     }\n \n     const renderFooter = () => {\n         if (isModal) return (\n             <Text>\n-                ({chalk.cyan.bold('Enter')}) Confirm      ({chalk.cyan.bold('Esc')}) Cancel\n+                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n             </Text>\n         );\n         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n \n-        const pauseAction = status === 'PAUSED' ? `(${chalk.cyan.bold('R')})esume` : `(${chalk.cyan.bold('P')})ause`;;\n-        return <Text color=\"gray\">\n-            ({chalk.cyan.bold('↑↓')}) Nav · ({chalk.cyan.bold('Enter')}) Review · ({chalk.cyan.bold('A')})pprove All · ({chalk.cyan.bold('C')})ommit All · {pauseAction} · ({chalk.cyan.bold('Q')})uit\n-        </Text>\n+        const pauseAction = status === 'PAUSED'\n+\t\t\t? <Text>(<Text color=\"cyan\" bold>R</Text>)esume</Text>\n+\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n+\t\treturn <Text color=\"gray\">\n+\t\t\t(<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>Enter</Text>) Review · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n+\t\t</Text>\n     }\n     \n     const transactionsToConfirm = useMemo(() => {\n\n"
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/GlobalHelpScreen.tsx
+    content: >+
+      --- src/components/GlobalHelpScreen.tsx
+
+      +++ src/components/GlobalHelpScreen.tsx
+
+      @@ -1,6 +1,5 @@
+       import React from 'react';
+       import { Box, Text } from 'ink';
+      -import chalk from 'chalk';
+       
+       const GlobalHelpScreen = () => {
+           return (
+      @@ -21,30 +20,30 @@
+                       <Box flexDirection="column" gap={1}>
+                           <Box flexDirection="column">
+                               <Text bold color="cyan">GLOBAL</Text>
+      -                        <Text>  {chalk.cyan.bold('?')}        Toggle this
+      help screen</Text>
+
+      -                        <Text>  {chalk.cyan.bold('Q')}        Quit to
+      terminal (from main screens)</Text>
+
+      +                        <Text>  <Text color="cyan" bold>?</Text>       
+      Toggle this help screen</Text>
+
+      +                        <Text>  <Text color="cyan" bold>Q</Text>       
+      Quit to terminal (from main screens)</Text>
+                           </Box>
+                           <Box flexDirection="column">
+                               <Text bold color="cyan">DASHBOARD (watch)</Text>
+      -                        <Text>  {chalk.cyan.bold('↑↓')}       Navigate
+      event stream</Text>
+
+      -                        <Text>  {chalk.cyan.bold('P')}        Pause /
+      Resume clipboard watcher</Text>
+
+      -                        <Text>  {chalk.cyan.bold('A')}        Approve all
+      pending transactions</Text>
+
+      -                        <Text>  {chalk.cyan.bold('C')}        Commit all
+      applied transactions to git</Text>
+
+      +                        <Text>  <Text color="cyan" bold>↑↓</Text>      
+      Navigate event stream</Text>
+
+      +                        <Text>  <Text color="cyan" bold>P</Text>       
+      Pause / Resume clipboard watcher</Text>
+
+      +                        <Text>  <Text color="cyan" bold>A</Text>       
+      Approve all pending transactions</Text>
+
+      +                        <Text>  <Text color="cyan" bold>C</Text>       
+      Commit all applied transactions to git</Text>
+                           </Box>
+                           <Box flexDirection="column">
+                               <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+      -                        <Text>  {chalk.cyan.bold('D')}        Show /
+      Collapse file diff</Text>
+
+      -                        <Text>  {chalk.cyan.bold('R')}        Show /
+      Collapse reasoning steps</Text>
+
+      -                        <Text>  {chalk.cyan.bold('C')}        Enter /
+      Exit Copy Mode (Details Screen)</Text>
+
+      -                        <Text>  {chalk.cyan.bold('U')}        Undo /
+      Revert Transaction</Text>
+
+      -                        <Text>  {chalk.cyan.bold('Space')}    Toggle
+      approval state of a file (Review Screen)</Text>
+
+      +                        <Text>  <Text color="cyan" bold>D</Text>       
+      Show / Collapse file diff</Text>
+
+      +                        <Text>  <Text color="cyan" bold>R</Text>       
+      Show / Collapse reasoning steps</Text>
+
+      +                        <Text>  <Text color="cyan" bold>C</Text>       
+      Enter / Exit Copy Mode (Details Screen)</Text>
+
+      +                        <Text>  <Text color="cyan" bold>U</Text>       
+      Undo / Revert Transaction</Text>
+
+      +                        <Text>  <Text color="cyan" bold>Space</Text>   
+      Toggle approval state of a file (Review Screen)</Text>
+                           </Box>
+                       </Box>
+                   </Box>
+                   <Box marginTop={1}>
+      -                <Text bold>(Press {chalk.cyan.bold('?')} or
+      {chalk.cyan.bold('Esc')} to close)</Text>
+
+      +                <Text bold>(Press <Text color="cyan" bold>?</Text> or
+      <Text color="cyan" bold>Esc</Text> to close)</Text>
+                   </Box>
+               </Box>
+           );
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: "--- src/components/InitializationScreen.tsx\n+++ src/components/InitializationScreen.tsx\n@@ -1,16 +1,15 @@\n import React, { useEffect } from 'react';\n import { Box, Text, useApp, useInput } from 'ink';\n import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';\n-import chalk from 'chalk';\n import Separator from './Separator';\n import { useAppStore } from '../stores/app.store';\n import { sleep } from '../utils';\n \n const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n-\tlet symbol;\n+\tlet symbol: React.ReactNode;\n \tswitch (task.status) {\n \t\tcase 'pending': symbol = '( )'; break;\n-\t\tcase 'active': symbol = chalk.cyan('(●)'); break;\n-\t\tcase 'done': symbol = chalk.green(doneSymbol); break;\n+\t\tcase 'active': symbol = <Text color=\"cyan\">(●)</Text>; break;\n+\t\tcase 'done': symbol = <Text color=\"green\">{doneSymbol}</Text>; break;\n \t}\n \n \tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n@@ -112,8 +111,8 @@\n     const renderContext = () => (\n         <Box flexDirection=\"column\" marginBottom={1}>\n             <Text bold color=\"cyan\">CONTEXT</Text>\n-            <Text>  {chalk.green('✓')} Project ID: {projectId}</Text>\n-            <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>\n+            <Text>  <Text color=\"green\">✓</Text> Project ID: {projectId}</Text>\n+            <Text>  <Text color=\"green\">✓</Text> Gitignore:  Found at ./</Text>\n         </Box>\n     );\n \n@@ -133,7 +132,7 @@\n             <Box flexDirection=\"column\" marginTop={1}>\n                 {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol=\"[✓]\" />)}\n                 <Box flexDirection=\"column\" marginTop={1}>\n-                    <Text>{chalk.cyan('>')} The .relay/ directory is usually ignored by git.</Text>\n+                    <Text><Text color=\"cyan\">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>\n                     <Text>  Do you want to share its state with your team by committing it?</Text>\n                 </Box>\n             </Box>\n@@ -151,15 +150,15 @@\n                 <Text bold color=\"green\"> SYSTEM READY</Text>\n                 <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                     <Box flexDirection=\"column\">\n-                        <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>\n+                        <Text><Text color=\"green\">✓</Text> Config:   relay.config.json created.</Text>\n                         <Text color=\"gray\" italic>          › Edit this file to tune linters, git integration, etc.</Text>\n                     </Box>\n                     <Box flexDirection=\"column\">\n-                        <Text>{chalk.green('✓')} State:    {stateText}</Text>\n+                        <Text><Text color=\"green\">✓</Text> State:    {stateText}</Text>\n                         {stateSubText && <Text color=\"gray\" italic>          › {stateSubText}</Text>}\n                     </Box>\n                     <Box flexDirection=\"column\">\n-                        <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n+                        <Text><Text color=\"green\">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n                         <Text color=\"gray\" italic>          › Copied to clipboard. Paste into your AI's custom instructions.</Text>\n                     </Box>\n                 </Box>\n@@ -179,8 +178,8 @@\n     switch (phase) {\n         case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;\n         case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;\n-        case 'INTERACTIVE': footerText = <Text>({chalk.cyan.bold('Enter')}) No, ignore it (default)      ({chalk.cyan.bold('S')}) Yes, share it</Text>; break;\n-        case 'FINALIZE': footerText = <Text>({chalk.cyan.bold('W')})atch for Patches · ({chalk.cyan.bold('L')})View Logs · ({chalk.cyan.bold('Q')})uit</Text>; break;\n+        case 'INTERACTIVE': footerText = <Text>(<Text color=\"cyan\" bold>Enter</Text>) No, ignore it (default)      (<Text color=\"cyan\" bold>S</Text>) Yes, share it</Text>; break;\n+        case 'FINALIZE': footerText = <Text>(<Text color=\"cyan\" bold>W</Text>)atch for Patches · (<Text color=\"cyan\" bold>L</Text>)View Logs · (<Text color=\"cyan\" bold>Q</Text>)uit</Text>; break;\n     }\n \n     return (\n\n"
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: >+
+      --- src/components/SplashScreen.tsx
+
+      +++ src/components/SplashScreen.tsx
+
+      @@ -2,7 +2,6 @@
+       import { Box, Text, useInput } from 'ink';
+       import { useAppStore } from '../stores/app.store';
+      -import chalk from 'chalk';
+       import Separator from './Separator';
+       
+       const SplashScreen = () => {
+      @@ -39,7 +38,7 @@
+                   <Text color="cyan">{logo}</Text>
+                   <Box flexDirection="column" alignItems="center">
+                       <Text italic>A zero-friction, AI-native patch engine.</Text>
+      -                <Text italic color="gray">Built by Arman and contributors
+      · {chalk.underline('https://relay.noca.pro')}</Text>
+
+      +                <Text italic color="gray">Built by Arman and contributors
+      · <Text underline>https://relay.noca.pro</Text></Text>
+                   </Box>
+                   
+                   <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+      @@ -64,12 +63,12 @@
+                   </Box>
+                   
+                   <Box marginTop={1}><Separator /></Box>
+      -            <Text>If you love this workflow, check out
+      {chalk.underline('https://www.noca.pro')} for the full</Text>
+
+      +            <Text>If you love this workflow, check out <Text
+      underline>https://www.noca.pro</Text> for the full</Text>
+                   <Text>web app with repo-wide visual context, history, and rollback.</Text>
+      -            <Text>{chalk.cyan.bold('(V)')}isit noca.pro</Text>
+
+      +            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                   <Separator />
+      -            <Text>Follow {chalk.cyan.bold('(X)')} · Join
+      {chalk.cyan.bold('(D)')}iscord · Star on
+      {chalk.cyan.bold('(G)')}itHub</Text>
+
+      +            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text
+      color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan"
+      bold>(G)</Text>itHub</Text>
+                   <Separator />
+      -            <Text>Loading... {countdown} ({chalk.gray('Press any key to
+      skip')})</Text>
+
+      +            <Text>Loading... {countdown} (<Text color="gray">Press any
+      key to skip</Text>)</Text>
+               </Box>
+           );
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  package.json: |
+    {
+      "name": "relaycode-tui",
+      "module": "index.tsx",
+      "type": "module",
+      "private": true,
+      "scripts": {
+        "start": "bun run index.tsx",
+        "dev": "bun run --watch index.tsx"
+      },
+      "dependencies": {
+        "ink": "^4.4.1",
+        "react": "^18.2.0",
+        "ink-text-input": "^4.0.3",
+        "ink-select-input": "^4.2.2",
+        "ink-spinner": "^5.0.0",
+        "chalk": "^5.3.0",
+        "clipboardy": "^4.0.0",
+        "zustand": "^4.4.1"
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "^18.2.22",
+        "@types/node": "^20.5.9",
+        "typescript": "^5"
+      }
+    }
+  src/components/InitializationScreen.tsx: "import React, { useEffect } from 'react';\nimport { Box, Text, useApp, useInput } from 'ink';\nimport { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';\nimport chalk from 'chalk';\nimport Separator from './Separator';\nimport { useAppStore } from '../stores/app.store';\nimport { sleep } from '../utils';\n\nconst TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n\tlet symbol;\n\tswitch (task.status) {\n\t\tcase 'pending': symbol = '( )'; break;\n\t\tcase 'active': symbol = chalk.cyan('(●)'); break;\n\t\tcase 'done': symbol = chalk.green(doneSymbol); break;\n\t}\n\n\tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n\n\treturn (\n\t\t<Box flexDirection=\"column\">\n\t\t\t<Text>\n\t\t\t\t{symbol} {title}\n\t\t\t</Text>\n\t\t\t{task.subtext && task.status !== 'done' && (\n\t\t\t\t<Text italic color=\"gray\">\n\t\t\t\t\t{'     └─ '}{task.subtext}\n\t\t\t\t</Text>\n\t\t\t)}\n\t\t</Box>\n\t);\n};\n\nconst InitializationScreen = () => {\n    const phase = useInitStore(s => s.phase);\n    const analyzeTasks = useInitStore(s => s.analyzeTasks);\n    const configureTasks = useInitStore(s => s.configureTasks);\n    const interactiveChoice = useInitStore(s => s.interactiveChoice);\n    const projectId = useInitStore(s => s.projectId);\n    const actions = useInitStore(s => s.actions);\n    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);\n    const { exit } = useApp();\n\n    useInput((input, key) => {\n        if (phase === 'INTERACTIVE') {\n            if (key.return) {\n                actions.setInteractiveChoice('ignore');\n            } else if (input.toLowerCase() === 's') {\n                actions.setInteractiveChoice('share');\n            }\n        }\n        if (phase === 'FINALIZE') {\n            if (input.toLowerCase() === 'q') {\n                exit();\n            } else if (input.toLowerCase() === 'w') {\n                showDashboardScreen();\n            }\n        }\n    });\n\n    useEffect(() => {\n        actions.resetInit();\n        const runSimulation = async () => {\n            actions.setPhase('ANALYZE');\n            for (const task of initialAnalyzeTasks) {\n                actions.updateAnalyzeTask(task.id, 'active');\n                await sleep(800);\n                actions.updateAnalyzeTask(task.id, 'done');\n            }\n            actions.setAnalysisResults(`'relaycode' (from package.json)`, true);\n            await sleep(500);\n\n            actions.setPhase('CONFIGURE');\n            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);\n            for (const task of configTasksUntilInteractive) {\n                actions.updateConfigureTask(task.id, 'active');\n                await sleep(800);\n                actions.updateConfigureTask(task.id, 'done');\n            }\n            await sleep(500);\n\n            actions.setPhase('INTERACTIVE');\n        };\n\n        runSimulation();\n    }, []);\n\n    useEffect(() => {\n        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {\n            const resumeSimulation = async () => {\n                actions.setPhase('CONFIGURE');\n                const lastTask = initialConfigureTasks[2];\n                if (lastTask) {\n                    actions.updateConfigureTask(lastTask.id, 'active');\n                    await sleep(800);\n                    actions.updateConfigureTask(lastTask.id, 'done');\n                    await sleep(500);\n\n                    actions.setPhase('FINALIZE');\n                }\n            };\n            resumeSimulation();\n        }\n    }, [interactiveChoice, phase, actions]);\n\n    const renderAnalyze = () => (\n        <Box flexDirection=\"column\">\n            <Text bold color=\"cyan\">PHASE 1: ANALYZE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}\n            </Box>\n        </Box>\n    );\n\n    const renderContext = () => (\n        <Box flexDirection=\"column\" marginBottom={1}>\n            <Text bold color=\"cyan\">CONTEXT</Text>\n            <Text>  {chalk.green('✓')} Project ID: {projectId}</Text>\n            <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>\n        </Box>\n    );\n\n    const renderConfigure = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol=\"[✓]\" />)}\n            </Box>\n        </Box>\n    );\n\n    const renderInteractive = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol=\"[✓]\" />)}\n                <Box flexDirection=\"column\" marginTop={1}>\n                    <Text>{chalk.cyan('>')} The .relay/ directory is usually ignored by git.</Text>\n                    <Text>  Do you want to share its state with your team by committing it?</Text>\n                </Box>\n            </Box>\n        </Box>\n    );\n\n    const renderFinalize = () => {\n        const stateText = interactiveChoice === 'share'\n            ? \".relay/ directory initialized. It will be committed to git.\"\n            : \".relay/ directory initialized and added to .gitignore.\";\n        const stateSubText = interactiveChoice === 'share'\n            ? undefined\n            : \"Local transaction history will be stored here.\";\n        \n        return (\n            <Box flexDirection=\"column\">\n                <Text bold color=\"green\"> SYSTEM READY</Text>\n                <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                    <Box flexDirection=\"column\">\n                        <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>\n                        <Text color=\"gray\" italic>          › Edit this file to tune linters, git integration, etc.</Text>\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text>{chalk.green('✓')} State:    {stateText}</Text>\n                        {stateSubText && <Text color=\"gray\" italic>          › {stateSubText}</Text>}\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n                        <Text color=\"gray\" italic>          › Copied to clipboard. Paste into your AI's custom instructions.</Text>\n                    </Box>\n                </Box>\n            </Box>\n        );\n    };\n\n    const renderPhase = () => {\n        switch (phase) {\n            case 'ANALYZE': return renderAnalyze();\n            case 'CONFIGURE': return renderConfigure();\n            case 'INTERACTIVE': return renderInteractive();\n            case 'FINALIZE': return renderFinalize();\n        }\n    };\n    \n    let footerText;\n    switch (phase) {\n        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;\n        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;\n        case 'INTERACTIVE': footerText = <Text>({chalk.cyan.bold('Enter')}) No, ignore it (default)      ({chalk.cyan.bold('S')}) Yes, share it</Text>; break;\n        case 'FINALIZE': footerText = <Text>({chalk.cyan.bold('W')})atch for Patches · ({chalk.cyan.bold('L')})View Logs · ({chalk.cyan.bold('Q')})uit</Text>; break;\n    }\n\n    return (\n        <Box flexDirection=\"column\">\n            <Text color=\"cyan\">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>\n            <Separator />\n            <Box marginY={1}>{renderPhase()}</Box>\n            <Separator />\n            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}\n        </Box>\n    );\n};\n\nexport default InitializationScreen;"
+  src/components/DashboardScreen.tsx: >-
+    import React, { useMemo } from 'react';
+
+    import { Box, Text, useApp, useInput } from 'ink';
+
+    import chalk from 'chalk';
+
+    import Spinner from 'ink-spinner';
+
+    import { useDashboardStore, type Transaction, type DashboardStatus, type
+    TransactionStatus } from '../stores/dashboard.store';
+
+    import Separator from './Separator';
+
+    import GlobalHelpScreen from './GlobalHelpScreen';
+
+
+    // --- Sub-components & Helpers ---
+
+
+    const getStatusIcon = (status: TransactionStatus) => {
+        switch (status) {
+            case 'PENDING': return chalk.yellow('?');
+            case 'APPLIED': return chalk.green('✓');
+            case 'COMMITTED': return chalk.blue('→');
+            case 'FAILED': return chalk.red('✗');
+            case 'REVERTED': return chalk.gray('↩');
+            case 'IN-PROGRESS': return <Spinner type="dots" />;
+            default: return ' ';
+        }
+    };
+
+
+    const formatTimeAgo = (timestamp: number) => {
+        const seconds = Math.floor((Date.now() - timestamp) / 1000);
+        if (seconds < 60) return `-${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        return `-${minutes}m`;
+    };
+
+
+    const EventStreamItem = ({ transaction, isSelected }: { transaction:
+    Transaction, isSelected: boolean }) => {
+        const icon = getStatusIcon(transaction.status);
+        const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+        const statusText = transaction.status.padEnd(11, ' ');
+        
+        let message = transaction.message;
+        if (transaction.status === 'IN-PROGRESS') {
+            message = chalk.cyan(message);
+        }
+        
+        const content = (
+            <Text>
+                {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {message}
+            </Text>
+        );
+
+        return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+    };
+
+
+    const ConfirmationContent = ({ status, transactionsToConfirm }: { status:
+    DashboardStatus, transactionsToConfirm: Transaction[] }) => {
+        const isApprove = status === 'CONFIRM_APPROVE';
+        const actionText = isApprove ? 'APPROVE' : 'COMMIT';
+        
+        return (
+            <Box flexDirection="column" marginY={1} paddingLeft={2}>
+                <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
+                <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>
+                <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                    {transactionsToConfirm.map(tx => (
+                        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                    ))}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const DashboardScreen = () => {
+        const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+        const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
+        const { exit } = useApp();
+
+        const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+        const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+        const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
+        const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
+        
+        useInput((input, key) => {
+            if (input === '?') {
+                toggleHelp();
+                return;
+            }
+
+            if (showHelp) {
+                if (key.escape || input === '?') toggleHelp();
+                return;
+            }
+
+            if (isModal) {
+                if (key.return) confirmAction();
+                if (key.escape) cancelAction();
+                return;
+            }
+
+            if (isProcessing) return; // No input while processing
+            
+            if (input.toLowerCase() === 'q') exit();
+
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+            
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
+        });
+
+        const renderStatusBar = () => {
+            let statusText, statusIcon;
+            switch (status) {
+                case 'LISTENING': statusText = 'LISTENING'; statusIcon = chalk.green('●'); break;
+                case 'PAUSED': statusText = 'PAUSED'; statusIcon = chalk.yellow('||'); break;
+                case 'APPROVING': statusText = 'APPROVING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
+                case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = chalk.cyan(<Spinner type="dots"/>); break;
+                default: statusText = 'LISTENING'; statusIcon = chalk.green('●');
+            }
+
+            let approvalStr = String(pendingApprovals).padStart(2, '0');
+            let commitStr = String(pendingCommits).padStart(2, '0');
+
+            if (status === 'APPROVING') approvalStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
+            if (status === 'COMMITTING') commitStr = `(${chalk.cyan(<Spinner type="dots"/>)})`;
+            if (status === 'CONFIRM_APPROVE') approvalStr = chalk.bold.yellow(`┌ ${approvalStr} ┐`);
+            if (status === 'CONFIRM_COMMIT') commitStr = chalk.bold.yellow(`┌ ${commitStr} ┐`);
+            
+            return (
+                <Text>
+                    STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+                </Text>
+            )
+        }
+
+        const renderFooter = () => {
+            if (isModal) return (
+                <Text>
+                    ({chalk.cyan.bold('Enter')}) Confirm      ({chalk.cyan.bold('Esc')}) Cancel
+                </Text>
+            );
+            if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+            const pauseAction = status === 'PAUSED' ? `(${chalk.cyan.bold('R')})esume` : `(${chalk.cyan.bold('P')})ause`;;
+            return <Text color="gray">
+                ({chalk.cyan.bold('↑↓')}) Nav · ({chalk.cyan.bold('Enter')}) Review · ({chalk.cyan.bold('A')})pprove All · ({chalk.cyan.bold('C')})ommit All · {pauseAction} · ({chalk.cyan.bold('Q')})uit
+            </Text>
+        }
+        
+        const transactionsToConfirm = useMemo(() => {
+            if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+            if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
+            return [];
+        }, [status, transactions]);
+
+        return (
+            <Box flexDirection="column" height="100%">
+                {showHelp && <GlobalHelpScreen />}
+
+                <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
+                    <Text color="cyan">▲ relaycode dashboard</Text>
+                    <Separator />
+                    <Box marginY={1}>
+                        {renderStatusBar()}
+                    </Box>
+                    
+                    {isModal && (
+                        <>
+                            <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
+                            <Separator />
+                        </>
+                    )}
+                    
+                    <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+                    <Box flexDirection="column" marginTop={1}>
+                        {transactions.map((tx, index) => (
+                            <EventStreamItem 
+                                key={tx.id} 
+                                transaction={tx} 
+                                isSelected={!isModal && index === selectedTransactionIndex}
+                            />
+                        ))}
+                    </Box>
+
+                    <Box marginTop={1}><Separator /></Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default DashboardScreen;
+  src/components/GlobalHelpScreen.tsx: |-
+    import React from 'react';
+    import { Box, Text } from 'ink';
+    import chalk from 'chalk';
+
+    const GlobalHelpScreen = () => {
+        return (
+            <Box
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                width="100%"
+                height="100%"
+            >
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    paddingX={2}
+                    paddingY={1}
+                    width="80%"
+                >
+                    <Box justifyContent="center" marginBottom={1}>
+                        <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
+                    </Box>
+                    <Box flexDirection="column" gap={1}>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">GLOBAL</Text>
+                            <Text>  {chalk.cyan.bold('?')}        Toggle this help screen</Text>
+                            <Text>  {chalk.cyan.bold('Q')}        Quit to terminal (from main screens)</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">DASHBOARD (watch)</Text>
+                            <Text>  {chalk.cyan.bold('↑↓')}       Navigate event stream</Text>
+                            <Text>  {chalk.cyan.bold('P')}        Pause / Resume clipboard watcher</Text>
+                            <Text>  {chalk.cyan.bold('A')}        Approve all pending transactions</Text>
+                            <Text>  {chalk.cyan.bold('C')}        Commit all applied transactions to git</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                            <Text>  {chalk.cyan.bold('D')}        Show / Collapse file diff</Text>
+                            <Text>  {chalk.cyan.bold('R')}        Show / Collapse reasoning steps</Text>
+                            <Text>  {chalk.cyan.bold('C')}        Enter / Exit Copy Mode (Details Screen)</Text>
+                            <Text>  {chalk.cyan.bold('U')}        Undo / Revert Transaction</Text>
+                            <Text>  {chalk.cyan.bold('Space')}    Toggle approval state of a file (Review Screen)</Text>
+                        </Box>
+                    </Box>
+                </Box>
+                <Box marginTop={1}>
+                    <Text bold>(Press {chalk.cyan.bold('?')} or {chalk.cyan.bold('Esc')} to close)</Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default GlobalHelpScreen;
+  src/components/SplashScreen.tsx: |-
+    import React, { useState, useEffect } from 'react';
+    import { Box, Text, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import chalk from 'chalk';
+    import Separator from './Separator';
+
+    const SplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState(5);
+
+        const handleSkip = () => {
+            showInitScreen();
+        };
+
+        useInput(() => {
+            handleSkip();
+        });
+
+        useEffect(() => {
+            if (countdown === 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen]);
+
+        const logo = `
+             ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+             ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+             ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+    `;
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode</Text>
+                <Separator />
+                <Text color="cyan">{logo}</Text>
+                <Box flexDirection="column" alignItems="center">
+                    <Text italic>A zero-friction, AI-native patch engine.</Text>
+                    <Text italic color="gray">Built by Arman and contributors · {chalk.underline('https://relay.noca.pro')}</Text>
+                </Box>
+                
+                <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                    <Box flexDirection="column" width="45%">
+                        <Text>Version 1.1.5</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>relaycode</Text>
+                        <Text>relaycode-core</Text>
+                        <Text>apply-multi-diff</Text>
+                        <Text>konro</Text>
+                    </Box>
+                     <Box flexDirection="column" width="45%">
+                        <Text>Build Timestamps</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>2025-09-20 13:58:05</Text>
+                        <Text>2025-09-20 10:59:05</Text>
+                        <Text>(versioned)</Text>
+                        <Text>(versioned)</Text>
+                    </Box>
+                </Box>
+                
+                <Box marginTop={1}><Separator /></Box>
+                <Text>If you love this workflow, check out {chalk.underline('https://www.noca.pro')} for the full</Text>
+                <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                <Text>{chalk.cyan.bold('(V)')}isit noca.pro</Text>
+                <Separator />
+                <Text>Follow {chalk.cyan.bold('(X)')} · Join {chalk.cyan.bold('(D)')}iscord · Star on {chalk.cyan.bold('(G)')}itHub</Text>
+                <Separator />
+                <Text>Loading... {countdown} ({chalk.gray('Press any key to skip')})</Text>
+            </Box>
+        );
+    };
+
+    export default SplashScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 8

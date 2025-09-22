@@ -1,0 +1,705 @@
+uuid: c25cfb34-8c04-4860-84c1-4c7595ca4089
+projectId: relaycode-tui
+createdAt: '2025-09-21T22:09:46.478Z'
+gitCommitMsg: >-
+  feat: implement review, diff, and reason screens
+
+  This commit introduces the core user-facing components for reviewing
+  AI-generated patches.
+
+  - Adds `ReviewScreen` as the main orchestrator for displaying transaction
+  details, files, and script results. - Implements `DiffScreen` to show file
+  changes with a collapsible view. - Implements `ReasonScreen` to display the
+  AI's step-by-step reasoning. - Creates `review.store.ts` with mock data to
+  manage the state of the review process for prototyping. - Integrates the new
+  `ReviewScreen` into the main application flow, accessible from the dashboard.
+promptSummary: >-
+  Create review, diff, and reason screens based on markdown documentation for
+  prototyping purposes.
+reasoning:
+  - 'Here is the plan to implement the requested screens:'
+  - >-
+    1.  **Create `ReasonScreen` Component**: I'll start by creating a simple
+    component, `src/components/ReasonScreen.tsx`, to display the AI's reasoning
+    text as specified in its README.
+  - >-
+    2.  **Create `DiffScreen` Component**: Next, I'll create
+    `src/components/DiffScreen.tsx`. This component will render a file's diff,
+    including basic colorization and logic for a collapsed/expanded view.
+  - >-
+    3.  **Create Review Store**: To manage the complex state of the review
+    screen, I'll create a new Zustand store at `src/stores/review.store.ts`.
+    This will hold mock data for files, script results, and UI state, simulating
+    a real transaction.
+  - >-
+    4.  **Create `ReviewScreen` Component**: With the supporting components and
+    store in place, I'll build the main `src/components/ReviewScreen.tsx`. This
+    screen will orchestrate the UI, render the navigator and body sections, and
+    handle user input to switch between views (diff, reasoning, etc.).
+  - >-
+    5.  **Integrate New Screen**: Finally, I'll update the main application
+    logic (`app.store.ts` and `App.tsx`) to include the new 'review' screen. I
+    will also modify `DashboardScreen.tsx` to allow navigation to the
+    `ReviewScreen` for simulation purposes.
+  - >-
+    This approach builds the new feature from the smallest components up to the
+    main screen, ensuring all dependencies are in place before they are needed.
+  - >-
+    First, I'll create the `ReasonScreen` component. It's a simple display
+    component for the AI's reasoning.
+  - >-
+    Next, I'll create the `DiffScreen` component, which will be responsible for
+    rendering file diffs with support for an expanded and collapsed state.
+  - >-
+    Now, I'll create a dedicated Zustand store to manage the state for the
+    `ReviewScreen`. This will contain mock data for files, scripts, and UI state
+    to simulate a real review session.
+  - >-
+    Now I'll build the main `ReviewScreen` component, which ties together the
+    store and the `DiffScreen` and `ReasonScreen` components into a fully
+    interactive UI.
+  - I'll update the global app store to be aware of the new `review` screen.
+  - Now I will update the main `App` component to render the `ReviewScreen`.
+  - >-
+    Finally, to enable navigation to the new screen for this prototype, I'll
+    modify the `DashboardScreen` so that pressing Enter will transition to the
+    `ReviewScreen`.
+operations:
+  - type: write
+    path: src/components/ReasonScreen.tsx
+    content: |-
+      import React from 'react';
+      import { Box, Text } from 'ink';
+
+      interface ReasonScreenProps {
+          reasoning: string;
+      }
+
+      const ReasonScreen = ({ reasoning }: ReasonScreenProps) => {
+          return (
+              <Box flexDirection="column">
+                  <Text>REASONING</Text>
+                  <Box flexDirection="column" marginTop={1}>
+                      <Text>{reasoning}</Text>
+                  </Box>
+              </Box>
+          );
+      };
+
+      export default ReasonScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/components/DiffScreen.tsx
+    content: >-
+      import React from 'react';
+
+      import { Box, Text } from 'ink';
+
+
+      interface DiffScreenProps {
+          filePath: string;
+          diffContent: string;
+          isExpanded: boolean;
+      }
+
+
+      const DiffScreen = ({ filePath, diffContent, isExpanded }:
+      DiffScreenProps) => {
+          const lines = diffContent.split('\n');
+          const COLLAPSE_THRESHOLD = 20;
+          const COLLAPSE_SHOW_LINES = 8;
+
+          const renderContent = () => {
+              if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+                  const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+                  const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+                  const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+                  return (
+                      <>
+                          {topLines.map((line, i) => renderLine(line, i))}
+                          <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                          {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                      </>
+                  );
+              }
+              return lines.map((line, i) => renderLine(line, i));
+          };
+
+          const renderLine = (line: string, key: number) => {
+              let color = 'white';
+              if (line.startsWith('+')) color = 'green';
+              if (line.startsWith('-')) color = 'red';
+              if (line.startsWith('@@')) color = 'cyan';
+              return <Text key={key} color={color}>{line}</Text>;
+          };
+
+          return (
+              <Box flexDirection="column">
+                  <Text>DIFF: {filePath}</Text>
+                  <Box flexDirection="column" marginTop={1}>
+                      {renderContent()}
+                  </Box>
+              </Box>
+          );
+      };
+
+
+      export default DiffScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/stores/review.store.ts
+    content: >-
+      import { create } from 'zustand';
+
+
+      // --- Types ---
+
+
+      export type FileStatus = 'MODIFIED' | 'FAILED' | 'APPROVED' | 'REJECTED';
+
+      export interface FileItem {
+          id: string;
+          path: string;
+          status: FileStatus;
+          diff: string;
+          error?: string;
+          strategy: 'replace' | 'standard-diff';
+      }
+
+
+      export interface ScriptResult {
+          command: string;
+          success: boolean;
+          duration: number;
+          summary: string;
+          output: string;
+      }
+
+
+      export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'none';
+
+
+      interface ReviewState {
+          // Transaction Info
+          hash: string;
+          message: string;
+          prompt: string;
+          reasoning: string;
+          
+          // File & Script Info
+          files: FileItem[];
+          scripts: ScriptResult[];
+          
+          // UI State
+          selectedItemIndex: number; // Can be file or script
+          bodyView: BodyView;
+          isDiffExpanded: boolean;
+
+          actions: {
+              moveSelectionUp: () => void;
+              moveSelectionDown: () => void;
+              toggleFileApproval: () => void;
+              toggleDiffView: () => void;
+              toggleReasoningView: () => void;
+              toggleScriptView: (index: number) => void;
+              expandDiff: () => void;
+          };
+      }
+
+
+      // --- Mock Data ---
+
+
+      const mockFiles: FileItem[] = [
+          { id: '1', path: 'src/core/clipboard.ts', status: 'APPROVED', diff: `--- a/src/core/clipboard.ts
+      +++ b/src/core/clipboard.ts
+
+      @@ -1,5 +1,6 @@
+       import { copy as copyToClipboard } from 'clipboardy';
+      +import { getErrorMessage } from '../utils';
+       
+       export const copy = async (text: string) => {
+         try {
+      -    await copyToClipboard(text);
+
+      +    await copyToClipboard(String(text));
+           return { success: true };
+         } catch (error) {
+      -    return { success: false, error: error.message };
+
+      +    return { success: false, error: getErrorMessage(error) };
+         }
+       };`, strategy: 'replace' },
+          { id: '2', path: 'src/utils/shell.ts', status: 'APPROVED', diff: `--- a/src/utils/shell.ts
+      +++ b/src/utils/shell.ts
+
+      @@ -10,3 +10,11 @@
+       export const executeCommand = async (command: string): Promise<string> => {
+         // ... implementation
+       };
+      +
+
+      +export const getErrorMessage = (error: unknown): string => {
+
+      +  if (error instanceof Error) {
+
+      +    return error.message;
+
+      +  }
+
+      +  return String(error);
+
+      +};
+
+      `, strategy: 'standard-diff' },
+          { id: '3', path: 'src/components/Button.tsx', status: 'FAILED', diff: '', error: 'Hunk #1 failed to apply', strategy: 'standard-diff' },
+      ];
+
+
+      const mockScripts: ScriptResult[] = [
+          { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
+          { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: `src/core/clipboard.ts
+        45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+        88:5   Warning  Unexpected console statement. (no-console)` },
+      ];
+
+
+      const mockReasoning = `1. Identified a potential uncaught exception in the
+      \`restoreSnapshot\` function
+         if a file operation fails midway through a loop of many files. This could
+         leave the project in a partially-reverted, inconsistent state.
+
+      2. Wrapped the file restoration loop in a \`Promise.all\` and added a
+      dedicated
+         error collection array. This ensures that all file operations are
+         attempted and that a comprehensive list of failures is available
+         afterward for better error reporting or partial rollback logic.`;
+
+      // --- Store Implementation ---
+
+
+      export const useReviewStore = create<ReviewState>((set, get) => ({
+          // Transaction Info
+          hash: '4b9d8f03',
+          message: 'refactor: simplify clipboard logic',
+          prompt: 'Simplify the clipboard logic using an external library...',
+          reasoning: mockReasoning,
+
+          // File & Script Info
+          files: mockFiles,
+          scripts: mockScripts,
+
+          // UI State
+          selectedItemIndex: 0, // Start with first file
+          bodyView: 'none',
+          isDiffExpanded: false,
+
+          actions: {
+              moveSelectionUp: () => set(state => ({
+                  selectedItemIndex: Math.max(0, state.selectedItemIndex - 1)
+              })),
+              moveSelectionDown: () => set(state => ({
+                  selectedItemIndex: Math.min(state.files.length + state.scripts.length - 1, state.selectedItemIndex + 1)
+              })),
+              toggleFileApproval: () => set(state => {
+                  const { selectedItemIndex, files } = state;
+                  if (selectedItemIndex >= files.length) return {}; // Not a file
+                  
+                  const newFiles = [...files];
+                  const file = newFiles[selectedItemIndex];
+                  if (file.status === 'APPROVED') {
+                      file.status = 'REJECTED';
+                  } else if (file.status === 'REJECTED') {
+                      file.status = 'APPROVED';
+                  }
+                  return { files: newFiles };
+              }),
+              toggleDiffView: () => set(state => {
+                  const { bodyView } = state;
+                  if (state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
+                  return {
+                      bodyView: bodyView === 'diff' ? 'none' : 'diff',
+                      isDiffExpanded: false // Always start collapsed
+                  };
+              }),
+              toggleReasoningView: () => set(state => {
+                  const { bodyView } = state;
+                  return {
+                      bodyView: bodyView === 'reasoning' ? 'none' : 'reasoning'
+                  };
+              }),
+              toggleScriptView: (index: number) => set(state => {
+                  const { bodyView, selectedItemIndex } = state;
+                  if (bodyView === 'script_output' && selectedItemIndex === index) {
+                      return { bodyView: 'none' };
+                  }
+                  return { bodyView: 'script_output' };
+              }),
+              expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+          }
+      }));
+    patchStrategy: replace
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: >-
+      import React from 'react';
+
+      import { Box, Text, useInput } from 'ink';
+
+      import { useReviewStore, FileItem, ScriptResult } from
+      '../stores/review.store';
+
+      import Separator from './Separator';
+
+      import DiffScreen from './DiffScreen';
+
+      import ReasonScreen from './ReasonScreen';
+
+
+      // --- Sub-components ---
+
+
+      const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+      boolean}) => {
+          let icon;
+          let color;
+          switch (file.status) {
+              case 'APPROVED': icon = '[✓]'; color = 'green'; break;
+              case 'REJECTED': icon = '[✗]'; color = 'red'; break;
+              case 'FAILED': icon = '[!]'; color = 'red'; break;
+              case 'MODIFIED': icon = '[~]'; color = 'yellow'; break;
+          }
+
+          const content = (
+              <Box>
+                  <Text color={color}>{icon} MOD {file.path}</Text>
+                  <Box flexGrow={1} />
+                  {file.error ? <Text color="red">({file.error})</Text> : <Text>[{file.strategy}]</Text>}
+              </Box>
+          );
+
+          return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+      }
+
+
+      const ScriptItemRow = ({ script, isSelected, isExpanded }: { script:
+      ScriptResult, isSelected: boolean, isExpanded: boolean }) => {
+          const icon = script.success ? <Text color="green">✓</Text> : <Text color="red">✗</Text>;
+          const arrow = isExpanded ? '▾' : '▸';
+
+          const content = <Text>{icon} {script.command} ({script.duration}s) {arrow} {script.summary}</Text>;
+          return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+      }
+
+
+      // --- Main Component ---
+
+
+      const ReviewScreen = () => {
+          const store = useReviewStore();
+          const { 
+              hash, message, reasoning, files, scripts, 
+              selectedItemIndex, bodyView, isDiffExpanded 
+          } = store;
+          const { 
+              moveSelectionUp, moveSelectionDown, toggleFileApproval, 
+              toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff
+          } = store.actions;
+          
+          const numFiles = files.length;
+          
+          useInput((input, key) => {
+              if (key.upArrow) moveSelectionUp();
+              if (key.downArrow) moveSelectionDown();
+
+              if (input.toLowerCase() === 'r') toggleReasoningView();
+              
+              if (input === ' ') {
+                  if (selectedItemIndex < numFiles) {
+                      toggleFileApproval();
+                  }
+              }
+              
+              if (input.toLowerCase() === 'd') {
+                  if (selectedItemIndex < numFiles) {
+                      toggleDiffView();
+                  }
+              }
+
+              if (input.toLowerCase() === 'x' && bodyView === 'diff') {
+                  expandDiff();
+              }
+
+              if (key.return) { // Enter key
+                   if (selectedItemIndex >= numFiles) { // It's a script
+                      toggleScriptView(selectedItemIndex);
+                  }
+              }
+          });
+
+          const renderBody = () => {
+              if (bodyView === 'none') return null;
+
+              if (bodyView === 'reasoning') {
+                  return <ReasonScreen reasoning={reasoning} />;
+              }
+              
+              if (bodyView === 'diff') {
+                  const selectedFile = files[selectedItemIndex];
+                  if (!selectedFile) return null;
+                  return <DiffScreen filePath={selectedFile.path} diffContent={selectedFile.diff} isExpanded={isDiffExpanded} />;
+              }
+
+              if (bodyView === 'script_output') {
+                   const scriptIndex = selectedItemIndex - numFiles;
+                   const selectedScript = scripts[scriptIndex];
+                   if (!selectedScript) return null;
+                   return (
+                      <Box flexDirection="column">
+                          <Text>OUTPUT: `{selectedScript.command}`</Text>
+                          <Box marginTop={1}><Text>{selectedScript.output}</Text></Box>
+                      </Box>
+                   );
+              }
+              
+              return null;
+          }
+
+          const renderFooter = () => {
+              let actions = ["(↑↓) Nav", "(Spc) Toggle"];
+              
+              if (bodyView === 'diff') {
+                  actions.push(isDiffExpanded ? "(X)Collapse" : "(X)pand Diff");
+                  actions.push("(D)Collapse View");
+              } else if (selectedItemIndex < numFiles) {
+                  actions.push("(D)iff");
+              }
+              
+              if (bodyView === 'reasoning') {
+                  actions.push("(R)Collapse View");
+              } else {
+                  actions.push("(R)easoning");
+              }
+
+              if (selectedItemIndex >= numFiles) {
+                   const isExpanded = bodyView === 'script_output' && selectedItemIndex >= numFiles;
+                   actions.push(isExpanded ? "(Ent)Collapse" : "(Ent)Expand");
+              }
+              
+              actions.push("(A)pprove");
+              
+              return <Text>{actions.join(' · ')}</Text>
+          }
+
+          return (
+              <Box flexDirection="column">
+                  <Text color="cyan">▲ relaycode review</Text>
+                  <Separator />
+                  
+                  {/* Navigator */}
+                  <Box flexDirection="column" marginY={1}>
+                      <Text>{hash} · {message}</Text>
+                      <Text>(+22/-11) · 2/3 Files · 3.9s</Text>
+                      <Box marginY={1}>
+                          <Text>{bodyView === 'reasoning' ? '▾' : '▸'} (R)easoning (3 steps)</Text>
+                      </Box>
+                      <Separator/>
+                      {scripts.map((script, index) => (
+                          <ScriptItemRow 
+                              key={script.command} 
+                              script={script}
+                              isSelected={selectedItemIndex === numFiles + index}
+                              isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                          />
+                      ))}
+                      <Separator/>
+                      <Text>FILES</Text>
+                       {files.map((file, index) => (
+                          <FileItemRow 
+                              key={file.id} 
+                              file={file} 
+                              isSelected={selectedItemIndex === index}
+                          />
+                      ))}
+                  </Box>
+                  
+                  <Separator/>
+                  
+                  {/* Body */}
+                  <Box marginY={1}>
+                      {renderBody()}
+                  </Box>
+
+                  {(bodyView !== 'none' && renderBody() !== null) && <Separator />}
+
+                  {/* Footer */}
+                  <Box>
+                      {renderFooter()}
+                  </Box>
+              </Box>
+          );
+      };
+
+
+      export default ReviewScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/stores/app.store.ts
+    content: |+
+      --- src/stores/app.store.ts
+      +++ src/stores/app.store.ts
+      @@ -1,11 +1,13 @@
+       import { create } from 'zustand';
+       
+      -export type AppScreen = 'splash' | 'init' | 'dashboard';
+      +export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review';
+       
+       interface AppState {
+           currentScreen: AppScreen;
+           actions: {
+               showInitScreen: () => void;
+               showDashboardScreen: () => void;
+      +        showReviewScreen: () => void;
+           };
+       }
+       
+      @@ -14,6 +16,7 @@
+           actions: {
+               showInitScreen: () => set({ currentScreen: 'init' }),
+               showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+      +        showReviewScreen: () => set({ currentScreen: 'review' }),
+           },
+       }));
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/App.tsx
+    content: |
+      --- src/App.tsx
+      +++ src/App.tsx
+      @@ -3,6 +3,7 @@
+       import SplashScreen from './components/SplashScreen';
+       import InitializationScreen from './components/InitializationScreen';
+       import DashboardScreen from './components/DashboardScreen';
+      +import ReviewScreen from './components/ReviewScreen';
+       
+       const App = () => {
+           const currentScreen = useAppStore(state => state.currentScreen);
+      @@ -23,6 +24,10 @@
+               return <DashboardScreen />;
+           }
+       
+      +    if (currentScreen === 'review') {
+      +        return <ReviewScreen />;
+      +    }
+      +
+           return null;
+       };
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: >+
+      --- src/components/DashboardScreen.tsx
+
+      +++ src/components/DashboardScreen.tsx
+
+      @@ -2,6 +2,7 @@
+       import { Box, Text, useApp, useInput } from 'ink';
+       import Spinner from 'ink-spinner';
+       import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
+      +import { useAppStore } from '../stores/app.store';
+       import Separator from './Separator';
+       import GlobalHelpScreen from './GlobalHelpScreen';
+       
+      @@ -59,6 +60,7 @@
+           const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+           const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);
+           const { exit } = useApp();
+      +    const showReviewScreen = useAppStore(s =>
+      s.actions.showReviewScreen);
+       
+           const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+           const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+      @@ -88,6 +90,10 @@
+               if (key.upArrow) moveSelectionUp();
+               if (key.downArrow) moveSelectionDown();
+               
+      +        if (key.return) {
+
+      +            showReviewScreen();
+
+      +        }
+
+      +        
+               if (input.toLowerCase() === 'p') togglePause();
+               if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+               if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/ReasonScreen.tsx: null
+  src/components/DiffScreen.tsx: null
+  src/stores/review.store.ts: null
+  src/components/ReviewScreen.tsx: null
+  src/stores/app.store.ts: |-
+    import { create } from 'zustand';
+
+    export type AppScreen = 'splash' | 'init' | 'dashboard';
+
+    interface AppState {
+        currentScreen: AppScreen;
+        actions: {
+            showInitScreen: () => void;
+            showDashboardScreen: () => void;
+        };
+    }
+
+    export const useAppStore = create<AppState>((set) => ({
+        currentScreen: 'splash',
+        actions: {
+            showInitScreen: () => set({ currentScreen: 'init' }),
+            showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+        },
+    }));
+  src/App.tsx: |-
+    import React, { useEffect } from 'react';
+    import { useAppStore } from './stores/app.store';
+    import SplashScreen from './components/SplashScreen';
+    import InitializationScreen from './components/InitializationScreen';
+    import DashboardScreen from './components/DashboardScreen';
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+
+        useEffect(() => {
+            // Clear the terminal when the screen changes to ensure a clean view.
+            // This is especially important when transitioning from the splash screen.
+            console.clear();
+        }, [currentScreen]);
+        
+        if (currentScreen === 'splash') {
+            return <SplashScreen />;
+        }
+
+        if (currentScreen === 'init') {
+            return <InitializationScreen />;
+        }
+
+        if (currentScreen === 'dashboard') {
+            return <DashboardScreen />;
+        }
+
+        return null;
+    };
+
+    export default App;
+  src/components/DashboardScreen.tsx: "import React, { useMemo } from 'react';\nimport { Box, Text, useApp, useInput } from 'ink';\nimport Spinner from 'ink-spinner';\nimport { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';\nimport Separator from './Separator';\nimport GlobalHelpScreen from './GlobalHelpScreen';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `-${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `-${minutes}m`;\n};\n\nconst EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    \n    const messageNode = transaction.status === 'IN-PROGRESS' \n        ? <Text color=\"cyan\">{transaction.message}</Text> \n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({ status, transactionsToConfirm }: { status: DashboardStatus, transactionsToConfirm: Transaction[] }) => {\n    const isApprove = status === 'CONFIRM_APPROVE';\n    const actionText = isApprove ? 'APPROVE' : 'COMMIT';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:</Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();\n    const { togglePause, moveSelectionUp, moveSelectionDown, startApproveAll, startCommitAll, confirmAction, cancelAction, toggleHelp } = useDashboardStore(s => s.actions);\n    const { exit } = useApp();\n\n    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);\n    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);\n\n    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';\n    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';\n    \n    useInput((input, key) => {\n        if (input === '?') {\n            toggleHelp();\n            return;\n        }\n\n        if (showHelp) {\n            if (key.escape || input === '?') toggleHelp();\n            return;\n        }\n\n        if (isModal) {\n            if (key.return) confirmAction();\n            if (key.escape) cancelAction();\n            return;\n        }\n\n        if (isProcessing) return; // No input while processing\n        \n        if (input.toLowerCase() === 'q') exit();\n\n        if (key.upArrow) moveSelectionUp();\n        if (key.downArrow) moveSelectionDown();\n        \n        if (input.toLowerCase() === 'p') togglePause();\n        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();\n        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();\n    });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'COMMITTING') commitStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        if (status === 'CONFIRM_COMMIT') commitStr = <Text bold color=\"yellow\">┌ {commitStr} ┐</Text>;\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        )\n    }\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <Text>\n                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n            </Text>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const pauseAction = status === 'PAUSED'\n\t\t\t? <Text>(<Text color=\"cyan\" bold>R</Text>)esume</Text>\n\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n\t\treturn <Text color=\"gray\">\n\t\t\t(<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>Enter</Text>) Review · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n\t\t</Text>\n    }\n    \n    const transactionsToConfirm = useMemo(() => {\n        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');\n        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');\n        return [];\n    }, [status, transactions]);\n\n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            {showHelp && <GlobalHelpScreen />}\n\n            <Box flexDirection=\"column\" display={showHelp ? 'none' : 'flex'}>\n                <Text color=\"cyan\">▲ relaycode dashboard</Text>\n                <Separator />\n                <Box marginY={1}>\n                    {renderStatusBar()}\n                </Box>\n                \n                {isModal && (\n                    <>\n                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />\n                        <Separator />\n                    </>\n                )}\n                \n                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n                <Box flexDirection=\"column\" marginTop={1}>\n                    {transactions.map((tx, index) => (\n                        <EventStreamItem \n                            key={tx.id} \n                            transaction={tx} \n                            isSelected={!isModal && index === selectedTransactionIndex}\n                        />\n                    ))}\n                </Box>\n\n                <Box marginTop={1}><Separator /></Box>\n                {renderFooter()}\n            </Box>\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 9

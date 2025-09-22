@@ -1,0 +1,140 @@
+uuid: fcb87532-68a8-48b2-b0e5-79a099d0ca38
+projectId: relaycode-tui
+createdAt: '2025-09-21T21:42:17.895Z'
+gitCommitMsg: >-
+  fix(components): correct invalid props in GlobalHelpScreen
+
+  This commit resolves TypeScript compilation errors in `GlobalHelpScreen.tsx`
+  by replacing unsupported props with valid alternatives from the Ink library.
+
+  - Removed `position`, `top`, `left`, `right`, and `bottom` from the root
+  `<Box>` component, which are not valid props. Replaced them with
+  `width="100%"` and `height="100%"` to make the component fill its container. -
+  Corrected the use of `marginTop` on a `<Text>` component by wrapping it in a
+  `<Box>` and applying the margin there, as required by Ink's layout model.
+promptSummary: >-
+  The user provided TypeScript errors related to invalid props on Ink components
+  (`<Box>` and `<Text>`). I am fixing these errors.
+reasoning:
+  - >-
+    You've pointed out some TypeScript errors. It seems my previous
+    implementation used some CSS-style props on Ink components that aren't
+    supported by their type definitions. Specifically, `<Box>` doesn't have
+    props like `position` and `top`, and `<Text>` doesn't have `marginTop`.
+  - >-
+    I will correct these issues by using valid Ink props to achieve the desired
+    layout.
+  - >-
+    1.  **For the overlay effect**: Instead of using absolute positioning props
+    which are causing errors, I will make the `GlobalHelpScreen`'s root `<Box>`
+    fill its container using `width="100%"` and `height="100%"`. The existing
+    logic in `DashboardScreen.tsx` already handles swapping this component with
+    the main dashboard content, so this will effectively create a full-screen
+    help modal, which is a good solution for this prototype.
+  - >-
+    2.  **For the margin on text**: To fix the invalid `marginTop` prop on the
+    `<Text>` component, I will wrap the text in a `<Box>` and apply the
+    `marginTop` to that box, which is the standard practice in Ink.
+  - 'Here is the patch for `src/components/GlobalHelpScreen.tsx`:'
+  - >-
+    These changes will resolve the TypeScript errors and ensure the components
+    render correctly within the Ink framework.
+operations:
+  - type: write
+    path: src/components/GlobalHelpScreen.tsx
+    content: |+
+      --- src/components/GlobalHelpScreen.tsx
+      +++ src/components/GlobalHelpScreen.tsx
+      @@ -4,14 +4,11 @@
+       const GlobalHelpScreen = () => {
+           return (
+               <Box
+      -            position="absolute"
+      -            top={0}
+      -            left={0}
+      -            right={0}
+      -            bottom={0}
+                   flexDirection="column"
+                   justifyContent="center"
+                   alignItems="center"
+      +            width="100%"
+      +            height="100%"
+               >
+                   <Box
+                       flexDirection="column"
+      @@ -42,7 +39,9 @@
+                           </Box>
+                       </Box>
+                   </Box>
+      -            <Text bold marginTop={1}>(Press ? or Esc to close)</Text>
+      +            <Box marginTop={1}>
+      +                <Text bold>(Press ? or Esc to close)</Text>
+      +            </Box>
+               </Box>
+           );
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/GlobalHelpScreen.tsx: |-
+    import React from 'react';
+    import { Box, Text } from 'ink';
+
+    const GlobalHelpScreen = () => {
+        return (
+            <Box
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+            >
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    paddingX={2}
+                    paddingY={1}
+                    width="80%"
+                >
+                    <Box justifyContent="center" marginBottom={1}>
+                        <Text bold>▲ relaycode · keyboard shortcuts</Text>
+                    </Box>
+                    <Box flexDirection="column" gap={1}>
+                        <Box flexDirection="column">
+                            <Text bold>GLOBAL</Text>
+                            <Text>  ?        Toggle this help screen</Text>
+                            <Text>  Q        Quit to terminal (from main screens)</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold>DASHBOARD (watch)</Text>
+                            <Text>  ↑↓       Navigate event stream</Text>
+                            <Text>  P        Pause / Resume clipboard watcher</Text>
+                            <Text>  A        Approve all pending transactions</Text>
+                            <Text>  C        Commit all applied transactions to git</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold>REVIEW & DETAILS SCREENS</Text>
+                            <Text>  D        Show / Collapse file diff</Text>
+                            <Text>  R        Show / Collapse reasoning steps</Text>
+                            <Text>  C        Enter / Exit Copy Mode (Details Screen)</Text>
+                            <Text>  U        Undo / Revert Transaction</Text>
+                            <Text>  Space    Toggle approval state of a file (Review Screen)</Text>
+                        </Box>
+                    </Box>
+                </Box>
+                <Text bold marginTop={1}>(Press ? or Esc to close)</Text>
+            </Box>
+        );
+    };
+
+    export default GlobalHelpScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 5

@@ -1,0 +1,571 @@
+uuid: c32c1c38-8c1d-4050-891d-114d59f59f2a
+projectId: relaycode-tui
+createdAt: '2025-09-22T00:47:59.468Z'
+gitCommitMsg: >-
+  feat(debug): add debug screen menu
+
+  Implement a debug menu accessible via `Ctrl+S` from any screen. This menu
+  allows developers to quickly navigate to different application screens and set
+  them to specific states for easier UI testing and workflow verification.
+
+  - Adds state to `app.store` for managing debug menu visibility. - Adds a
+  `setStatus` debug helper to `dashboard.store`. - Creates a new `DebugMenu.tsx`
+  component. - Integrates the global key listener and menu rendering in
+  `App.tsx`.
+promptSummary: >-
+  Create a debug menu accessible with Ctrl+S to switch between different screens
+  and states for easier development and testing.
+reasoning:
+  - >-
+    This is a great idea for improving developer experience and testing the TUI.
+    I'll add a debug menu that can be opened with `Ctrl+S` from any screen. This
+    menu will allow you to jump to any screen in a specific state.
+  - 'Here''s my plan:'
+  - >-
+    1.  **Update `app.store.ts`**: I'll add state to manage the visibility of
+    the new debug menu.
+  - >-
+    2.  **Update `dashboard.store.ts`**: I'll add a helper action to easily set
+    the dashboard's state for debugging purposes.
+  - >-
+    3.  **Create `DebugMenu.tsx`**: This new component will be the screen list
+    menu, allowing navigation and state selection.
+  - >-
+    4.  **Update `App.tsx`**: I will add the global `Ctrl+S` key listener here
+    and render the debug menu when it's active.
+  - Let's start with the state management changes.
+  - '### 1. Update Application State'
+  - >-
+    I'll modify `src/stores/app.store.ts` to track whether the debug menu is
+    open and add actions to toggle it and show the splash screen.
+  - '### 2. Add Debug Helper to Dashboard Store'
+  - >-
+    To easily switch between dashboard states (e.g., 'LISTENING',
+    'CONFIRM_APPROVE'), I'll add a `setStatus` action to
+    `src/stores/dashboard.store.ts`.
+  - '### 3. Create the Debug Menu Component'
+  - >-
+    Now I'll create the new file `src/components/DebugMenu.tsx`. This component
+    will list various screens and states, allowing you to jump directly to them.
+  - '### 4. Integrate into the Main App Component'
+  - >-
+    Finally, I'll update `src/App.tsx` to listen for `Ctrl+S` globally and
+    render the debug menu when active.
+  - >-
+    I've also updated the `useEffect` dependency array in `App.tsx` to ensure
+    the screen clears when the debug menu is opened or closed. You can now press
+    `Ctrl+S` anywhere in the application to access the debug screen switcher.
+operations:
+  - type: write
+    path: src/stores/app.store.ts
+    content: >
+      --- src/stores/app.store.ts
+
+      +++ src/stores/app.store.ts
+
+      @@ -3,22 +3,28 @@
+       export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' | 'review-processing';
+       
+       interface AppState {
+      +    isDebugMenuOpen: boolean;
+           currentScreen: AppScreen;
+           actions: {
+               showInitScreen: () => void;
+               showReviewProcessingScreen: () => void;
+               showDashboardScreen: () => void;
+               showReviewScreen: () => void;
+      +        showSplashScreen: () => void;
+
+      +        toggleDebugMenu: () => void;
+           };
+       }
+       
+       export const useAppStore = create<AppState>((set) => ({
+      +    isDebugMenuOpen: false,
+           currentScreen: 'splash',
+           actions: {
+               showInitScreen: () => set({ currentScreen: 'init' }),
+               showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+               showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+               showReviewScreen: () => set({ currentScreen: 'review' }),
+      +        showSplashScreen: () => set({ currentScreen: 'splash' }),
+
+      +        toggleDebugMenu: () => set(state => ({ isDebugMenuOpen:
+      !state.isDebugMenuOpen })),
+           },
+       }));
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: |
+      --- src/stores/dashboard.store.ts
+      +++ src/stores/dashboard.store.ts
+      @@ -43,6 +43,7 @@
+               confirmAction: () => Promise<void>;
+               cancelAction: () => void;
+               toggleHelp: () => void;
+      +        setStatus: (status: DashboardStatus) => void; // For debug menu
+           };
+       }
+       
+      @@ -73,6 +74,8 @@
+               })),
+               cancelAction: () => set(state => ({ status: state.previousStatus })),
+               toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+      +        setStatus: (status) => set({ status }),
+       
+               confirmAction: async () => {
+                   const { status, previousStatus } = get();
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugMenu.tsx
+    content: |-
+      import React, { useState } from 'react';
+      import { Box, Text, useInput } from 'ink';
+      import { useAppStore } from '../stores/app.store';
+      import { useDashboardStore } from '../stores/dashboard.store';
+      import { useInitStore } from '../stores/init.store';
+      import { useReviewStore } from '../stores/review.store';
+      import Separator from './Separator';
+
+      interface MenuItem {
+          title: string;
+          action: () => void;
+      }
+
+      const DebugMenu = () => {
+          const [selectedIndex, setSelectedIndex] = useState(0);
+          const appActions = useAppStore(s => s.actions);
+          const dashboardActions = useDashboardStore(s => s.actions);
+          const initActions = useInitStore(s => s.actions);
+          const reviewActions = useReviewStore(s => s.actions);
+
+          const menuItems: MenuItem[] = [
+              {
+                  title: 'Splash Screen',
+                  action: () => appActions.showSplashScreen(),
+              },
+              {
+                  title: 'Init: Analyze Phase',
+                  action: () => {
+                      initActions.setPhase('ANALYZE');
+                      appActions.showInitScreen();
+                  },
+              },
+              {
+                  title: 'Init: Interactive Phase',
+                  action: () => {
+                      initActions.setPhase('INTERACTIVE');
+                      appActions.showInitScreen();
+                  },
+              },
+              {
+                  title: 'Init: Finalize Phase',
+                  action: () => {
+                      initActions.setPhase('FINALIZE');
+                      appActions.showInitScreen();
+                  },
+              },
+              {
+                  title: 'Dashboard: Listening',
+                  action: () => {
+                      dashboardActions.setStatus('LISTENING');
+                      appActions.showDashboardScreen();
+                  },
+              },
+              {
+                  title: 'Dashboard: Confirm Approve',
+                  action: () => {
+                      dashboardActions.setStatus('CONFIRM_APPROVE');
+                      appActions.showDashboardScreen();
+                  },
+              },
+              {
+                  title: 'Dashboard: Approving',
+                  action: () => {
+                      dashboardActions.setStatus('APPROVING');
+                      appActions.showDashboardScreen();
+                  },
+              },
+              {
+                  title: 'Review: Partial Failure (Default)',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Success',
+                  action: () => {
+                      reviewActions.simulateSuccessScenario();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Diff View',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.toggleDiffView();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Reasoning View',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.toggleReasoningView();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Copy Mode',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.toggleCopyMode();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review Processing',
+                  action: () => appActions.showReviewProcessingScreen(),
+              },
+          ];
+
+          useInput((input, key) => {
+              if (key.upArrow) {
+                  setSelectedIndex(i => Math.max(0, i - 1));
+              }
+              if (key.downArrow) {
+                  setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+              }
+              if (key.return) {
+                  const item = menuItems[selectedIndex];
+                  if (item) {
+                      item.action();
+                      appActions.toggleDebugMenu();
+                  }
+              }
+              if (key.escape || (key.ctrl && input === 's')) {
+                  appActions.toggleDebugMenu();
+              }
+          });
+
+          return (
+              <Box
+                  flexDirection="column"
+                  borderStyle="round"
+                  borderColor="yellow"
+                  width="100%"
+                  paddingX={2}
+              >
+                  <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+                  <Separator />
+                  <Box flexDirection="column" marginY={1}>
+                      {menuItems.map((item, index) => (
+                          <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                              {selectedIndex === index ? '> ' : '  '}
+                              {item.title}
+                          </Text>
+                      ))}
+                  </Box>
+                  <Separator />
+                  <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+S) Close</Text>
+              </Box>
+          );
+      };
+
+      export default DebugMenu;
+    patchStrategy: replace
+  - type: write
+    path: src/App.tsx
+    content: >
+      --- src/App.tsx
+
+      +++ src/App.tsx
+
+      @@ -1,23 +1,38 @@
+       import React, { useEffect } from 'react';
+      +import { useInput } from 'ink';
+       import { useAppStore } from './stores/app.store';
+       import SplashScreen from './components/SplashScreen';
+       import InitializationScreen from './components/InitializationScreen';
+       import DashboardScreen from './components/DashboardScreen';
+       import ReviewScreen from './components/ReviewScreen';
+       import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+      +import DebugMenu from './components/DebugMenu';
+       
+       const App = () => {
+      -    const currentScreen = useAppStore(state => state.currentScreen);
+
+      +    const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state
+      => ({
+
+      +        currentScreen: state.currentScreen,
+
+      +        isDebugMenuOpen: state.isDebugMenuOpen,
+
+      +        actions: state.actions,
+
+      +    }));
+
+      +
+
+      +    useInput((input, key) => {
+
+      +        if (key.ctrl && input === 's') {
+
+      +            actions.toggleDebugMenu();
+
+      +        }
+
+      +    });
+       
+           useEffect(() => {
+               // Clear the terminal when the screen changes to ensure a clean view.
+               // This is especially important when transitioning from the splash screen.
+               // eslint-disable-next-line no-console
+               console.clear();
+      -    }, [currentScreen]);
+
+      +    }, [currentScreen, isDebugMenuOpen]);
+
+      +
+
+      +    if (isDebugMenuOpen) {
+
+      +        return <DebugMenu />;
+
+      +    }
+           
+           if (currentScreen === 'splash') {
+               return <SplashScreen />;
+    patchStrategy: standard-diff
+snapshot:
+  src/components/DebugMenu.tsx: null
+  src/stores/app.store.ts: >-
+    import { create } from 'zustand';
+
+
+    export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' |
+    'review-processing';
+
+
+    interface AppState {
+        currentScreen: AppScreen;
+        actions: {
+            showInitScreen: () => void;
+            showReviewProcessingScreen: () => void;
+            showDashboardScreen: () => void;
+            showReviewScreen: () => void;
+        };
+    }
+
+
+    export const useAppStore = create<AppState>((set) => ({
+        currentScreen: 'splash',
+        actions: {
+            showInitScreen: () => set({ currentScreen: 'init' }),
+            showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+            showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+            showReviewScreen: () => set({ currentScreen: 'review' }),
+        },
+    }));
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { sleep } from '../utils';
+
+
+    // --- Types ---
+
+    export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' |
+    'FAILED' | 'REVERTED' | 'IN-PROGRESS';
+
+
+    export interface Transaction {
+        id: string;
+        timestamp: number;
+        status: TransactionStatus;
+        hash: string;
+        message: string;
+        error?: string;
+    }
+
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'CONFIRM_COMMIT' | 'APPROVING' | 'COMMITTING';
+
+
+    // --- Initial State (for simulation) ---
+
+    const createInitialTransactions = (): Transaction[] => [
+        { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+        { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+        { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+        { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+        { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+        { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+    ];
+
+
+    // --- Store Interface ---
+
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus; // To handle cancel from confirmation
+        transactions: Transaction[];
+        selectedTransactionIndex: number;
+        showHelp: boolean;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            startCommitAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            toggleHelp: () => void;
+        };
+    }
+
+
+    // --- Store Implementation ---
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        transactions: createInitialTransactions(),
+        selectedTransactionIndex: 0,
+        showHelp: false,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => ({
+                selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1),
+            })),
+            moveSelectionDown: () => set(state => ({
+                selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1),
+            })),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            startCommitAll: () => set(state => ({
+                status: 'CONFIRM_COMMIT',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+
+            confirmAction: async () => {
+                const { status, previousStatus } = get();
+                if (status === 'CONFIRM_APPROVE') {
+                    set({ status: 'APPROVING' });
+
+                    // Find pending transactions and mark them as in-progress
+                    const pendingTxIds: string[] = [];
+                    set(state => {
+                        const newTxs = state.transactions.map(tx => {
+                            if (tx.status === 'PENDING') {
+                                pendingTxIds.push(tx.id);
+                                return { ...tx, status: 'IN-PROGRESS' as const };
+                            }
+                            return tx;
+                        });
+                        return { transactions: newTxs };
+                    });
+
+                    await sleep(2000); // Simulate approval process
+
+                    // Mark them as applied
+                    set(state => {
+                        const newTxs = state.transactions.map(tx => {
+                            if (pendingTxIds.includes(tx.id)) {
+                                return { ...tx, status: 'APPLIED' as const };
+                            }
+                            return tx;
+                        });
+                        return { transactions: newTxs, status: previousStatus };
+                    });
+                } else if (status === 'CONFIRM_COMMIT') {
+                    set({ status: 'COMMITTING' });
+                     // Find applied transactions and mark them as in-progress
+                     const appliedTxIds: string[] = [];
+                     set(state => {
+                         const newTxs = state.transactions.map(tx => {
+                             if (tx.status === 'APPLIED') {
+                                appliedTxIds.push(tx.id);
+                                 return { ...tx, status: 'IN-PROGRESS' as const };
+                             }
+                             return tx;
+                         });
+                         return { transactions: newTxs };
+                     });
+     
+                     await sleep(2000); // Simulate commit process
+     
+                     // Mark them as committed
+                     set(state => {
+                         const newTxs = state.transactions.map(tx => {
+                             if (appliedTxIds.includes(tx.id)) {
+                                 return { ...tx, status: 'COMMITTED' as const };
+                             }
+                             return tx;
+                         });
+                         return { transactions: newTxs, status: previousStatus };
+                     });
+                }
+            },
+        },
+    }));
+  src/App.tsx: |-
+    import React, { useEffect } from 'react';
+    import { useAppStore } from './stores/app.store';
+    import SplashScreen from './components/SplashScreen';
+    import InitializationScreen from './components/InitializationScreen';
+    import DashboardScreen from './components/DashboardScreen';
+    import ReviewScreen from './components/ReviewScreen';
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+
+        useEffect(() => {
+            // Clear the terminal when the screen changes to ensure a clean view.
+            // This is especially important when transitioning from the splash screen.
+            // eslint-disable-next-line no-console
+            console.clear();
+        }, [currentScreen]);
+        
+        if (currentScreen === 'splash') {
+            return <SplashScreen />;
+        }
+
+        if (currentScreen === 'init') {
+            return <InitializationScreen />;
+        }
+
+        if (currentScreen === 'dashboard') {
+            return <DashboardScreen />;
+        }
+
+        if (currentScreen === 'review') {
+            return <ReviewScreen />;
+        }
+
+        if (currentScreen === 'review-processing') {
+            return <ReviewProcessingScreen />;
+        }
+
+        return null;
+    };
+
+    export default App;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: '2025-09-22T00:48:19.789Z'
+status: committed
+id: 20

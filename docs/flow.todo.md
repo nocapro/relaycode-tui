@@ -1,3 +1,9 @@
+transaction history screen and transaction detail screen
+
+add feature , open transaction yaml file or files in their ide editor
+
+===
+
 transaction detail screen and review screen
 
 the reasoning view should one column, so vertically spread text with scrollable nav

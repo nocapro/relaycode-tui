@@ -1,0 +1,322 @@
+uuid: c29b9f29-5f21-4f11-9a70-76fc2d93e433
+projectId: relaycode-tui
+createdAt: '2025-09-21T22:16:05.445Z'
+gitCommitMsg: >-
+  fix(ui): correct invalid component nesting in ReviewScreen
+
+  Refactored the `FileItemRow` component in `ReviewScreen.tsx` to prevent a
+  runtime crash caused by nesting a `<Box>` component inside a `<Text>`
+  component.
+
+  The original implementation created a `content` variable as a `<Box>` for
+  layout purposes and then incorrectly wrapped it in a `<Text>` to apply
+  selection styles.
+
+  The fix ensures the component's root is a `<Box>` and correctly structures
+  `<Text>` and other layout components as siblings, adhering to Ink's rendering
+  rules. This resolves the error while maintaining the intended UI behavior and
+  styling for selected items.
+promptSummary: >-
+  The user is reporting a crash in the TUI application with the error "<Box>
+  can’t be nested inside <Text> component". The stack trace points to the
+  FileItemRow component. I need to fix the invalid component nesting.
+reasoning:
+  - >-
+    The error message `<Box> can’t be nested inside <Text> component` clearly
+    indicates a layout issue within one of the Ink components. The stack trace
+    points directly to the `FileItemRow` component in
+    `src/components/ReviewScreen.tsx`.
+  - >-
+    Upon inspection, the original `FileItemRow` component constructed a
+    `content` variable holding a `<Box>` element. It then attempted to render
+    this `<Box>` inside a `<Text>` component in its return statement
+    (`<Text>{content}</Text>`), which is an invalid hierarchy in Ink. The
+    `<Box>` component is used for layout and cannot be a child of a `<Text>`
+    component.
+  - To fix this, I will refactor the `FileItemRow` component.
+  - >-
+    1.  The root element will now be a `<Box>` to correctly handle the flexbox
+    layout (`flexGrow`).
+  - >-
+    2.  Instead of creating an intermediate `content` variable as a `<Box>`,
+    I'll create variables for the text-based parts of the row (`fileDetails` and
+    `strategyDetails`).
+  - >-
+    3.  The selection logic (`isSelected`) will now apply `bold` and
+    `color="cyan"` props to the parent `<Text>` components that wrap the
+    details, ensuring the styles propagate correctly without invalid nesting.
+  - >-
+    4.  This new structure respects Ink's layout rules: `<Box>` contains
+    `<Text>` and other `<Box>` elements as siblings, but a `<Text>` never
+    contains a `<Box>`.
+  - >-
+    This change resolves the crash while preserving the intended visual
+    appearance and behavior of the selected row in the UI.
+operations:
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: >+
+      --- src/components/ReviewScreen.tsx
+
+      +++ src/components/ReviewScreen.tsx
+
+      @@ -9,22 +9,22 @@
+       
+       // --- Sub-components ---
+       
+      -const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+      boolean}) => {
+
+      +const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+      boolean }) => {
+           let icon;
+           let color;
+           switch (file.status) {
+               case 'APPROVED': icon = '[✓]'; color = 'green'; break;
+               case 'REJECTED': icon = '[✗]'; color = 'red'; break;
+               case 'FAILED': icon = '[!]'; color = 'red'; break;
+               case 'MODIFIED': icon = '[~]'; color = 'yellow'; break;
+           }
+       
+      -    const content = (
+
+      +    const fileDetails = <Text color={color}>{icon} MOD
+      {file.path}</Text>;
+
+      +    const strategyDetails = file.error ? <Text
+      color="red">({file.error})</Text> : <Text>[{file.strategy}]</Text>;
+
+      +
+
+      +    return (
+               <Box>
+      -            <Text color={color}>{icon} MOD {file.path}</Text>
+
+      +            <Text bold={isSelected} color={isSelected ? 'cyan' :
+      undefined}>{isSelected ? '> ' : '  '}{fileDetails}</Text>
+                   <Box flexGrow={1} />
+      -            {file.error ? <Text color="red">({file.error})</Text> :
+      <Text>[{file.strategy}]</Text>}
+
+      +            <Text bold={isSelected} color={isSelected ? 'cyan' :
+      undefined}>{strategyDetails}</Text>
+               </Box>
+           );
+      -
+
+      -    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> :
+      <Text>{'  '}{content}</Text>;
+       }
+       
+       const ScriptItemRow = ({ script, isSelected, isExpanded }: { script: ScriptResult, isSelected: boolean, isExpanded: boolean }) => {
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/ReviewScreen.tsx: >-
+    import React from 'react';
+
+    import { Box, Text, useInput } from 'ink';
+
+    import { useReviewStore, type FileItem, type ScriptResult } from
+    '../stores/review.store';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+
+    // --- Sub-components ---
+
+
+    const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+    boolean}) => {
+        let icon;
+        let color;
+        switch (file.status) {
+            case 'APPROVED': icon = '[✓]'; color = 'green'; break;
+            case 'REJECTED': icon = '[✗]'; color = 'red'; break;
+            case 'FAILED': icon = '[!]'; color = 'red'; break;
+            case 'MODIFIED': icon = '[~]'; color = 'yellow'; break;
+        }
+
+        const content = (
+            <Box>
+                <Text color={color}>{icon} MOD {file.path}</Text>
+                <Box flexGrow={1} />
+                {file.error ? <Text color="red">({file.error})</Text> : <Text>[{file.strategy}]</Text>}
+            </Box>
+        );
+
+        return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+    }
+
+
+    const ScriptItemRow = ({ script, isSelected, isExpanded }: { script:
+    ScriptResult, isSelected: boolean, isExpanded: boolean }) => {
+        const icon = script.success ? <Text color="green">✓</Text> : <Text color="red">✗</Text>;
+        const arrow = isExpanded ? '▾' : '▸';
+
+        const content = <Text>{icon} {script.command} ({script.duration}s) {arrow} {script.summary}</Text>;
+        return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+    }
+
+
+    // --- Main Component ---
+
+
+    const ReviewScreen = () => {
+        const store = useReviewStore();
+        const { 
+            hash, message, reasoning, files, scripts, 
+            selectedItemIndex, bodyView, isDiffExpanded 
+        } = store;
+        const { 
+            moveSelectionUp, moveSelectionDown, toggleFileApproval, 
+            toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff
+        } = store.actions;
+        
+        const numFiles = files.length;
+        
+        useInput((input, key) => {
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleReasoningView();
+            
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    toggleFileApproval();
+                }
+            }
+            
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleDiffView();
+                }
+            }
+
+            if (input.toLowerCase() === 'x' && bodyView === 'diff') {
+                expandDiff();
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleScriptView(selectedItemIndex);
+                }
+            }
+        });
+
+        const renderBody = () => {
+            if (bodyView === 'none') return null;
+
+            if (bodyView === 'reasoning') {
+                return <ReasonScreen reasoning={reasoning} />;
+            }
+            
+            if (bodyView === 'diff') {
+                const selectedFile = files[selectedItemIndex];
+                if (!selectedFile) return null;
+                return <DiffScreen filePath={selectedFile.path} diffContent={selectedFile.diff} isExpanded={isDiffExpanded} />;
+            }
+
+            if (bodyView === 'script_output') {
+                 const scriptIndex = selectedItemIndex - numFiles;
+                 const selectedScript = scripts[scriptIndex];
+                 if (!selectedScript) return null;
+                 return (
+                    <Box flexDirection="column">
+                        <Text>OUTPUT: `{selectedScript.command}`</Text>
+                        <Box marginTop={1}><Text>{selectedScript.output}</Text></Box>
+                    </Box>
+                 );
+            }
+            
+            return null;
+        }
+
+        const renderFooter = () => {
+            let actions = ["(↑↓) Nav", "(Spc) Toggle"];
+            
+            if (bodyView === 'diff') {
+                actions.push(isDiffExpanded ? "(X)Collapse" : "(X)pand Diff");
+                actions.push("(D)Collapse View");
+            } else if (selectedItemIndex < numFiles) {
+                actions.push("(D)iff");
+            }
+            
+            if (bodyView === 'reasoning') {
+                actions.push("(R)Collapse View");
+            } else {
+                actions.push("(R)easoning");
+            }
+
+            if (selectedItemIndex >= numFiles) {
+                 const isExpanded = bodyView === 'script_output' && selectedItemIndex >= numFiles;
+                 actions.push(isExpanded ? "(Ent)Collapse" : "(Ent)Expand");
+            }
+            
+            actions.push("(A)pprove");
+            
+            return <Text>{actions.join(' · ')}</Text>
+        }
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode review</Text>
+                <Separator />
+                
+                {/* Navigator */}
+                <Box flexDirection="column" marginY={1}>
+                    <Text>{hash} · {message}</Text>
+                    <Text>(+22/-11) · 2/3 Files · 3.9s</Text>
+                    <Box marginY={1}>
+                        <Text>{bodyView === 'reasoning' ? '▾' : '▸'} (R)easoning (3 steps)</Text>
+                    </Box>
+                    <Separator/>
+                    {scripts.map((script, index) => (
+                        <ScriptItemRow 
+                            key={script.command} 
+                            script={script}
+                            isSelected={selectedItemIndex === numFiles + index}
+                            isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                        />
+                    ))}
+                    <Separator/>
+                    <Text>FILES</Text>
+                     {files.map((file, index) => (
+                        <FileItemRow 
+                            key={file.id} 
+                            file={file} 
+                            isSelected={selectedItemIndex === index}
+                        />
+                    ))}
+                </Box>
+                
+                <Separator/>
+                
+                {/* Body */}
+                <Box marginY={1}>
+                    {renderBody()}
+                </Box>
+
+                {(bodyView !== 'none' && renderBody() !== null) && <Separator />}
+
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default ReviewScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 11

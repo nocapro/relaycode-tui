@@ -1,0 +1,309 @@
+uuid: f193c373-c157-4b71-ae62-0941d4a0375c
+projectId: relaycode-tui
+createdAt: '2025-09-22T00:51:06.238Z'
+gitCommitMsg: >-
+  fix(debug): change debug menu shortcut to Ctrl+B
+
+  The `Ctrl+S` shortcut for opening the debug menu was being intercepted by the
+  terminal's flow control (XOFF). This prevented the application from receiving
+  the input.
+
+  This commit changes the shortcut to `Ctrl+B` to avoid this common conflict.
+  The change is applied to the global listener in `App.tsx` and the close
+  listener and help text within `DebugMenu.tsx`.
+promptSummary: >-
+  The user reported that Ctrl+S shortcut for the debug menu is not working,
+  likely due to terminal conflicts. I am changing it to Ctrl+B.
+reasoning:
+  - >-
+    You've pointed out a great catch. You are absolutely right, `Ctrl+S` is a
+    very common terminal shortcut to pause terminal output (XOFF), which would
+    prevent the application from ever receiving the key press. My apologies for
+    overlooking that.
+  - >-
+    I'll change the shortcut to `Ctrl+B` (for "build" or "debug"), as it's much
+    less likely to conflict with system or terminal shortcuts. I'll update the
+    global listener in `App.tsx` and the corresponding logic and help text in
+    `DebugMenu.tsx`.
+  - '### 1. Update Global Shortcut in `App.tsx`'
+  - I'll change the key combination in `src/App.tsx` to listen for `Ctrl+B`.
+  - '### 2. Update Debug Menu Shortcut and Help Text'
+  - >-
+    Now, I'll update `src/components/DebugMenu.tsx` to use `Ctrl+B` for closing
+    the menu and I will also update the help text at the bottom to reflect this
+    change.
+  - >-
+    This should resolve the issue and make the debug menu accessible from any
+    screen using the new `Ctrl+B` shortcut.
+operations:
+  - type: write
+    path: src/App.tsx
+    content: |+
+      --- src/App.tsx
+      +++ src/App.tsx
+      @@ -14,8 +14,8 @@
+           }));
+       
+           useInput((input, key) => {
+      -        if (key.ctrl && input === 's') {
+      +        if (key.ctrl && input === 'b') {
+                   actions.toggleDebugMenu();
+               }
+           });
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugMenu.tsx
+    content: >+
+      --- src/components/DebugMenu.tsx
+
+      +++ src/components/DebugMenu.tsx
+
+      @@ -124,7 +124,7 @@
+                       appActions.toggleDebugMenu();
+                   }
+               }
+      -        if (key.escape || (key.ctrl && input === 's')) {
+
+      +        if (key.escape || (key.ctrl && input === 'b')) {
+                   appActions.toggleDebugMenu();
+               }
+           });
+      @@ -148,7 +148,7 @@
+                       ))}
+                   </Box>
+                   <Separator />
+      -            <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+S)
+      Close</Text>
+
+      +            <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+B)
+      Close</Text>
+               </Box>
+           );
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/App.tsx: |-
+    import React, { useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from './stores/app.store';
+    import SplashScreen from './components/SplashScreen';
+    import InitializationScreen from './components/InitializationScreen';
+    import DashboardScreen from './components/DashboardScreen';
+    import ReviewScreen from './components/ReviewScreen';
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+    import DebugMenu from './components/DebugMenu';
+
+    const App = () => {
+        const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state => ({
+            currentScreen: state.currentScreen,
+            isDebugMenuOpen: state.isDebugMenuOpen,
+            actions: state.actions,
+        }));
+
+        useInput((input, key) => {
+            if (key.ctrl && input === 's') {
+                actions.toggleDebugMenu();
+            }
+        });
+
+        useEffect(() => {
+            // Clear the terminal when the screen changes to ensure a clean view.
+            // This is especially important when transitioning from the splash screen.
+            // eslint-disable-next-line no-console
+            console.clear();
+        }, [currentScreen, isDebugMenuOpen]);
+
+        if (isDebugMenuOpen) {
+            return <DebugMenu />;
+        }
+        
+        if (currentScreen === 'splash') {
+            return <SplashScreen />;
+        }
+
+        if (currentScreen === 'init') {
+            return <InitializationScreen />;
+        }
+
+        if (currentScreen === 'dashboard') {
+            return <DashboardScreen />;
+        }
+
+        if (currentScreen === 'review') {
+            return <ReviewScreen />;
+        }
+
+        if (currentScreen === 'review-processing') {
+            return <ReviewProcessingScreen />;
+        }
+
+        return null;
+    };
+
+    export default App;
+  src/components/DebugMenu.tsx: |-
+    import React, { useState } from 'react';
+    import { Box, Text, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useReviewStore } from '../stores/review.store';
+    import Separator from './Separator';
+
+    interface MenuItem {
+        title: string;
+        action: () => void;
+    }
+
+    const DebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const reviewActions = useReviewStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleDiffView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleReasoningView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleCopyMode();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => Math.max(0, i - 1));
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+            }
+            if (key.escape || (key.ctrl && input === 's')) {
+                appActions.toggleDebugMenu();
+            }
+        });
+
+        return (
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="yellow"
+                width="100%"
+                paddingX={2}
+            >
+                <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+                <Separator />
+                <Box flexDirection="column" marginY={1}>
+                    {menuItems.map((item, index) => (
+                        <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                            {selectedIndex === index ? '> ' : '  '}
+                            {item.title}
+                        </Text>
+                    ))}
+                </Box>
+                <Separator />
+                <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+S) Close</Text>
+            </Box>
+        );
+    };
+
+    export default DebugMenu;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: '2025-09-22T00:53:09.176Z'
+status: committed
+id: 21

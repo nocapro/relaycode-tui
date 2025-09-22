@@ -1,0 +1,372 @@
+uuid: c3284093-9799-4d69-a1b6-726ef3c1144f
+projectId: relaycode-tui
+createdAt: '2025-09-22T02:10:34.212Z'
+gitCommitMsg: >-
+  fix(history): Resolve linting and TypeScript errors
+
+  This commit addresses several issues in the TransactionHistoryScreen component
+  identified by the linter and TypeScript compiler:
+
+  -   Fixes a `max-len` violation by reformatting the props for the
+  `TransactionRow` component. -   Resolves a TypeScript error by replacing an
+  invalid `marginY` prop on a `Text` component with a wrapping `Box` component.
+  -   Corrects unescaped single quotes to resolve `react/no-unescaped-entities`
+  warnings. -   Removes an extra blank line to fix a `no-multiple-empty-lines`
+  error.
+promptSummary: The user provided linting and TypeScript errors and requested fixes.
+reasoning:
+  - >-
+    Based on the errors you've provided from the linter and TypeScript compiler,
+    I will apply fixes to `src/components/TransactionHistoryScreen.tsx`.
+  - 'Here''s the plan:'
+  - >-
+    1.  **Fix `max-len` error**: I will reformat the props for the
+    `TransactionRow` component to span multiple lines, improving readability and
+    adhering to the line length limit.
+  - >-
+    2.  **Fix TypeScript error**: The `Text` component from `ink` does not
+    accept margin props like `marginY`. I will fix this by wrapping the `Text`
+    component in a `Box` component and applying the vertical margin to the
+    `Box`, which is the correct pattern for layout in `ink`.
+  - >-
+    3.  **Fix `react/no-unescaped-entities` error**: I will replace the
+    unescaped single quotes (`'`) with their HTML entity equivalent (`&apos;`)
+    to resolve the linting warning.
+  - >-
+    4.  **Fix `no-multiple-empty-lines` error**: I will remove an extra blank
+    line to clean up the code and fix the linting error.
+  - These changes will resolve all the reported issues.
+operations:
+  - type: write
+    path: src/components/TransactionHistoryScreen.tsx
+    content: >+
+      --- src/components/TransactionHistoryScreen.tsx
+
+      +++ src/components/TransactionHistoryScreen.tsx
+
+      @@ -41,7 +41,17 @@
+           );
+       };
+       
+      -const TransactionRow = ({ tx, isSelected, isExpanded, isSelectedForAction
+      }: { tx: HistoryTransaction, isSelected: boolean, isExpanded: boolean,
+      isSelectedForAction: boolean }) => {
+
+      +const TransactionRow = ({
+
+      +    tx,
+
+      +    isSelected,
+
+      +    isExpanded,
+
+      +    isSelectedForAction,
+
+      +}: {
+
+      +    tx: HistoryTransaction,
+
+      +    isSelected: boolean,
+
+      +    isExpanded: boolean,
+
+      +    isSelectedForAction: boolean,
+
+      +}) => {
+           const icon = isExpanded ? '▾' : '▸';
+           const statusMap = {
+               Committed: <Text color="green">✓ Committed</Text>,
+      @@ -124,16 +134,15 @@
+           return (
+               <Box flexDirection="column" marginY={1}>
+                   <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForAction.size} SELECTED ITEMS</Text>
+      -            <Text marginY={1}>This action is often irreversible. Are you
+      sure?</Text>
+
+      +            <Box marginY={1}>
+
+      +                <Text>This action is often irreversible. Are you
+      sure?</Text>
+
+      +            </Box>
+                   <Text>(1) Revert Selected Transactions</Text>
+      -            <Text>(2) Mark as 'Git Committed'</Text>
+
+      +            <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+                   <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
+                   <Text>(Esc) Cancel</Text>
+               </Box>
+           );
+       };
+       
+      -
+       // --- Main Component ---
+       
+       const TransactionHistoryScreen = () => {
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/TransactionHistoryScreen.tsx: >-
+    import React, { useState } from 'react';
+
+    import { Box, Text, useInput } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import { useTransactionHistoryStore, type HistoryTransaction, type
+    FileChange } from '../stores/transaction-history.store';
+
+    import Separator from './Separator';
+
+    import { useAppStore } from '../stores/app.store';
+
+
+    // --- Sub-components ---
+
+
+    const DiffPreview = ({ diff }: { diff: string }) => {
+        const lines = diff.split('\n');
+        const previewLines = lines.slice(0, 5);
+        const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+        return (
+            <Box flexDirection="column" paddingLeft={8}>
+                {previewLines.map((line, i) => {
+                    let color = 'white';
+                    if (line.startsWith('+')) color = 'green';
+                    if (line.startsWith('-')) color = 'red';
+                    if (line.startsWith('@@')) color = 'cyan';
+                    return <Text key={i} color={color}>{line}</Text>;
+                })}
+                {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+            </Box>
+        );
+    };
+
+
+    const FileRow = ({ file, isSelected, isExpanded }: { file: FileChange,
+    isSelected: boolean, isExpanded: boolean }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
+        
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {icon} {typeMap[file.type]} {file.path}
+                </Text>
+                {isExpanded && <DiffPreview diff={file.diff} />}
+            </Box>
+        );
+    };
+
+
+    const TransactionRow = ({ tx, isSelected, isExpanded, isSelectedForAction }:
+    { tx: HistoryTransaction, isSelected: boolean, isExpanded: boolean,
+    isSelectedForAction: boolean }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const statusMap = {
+            Committed: <Text color="green">✓ Committed</Text>,
+            Handoff: <Text color="magenta">→ Handoff</Text>,
+            Reverted: <Text color="gray">↩ Reverted</Text>,
+        };
+        const date = new Date(tx.timestamp).toISOString().split('T')[0];
+        const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
+        
+        return (
+            <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {selectionIndicator} {icon} {statusMap[tx.status]} · {tx.hash} · {date} · {tx.message}
+                </Text>
+                {isExpanded && (
+                    <Box flexDirection="column" paddingLeft={8}>
+                        <Text color="gray">Stats: {tx.stats.files} Files · +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>
+                        <Text>Files:</Text>
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    const CopyMode = () => {
+        const { selectedForAction, lastCopiedMessage } = useTransactionHistoryStore();
+        const { setMode, executeCopy } = useTransactionHistoryStore(s => s.actions);
+        const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
+
+        const toggleField = (field: string) => {
+            const newFields = new Set(selectedFields);
+            if (newFields.has(field)) {
+                newFields.delete(field);
+            } else {
+                newFields.add(field);
+            }
+            setSelectedFields(newFields);
+        };
+        
+        useInput((input, key) => {
+            if (key.escape || input.toLowerCase() === 'c') {
+                setMode('LIST');
+            }
+            if (key.return) {
+                executeCopy(Array.from(selectedFields));
+            }
+            // Basic navigation for demo
+            if (input.toLowerCase() === 'm') toggleField('Git Messages');
+            if (input.toLowerCase() === 'r') toggleField('Reasonings');
+        });
+
+        const fields = [
+            { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
+            { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
+        ];
+
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text>Select data to copy from {selectedForAction.size} transactions:</Text>
+                <Box marginY={1}>
+                    {fields.map(f => (
+                        <Text key={f.key}>
+                            [{selectedFields.has(f.name) ? 'x' : ' '}] ({f.key}) {f.name.padEnd(15)}
+                        </Text>
+                    ))}
+                </Box>
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+            </Box>
+        );
+    };
+
+
+    const BulkActionsMode = () => {
+        const { selectedForAction } = useTransactionHistoryStore();
+        const { setMode } = useTransactionHistoryStore(s => s.actions);
+        
+        useInput((input, key) => {
+            if (key.escape) setMode('LIST');
+        });
+
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForAction.size} SELECTED ITEMS</Text>
+                <Text marginY={1}>This action is often irreversible. Are you sure?</Text>
+                <Text>(1) Revert Selected Transactions</Text>
+                <Text>(2) Mark as 'Git Committed'</Text>
+                <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
+                <Text>(Esc) Cancel</Text>
+            </Box>
+        );
+    };
+
+
+
+    // --- Main Component ---
+
+
+    const TransactionHistoryScreen = () => {
+        const store = useTransactionHistoryStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        
+        useInput((input, key) => {
+            if (store.mode === 'FILTER') {
+                if (key.escape) store.actions.setMode('LIST');
+                if (key.return) store.actions.applyFilter();
+                return;
+            }
+            if (store.mode === 'COPY' || store.mode === 'BULK_ACTIONS') return;
+
+            // LIST mode inputs
+            if (key.upArrow) store.actions.navigateUp();
+            if (key.downArrow) store.actions.navigateDown();
+            if (key.rightArrow) store.actions.expandOrDrillDown();
+            if (key.leftArrow) store.actions.collapseOrBubbleUp();
+            if (input === ' ') store.actions.toggleSelection();
+
+            if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
+            if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
+            if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
+            
+            if (key.escape || input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        const renderFooter = () => {
+            if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>;
+            if (store.mode === 'COPY') return <Text>(M,R,...) Toggle · (Enter) Copy · (C, Esc) Exit</Text>;
+            if (store.mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
+            
+            const actions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
+            if (store.selectedForAction.size > 0) {
+                actions.push('(C)opy', '(B)ulk');
+            }
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+        const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
+        
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode transaction history</Text>
+                <Separator />
+
+                <Box>
+                    <Text>Filter: </Text>
+                    {store.mode === 'FILTER' ? (
+                        <TextInput value={store.filterQuery} onChange={store.actions.setFilterQuery} />
+                    ) : (
+                        <Text>{filterStatus}</Text>
+                    )}
+                    <Text> · Showing 1-10 of {store.transactions.length} transactions</Text>
+                </Box>
+
+                <Box flexDirection="column" marginY={1}>
+                    {store.mode === 'COPY' && <CopyMode />}
+                    {store.mode === 'BULK_ACTIONS' && <BulkActionsMode />}
+
+                    {store.mode === 'LIST' && store.transactions.slice(0, 10).map(tx => {
+                        const isTxSelected = store.selectedItemPath.startsWith(tx.id);
+                        const isTxExpanded = store.expandedIds.has(tx.id);
+                        const isSelectedForAction = store.selectedForAction.has(tx.id);
+
+                        return (
+                            <Box flexDirection="column" key={tx.id}>
+                                <TransactionRow
+                                    tx={tx}
+                                    isSelected={isTxSelected && !store.selectedItemPath.includes('/')}
+                                    isExpanded={isTxExpanded}
+                                    isSelectedForAction={isSelectedForAction}
+                                />
+                                {isTxExpanded && tx.files.map(file => {
+                                    const filePath = `${tx.id}/${file.id}`;
+                                    const isFileSelected = store.selectedItemPath === filePath;
+                                    const isFileExpanded = store.expandedIds.has(filePath);
+                                    return (
+                                        <FileRow
+                                            key={file.id}
+                                            file={file}
+                                            isSelected={isFileSelected}
+                                            isExpanded={isFileExpanded}
+                                        />
+                                    );
+                                })}
+                            </Box>
+                        );
+                    })}
+                </Box>
+
+                <Separator />
+                {renderFooter()}
+            </Box>
+        );
+    };
+
+
+    export default TransactionHistoryScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: '2025-09-22T02:17:10.643Z'
+status: committed
+id: 34

@@ -1,0 +1,539 @@
+uuid: e7524961-d779-4b6e-a316-09228801d0f5
+projectId: relaycode-tui
+createdAt: '2025-09-21T21:17:30.188Z'
+gitCommitMsg: >-
+  feat(tui): implement splash and initialization screens
+
+  Implements a high-fidelity TUI prototype for the application startup and
+  initialization flow as specified in the design documents.
+
+  - Creates a timed, skippable splash screen with branding and version
+    information.
+  - Implements a stateful, four-phase initialization screen (Analyze,
+    Configure, Interactive, Finalize) using Ink for rendering and Zustand
+    for state management.
+  - Simulates asynchronous tasks and handles user input for interactive
+    prompts.
+  - Sets up the main application structure to switch between screens.
+promptSummary: >-
+  I have created a comprehensive TUI prototype for a splash screen and a
+  multi-phase initialization screen using Ink, React, and Zustand, based on
+  detailed markdown specifications. The prototype simulates the entire user flow
+  with timed events and interactive prompts.
+reasoning:
+  - >-
+    This is an excellent request. Creating a high-fidelity TUI prototype is a
+    great use case for Ink and React. I will structure the application using
+    Zustand for state management to handle the complex, multi-phase
+    initialization flow you've designed.
+  - 'Here is my step-by-step plan:'
+  - >-
+    1.  **Set up the State**: I will create a Zustand store in `src/store.ts` to
+    manage the application's global state, such as which screen is visible
+    (`splash` or `init`), and the detailed state for the initialization
+    process's finite state machine.
+  - >-
+    2.  **Create Reusable Components**: A full-width `Separator` component will
+    be useful across different screens, so I'll create it in
+    `src/components/Separator.tsx`.
+  - >-
+    3.  **Implement the Splash Screen**: I'll build
+    `src/components/SplashScreen.tsx` to match your specification, including the
+    ASCII art, version info, and the timed countdown which can be skipped by any
+    key press.
+  - >-
+    4.  **Implement the Initialization Screen**: This is the core of the task.
+    In `src/components/InitializationScreen.tsx`, I will implement the
+    four-phase flow (`ANALYZE`, `CONFIGURE`, `INTERACTIVE`, `FINALIZE`). I'll
+    use `useEffect` hooks to simulate the async, timed progression of tasks, and
+    the `useInput` hook from Ink to handle user interaction during the
+    interactive phase.
+  - >-
+    5.  **Create the Main App Component**: `src/App.tsx` will be the root of the
+    React application. It will read the current screen state from the Zustand
+    store and render either the `SplashScreen` or the `InitializationScreen`.
+  - >-
+    6.  **Modify `index.tsx`**: Finally, I will update the entry point
+    `index.tsx` to render the new `App` component.
+  - >-
+    I will focus on accurately simulating the behavior and visual states
+    described in your detailed markdown documents.
+  - '### 1. Create the Zustand Store'
+  - >-
+    This store will manage the entire TUI state, including which screen is
+    active and the complex state for the initialization flow.
+  - '### 2. Create a Reusable Separator Component'
+  - >-
+    This component will draw a horizontal line across the terminal width, which
+    is used in both screen designs.
+  - '### 3. Implement the Splash Screen'
+  - >-
+    This component displays branding and version information for a few seconds
+    before automatically transitioning to the main application.
+  - '### 4. Implement the Stateful Initialization Screen'
+  - >-
+    This component is the heart of the TUI, simulating the four-phase bootstrap
+    process. It uses the Zustand store extensively to read state and trigger
+    state transitions.
+  - '### 5. Create the Main App Component'
+  - >-
+    This component acts as a router, selecting which screen to display based on
+    the global state.
+  - '### 6. Update the Application Entry Point'
+  - >-
+    Finally, I'll modify `index.tsx` to render the main `App` component, which
+    now controls the entire TUI.
+  - >-
+    This completes the implementation of your TUI prototype. Running `bun start`
+    will now launch the splash screen, which will then transition to the fully
+    interactive, multi-phase initialization screen, closely following the
+    specifications you provided.
+operations:
+  - type: write
+    path: src/store.ts
+    content: >-
+      import { create } from 'zustand';
+
+
+      // Utility for simulation
+
+      export const sleep = (ms: number) => new Promise(resolve =>
+      setTimeout(resolve, ms));
+
+
+      // Types
+
+      export type AppScreen = 'splash' | 'init';
+
+      export type TaskStatus = 'pending' | 'active' | 'done';
+
+      export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' |
+      'FINALIZE';
+
+      export type GitignoreChoice = 'ignore' | 'share';
+
+
+      export interface Task {
+          id: string;
+          title: string;
+          subtext?: string;
+          status: TaskStatus;
+      }
+
+
+      // Initial State definitions from README
+
+      export const initialAnalyzeTasks: Task[] = [
+          { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
+          { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
+          { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
+      ];
+
+
+      export const initialConfigureTasks: Task[] = [
+          { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
+          { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
+          { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
+      ];
+
+
+      // Store Interface
+
+      interface TuiState {
+          currentScreen: AppScreen;
+          phase: InitPhase;
+          analyzeTasks: Task[];
+          projectId: string | null;
+          gitignoreFound: boolean | null;
+          configureTasks: Task[];
+          interactiveChoice: GitignoreChoice | null;
+
+          actions: {
+              showInitScreen: () => void;
+              setPhase: (phase: InitPhase) => void;
+              updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+              setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
+              updateConfigureTask: (id: string, status: TaskStatus) => void;
+              setInteractiveChoice: (choice: GitignoreChoice) => void;
+              resetInit: () => void;
+          };
+      }
+
+
+      // Create the store
+
+      export const useStore = create<TuiState>((set) => ({
+          currentScreen: 'splash',
+          phase: 'ANALYZE',
+          analyzeTasks: initialAnalyzeTasks,
+          projectId: null,
+          gitignoreFound: null,
+          configureTasks: initialConfigureTasks,
+          interactiveChoice: null,
+
+          actions: {
+              showInitScreen: () => set({ currentScreen: 'init' }),
+              setPhase: (phase) => set({ phase }),
+              updateAnalyzeTask: (id, status) => set(state => ({
+                  analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t)
+              })),
+              setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+              updateConfigureTask: (id, status) => set(state => ({
+                  configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t)
+              })),
+              setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+              resetInit: () => set({
+                  phase: 'ANALYZE',
+                  analyzeTasks: JSON.parse(JSON.stringify(initialAnalyzeTasks)),
+                  projectId: null,
+                  gitignoreFound: null,
+                  configureTasks: JSON.parse(JSON.stringify(initialConfigureTasks)),
+                  interactiveChoice: null,
+              }),
+          },
+      }));
+    patchStrategy: replace
+  - type: write
+    path: src/components/Separator.tsx
+    content: "import React from 'react';\nimport {Text} from 'ink';\nimport useStdoutDimensions from 'ink-use-stdout-dimensions';\n\nconst Separator = () => {\n\tconst [columns] = useStdoutDimensions();\n\treturn <Text>{'─'.repeat(columns || 80)}</Text>;\n};\n\nexport default Separator;"
+    patchStrategy: replace
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: |-
+      import React, { useState, useEffect } from 'react';
+      import { Box, Text, useInput } from 'ink';
+      import { useStore } from '../store';
+      import chalk from 'chalk';
+      import Separator from './Separator';
+
+      const SplashScreen = () => {
+          const { showInitScreen } = useStore(state => state.actions);
+          const [countdown, setCountdown] = useState(5);
+
+          const handleSkip = () => {
+              showInitScreen();
+          };
+
+          useInput(() => {
+              handleSkip();
+          });
+
+          useEffect(() => {
+              if (countdown === 0) {
+                  showInitScreen();
+                  return;
+              }
+
+              const timer = setTimeout(() => {
+                  setCountdown(c => c - 1);
+              }, 1000);
+
+              return () => clearTimeout(timer);
+          }, [countdown, showInitScreen]);
+
+          const logo = `
+               ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+               ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+               ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+      `;
+
+          return (
+              <Box flexDirection="column">
+                  <Text>▲ relaycode</Text>
+                  <Separator />
+                  <Text>{logo}</Text>
+                  <Box flexDirection="column" alignItems="center">
+                      <Text>A zero-friction, AI-native patch engine.</Text>
+                      <Text>Built by Arman and contributors · https://relay.noca.pro</Text>
+                  </Box>
+                  
+                  <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                      <Box flexDirection="column" width="45%">
+                          <Text>Version 1.1.5</Text>
+                          <Text>─────────────────────────</Text>
+                          <Text>relaycode</Text>
+                          <Text>relaycode-core</Text>
+                          <Text>apply-multi-diff</Text>
+                          <Text>konro</Text>
+                      </Box>
+                       <Box flexDirection="column" width="45%">
+                          <Text>Build Timestamps</Text>
+                          <Text>─────────────────────────</Text>
+                          <Text>2025-09-20 13:58:05</Text>
+                          <Text>2025-09-20 10:59:05</Text>
+                          <Text>(versioned)</Text>
+                          <Text>(versioned)</Text>
+                      </Box>
+                  </Box>
+                  
+                  <Box marginTop={1}><Separator /></Box>
+                  <Text>If you love this workflow, check out https://www.noca.pro for the full</Text>
+                  <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                  <Text>{chalk.bold('(V)')}isit noca.pro</Text>
+                  <Separator />
+                  <Text>Follow {chalk.bold('(X)')} · Join {chalk.bold('(D)')}iscord · Star on {chalk.bold('(G)')}itHub</Text>
+                  <Separator />
+                  <Text>Loading... {countdown} (Press any key to skip)</Text>
+              </Box>
+          );
+      };
+
+      export default SplashScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: >-
+      import React, { useEffect } from 'react';
+
+      import { Box, Text, useApp, useInput } from 'ink';
+
+      import { useStore, Task, initialAnalyzeTasks, initialConfigureTasks, sleep
+      } from '../store';
+
+      import chalk from 'chalk';
+
+      import Separator from './Separator';
+
+
+      const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?:
+      string }) => {
+          let symbol;
+          switch (task.status) {
+              case 'pending': symbol = '( )'; break;
+              case 'active': symbol = chalk.cyan('(●)'); break;
+              case 'done': symbol = chalk.green(doneSymbol); break;
+          }
+
+          const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
+
+          return (
+              <Box flexDirection="column">
+                  <Text>
+                      {symbol} {title}
+                  </Text>
+                  {task.subtext && task.status !== 'done' && (
+                      <Text>
+                          {'     └─ '}{task.subtext}
+                      </Text>
+                  )}
+              </Box>
+          );
+      };
+
+
+      const InitializationScreen = () => {
+          const store = useStore();
+          const { actions } = store;
+          const { exit } = useApp();
+
+          useInput((input, key) => {
+              if (store.phase === 'INTERACTIVE') {
+                  if (key.return) {
+                      actions.setInteractiveChoice('ignore');
+                  } else if (input.toLowerCase() === 's') {
+                      actions.setInteractiveChoice('share');
+                  }
+              }
+              if (store.phase === 'FINALIZE') {
+                  if (input.toLowerCase() === 'q') {
+                      exit();
+                  }
+              }
+          });
+
+          useEffect(() => {
+              actions.resetInit();
+              const runSimulation = async () => {
+                  actions.setPhase('ANALYZE');
+                  for (const task of initialAnalyzeTasks) {
+                      actions.updateAnalyzeTask(task.id, 'active');
+                      await sleep(800);
+                      actions.updateAnalyzeTask(task.id, 'done');
+                  }
+                  actions.setAnalysisResults(`'relaycode' (from package.json)`, true);
+                  await sleep(500);
+
+                  actions.setPhase('CONFIGURE');
+                  const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+                  for (const task of configTasksUntilInteractive) {
+                      actions.updateConfigureTask(task.id, 'active');
+                      await sleep(800);
+                      actions.updateConfigureTask(task.id, 'done');
+                  }
+                  await sleep(500);
+
+                  actions.setPhase('INTERACTIVE');
+              };
+
+              runSimulation();
+          }, []);
+
+          useEffect(() => {
+              if (store.phase === 'INTERACTIVE' && store.interactiveChoice !== null) {
+                  const resumeSimulation = async () => {
+                      actions.setPhase('CONFIGURE');
+                      const lastTask = initialConfigureTasks[2];
+                      actions.updateConfigureTask(lastTask.id, 'active');
+                      await sleep(800);
+                      actions.updateConfigureTask(lastTask.id, 'done');
+                      await sleep(500);
+                      
+                      actions.setPhase('FINALIZE');
+                  };
+                  resumeSimulation();
+              }
+          }, [store.interactiveChoice, store.phase]);
+
+          const renderAnalyze = () => (
+              <Box flexDirection="column">
+                  <Text bold>PHASE 1: ANALYZE</Text>
+                  <Box flexDirection="column" marginTop={1} gap={1}>
+                      {store.analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
+                  </Box>
+              </Box>
+          );
+
+          const renderContext = () => (
+              <Box flexDirection="column" marginBottom={1}>
+                  <Text bold>CONTEXT</Text>
+                  <Text>  {chalk.green('✓')} Project ID: {store.projectId}</Text>
+                  <Text>  {chalk.green('✓')} Gitignore:  Found at ./</Text>
+              </Box>
+          );
+
+          const renderConfigure = () => (
+              <Box flexDirection="column">
+                  {renderContext()}
+                  <Text bold>PHASE 2: CONFIGURE</Text>
+                  <Box flexDirection="column" marginTop={1} gap={1}>
+                      {store.configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
+                  </Box>
+              </Box>
+          );
+
+          const renderInteractive = () => (
+              <Box flexDirection="column">
+                  {renderContext()}
+                  <Text bold>PHASE 2: CONFIGURE</Text>
+                  <Box flexDirection="column" marginTop={1}>
+                      {store.configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol="[✓]" />)}
+                      <Box flexDirection="column" marginTop={1}>
+                          <Text>{chalk.cyan('>')} The .relay/ directory is usually ignored by git.</Text>
+                          <Text>  Do you want to share its state with your team by committing it?</Text>
+                      </Box>
+                  </Box>
+              </Box>
+          );
+
+          const renderFinalize = () => {
+              const stateText = store.interactiveChoice === 'share'
+                  ? ".relay/ directory initialized. It will be committed to git."
+                  : ".relay/ directory initialized and added to .gitignore.";
+              const stateSubText = store.interactiveChoice === 'share'
+                  ? undefined
+                  : "Local transaction history will be stored here.";
+              
+              return (
+                  <Box flexDirection="column">
+                      <Text bold> SYSTEM READY</Text>
+                      <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                          <Box flexDirection="column">
+                              <Text>{chalk.green('✓')} Config:   relay.config.json created.</Text>
+                              <Text>          {chalk.gray('›')} Edit this file to tune linters, git integration, etc.</Text>
+                          </Box>
+                          <Box flexDirection="column">
+                              <Text>{chalk.green('✓')} State:    {stateText}</Text>
+                              {stateSubText && <Text>          {chalk.gray('›')} {stateSubText}</Text>}
+                          </Box>
+                          <Box flexDirection="column">
+                              <Text>{chalk.green('✓')} Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
+                              <Text>          {chalk.gray('›')} Copied to clipboard. Paste into your AI's custom instructions.</Text>
+                          </Box>
+                      </Box>
+                  </Box>
+              );
+          };
+
+          const renderPhase = () => {
+              switch (store.phase) {
+                  case 'ANALYZE': return renderAnalyze();
+                  case 'CONFIGURE': return renderConfigure();
+                  case 'INTERACTIVE': return renderInteractive();
+                  case 'FINALIZE': return renderFinalize();
+              }
+          };
+          
+          let footerText;
+          switch (store.phase) {
+              case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+              case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+              case 'INTERACTIVE': footerText = `(${chalk.bold('Enter')}) No, ignore it (default)      (${chalk.bold('S')}) Yes, share it`; break;
+              case 'FINALIZE': footerText = `(${chalk.bold('W')})atch for Patches · (${chalk.bold('L')})View Logs · (${chalk.bold('Q')})uit`; break;
+          }
+
+          return (
+              <Box flexDirection="column">
+                  <Text>{store.phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
+                  <Separator />
+                  <Box marginY={1}>{renderPhase()}</Box>
+                  <Separator />
+                  <Text>{footerText}</Text>
+              </Box>
+          );
+      };
+
+
+      export default InitializationScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/App.tsx
+    content: |-
+      import React from 'react';
+      import { useStore } from './store';
+      import SplashScreen from './components/SplashScreen';
+      import InitializationScreen from './components/InitializationScreen';
+
+      const App = () => {
+          const currentScreen = useStore(state => state.currentScreen);
+
+          if (currentScreen === 'splash') {
+              return <SplashScreen />;
+          }
+
+          if (currentScreen === 'init') {
+              return <InitializationScreen />;
+          }
+
+          return null;
+      };
+
+      export default App;
+    patchStrategy: replace
+  - type: write
+    path: index.tsx
+    content: |
+      <<<<<<< SEARCH
+      import App from './src/App.tsx';
+      =======
+      import App from './src/App';
+      >>>>>>> REPLACE
+    patchStrategy: search-replace
+snapshot:
+  src/store.ts: null
+  src/components/Separator.tsx: null
+  src/components/SplashScreen.tsx: null
+  src/components/InitializationScreen.tsx: null
+  src/App.tsx: null
+  index.tsx: |
+    import React from 'react';
+    import { render } from 'ink';
+    import App from './src/App.tsx';
+
+    render(<App />);
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: '2025-09-21T21:26:14.062Z'
+status: committed
+id: 1

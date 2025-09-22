@@ -1,0 +1,2781 @@
+uuid: c29ca4a3-7640-4131-b4f0-ec7b63f582f3
+projectId: relaycode-tui
+createdAt: '2025-09-22T01:10:18.064Z'
+gitCommitMsg: >-
+  feat(review): implement full review screen spec
+
+  This commit overhauls the Review Screen to align with the detailed design
+  specifications in `review-screen.readme.md`.
+
+  Key changes include: - Restructured the UI into a clear Navigator/Body/Footer
+  layout. - Implemented the full advanced repair workflow, including states for
+  AWAITING patch and RE-APPLYING files. - Added the "Handoff to External Agent"
+  feature, including a confirmation modal and generation of a detailed
+  context-aware prompt. - Updated the Dashboard to recognize and display the new
+  'HANDOFF' transaction status. - Enhanced the Copy Mode and Bulk Repair modals
+  with better formatting and information density as per the mockups. - Added new
+  states to the debug menu for easier testing of these new features.
+promptSummary: >-
+  The user requested a major overhaul of the Review Screen to match the detailed
+  specifications in the README file. This involved UI layout changes,
+  implementing advanced repair workflows like "Handoff", and adding
+  corresponding states to the data stores and debug menu.
+reasoning:
+  - >-
+    Here are the modifications to bring your TUI's Review Screen in line with
+    the detailed specifications. I've focused on restructuring the UI,
+    implementing the advanced repair and handoff workflows, and ensuring all
+    states and footer actions match the documentation.
+  - '### 1. Update Core State Management for Review'
+  - >-
+    First, I'll update `review.store.ts` to support the new file statuses
+    (`AWAITING`, `RE_APPLYING`) and UI states (`confirm_handoff`) required by
+    the advanced repair workflows. This includes implementing the detailed logic
+    for generating repair and handoff prompts.
+  - '### 2. Update Dashboard for "Handoff" State'
+  - >-
+    To support the handoff workflow, I'll update the `dashboard.store.ts` to
+    recognize a `HANDOFF` status and add a mechanism to update transactions.
+    Then, I'll modify `DashboardScreen.tsx` to render this new status correctly,
+    as shown in the review screen's documentation.
+  - '### 3. Refactor the Review Screen Component'
+  - >-
+    This is the main change. I'm overhauling `ReviewScreen.tsx` to match the
+    layout and behavior from the documentation. This includes creating the
+    `Navigator` and `Body` sections, updating the file list to show new
+    statuses, and making the modals for copy mode and bulk repair more
+    informative.
+  - '### 4. Enhance the Debug Menu'
+  - >-
+    Finally, I'll add new entries to the `DebugMenu.tsx` to make it easier to
+    test the newly implemented states of the Review Screen, such as the bulk
+    repair and handoff confirmation modals.
+  - >-
+    These changes complete the implementation of the specified review screen
+    design, including its complex states and repair workflows, making the TUI a
+    much more powerful and intuitive tool.
+operations:
+  - type: write
+    path: src/stores/review.store.ts
+    content: >+
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ -1,10 +1,11 @@
+       import { create } from 'zustand';
+       import { sleep } from '../utils';
+       import { useAppStore } from './app.store';
+      +import { useDashboardStore } from './dashboard.store';
+       
+       // --- Types ---
+       
+      -export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED';
+
+      +export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING'
+      | 'RE_APPLYING';
+       export interface FileItem {
+           id: string;
+           path: string;
+      @@ -34,7 +35,7 @@
+           { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+       ];
+       
+      -export type BodyView = 'diff' | 'reasoning' | 'script_output' |
+      'copy_mode' | 'bulk_repair' | 'none';
+
+      +export type BodyView = 'diff' | 'reasoning' | 'script_output' |
+      'copy_mode' | 'bulk_repair' | 'confirm_handoff' | 'none';
+       export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+       
+       interface ReviewState {
+      @@ -82,7 +83,8 @@
+               // Repair Actions
+               tryRepairFile: () => void;
+               showBulkRepair: () => void;
+      -        executeBulkRepairOption: (option: number) => void;
+
+      +        executeBulkRepairOption: (option: number) => Promise<void>;
+
+      +        confirmHandoff: () => void;
+               
+               // Navigation Actions
+               scrollReasoningUp: () => void;
+      @@ -291,7 +293,8 @@
+               // Repair Actions
+               tryRepairFile: () => void;
+               showBulkRepair: () => void;
+      -        executeBulkRepairOption: (option: number) => void;
+
+      +        executeBulkRepairOption: (option: number) => Promise<void>;
+
+      +        confirmHandoff: () => void;
+               
+               // Navigation Actions
+               scrollReasoningUp: () => void;
+      @@ -470,6 +473,11 @@
+                   patchStatus: 'PARTIAL_FAILURE' as const,
+                   files: mockFiles,
+                   scripts: [],
+      +            // Reset UI state
+
+      +            bodyView: 'none',
+
+      +            isDiffExpanded: false,
+
+      +            reasoningScrollIndex: 0,
+
+      +            scriptErrorIndex: 0,
+                   selectedItemIndex: 0,
+                   bodyView: 'none' as const,
+               })),
+      @@ -583,93 +591,123 @@
+               showBulkRepair: () => set(() => ({
+                   bodyView: 'bulk_repair' as const,
+               })),
+      -        executeBulkRepairOption: (option: number) => set(state => {
+
+      +        executeBulkRepairOption: async (option: number) => {
+                   switch (option) {
+                       case 1: {
+      -                    // Copy Bulk Re-apply Prompt
+
+      -                    const failedFiles = state.files.filter(f => f.status
+      === 'FAILED');
+
+      -                    const bulkPrompt = `The previous patch failed to
+      apply to MULTIPLE files. Please generate a new, corrected patch that
+      addresses all the files listed below.
+
+      +                    set(state => {
+
+      +                        // Copy Bulk Re-apply Prompt
+
+      +                        const failedFiles = state.files.filter(f =>
+      f.status === 'FAILED');
+
+      +                        const bulkPrompt = `The previous patch failed to
+      apply to MULTIPLE files. Please generate a new, corrected patch that
+      addresses all the files listed below.
+       
+       IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
+       
+       ${failedFiles.map(file => `--- FILE: ${file.path} ---
+       Strategy: ${file.strategy}
+       Error: ${file.error}
+      -
+       ORIGINAL CONTENT:
+       ---
+       // ... original content of ${file.path} ...
+       ---
+      -
+       FAILED PATCH:
+       ---
+       ${file.diff || '// ... failed diff ...'}
+       ---
+       `).join('\n')}
+      -
+       Please analyze all failed files and provide a complete, corrected response.`;
+      -
+
+      -                    // eslint-disable-next-line no-console
+
+      -                    console.log(`[CLIPBOARD] Copied bulk repair prompt
+      for ${failedFiles.length} files`);
+
+      -                    return { bodyView: 'none' as const,
+      copyModeLastCopied: 'Bulk repair prompt copied' };
+
+      +                        // eslint-disable-next-line no-console
+
+      +                        console.log(`[CLIPBOARD] Copied bulk repair
+      prompt for ${failedFiles.length} files`);
+
+      +                        
+
+      +                        const newFiles = state.files.map(file => 
+
+      +                            file.status === 'FAILED' 
+
+      +                                ? { ...file, status: 'AWAITING' as const
+      }
+
+      +                                : file,
+
+      +                        );
+
+      +                        
+
+      +                        return { files: newFiles, bodyView: 'none' as
+      const, copyModeLastCopied: 'Bulk repair prompt copied' };
+
+      +                    });
+
+      +                    break;
+                       }
+                           
+                       case 2: {
+                           // Bulk Change Strategy & Re-apply
+      -                    // Mock: Change all failed files to 'replace'
+      strategy and mark as successful
+
+      -                    const newFiles = state.files.map(file => 
+
+      -                        file.status === 'FAILED' 
+
+      -                            ? { ...file, status: 'APPROVED' as const,
+      strategy: 'replace' as const, error: undefined, linesAdded: 3,
+      linesRemoved: 1 }
+
+      -                            : file,
+
+      -                    );
+
+      -                    return { files: newFiles, bodyView: 'none' as const
+      };
+
+      +                    const failedFileIds = new
+      Set(useReviewStore.getState().files.filter(f => f.status ===
+      'FAILED').map(f => f.id));
+
+      +                    
+
+      +                    set(state => ({
+
+      +                        files: state.files.map(file => 
+
+      +                            failedFileIds.has(file.id)
+
+      +                                ? { ...file, status: 'RE_APPLYING' as
+      const }
+
+      +                                : file,
+
+      +                        ),
+
+      +                        bodyView: 'none' as const,
+
+      +                    }));
+
+      +                    
+
+      +                    await sleep(1500); // Simulate re-apply
+
+      +
+
+      +                    // Mock a mixed result
+
+      +                    let first = true;
+
+      +                    set(state => ({
+
+      +                        files: state.files.map(file => {
+
+      +                            if (failedFileIds.has(file.id)) {
+
+      +                                if (first) {
+
+      +                                    first = false;
+
+      +                                    return { ...file, status: 'APPROVED'
+      as const, strategy: 'replace' as const, error: undefined, linesAdded: 9,
+      linesRemoved: 2 };
+
+      +                                }
+
+      +                                return { ...file, status: 'FAILED' as
+      const, error: `'replace' failed: markers not found` };
+
+      +                            }
+
+      +                            return file;
+
+      +                        }),
+
+      +                    }));
+
+      +                    break;
+                       }
+                           
+                       case 3: {
+                           // Handoff to External Agent
+      -                    // Mock: Generate handoff prompt
+
+      -                    const failedFiles = state.files.filter(f => f.status
+      === 'FAILED');
+
+      -                    const handoffPrompt = `# Relaycode Handoff: Failed
+      Patch Application
+
+      -
+
+      -The following files failed to apply and require manual intervention:
+
+      -
+
+      -${failedFiles.map(file => `## ${file.path}
+
+      -- Error: ${file.error}
+
+      -- Strategy: ${file.strategy}
+
+      -`).join('\n')}
+
+      -
+
+      -Please resolve these issues and provide updated patches.`;
+
+      -
+
+      -                    // eslint-disable-next-line no-console
+
+      -                    console.log(`[CLIPBOARD] Copied handoff prompt for
+      ${failedFiles.length} files`);
+
+      -                    return { bodyView: 'none' as const,
+      copyModeLastCopied: 'Handoff prompt copied' };
+
+      +                    set({ bodyView: 'confirm_handoff' as const });
+
+      +                    break;
+                       }
+                           
+                       case 4: {
+                           // Bulk Abandon All Failed Files
+      -                    const abandonedFiles = state.files.map(file => 
+
+      -                        file.status === 'FAILED' 
+
+      -                            ? { ...file, status: 'REJECTED' as const }
+
+      -                            : file,
+
+      -                    );
+
+      -                    return { files: abandonedFiles, bodyView: 'none' as
+      const };
+
+      +                    set(state => ({
+
+      +                        files: state.files.map(file => 
+
+      +                            file.status === 'FAILED' 
+
+      +                                ? { ...file, status: 'REJECTED' as const
+      }
+
+      +                                : file,
+
+      +                        ),
+
+      +                        bodyView: 'none' as const,
+
+      +                    }));
+
+      +                    break;
+                       }
+                           
+                       default:
+      -                    return { bodyView: 'none' as const };
+
+      +                    set({ bodyView: 'none' as const });
+                   }
+      -        }),
+
+      +        },
+
+      +        confirmHandoff: () => {
+
+      +            const { hash, message, reasoning, files } =
+      useReviewStore.getState();
+
+      +            const { updateTransactionStatus } =
+      useDashboardStore.getState().actions;
+
+      +            const { showDashboardScreen } =
+      useAppStore.getState().actions;
+
+      +            
+
+      +            const successfulFiles = files.filter(f => f.status ===
+      'APPROVED');
+
+      +            const failedFiles = files.filter(f => f.status === 'FAILED');
+
+      +
+
+      +            const handoffPrompt = `I am handing off a failed automated
+      code transaction to you. Your task is to act as my programming assistant
+      and complete the planned changes.
+
+      +
+
+      +The full plan for this transaction is detailed in the YAML file located
+      at: .relay/transactions/${hash}.yml. Please use this file as your primary
+      source of truth for the overall goal.
+
+      +
+
+      +Here is the current status of the transaction:
+
+      +
+
+      +--- TRANSACTION SUMMARY ---
+
+      +Goal: ${message}
+
+      +Reasoning:
+
+      +${reasoning}
+
+      +
+
+      +--- CURRENT FILE STATUS ---
+
+      +SUCCESSFUL CHANGES (already applied, no action needed):
+
+      +${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || ' 
+      (None)'}
+
+      +
+
+      +FAILED CHANGES (these are the files you need to fix):
+
+      +${failedFiles.map(f => `- FAILED: ${f.path} (Error:
+      ${f.error})`).join('\n')}
+
+      +
+
+      +Your job is to now work with me to fix the FAILED files and achieve the
+      original goal of the transaction. Please start by asking me which file you
+      should work on first.`;
+
+      +
+
+      +            // eslint-disable-next-line no-console
+
+      +            console.log('[CLIPBOARD] Copied Handoff Prompt.');
+
+      +            
+
+      +            // This is a bit of a hack to find the right transaction to
+      update in the demo
+
+      +            const txToUpdate =
+      useDashboardStore.getState().transactions.find(tx => tx.hash === hash);
+
+      +            if (txToUpdate) {
+
+      +                updateTransactionStatus(txToUpdate.id, 'HANDOFF');
+
+      +            }
+
+      +
+
+      +            showDashboardScreen();
+
+      +        },
+               
+               // Navigation Actions
+               scrollReasoningUp: () => set(state => ({
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: >+
+      --- src/stores/dashboard.store.ts
+
+      +++ src/stores/dashboard.store.ts
+
+      @@ -2,7 +2,7 @@
+       import { sleep } from '../utils';
+       
+       // --- Types ---
+      -export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' |
+      'FAILED' | 'REVERTED' | 'IN-PROGRESS';
+
+      +export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' |
+      'FAILED' | 'REVERTED' | 'IN-PROGRESS' | 'HANDOFF';
+       
+       export interface Transaction {
+           id: string;
+      @@ -42,6 +42,7 @@
+               confirmAction: () => Promise<void>;
+               cancelAction: () => void;
+               toggleHelp: () => void;
+      +        updateTransactionStatus: (id: string, status: TransactionStatus)
+      => void;
+               setStatus: (status: DashboardStatus) => void; // For debug menu
+           };
+       }
+      @@ -69,6 +70,16 @@
+               })),
+               cancelAction: () => set(state => ({ status: state.previousStatus })),
+               toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+      +        updateTransactionStatus: (id, status) => {
+
+      +            set(state => ({
+
+      +                transactions: state.transactions.map(tx =>
+
+      +                    tx.id === id ? { ...tx, status, timestamp: Date.now()
+      } : tx,
+
+      +                ),
+
+      +            }));
+
+      +            // After updating, move selection to the updated transaction
+
+      +            const index = get().transactions.findIndex(tx => tx.id ===
+      id);
+
+      +            if (index !== -1) set({ selectedTransactionIndex: index });
+
+      +        },
+               setStatus: (status) => set({ status }),
+       
+               confirmAction: async () => {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: |+
+      --- src/components/DashboardScreen.tsx
+      +++ src/components/DashboardScreen.tsx
+      @@ -10,6 +10,7 @@
+           switch (status) {
+               case 'PENDING': return <Text color="yellow">?</Text>;
+               case 'APPLIED': return <Text color="green">✓</Text>;
+      -        case 'COMMITTED': return <Text color="blue">→</Text>;
+      +        case 'COMMITTED': return <Text color="blue">→</Text>;
+      +        case 'HANDOFF': return <Text color="magenta">→</Text>;
+               case 'FAILED': return <Text color="red">✗</Text>;
+               case 'REVERTED': return <Text color="gray">↩</Text>;
+               case 'IN-PROGRESS': return <Spinner type="dots" />;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: >+
+      --- src/components/ReviewScreen.tsx
+
+      +++ src/components/ReviewScreen.tsx
+
+      @@ -12,6 +12,8 @@
+               case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
+               case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
+               case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+      +        case 'AWAITING': icon = '[●]'; iconColor = 'yellow'; break;
+
+      +        case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
+           }
+       
+           const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+      @@ -25,6 +27,30 @@
+                           <Text color="red">    ({file.error})</Text>
+                       </Text>
+                   </Box>
+      +        );
+
+      +    }
+
+      +
+
+      +    if (file.status === 'AWAITING') {
+
+      +        return (
+
+      +            <Box>
+
+      +                <Text bold={isSelected} color={isSelected ? 'cyan' :
+      undefined}>
+
+      +                    {prefix}<Text color={iconColor}>{icon} AWAITING
+      {file.path}</Text>
+
+      +                    <Text color="yellow">    (Bulk re-apply prompt
+      copied!)</Text>
+
+      +                </Text>
+
+      +            </Box>
+
+      +        );
+
+      +    }
+
+      +
+
+      +    if (file.status === 'RE_APPLYING') {
+
+      +        return (
+
+      +             <Box>
+
+      +                <Text bold={isSelected} color={isSelected ? 'cyan' :
+      undefined}>
+
+      +                    {prefix}<Text color={iconColor}>{icon} RE-APPLYING...
+      {file.path}</Text>
+
+      +                    <Text color="cyan"> (using 'replace' strategy)</Text>
+
+      +                </Text>
+
+      +            </Box>
+               );
+           }
+       
+      @@ -87,7 +113,7 @@
+               isDiffExpanded,
+               copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
+           } = store;
+           const {
+               moveSelectionUp, moveSelectionDown, toggleFileApproval,
+               toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+               startApplySimulation,
+               rejectAllFiles, approve,
+               toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
+               copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
+      -        tryRepairFile, showBulkRepair, executeBulkRepairOption,
+
+      +        tryRepairFile, showBulkRepair, executeBulkRepairOption,
+      confirmHandoff,
+               scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+           } = store.actions;
+       
+      @@ -118,6 +144,9 @@
+               if (key.escape) {
+                   if (bodyView === 'copy_mode') {
+                       toggleCopyMode();
+      +            } else if (bodyView === 'confirm_handoff') {
+
+      +                // Pressing Esc on confirm handoff goes back to the main
+      view
+
+      +                toggleReasoningView(); // Toggles any view off
+                   } else if (bodyView === 'bulk_repair') {
+                       showBulkRepair(); // Close bulk repair modal
+                   } else if (bodyView !== 'none') {
+      @@ -148,6 +177,14 @@
+                   return;
+               }
+       
+      +        // Handoff Confirmation
+
+      +        if (bodyView === 'confirm_handoff') {
+
+      +            if (key.return) {
+
+      +                confirmHandoff();
+
+      +            }
+
+      +            return;
+
+      +        }
+
+      +
+               // Bulk Repair Navigation
+               if (bodyView === 'bulk_repair') {
+                   if (input >= '1' && input <= '4') {
+      @@ -321,55 +358,103 @@
+                   );
+               }
+       
+      +        if (bodyView === 'confirm_handoff') {
+
+      +            return (
+
+      +                <Box flexDirection="column" gap={1}>
+
+      +                    <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+
+      +                    <Box flexDirection="column">
+
+      +                        <Text>This action will:</Text>
+
+      +                        <Text>1. Copy a detailed prompt to your clipboard
+      for an agentic AI.</Text>
+
+      +                        <Text>2. Mark the current transaction as
+      'Handoff' and close this review.</Text>
+
+      +                        <Text>3. Assume that you and the external agent
+      will complete the work.</Text>
+
+      +                    </Box>
+
+      +                    <Text>Relaycode will NOT wait for a new patch. This
+      is a final action.</Text>
+
+      +                    <Text bold color="yellow">Are you sure you want to
+      proceed?</Text>
+
+      +                </Box>
+
+      +            );
+
+      +        }
+
+      +
+               if (bodyView === 'copy_mode') {
+                   const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                   const options = [
+                       { key: 'U', label: 'UUID', value: `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                       { key: 'M', label: 'Git Message', value: message },
+      -                { key: 'P', label: 'Prompt', value:
+      `${prompt.substring(0, 50)}...` },
+
+      -                { key: 'R', label: 'Reasoning', value:
+      `${reasoning.substring(0, 50)}...` },
+
+      +                { key: 'P', label: 'Prompt', value:
+      `${prompt.substring(0, 45)}...` },
+
+      +                { key: 'R', label: 'Reasoning', value:
+      `${reasoning.split('\n')[0].substring(0, 45)}...` },
+
+      +            ];
+
+      +            const fileOptions = [
+                       { key: 'F', label: 'Diff for', value: selectedFile ? selectedFile.path : 'N/A' },
+                       { key: 'A', label: 'All Diffs', value: `${files.length} files` },
+                   ];
+       
+                   return (
+      -                <Box flexDirection="column">
+
+      -                    <Text>Select item to copy to clipboard:</Text>
+
+      -                    <Box marginTop={1} />
+
+      +                <Box flexDirection="column" gap={1}>
+
+      +                    <Text bold>Select item to copy to clipboard:</Text>
+                           
+      -                    {options.map((option, index) => (
+
+      -                        <Text key={option.key} bold={index ===
+      copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' :
+      undefined}>
+
+      -                            {index === copyModeSelectedIndex ? '> ' : ' 
+      '}
+
+      -                            [{option.key}] {option.label}: {option.value}
+
+      -                        </Text>
+
+      -                    ))}
+
+      +                    <Box flexDirection="column">
+
+      +                        {options.map((option, index) => (
+
+      +                            <Text key={option.key} bold={index ===
+      copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' :
+      undefined}>
+
+      +                                {index === copyModeSelectedIndex ? '> ' :
+      '  '}
+
+      +                                [{option.key}] {option.label.padEnd(11, '
+      ')}: {option.value}
+
+      +                            </Text>
+
+      +                        ))}
+
+      +                    </Box>
+
+      +
+
+      +                    <Separator/>
+                           
+      -                    <Box marginTop={1} />
+
+      +                    <Box flexDirection="column">
+
+      +                        {fileOptions.map((option, index) => {
+
+      +                            const overallIndex = index + options.length;
+
+      +                            return (
+
+      +                                <Text key={option.key} bold={overallIndex
+      === copyModeSelectedIndex} color={overallIndex === copyModeSelectedIndex ?
+      'cyan' : undefined}>
+
+      +                                    {overallIndex ===
+      copyModeSelectedIndex ? '> ' : '  '}
+
+      +                                    [{option.key}]
+      {option.label.padEnd(11, ' ')}: {option.value}
+
+      +                                </Text>
+
+      +                            );
+
+      +                        })}
+
+      +                    </Box>
+
+      +
+
+      +                    <Separator/>
+
+      +
+                           {copyModeLastCopied && (
+                               <Text color="green">✓ Copied {copyModeLastCopied} to clipboard.</Text>
+                           )}
+                       </Box>
+                   );
+               }
+       
+               if (bodyView === 'bulk_repair') {
+                   const failedFiles = files.filter(f => f.status === 'FAILED');
+      +            const repairOptions = [
+
+      +                '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+
+      +                '(2) Bulk Change Strategy & Re-apply',
+
+      +                '(3) Handoff to External Agent',
+
+      +                '(4) Bulk Abandon All Failed Files',
+
+      +                '(Esc) Cancel',
+
+      +            ];
+                   
+                   return (
+      -                <Box flexDirection="column">
+
+      -                    <Text>BULK REPAIR ACTION</Text>
+
+      -                    <Box marginTop={1} />
+
+      +                <Box flexDirection="column" gap={1}>
+
+      +                    <Text bold>BULK REPAIR ACTION</Text>
+                           
+      -                    <Text>The following {failedFiles.length} files failed
+      to apply:</Text>
+
+      -                    {failedFiles.map(file => (
+
+      -                        <Text key={file.id}>- {file.path}</Text>
+
+      -                    ))}
+
+      +                    <Box flexDirection="column">
+
+      +                        <Text>The following {failedFiles.length} files
+      failed to apply:</Text>
+
+      +                        {failedFiles.map(file => (
+
+      +                            <Text key={file.id}>- {file.path}</Text>
+
+      +                        ))}
+
+      +                    </Box>
+                           
+      -                    <Box marginTop={1} />
+                           <Text>How would you like to proceed?</Text>
+      -                    <Box marginTop={1} />
+                           
+      -                    <Text>{'> (1) Copy Bulk Re-apply Prompt (for
+      single-shot AI)'}</Text>
+
+      -                    <Text>  (2) Bulk Change Strategy & Re-apply</Text>
+
+      -                    <Text>  (3) Handoff to External Agent</Text>
+
+      -                    <Text>  (4) Bulk Abandon All Failed Files</Text>
+
+      -                    <Text>  (Esc) Cancel</Text>
+
+      +                    <Box flexDirection="column">
+
+      +                        {repairOptions.map((opt, i) => (
+
+      +                            <Text key={i}>
+
+      +                                {i === 0 ? '> ' : '  '}
+
+      +                                {opt}
+
+      +                            </Text>
+
+      +                        ))}
+
+      +                    </Box>
+                       </Box>
+                   );
+               }
+      @@ -382,7 +467,7 @@
+               if (bodyView === 'diff') {
+                   return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
+               }
+               if (bodyView === 'reasoning') {
+      -            return <Text>(↑↓) Scroll · (R/Esc) Back</Text>;
+
+      +            return <Text>(↑↓) Scroll Text · (R)Collapse View · (C)opy
+      Mode</Text>;
+               }
+               if (bodyView === 'script_output') {
+                   return (
+      @@ -393,6 +478,9 @@
+               }
+               if (bodyView === 'bulk_repair') {
+                   return <Text>Choose an option [1-4, Esc]:</Text>;
+      +        }
+
+      +        if (bodyView === 'confirm_handoff') {
+
+      +            return <Text>(Enter) Confirm Handoff      (Esc)
+      Cancel</Text>;
+               }
+       
+               // Main footer
+      @@ -426,7 +514,9 @@
+                   actions.push('(A)pprove');
+               }
+               
+      +        if (files.some(f => f.status === 'APPROVED' || f.status ===
+      'FAILED')) {
+                   actions.push('(Shift+R) Reject All');
+      +        }
+               actions.push('(Q)uit');
+       
+               return <Text>{actions.join(' · ')}</Text>;
+      @@ -436,55 +526,59 @@
+           return (
+               <Box flexDirection="column">
+                   {/* Header */}
+      -            <Text color="cyan">▲ relaycode review{bodyView ===
+      'copy_mode' ? ' · copy mode' : ''}</Text>
+
+      +            <Text color="cyan">
+
+      +                ▲ relaycode review{bodyView === 'copy_mode' ? ' · copy
+      mode' : ''}
+
+      +            </Text>
+                   <Separator />
+                   
+                   {/* Navigator Section */}
+      -            <Box flexDirection="column">
+
+      -                {/* Transaction summary */}
+
+      -                <Box>
+
+      -                    <Text>{hash} · {message}</Text>
+
+      +            <Box flexDirection="column" marginY={1}>
+
+      +                <Box flexDirection="column">
+
+      +                    <Text>{hash} · {message}</Text>
+
+      +                    <Text>
+
+      +                        (<Text
+      color="green">+{approvedLinesAdded}</Text>/<Text
+      color="red">-{approvedLinesRemoved}</Text>) ·
+      {approvedFilesCount}/{numFiles} Files · {duration}s
+
+      +                        {patchStatus === 'PARTIAL_FAILURE' &&
+      scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+
+      +                        {patchStatus === 'PARTIAL_FAILURE' && <Text
+      color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+
+      +                    </Text>
+                       </Box>
+      -                <Box>
+
+      -                    <Text>(<Text
+      color="green">+{approvedLinesAdded}</Text>/<Text
+      color="red">-{approvedLinesRemoved}</Text>) ·
+      {approvedFilesCount}/{numFiles} Files · {duration}s</Text>
+
+      -                    {patchStatus === 'PARTIAL_FAILURE' && <Text
+      color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+
+      -                    {scripts.length === 0 && patchStatus ===
+      'PARTIAL_FAILURE' && <Text> · Scripts: SKIPPED</Text>}
+
+      -                </Box>
+
+      -                
+
+      -                <Box marginTop={1} />
+
+      -                
+
+      -                {/* Prompt and Reasoning */}
+
+      -                <Text>(P)rompt ▸ {prompt.substring(0, 50)}...</Text>
+
+      -                <Text>(R)easoning ({reasoning.split('\n\n').length}
+      steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+
+      -                    {(reasoning.split('\n')[0] ?? '').substring(0,
+      50)}...
+
+      -                </Text>
+
+      -                
+
+      -                <Separator/>
+
+      -                
+
+      -                {/* Script Results (if any) */}
+
+      -                {scripts.length > 0 && (
+
+      -                    <>
+
+      -                        {scripts.map((script, index) => (
+
+      -                            <ScriptItemRow 
+
+      -                                key={script.command} 
+
+      -                                script={script}
+
+      -                                isSelected={selectedItemIndex ===
+      numFiles + index}
+
+      -                                isExpanded={bodyView === 'script_output'
+      && selectedItemIndex === numFiles + index}
+
+      -                            />
+
+      -                        ))}
+
+      -                        <Separator/>
+
+      -                    </>
+
+      -                )}
+
+      -                
+
+      -                {/* Files Section */}
+
+      -                <Text>FILES</Text>
+
+      -                {files.map((file, index) => (
+
+      -                    <FileItemRow 
+
+      -                        key={file.id} 
+
+      -                        file={file} 
+
+      -                        isSelected={selectedItemIndex === index}
+
+      -                    />
+
+      -                ))}
+
+      +
+
+      +                <Box flexDirection="column" marginTop={1}>
+
+      +                    <Text>
+
+      +                        (P)rompt ▸ {prompt.substring(0, 60)}...
+
+      +                    </Text>
+
+      +                    <Text>
+
+      +                        (R)easoning ({reasoning.split('\n\n').length}
+      steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+
+      +                        {(reasoning.split('\n')[0] ?? '').substring(0,
+      50)}...
+
+      +                    </Text>
+
+      +                </Box>
+                   </Box>
+                   
+      +            <Separator/>
+
+      +            
+
+      +            {/* Script Results (if any) */}
+
+      +            {scripts.length > 0 && (
+
+      +                <>
+
+      +                    <Box flexDirection="column" marginY={1}>
+
+      +                        {scripts.map((script, index) => (
+
+      +                            <ScriptItemRow 
+
+      +                                key={script.command} 
+
+      +                                script={script}
+
+      +                                isSelected={selectedItemIndex ===
+      numFiles + index}
+
+      +                                isExpanded={bodyView === 'script_output'
+      && selectedItemIndex === numFiles + index}
+
+      +                            />
+
+      +                        ))}
+
+      +                    </Box>
+
+      +                    <Separator/>
+
+      +                </>
+
+      +            )}
+
+      +            
+
+      +            {/* Files Section */}
+
+      +            <Box flexDirection="column" marginY={1}>
+
+      +                <Text bold>FILES</Text>
+
+      +                {files.map((file, index) => (
+
+      +                    <FileItemRow 
+
+      +                        key={file.id} 
+
+      +                        file={file} 
+
+      +                        isSelected={selectedItemIndex === index}
+
+      +                    />
+
+      +                ))}
+
+      +            </Box>
+                   <Separator/>
+                   
+                   {/* Body Viewport */}
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugMenu.tsx
+    content: >+
+      --- src/components/DebugMenu.tsx
+
+      +++ src/components/DebugMenu.tsx
+
+      @@ -83,6 +83,30 @@
+                   },
+               },
+               {
+      +            title: 'Review: Script Output',
+
+      +            action: () => {
+
+      +                reviewActions.simulateSuccessScenario();
+
+      +                reviewActions.toggleScriptView();
+
+      +                appActions.showReviewScreen();
+
+      +            },
+
+      +        },
+
+      +        {
+
+      +            title: 'Review: Bulk Repair',
+
+      +            action: () => {
+
+      +                reviewActions.simulateFailureScenario();
+
+      +                reviewActions.showBulkRepair();
+
+      +                appActions.showReviewScreen();
+
+      +            },
+
+      +        },
+
+      +        {
+
+      +            title: 'Review: Handoff Confirm',
+
+      +            action: () => {
+
+      +                reviewActions.simulateFailureScenario();
+
+      +                reviewActions.executeBulkRepairOption(3); // Option 3 is
+      Handoff
+
+      +                appActions.showReviewScreen();
+
+      +            },
+
+      +        },
+
+      +        {
+                   title: 'Review Processing',
+                   action: () => appActions.showReviewProcessingScreen(),
+               },
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { sleep } from '../utils';
+
+    import { useAppStore } from './app.store';
+
+
+    // --- Types ---
+
+
+    export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED';
+
+    export interface FileItem {
+        id: string;
+        path: string;
+        status: FileStatus;
+        diff: string;
+        linesAdded: number;
+        linesRemoved: number;
+        error?: string;
+        strategy: 'replace' | 'standard-diff';
+    }
+
+
+    export interface ScriptResult {
+        command: string;
+        success: boolean;
+        duration: number;
+        summary: string;
+        output: string;
+    }
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        duration?: number;
+    }
+
+
+    const initialApplySteps: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+
+    export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'copy_mode'
+    | 'bulk_repair' | 'none';
+
+    export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+
+
+    interface ReviewState {
+        // Transaction Info
+        hash: string;
+        message: string;
+        prompt: string;
+        reasoning: string;
+        linesAdded: number;
+        linesRemoved: number;
+        duration: number;
+        patchStatus: PatchStatus;
+
+        // File & Script Info
+        files: FileItem[];
+        scripts: ScriptResult[];
+
+        // UI State
+        applySteps: ApplyStep[];
+        selectedItemIndex: number; // Can be file or script
+        bodyView: BodyView;
+        isDiffExpanded: boolean;
+        
+        // Copy Mode State
+        copyModeSelectedIndex: number;
+        copyModeLastCopied: string | null;
+        
+        // Reasoning Scroll State
+        reasoningScrollIndex: number;
+        
+        // Script Navigation State
+        scriptErrorIndex: number;
+
+        actions: {
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            toggleFileApproval: () => void;
+            rejectAllFiles: () => void;
+            toggleDiffView: () => void;
+            toggleReasoningView: () => void;
+            toggleScriptView: () => void;
+            expandDiff: () => void;
+            approve: () => void;
+            simulateSuccessScenario: () => void;
+            startApplySimulation: (scenario: 'success' | 'failure') => void;
+            simulateFailureScenario: () => void;
+            
+            // Copy Mode Actions
+            toggleCopyMode: () => void;
+            moveCopySelectionUp: () => void;
+            moveCopySelectionDown: () => void;
+            copySelectedItem: () => void;
+            copyUUID: () => void;
+            copyMessage: () => void;
+            copyPrompt: () => void;
+            copyReasoning: () => void;
+            copyFileDiff: () => void;
+            copyAllDiffs: () => void;
+            
+            // Repair Actions
+            tryRepairFile: () => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => void;
+            
+            // Navigation Actions
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void,
+        };
+    }
+
+
+    // --- Mock Data ---
+
+
+    const mockFiles: FileItem[] = [
+        { 
+            id: '1', 
+            path: 'src/core/transaction.ts', 
+            status: 'APPROVED', 
+            linesAdded: 18, 
+            linesRemoved: 5, 
+            diff: `--- a/src/core/transaction.ts
+    +++ b/src/core/transaction.ts
+
+    @@ -15,7 +15,7 @@ export class Transaction {
+       }
+     
+    -  calculateChanges(): ChangeSet {
+
+    +  computeDelta(): ChangeSet {
+         return this.changes;
+       }
+     }`, 
+            strategy: 'replace', 
+        },
+        { 
+            id: '2', 
+            path: 'src/utils/logger.ts', 
+            status: 'FAILED', 
+            linesAdded: 0, 
+            linesRemoved: 0, 
+            diff: '', 
+            error: 'Hunk #1 failed to apply', 
+            strategy: 'standard-diff', 
+        },
+        { 
+            id: '3', 
+            path: 'src/commands/apply.ts', 
+            status: 'FAILED', 
+            linesAdded: 0, 
+            linesRemoved: 0, 
+            diff: '', 
+            error: 'Context mismatch at line 92', 
+            strategy: 'standard-diff', 
+        },
+    ];
+
+
+    const mockScripts: ScriptResult[] = [
+        { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
+        { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: `src/core/clipboard.ts
+      45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+      88:5   Warning  Unexpected console statement. (no-console)` },
+    ];
+
+
+    const mockReasoning = `1. Identified a potential uncaught exception in the
+    \`restoreSnapshot\` function
+       if a file operation fails midway through a loop of many files. This could
+       leave the project in a partially-reverted, inconsistent state.
+
+    2. Wrapped the file restoration loop in a \`Promise.all\` and added a
+    dedicated
+       error collection array. This ensures that all file operations are
+       attempted and that a comprehensive list of failures is available
+       afterward for better error reporting or partial rollback logic.`;
+
+    // --- Store Implementation ---
+
+
+    export const useReviewStore = create<ReviewState>((set) => ({
+        // Transaction Info
+        hash: 'e4a7c112',
+        message: 'refactor: rename core utility function',
+        prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+        reasoning: mockReasoning,
+        linesAdded: 18,
+        linesRemoved: 5,
+        duration: 0.6,
+        patchStatus: 'PARTIAL_FAILURE',
+
+        // File & Script Info
+        files: mockFiles,
+        scripts: [], // Empty for partial failure scenario
+
+        // UI State
+        applySteps: initialApplySteps,
+        selectedItemIndex: 0, // Start with first file
+        bodyView: 'none',
+        isDiffExpanded: false,
+        
+        // Copy Mode State
+        copyModeSelectedIndex: 0,
+        copyModeLastCopied: null,
+        
+        // Reasoning Scroll State
+        reasoningScrollIndex: 0,
+        
+        // Script Navigation State
+        scriptErrorIndex: 0,
+
+        actions: {
+            moveSelectionUp: () => set(state => ({
+                selectedItemIndex: Math.max(0, state.selectedItemIndex - 1),
+            })),
+            moveSelectionDown: () => set(state => ({
+                selectedItemIndex: Math.min(state.files.length + state.scripts.length - 1, state.selectedItemIndex + 1),
+            })),
+            toggleFileApproval: () => set(state => {
+                const { selectedItemIndex, files } = state;
+                if (selectedItemIndex >= files.length) return {}; // Not a file
+                
+                const newFiles = [...files];
+                const file = newFiles[selectedItemIndex];
+                if (file) {
+                    if (file.status === 'APPROVED') {
+                        file.status = 'REJECTED';
+                    } else if (file.status === 'REJECTED') {
+                        file.status = 'APPROVED';
+                    }
+                }
+                return { files: newFiles };
+            }),
+            rejectAllFiles: () => set(state => {
+                const newFiles = state.files.map(file => {
+                    if (file.status === 'APPROVED') {
+                        return { ...file, status: 'REJECTED' as const };
+                    }
+                    return file;
+                });
+                return { files: newFiles };
+            }),
+            toggleDiffView: () => set(state => {
+                const { bodyView } = state;
+                if (state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
+                return {
+                    bodyView: bodyView === 'diff' ? 'none' : 'diff',
+                    isDiffExpanded: false, // Always start collapsed
+                };
+            }),
+            toggleReasoningView: () => set(state => {
+                const { bodyView } = state;
+                return {
+                    bodyView: bodyView === 'reasoning' ? 'none' : 'reasoning',
+                };
+            }),
+            toggleScriptView: () => set(state => {
+                const { bodyView } = state;
+                return {
+                    bodyView: bodyView === 'script_output' ? 'none' : 'script_output',
+                };
+            }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => { /* NOP for now, would trigger commit and screen change */ },
+            startApplySimulation: async (scenario: 'success' | 'failure') => {
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                
+                set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
+                showReviewProcessingScreen();
+                
+                const updateStep = (id: string, status: ApplyStep['status'], duration?: number, details?: string) => {
+                    set(state => ({
+                        applySteps: state.applySteps.map(s => {
+                            if (s.id === id) {
+                                const newStep = { ...s, status };
+                                if (duration !== undefined) newStep.duration = duration;
+                                if (details !== undefined) newStep.details = details;
+                                return newStep;
+                            }
+                            return s;
+                        }),
+                    }));
+                };
+        
+                const addSubstep = (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => {
+                     set(state => ({
+                        applySteps: state.applySteps.map(s => {
+                            if (s.id === parentId) {
+                                const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                                return { ...s, substeps: newSubsteps };
+                            }
+                            return s;
+                        }),
+                    }));
+                };
+        
+                if (scenario === 'success') {
+                    useReviewStore.getState().actions.simulateSuccessScenario();
+                    
+                    updateStep('snapshot', 'active'); await sleep(100);
+                    updateStep('snapshot', 'done', 0.1);
+        
+                    updateStep('memory', 'active'); await sleep(100);
+                    addSubstep('memory', { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' });
+                    await sleep(100);
+                    addSubstep('memory', { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' });
+                    updateStep('memory', 'done', 0.3);
+        
+                    updateStep('post-command', 'active'); await sleep(1300);
+                    addSubstep('post-command', { id: 's3', title: '`bun run test` ... Passed', status: 'done' });
+                    updateStep('post-command', 'done', 2.3);
+        
+                    updateStep('linter', 'active'); await sleep(1200);
+                    addSubstep('linter', { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' });
+                    updateStep('linter', 'done', 1.2);
+        
+                    await sleep(500);
+        
+                } else { // failure scenario
+                    useReviewStore.getState().actions.simulateFailureScenario();
+                    
+                    updateStep('snapshot', 'active'); await sleep(100);
+                    updateStep('snapshot', 'done', 0.1);
+        
+                    updateStep('memory', 'active'); await sleep(100);
+                    addSubstep('memory', { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' });
+                    await sleep(100);
+                    addSubstep('memory', { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' });
+                    await sleep(100);
+                    addSubstep('memory', { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' });
+                    updateStep('memory', 'done', 0.5);
+        
+                    await sleep(100);
+                    updateStep('post-command', 'skipped', undefined, 'Skipped due to patch application failure');
+                    await sleep(100);
+                    updateStep('linter', 'skipped', undefined, 'Skipped due to patch application failure');
+                    
+                    await sleep(500);
+                }
+        
+                showReviewScreen();
+            },
+            simulateSuccessScenario: () => set(() => ({
+                hash: '4b9d8f03',
+                message: 'refactor: simplify clipboard logic',
+                prompt: 'Simplify the clipboard logic using an external library...',
+                linesAdded: 22,
+                linesRemoved: 11,
+                duration: 3.9,
+                patchStatus: 'SUCCESS' as const,
+                files: [
+                    { 
+                        id: '1', 
+                        path: 'src/core/clipboard.ts', 
+                        status: 'APPROVED' as const, 
+                        linesAdded: 15, 
+                        linesRemoved: 8, 
+                        diff: `--- a/src/core/clipboard.ts
+    +++ b/src/core/clipboard.ts
+
+    @@ -1,5 +1,6 @@
+     import { copy as copyToClipboard } from 'clipboardy';`, 
+                        strategy: 'replace' as const,
+                    },
+                    { 
+                        id: '2', 
+                        path: 'src/utils/shell.ts', 
+                        status: 'APPROVED' as const, 
+                        linesAdded: 7, 
+                        linesRemoved: 3, 
+                        diff: `--- a/src/utils/shell.ts
+    +++ b/src/utils/shell.ts`, 
+                        strategy: 'standard-diff' as const,
+                    },
+                ],
+                scripts: mockScripts,
+                selectedItemIndex: 0,
+                bodyView: 'none' as const,
+            })),
+            simulateFailureScenario: () => set(() => ({
+                hash: 'e4a7c112',
+                message: 'refactor: rename core utility function',
+                prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+                linesAdded: 18,
+                linesRemoved: 5,
+                duration: 0.6,
+                patchStatus: 'PARTIAL_FAILURE' as const,
+                files: mockFiles,
+                scripts: [],
+                selectedItemIndex: 0,
+                bodyView: 'none' as const,
+            })),
+            
+            // Copy Mode Actions
+            toggleCopyMode: () => set(state => ({
+                bodyView: state.bodyView === 'copy_mode' ? 'none' : 'copy_mode',
+                copyModeSelectedIndex: 0,
+                copyModeLastCopied: null,
+            })),
+            moveCopySelectionUp: () => set(state => ({
+                copyModeSelectedIndex: Math.max(0, state.copyModeSelectedIndex - 1),
+            })),
+            moveCopySelectionDown: () => set(state => ({
+                copyModeSelectedIndex: Math.min(5, state.copyModeSelectedIndex + 1), // 6 total options (U,M,P,R,F,A)
+            })),
+            copySelectedItem: () => set(state => {
+                const { copyModeSelectedIndex, hash, message, prompt, reasoning, files, selectedItemIndex } = state;
+                let content = '';
+                let label = '';
+                
+                switch (copyModeSelectedIndex) {
+                    case 0: // UUID
+                        content = `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+                        label = 'UUID';
+                        break;
+                    case 1: // Git Message
+                        content = message;
+                        label = 'Git Message';
+                        break;
+                    case 2: // Prompt
+                        content = prompt;
+                        label = 'Prompt';
+                        break;
+                    case 3: // Reasoning
+                        content = reasoning;
+                        label = 'Reasoning';
+                        break;
+                    case 4: // Diff for current file
+                        if (selectedItemIndex < files.length) {
+                            const file = files[selectedItemIndex];
+                            if (file) {
+                                content = file.diff;
+                                label = `Diff for ${file.path}`;
+                            }
+                        }
+                        break;
+                    case 5: // All Diffs
+                        content = files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
+                        label = 'All Diffs';
+                        break;
+                }
+                
+                // Mock clipboard operation (TUI environment - no real clipboard)
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied ${label}: ${content.substring(0, 100)}...`);
+                
+                return { copyModeLastCopied: label };
+            }),
+            copyUUID: () => set(state => {
+                const content = `${state.hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied UUID: ${content}`);
+                return { copyModeLastCopied: 'UUID' };
+            }),
+            copyMessage: () => set(state => {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied Git Message: ${state.message}`);
+                return { copyModeLastCopied: 'Git Message' };
+            }),
+            copyPrompt: () => set(state => {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied Prompt: ${state.prompt.substring(0, 100)}...`);
+                return { copyModeLastCopied: 'Prompt' };
+            }),
+            copyReasoning: () => set(state => {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied Reasoning: ${state.reasoning.substring(0, 100)}...`);
+                return { copyModeLastCopied: 'Reasoning' };
+            }),
+            copyFileDiff: () => set(state => {
+                if (state.selectedItemIndex < state.files.length) {
+                    const file = state.files[state.selectedItemIndex];
+                    if (file) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied diff for: ${file.path}`);
+                        return { copyModeLastCopied: `Diff for ${file.path}` };
+                    }
+                }
+                return {};
+            }),
+            copyAllDiffs: () => set(state => {
+                const content = state.files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied all diffs: ${state.files.length} files`);
+                return { copyModeLastCopied: 'All Diffs' };
+            }),
+            
+            // Repair Actions
+            tryRepairFile: () => set(state => {
+                const { selectedItemIndex, files } = state;
+                if (selectedItemIndex < files.length) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status === 'FAILED') {
+                        // Generate repair prompt and copy to clipboard
+                        const repairPrompt = `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+
+    Error: ${file.error}
+
+    Strategy: ${file.strategy}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original file content would be here ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff would be here ...'}
+
+    ---
+
+
+    Please provide a corrected patch that addresses the error.`;
+
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+
+                        // Mock: Update file status to show it's being repaired
+                        const newFiles = [...files];
+                        newFiles[selectedItemIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
+
+                        return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
+                    }
+                }
+                return {};
+            }),
+            showBulkRepair: () => set(() => ({
+                bodyView: 'bulk_repair' as const,
+            })),
+            executeBulkRepairOption: (option: number) => set(state => {
+                switch (option) {
+                    case 1: {
+                        // Copy Bulk Re-apply Prompt
+                        const failedFiles = state.files.filter(f => f.status === 'FAILED');
+                        const bulkPrompt = `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+
+    IMPORTANT: The response MUST contain a complete code block for EACH file
+    that needs to be fixed.
+
+
+    ${failedFiles.map(file => `--- FILE: ${file.path} ---
+
+    Strategy: ${file.strategy}
+
+    Error: ${file.error}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original content of ${file.path} ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff ...'}
+
+    ---
+
+    `).join('\n')}
+
+
+    Please analyze all failed files and provide a complete, corrected
+    response.`;
+
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files`);
+                        return { bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied' };
+                    }
+                        
+                    case 2: {
+                        // Bulk Change Strategy & Re-apply
+                        // Mock: Change all failed files to 'replace' strategy and mark as successful
+                        const newFiles = state.files.map(file => 
+                            file.status === 'FAILED' 
+                                ? { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 3, linesRemoved: 1 }
+                                : file,
+                        );
+                        return { files: newFiles, bodyView: 'none' as const };
+                    }
+                        
+                    case 3: {
+                        // Handoff to External Agent
+                        // Mock: Generate handoff prompt
+                        const failedFiles = state.files.filter(f => f.status === 'FAILED');
+                        const handoffPrompt = `# Relaycode Handoff: Failed Patch Application
+
+    The following files failed to apply and require manual intervention:
+
+
+    ${failedFiles.map(file => `## ${file.path}
+
+    - Error: ${file.error}
+
+    - Strategy: ${file.strategy}
+
+    `).join('\n')}
+
+
+    Please resolve these issues and provide updated patches.`;
+
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied handoff prompt for ${failedFiles.length} files`);
+                        return { bodyView: 'none' as const, copyModeLastCopied: 'Handoff prompt copied' };
+                    }
+                        
+                    case 4: {
+                        // Bulk Abandon All Failed Files
+                        const abandonedFiles = state.files.map(file => 
+                            file.status === 'FAILED' 
+                                ? { ...file, status: 'REJECTED' as const }
+                                : file,
+                        );
+                        return { files: abandonedFiles, bodyView: 'none' as const };
+                    }
+                        
+                    default:
+                        return { bodyView: 'none' as const };
+                }
+            }),
+            
+            // Navigation Actions
+            scrollReasoningUp: () => set(state => ({
+                reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1),
+            })),
+            scrollReasoningDown: () => set(state => {
+                const maxLines = state.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({
+                scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1),
+            })),
+            navigateScriptErrorDown: () => set(state => {
+                const selectedScript = state.scripts[state.selectedItemIndex - state.files.length];
+                if (selectedScript && selectedScript.output) {
+                    const errorLines = selectedScript.output.split('\n').filter(line => 
+                        line.includes('Error') || line.includes('Warning'),
+                    );
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+        },
+    }));
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { sleep } from '../utils';
+
+
+    // --- Types ---
+
+    export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' |
+    'FAILED' | 'REVERTED' | 'IN-PROGRESS';
+
+
+    export interface Transaction {
+        id: string;
+        timestamp: number;
+        status: TransactionStatus;
+        hash: string;
+        message: string;
+        error?: string;
+    }
+
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'CONFIRM_COMMIT' | 'APPROVING' | 'COMMITTING';
+
+
+    // --- Initial State (for simulation) ---
+
+    const createInitialTransactions = (): Transaction[] => [
+        { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+        { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+        { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+        { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+        { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+        { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+    ];
+
+
+    // --- Store Interface ---
+
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus; // To handle cancel from confirmation
+        transactions: Transaction[];
+        selectedTransactionIndex: number;
+        showHelp: boolean;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            startCommitAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            toggleHelp: () => void;
+            setStatus: (status: DashboardStatus) => void; // For debug menu
+        };
+    }
+
+
+    // --- Store Implementation ---
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        transactions: createInitialTransactions(),
+        selectedTransactionIndex: 0,
+        showHelp: false,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => ({
+                selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1),
+            })),
+            moveSelectionDown: () => set(state => ({
+                selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1),
+            })),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            startCommitAll: () => set(state => ({
+                status: 'CONFIRM_COMMIT',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+            setStatus: (status) => set({ status }),
+
+            confirmAction: async () => {
+                const { status, previousStatus } = get();
+                if (status === 'CONFIRM_APPROVE') {
+                    set({ status: 'APPROVING' });
+
+                    // Find pending transactions and mark them as in-progress
+                    const pendingTxIds: string[] = [];
+                    set(state => {
+                        const newTxs = state.transactions.map(tx => {
+                            if (tx.status === 'PENDING') {
+                                pendingTxIds.push(tx.id);
+                                return { ...tx, status: 'IN-PROGRESS' as const };
+                            }
+                            return tx;
+                        });
+                        return { transactions: newTxs };
+                    });
+
+                    await sleep(2000); // Simulate approval process
+
+                    // Mark them as applied
+                    set(state => {
+                        const newTxs = state.transactions.map(tx => {
+                            if (pendingTxIds.includes(tx.id)) {
+                                return { ...tx, status: 'APPLIED' as const };
+                            }
+                            return tx;
+                        });
+                        return { transactions: newTxs, status: previousStatus };
+                    });
+                } else if (status === 'CONFIRM_COMMIT') {
+                    set({ status: 'COMMITTING' });
+                     // Find applied transactions and mark them as in-progress
+                     const appliedTxIds: string[] = [];
+                     set(state => {
+                         const newTxs = state.transactions.map(tx => {
+                             if (tx.status === 'APPLIED') {
+                                appliedTxIds.push(tx.id);
+                                 return { ...tx, status: 'IN-PROGRESS' as const };
+                             }
+                             return tx;
+                         });
+                         return { transactions: newTxs };
+                     });
+     
+                     await sleep(2000); // Simulate commit process
+     
+                     // Mark them as committed
+                     set(state => {
+                         const newTxs = state.transactions.map(tx => {
+                             if (appliedTxIds.includes(tx.id)) {
+                                 return { ...tx, status: 'COMMITTED' as const };
+                             }
+                             return tx;
+                         });
+                         return { transactions: newTxs, status: previousStatus };
+                     });
+                }
+            },
+        },
+    }));
+  src/components/DashboardScreen.tsx: "import React, { useMemo } from 'react';\nimport { Box, Text, useApp, useInput } from 'ink';\nimport Spinner from 'ink-spinner';\nimport { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';\nimport { useAppStore } from '../stores/app.store';\nimport Separator from './Separator';\nimport GlobalHelpScreen from './GlobalHelpScreen';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `-${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `-${minutes}m`;\n};\n\nconst EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    \n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    status,\n    transactionsToConfirm,\n}: {\n    status: DashboardStatus;\n    transactionsToConfirm: Transaction[];\n}) => {\n    const isApprove = status === 'CONFIRM_APPROVE';\n    const actionText = isApprove ? 'APPROVE' : 'COMMIT';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();\n    const {\n        togglePause,\n        moveSelectionUp,\n        moveSelectionDown,\n        startApproveAll,\n        startCommitAll,\n        confirmAction,\n        cancelAction,\n        toggleHelp,\n    } = useDashboardStore(s => s.actions);\n    const { exit } = useApp();\n    const showReviewScreen = useAppStore(s => s.actions.showReviewScreen);\n\n    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);\n    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);\n\n    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';\n    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';\n    \n    useInput((input, key) => {\n        if (input === '?') {\n            toggleHelp();\n            return;\n        }\n\n        if (showHelp) {\n            if (key.escape || input === '?') toggleHelp();\n            return;\n        }\n\n        if (isModal) {\n            if (key.return) confirmAction();\n            if (key.escape) cancelAction();\n            return;\n        }\n\n        if (isProcessing) return; // No input while processing\n        \n        if (input.toLowerCase() === 'q') exit();\n\n        if (key.upArrow) moveSelectionUp();\n        if (key.downArrow) moveSelectionDown();\n        \n        if (key.return) {\n            showReviewScreen();\n        }\n        \n        if (input.toLowerCase() === 'p') togglePause();\n        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();\n        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();\n    });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'COMMITTING') commitStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        if (status === 'CONFIRM_COMMIT') {\n            commitStr = <Text bold color=\"yellow\">┌ {commitStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <Text>\n                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n            </Text>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const pauseAction = status === 'PAUSED'\n\t\t\t? <Text>(<Text color=\"cyan\" bold>R</Text>)esume</Text>\n\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n\t\treturn (\n            <Text color=\"gray\">\n                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>Enter</Text>) Review · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n            </Text>\n        );\n    };\n    \n    const transactionsToConfirm = useMemo(() => {\n        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');\n        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');\n        return [];\n    }, [status, transactions]);\n\n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            {showHelp && <GlobalHelpScreen />}\n\n            <Box flexDirection=\"column\" display={showHelp ? 'none' : 'flex'}>\n                <Text color=\"cyan\">▲ relaycode dashboard</Text>\n                <Separator />\n                <Box marginY={1}>\n                    {renderStatusBar()}\n                </Box>\n                \n                {isModal && (\n                    <>\n                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />\n                        <Separator />\n                    </>\n                )}\n                \n                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n                <Box flexDirection=\"column\" marginTop={1}>\n                    {transactions.map((tx, index) => (\n                        <EventStreamItem \n                            key={tx.id} \n                            transaction={tx} \n                            isSelected={!isModal && index === selectedTransactionIndex}\n                        />\n                    ))}\n                </Box>\n\n                <Box marginTop={1}><Separator /></Box>\n                {renderFooter()}\n            </Box>\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/components/ReviewScreen.tsx: >-
+    import React, { useMemo } from 'react';
+
+    import { Box, Text, useInput, useApp } from 'ink';
+
+    import { useReviewStore, type FileItem, type ScriptResult } from
+    '../stores/review.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+
+    // --- Sub-components ---
+
+
+    const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+    boolean }) => {
+        let icon;
+        let iconColor;
+        switch (file.status) {
+            case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
+            case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
+            case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+        }
+
+        const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+        const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+        const prefix = isSelected ? '> ' : '  ';
+
+        if (file.status === 'FAILED') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
+                        <Text color="red">    ({file.error})</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> MOD {file.path} {diffStats} [{strategy}]
+                </Text>
+            </Box>
+        );
+    };
+
+
+    const ScriptItemRow = ({
+        script,
+        isSelected,
+        isExpanded,
+    }: {
+        script: ScriptResult;
+        isSelected: boolean;
+        isExpanded: boolean;
+    }) => {
+        const icon = script.success ? '✓' : '✗';
+        const iconColor = script.success ? 'green' : 'red';
+        const arrow = isExpanded ? '▾' : '▸';
+        const prefix = isSelected ? '> ' : '  ';
+        
+        // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+        const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                          script.command.includes('lint') ? 'Linter' : 
+                          'Script';
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                    {script.summary}
+                </Text>
+            </Box>
+        );
+    };
+
+
+
+    // --- Main Component ---
+
+
+    const ReviewScreen = () => {
+        const { exit } = useApp();
+        const store = useReviewStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const {
+            hash, message, prompt, reasoning, files, scripts, patchStatus,
+            linesAdded, linesRemoved, duration,
+            selectedItemIndex, bodyView, isDiffExpanded,
+            copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
+        } = store;
+        const {
+            moveSelectionUp, moveSelectionDown, toggleFileApproval,
+            toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+            startApplySimulation,
+            rejectAllFiles, approve,
+            toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
+            copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
+            tryRepairFile, showBulkRepair, executeBulkRepairOption,
+            scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+        } = store.actions;
+
+        const {
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useMemo(() => {
+            const approvedFiles = files.filter(f => f.status === 'APPROVED');
+            return {
+                numFiles: files.length, approvedFilesCount: approvedFiles.length, approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0), approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+            };
+        }, [files]);
+
+        useInput((input, key) => {
+            // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+            if (input === '1') {
+                startApplySimulation('success');
+                return;
+            }
+            if (input === '2') {
+                // The store's default is failure, but to re-trigger the processing screen
+                startApplySimulation('failure');
+                return;
+            }
+
+            if (input.toLowerCase() === 'q') exit();
+
+            // Handle Escape key - context-sensitive behavior
+            if (key.escape) {
+                if (bodyView === 'copy_mode') {
+                    toggleCopyMode();
+                } else if (bodyView === 'bulk_repair') {
+                    showBulkRepair(); // Close bulk repair modal
+                } else if (bodyView !== 'none') {
+                    if (bodyView === 'diff') toggleDiffView();
+                    if (bodyView === 'reasoning') toggleReasoningView();
+                    if (bodyView === 'script_output') toggleScriptView();
+                } else {
+                    showDashboardScreen();
+                }
+                return;
+            }
+
+            // Copy Mode Navigation
+            if (bodyView === 'copy_mode') {
+                if (key.upArrow) moveCopySelectionUp();
+                if (key.downArrow) moveCopySelectionDown();
+                if (key.return) copySelectedItem();
+                
+                // Hotkey shortcuts
+                if (input.toLowerCase() === 'u') copyUUID();
+                if (input.toLowerCase() === 'm') copyMessage();
+                if (input.toLowerCase() === 'p') copyPrompt();
+                if (input.toLowerCase() === 'r') copyReasoning();
+                if (input.toLowerCase() === 'f') copyFileDiff();
+                if (input.toLowerCase() === 'a') copyAllDiffs();
+                if (input.toLowerCase() === 'c') toggleCopyMode();
+                return;
+            }
+
+            // Bulk Repair Navigation
+            if (bodyView === 'bulk_repair') {
+                if (input >= '1' && input <= '4') {
+                    executeBulkRepairOption(parseInt(input));
+                }
+                return;
+            }
+
+            // Reasoning Scroll Navigation
+            if (bodyView === 'reasoning') {
+                if (key.upArrow) scrollReasoningUp();
+                if (key.downArrow) scrollReasoningDown();
+                if (input.toLowerCase() === 'r') toggleReasoningView();
+                return;
+            }
+
+            // Script Output Navigation
+            if (bodyView === 'script_output') {
+                if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+                if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+                if (key.return) toggleScriptView();
+                if (input.toLowerCase() === 'c') {
+                    // Copy script output
+                    const scriptIndex = selectedItemIndex - numFiles;
+                    const selectedScript = scripts[scriptIndex];
+                    if (selectedScript) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                    }
+                }
+                return;
+            }
+
+            // Diff View Navigation
+            if (bodyView === 'diff') {
+                if (input.toLowerCase() === 'x') expandDiff();
+                if (input.toLowerCase() === 'd') toggleDiffView();
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleReasoningView();
+
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status !== 'FAILED') {
+                        toggleFileApproval();
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleDiffView();
+                }
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleScriptView();
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                toggleCopyMode();
+            }
+
+            // Handle T for single repair and Shift+T for bulk repair
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = files.some(f => f.status === 'FAILED');
+                    if (hasFailedFiles) {
+                        showBulkRepair();
+                    }
+                } else {
+                    if (selectedItemIndex < numFiles) {
+                        const file = files[selectedItemIndex];
+                        if (file && file.status === 'FAILED') {
+                            tryRepairFile();
+                        }
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        const renderBody = () => {
+            if (bodyView === 'none') return null;
+
+            if (bodyView === 'reasoning') {
+                const reasoningLinesCount = reasoning.split('\n').length;
+                const visibleLinesCount = 10;
+                return (
+                    <Box flexDirection="column">
+                        <ReasonScreen
+                            reasoning={reasoning}
+                            scrollIndex={reasoningScrollIndex}
+                            visibleLinesCount={visibleLinesCount}
+                        />
+                        {reasoningLinesCount > visibleLinesCount && (
+                            <Text color="gray">
+                                Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                                of {reasoningLinesCount}
+                            </Text>
+                        )}
+                    </Box>
+                );
+            }
+            
+            if (bodyView === 'diff') {
+                const selectedFile = files[selectedItemIndex];
+                if (!selectedFile) return null;
+                return (
+                    <DiffScreen
+                        filePath={selectedFile.path}
+                        diffContent={selectedFile.diff}
+                        isExpanded={isDiffExpanded}
+                    />
+                );
+            }
+
+            if (bodyView === 'script_output') {
+                 const scriptIndex = selectedItemIndex - numFiles;
+                 const selectedScript = scripts[scriptIndex];
+                 if (!selectedScript) return null;
+                 
+                 const outputLines = selectedScript.output.split('\n');
+                 const errorLines = outputLines.filter(line =>
+                    line.includes('Error') || line.includes('Warning'),
+                 );
+                 
+                 return (
+                    <Box flexDirection="column">
+                        <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                        <Box marginTop={1}>
+                            {outputLines.map((line, index) => {
+                                const isError = line.includes('Error');
+                                const isWarning = line.includes('Warning');
+                                const isHighlighted = errorLines[scriptErrorIndex] === line;
+                                
+                                return (
+                                    <Text 
+                                        key={index} 
+                                        color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                        bold={isHighlighted}
+                                        backgroundColor={isHighlighted ? 'blue' : undefined}
+                                    >
+                                        {line}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                        {errorLines.length > 0 && (
+                            <Text color="gray">
+                                Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                            </Text>
+                        )}
+                    </Box>
+                 );
+            }
+
+            if (bodyView === 'copy_mode') {
+                const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                const options = [
+                    { key: 'U', label: 'UUID', value: `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                    { key: 'M', label: 'Git Message', value: message },
+                    { key: 'P', label: 'Prompt', value: `${prompt.substring(0, 50)}...` },
+                    { key: 'R', label: 'Reasoning', value: `${reasoning.substring(0, 50)}...` },
+                    { key: 'F', label: 'Diff for', value: selectedFile ? selectedFile.path : 'N/A' },
+                    { key: 'A', label: 'All Diffs', value: `${files.length} files` },
+                ];
+
+                return (
+                    <Box flexDirection="column">
+                        <Text>Select item to copy to clipboard:</Text>
+                        <Box marginTop={1} />
+                        
+                        {options.map((option, index) => (
+                            <Text key={option.key} bold={index === copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                {index === copyModeSelectedIndex ? '> ' : '  '}
+                                [{option.key}] {option.label}: {option.value}
+                            </Text>
+                        ))}
+                        
+                        <Box marginTop={1} />
+                        {copyModeLastCopied && (
+                            <Text color="green">✓ Copied {copyModeLastCopied} to clipboard.</Text>
+                        )}
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'bulk_repair') {
+                const failedFiles = files.filter(f => f.status === 'FAILED');
+                
+                return (
+                    <Box flexDirection="column">
+                        <Text>BULK REPAIR ACTION</Text>
+                        <Box marginTop={1} />
+                        
+                        <Text>The following {failedFiles.length} files failed to apply:</Text>
+                        {failedFiles.map(file => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                        
+                        <Box marginTop={1} />
+                        <Text>How would you like to proceed?</Text>
+                        <Box marginTop={1} />
+                        
+                        <Text>{'> (1) Copy Bulk Re-apply Prompt (for single-shot AI)'}</Text>
+                        <Text>  (2) Bulk Change Strategy & Re-apply</Text>
+                        <Text>  (3) Handoff to External Agent</Text>
+                        <Text>  (4) Bulk Abandon All Failed Files</Text>
+                        <Text>  (Esc) Cancel</Text>
+                    </Box>
+                );
+            }
+            
+            return null;
+        };
+
+
+        const renderFooter = () => {
+            // Contextual footer for body views
+            if (bodyView === 'diff') {
+                return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
+            }
+            if (bodyView === 'reasoning') {
+                return <Text>(↑↓) Scroll · (R/Esc) Back</Text>;
+            }
+            if (bodyView === 'script_output') {
+                return (
+                    <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
+                );
+            }
+            if (bodyView === 'copy_mode') {
+                return <Text>(↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit</Text>;
+            }
+            if (bodyView === 'bulk_repair') {
+                return <Text>Choose an option [1-4, Esc]:</Text>;
+            }
+
+            // Main footer
+            const actions = ['(↑↓) Nav'];
+
+            const isFileSelected = selectedItemIndex < numFiles;
+            const hasFailedFiles = files.some(f => f.status === 'FAILED');
+            
+            if (isFileSelected) {
+                const selectedFile = files[selectedItemIndex];
+                if (selectedFile && selectedFile.status !== 'FAILED') {
+                    actions.push('(Spc) Toggle');
+                }
+                actions.push('(D)iff');
+                
+                // Add repair options for failed files
+                if (selectedFile && selectedFile.status === 'FAILED') {
+                    actions.push('(T)ry Repair');
+                }
+            } else { // script selected
+                actions.push('(Ent) Expand Details');
+            }
+
+            actions.push('(R)easoning');
+            
+            // Add bulk repair if there are failed files
+            if (hasFailedFiles) {
+                actions.push('(Shift+T) Bulk Repair');
+            }
+            
+            actions.push('(C)opy');
+
+            if (approvedFilesCount > 0) {
+                actions.push('(A)pprove');
+            }
+            
+                actions.push('(Shift+R) Reject All');
+            actions.push('(Q)uit');
+
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text color="cyan">▲ relaycode review{bodyView === 'copy_mode' ? ' · copy mode' : ''}</Text>
+                <Separator />
+                
+                {/* Navigator Section */}
+                <Box flexDirection="column">
+                    {/* Transaction summary */}
+                    <Box>
+                        <Text>{hash} · {message}</Text>
+                    </Box>
+                    <Box>
+                        <Text>(<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files · {duration}s</Text>
+                        {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                        {scripts.length === 0 && patchStatus === 'PARTIAL_FAILURE' && <Text> · Scripts: SKIPPED</Text>}
+                    </Box>
+                    
+                    <Box marginTop={1} />
+                    
+                    {/* Prompt and Reasoning */}
+                    <Text>(P)rompt ▸ {prompt.substring(0, 50)}...</Text>
+                    <Text>(R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                        {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
+                    </Text>
+                    
+                    <Separator/>
+                    
+                    {/* Script Results (if any) */}
+                    {scripts.length > 0 && (
+                        <>
+                            {scripts.map((script, index) => (
+                                <ScriptItemRow 
+                                    key={script.command} 
+                                    script={script}
+                                    isSelected={selectedItemIndex === numFiles + index}
+                                    isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                                />
+                            ))}
+                            <Separator/>
+                        </>
+                    )}
+                    
+                    {/* Files Section */}
+                    <Text>FILES</Text>
+                    {files.map((file, index) => (
+                        <FileItemRow 
+                            key={file.id} 
+                            file={file} 
+                            isSelected={selectedItemIndex === index}
+                        />
+                    ))}
+                </Box>
+                
+                <Separator/>
+                
+                {/* Body Viewport */}
+                {bodyView !== 'none' && (
+                    <>
+                        <Box marginY={1}>
+                            {renderBody()}
+                        </Box>
+                        <Separator />
+                    </>
+                )}
+
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default ReviewScreen;
+  src/components/DebugMenu.tsx: |-
+    import React, { useState } from 'react';
+    import { Box, Text, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useReviewStore } from '../stores/review.store';
+    import Separator from './Separator';
+
+    interface MenuItem {
+        title: string;
+        action: () => void;
+    }
+
+    const DebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const reviewActions = useReviewStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleDiffView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleReasoningView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleCopyMode();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => Math.max(0, i - 1));
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+            }
+            if (key.escape || (key.ctrl && input === 'b')) {
+                appActions.toggleDebugMenu();
+            }
+        });
+
+        return (
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="yellow"
+                width="100%"
+                paddingX={2}
+            >
+                <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+                <Separator />
+                <Box flexDirection="column" marginY={1}>
+                    {menuItems.map((item, index) => (
+                        <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                            {selectedIndex === index ? '> ' : '  '}
+                            {item.title}
+                        </Text>
+                    ))}
+                </Box>
+                <Separator />
+                <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+B) Close</Text>
+            </Box>
+        );
+    };
+
+    export default DebugMenu;
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 23

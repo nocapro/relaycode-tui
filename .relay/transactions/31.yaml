@@ -1,0 +1,363 @@
+uuid: c32c1c73-4424-4f05-aa7f-44e2d334e320
+projectId: relaycode-tui
+createdAt: '2025-09-22T01:53:44.782Z'
+gitCommitMsg: >-
+  feat(debug): add keyboard shortcuts for debug menu navigation
+
+  This commit enhances the debug menu by adding direct navigation shortcuts.
+  Users can now press number keys (1-9) or letter keys (a-z) to instantly jump
+  to the corresponding item in the menu.
+
+  - A helper function is introduced to map item indices to shortcut keys. - The
+  menu now displays the shortcut key next to each item. - The `useInput` hook is
+  updated to handle these new shortcuts. - The footer help text is updated to
+  reflect the new functionality.
+promptSummary: >-
+  The user requested to add keyboard shortcuts (number and letter keys) to
+  navigate the debug menu list directly.
+reasoning:
+  - >-
+    This is a great feature to improve the usability of the debug menu. I'll add
+    keyboard shortcuts using numbers (1-9) and letters (a-z) to allow you to
+    jump directly to any item in the list.
+  - 'Here are the changes I''ll make to `src/components/DebugMenu.tsx`:'
+  - >-
+    1.  A helper function `getKeyForIndex` will be added to generate the
+    shortcut key string (`1`, `2`, ..., `9`, `a`, `b`, ...) for each menu item.
+  - >-
+    2.  The rendering logic will be updated to display this shortcut key next to
+    each item's title.
+  - >-
+    3.  The `useInput` hook will be enhanced to listen for these new key presses
+    and update the selected item accordingly.
+  - >-
+    4.  The footer help text will be updated to inform the user about these new
+    navigation options.
+  - 'Here is the patch:'
+operations:
+  - type: write
+    path: src/components/DebugMenu.tsx
+    content: >+
+      --- src/components/DebugMenu.tsx
+
+      +++ src/components/DebugMenu.tsx
+
+      @@ -10,6 +10,13 @@
+           action: () => void;
+       }
+       
+      +const getKeyForIndex = (index: number): string => {
+
+      +    if (index < 9) {
+
+      +        return (index + 1).toString();
+
+      +    }
+
+      +    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+
+      +};
+
+      +
+       const DebugMenu = () => {
+           const [selectedIndex, setSelectedIndex] = useState(0);
+           const appActions = useAppStore(s => s.actions);
+      @@ -113,23 +120,42 @@
+       
+           useInput((input, key) => {
+               if (key.upArrow) {
+                   setSelectedIndex(i => Math.max(0, i - 1));
+      +            return;
+               }
+               if (key.downArrow) {
+                   setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+      +            return;
+               }
+               if (key.return) {
+                   const item = menuItems[selectedIndex];
+                   if (item) {
+                       item.action();
+                       appActions.toggleDebugMenu();
+                   }
+      +            return;
+               }
+               if (key.escape || (key.ctrl && input === 'b')) {
+                   appActions.toggleDebugMenu();
+      +            return;
+               }
+      +
+
+      +        // No ctrl/meta keys for selection shortcuts, and only single
+      characters
+
+      +        if (key.ctrl || key.meta || input.length !== 1) return;
+
+      +
+
+      +        if (input >= '1' && input <= '9') {
+
+      +            const targetIndex = parseInt(input, 10) - 1;
+
+      +            if (targetIndex < menuItems.length) {
+
+      +                setSelectedIndex(targetIndex);
+
+      +            }
+
+      +        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <=
+      'z') {
+
+      +            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) -
+      'a'.charCodeAt(0));
+
+      +            if (targetIndex < menuItems.length) {
+
+      +                setSelectedIndex(targetIndex);
+
+      +            }
+
+      +        }
+           });
+       
+           return (
+      @@ -144,12 +170,12 @@
+                   <Box flexDirection="column" marginY={1}>
+                       {menuItems.map((item, index) => (
+                           <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                               {selectedIndex === index ? '> ' : '  '}
+      -                        {item.title}
+
+      +                        ({getKeyForIndex(index)}) {item.title}
+                           </Text>
+                       ))}
+                   </Box>
+                   <Separator />
+      -            <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+B)
+      Close</Text>
+
+      +            <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc /
+      Ctrl+B) Close</Text>
+               </Box>
+           );
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/DebugMenu.tsx: >-
+    import React, { useState } from 'react';
+
+    import { Box, Text, useInput } from 'ink';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import Separator from './Separator';
+
+
+    interface MenuItem {
+        title: string;
+        action: () => void;
+    }
+
+
+    const DebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const reviewActions = useReviewStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleDiffView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleReasoningView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleCopyMode();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    reviewActions.toggleScriptView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.showBulkRepair();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.executeBulkRepairOption(3); // Option 3 is Handoff
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => Math.max(0, i - 1));
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+            }
+            if (key.escape || (key.ctrl && input === 'b')) {
+                appActions.toggleDebugMenu();
+            }
+        });
+
+        return (
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="yellow"
+                width="100%"
+                paddingX={2}
+            >
+                <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+                <Separator />
+                <Box flexDirection="column" marginY={1}>
+                    {menuItems.map((item, index) => (
+                        <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                            {selectedIndex === index ? '> ' : '  '}
+                            {item.title}
+                        </Text>
+                    ))}
+                </Box>
+                <Separator />
+                <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+B) Close</Text>
+            </Box>
+        );
+    };
+
+
+    export default DebugMenu;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 31
