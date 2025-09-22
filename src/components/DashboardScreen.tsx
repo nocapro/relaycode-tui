@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
@@ -7,6 +7,7 @@ import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import Separator from './Separator';
+import { useStdoutDimensions } from '../utils';
 import GlobalHelpScreen from './GlobalHelpScreen';
 
 // --- Sub-components & Helpers ---
@@ -74,6 +75,10 @@ const ConfirmationContent = ({
 // --- Main Component ---
 
 const DashboardScreen = () => {
+    const [, rows] = useStdoutDimensions();
+    const [viewOffset, setViewOffset] = useState(0);
+    const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
+    const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
     const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
     const {
         togglePause,
@@ -95,7 +100,15 @@ const DashboardScreen = () => {
 
     const isModal = status === 'CONFIRM_APPROVE';
     const isProcessing = status === 'APPROVING';
-    
+
+    useEffect(() => {
+        if (selectedTransactionIndex < viewOffset) {
+            setViewOffset(selectedTransactionIndex);
+        } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {
+            setViewOffset(selectedTransactionIndex - viewportHeight + 1);
+        }
+    }, [selectedTransactionIndex, viewOffset, viewportHeight]);
+
     useInput((input, key) => {
         if (input === '?') {
             toggleHelp();
@@ -118,14 +131,7 @@ const DashboardScreen = () => {
         if (input.toLowerCase() === 'q') exit();
 
         if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) {
-            if (selectedTransactionIndex === transactions.length - 1) {
-                historyActions.load();
-                appActions.showTransactionHistoryScreen();
-            } else {
-                moveSelectionDown();
-            }
-        }
+        if (key.downArrow) moveSelectionDown();
         
         if (key.return) {
             const selectedTx = transactions[selectedTransactionIndex];
@@ -218,13 +224,16 @@ const DashboardScreen = () => {
                 
                 <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
                 <Box flexDirection="column" marginTop={1}>
-                    {transactions.map((tx, index) => (
-                        <EventStreamItem 
-                            key={tx.id} 
-                            transaction={tx} 
-                            isSelected={!isModal && index === selectedTransactionIndex}
-                        />
-                    ))}
+                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                        const actualIndex = viewOffset + index;
+                        return (
+                            <EventStreamItem
+                                key={tx.id}
+                                transaction={tx}
+                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                            />
+                        );
+                    })}
                 </Box>
 
                 <Box marginTop={1}><Separator /></Box>

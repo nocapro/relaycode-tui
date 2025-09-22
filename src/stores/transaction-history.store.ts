@@ -80,7 +80,7 @@ const createMockTransactions = (): HistoryTransaction[] => {
     });
 };
 
-const getVisibleItemPaths = (transactions: HistoryTransaction[], expandedIds: Set<string>): string[] => {
+export const getVisibleItemPaths = (transactions: HistoryTransaction[], expandedIds: Set<string>): string[] => {
     const paths: string[] = [];
     for (const tx of transactions) {
         paths.push(tx.id);

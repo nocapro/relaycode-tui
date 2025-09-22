@@ -1,3 +1,12 @@
+===
+
+tsx files only for renders, so please extract out all hooks to [entity].hook.tsx files
+
+===
+
+paginated scroll for more list not working on transaction-history-screen and dashboard screen
+
+=== DONE
 
 based on      "docs/relaycode-tui/transaction-history-screen.readme.md"
 

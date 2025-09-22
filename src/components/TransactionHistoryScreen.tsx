@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
-import { useTransactionHistoryStore, type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
+import { useTransactionHistoryStore, getVisibleItemPaths, type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
 import Separator from './Separator';
 import { useAppStore } from '../stores/app.store';
+import { useStdoutDimensions } from '../utils';
 
 // --- Sub-components ---
 
@@ -149,8 +150,28 @@ const BulkActionsMode = () => {
 // --- Main Component ---
 
 const TransactionHistoryScreen = () => {
+    const [, rows] = useStdoutDimensions();
     const store = useTransactionHistoryStore();
     const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const [viewOffset, setViewOffset] = useState(0);
+
+    const visibleItemPaths = useMemo(
+        () => getVisibleItemPaths(store.transactions, store.expandedIds),
+        [store.transactions, store.expandedIds],
+    );
+    const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
+
+    const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+    const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
+
+    useEffect(() => {
+        if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+            setViewOffset(selectedIndex);
+        } else if (selectedIndex >= viewOffset + viewportHeight) {
+            setViewOffset(selectedIndex - viewportHeight + 1);
+        }
+    }, [selectedIndex, viewOffset, viewportHeight]);
     
     useInput((input, key) => {
         if (store.mode === 'FILTER') {
@@ -188,8 +209,17 @@ const TransactionHistoryScreen = () => {
         return <Text>{actions.join(' · ')}</Text>;
     };
 
+    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+    const transactionsInView = useMemo(
+        () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
+        [store.transactions, txIdsInView],
+    );
+    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
     const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
-    
+    const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
+
     return (
         <Box flexDirection="column">
             <Text color="cyan">▲ relaycode transaction history</Text>
@@ -202,27 +232,32 @@ const TransactionHistoryScreen = () => {
                 ) : (
                     <Text>{filterStatus}</Text>
                 )}
-                <Text> · Showing 1-10 of {store.transactions.length} transactions</Text>
+                <Text> · {showingStatus} ({store.transactions.length} txns)</Text>
             </Box>
 
             <Box flexDirection="column" marginY={1}>
                 {store.mode === 'COPY' && <CopyMode />}
                 {store.mode === 'BULK_ACTIONS' && <BulkActionsMode />}
 
-                {store.mode === 'LIST' && store.transactions.slice(0, 10).map(tx => {
+                {store.mode === 'LIST' && transactionsInView.map(tx => {
                     const isTxSelected = store.selectedItemPath.startsWith(tx.id);
                     const isTxExpanded = store.expandedIds.has(tx.id);
                     const isSelectedForAction = store.selectedForAction.has(tx.id);
 
+                    const showTxRow = pathsInViewSet.has(tx.id);
+
                     return (
                         <Box flexDirection="column" key={tx.id}>
-                            <TransactionRow
-                                tx={tx}
-                                isSelected={isTxSelected && !store.selectedItemPath.includes('/')}
-                                isExpanded={isTxExpanded}
-                                isSelectedForAction={isSelectedForAction}
-                            />
+                            {showTxRow && (
+                                <TransactionRow
+                                    tx={tx}
+                                    isSelected={isTxSelected && !store.selectedItemPath.includes('/')}
+                                    isExpanded={isTxExpanded}
+                                    isSelectedForAction={isSelectedForAction}
+                                />
+                            )}
                             {isTxExpanded && tx.files.map(file => {
+                                if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
                                 const filePath = `${tx.id}/${file.id}`;
                                 const isFileSelected = store.selectedItemPath === filePath;
                                 const isFileExpanded = store.expandedIds.has(filePath);
