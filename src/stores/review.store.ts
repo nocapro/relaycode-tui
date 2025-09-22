@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { sleep } from '../utils';
+import { useAppStore } from './app.store';
 
 // --- Types ---
 
@@ -22,6 +24,22 @@ export interface ScriptResult {
     output: string;
 }
 
+export interface ApplyStep {
+    id: string;
+    title: string;
+    status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+    details?: string;
+    substeps?: ApplyStep[];
+    duration?: number;
+}
+
+const initialApplySteps: ApplyStep[] = [
+    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+];
+
 export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'copy_mode' | 'bulk_repair' | 'none';
 export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
 
@@ -41,6 +59,7 @@ interface ReviewState {
     scripts: ScriptResult[];
 
     // UI State
+    applySteps: ApplyStep[];
     selectedItemIndex: number; // Can be file or script
     bodyView: BodyView;
     isDiffExpanded: boolean;
@@ -66,6 +85,7 @@ interface ReviewState {
         expandDiff: () => void;
         approve: () => void;
         simulateSuccessScenario: () => void;
+        startApplySimulation: (scenario: 'success' | 'failure') => void;
         simulateFailureScenario: () => void;
         
         // Copy Mode Actions
@@ -89,7 +109,7 @@ interface ReviewState {
         scrollReasoningUp: () => void;
         scrollReasoningDown: () => void;
         navigateScriptErrorUp: () => void;
-        navigateScriptErrorDown: () => void;
+        navigateScriptErrorDown: () => void,
     };
 }
 
@@ -170,6 +190,7 @@ export const useReviewStore = create<ReviewState>((set) => ({
     scripts: [], // Empty for partial failure scenario
 
     // UI State
+    applySteps: initialApplySteps,
     selectedItemIndex: 0, // Start with first file
     bodyView: 'none',
     isDiffExpanded: false,
@@ -237,6 +258,84 @@ export const useReviewStore = create<ReviewState>((set) => ({
         }),
         expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
         approve: () => { /* NOP for now, would trigger commit and screen change */ },
+        startApplySimulation: async (scenario: 'success' | 'failure') => {
+            const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            
+            set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
+            showReviewProcessingScreen();
+            
+            const updateStep = (id: string, status: ApplyStep['status'], duration?: number, details?: string) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep = { ...s, status };
+                            if (duration !== undefined) newStep.duration = duration;
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    }),
+                }));
+            };
+    
+            const addSubstep = (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => {
+                 set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            };
+    
+            if (scenario === 'success') {
+                useReviewStore.getState().actions.simulateSuccessScenario();
+                
+                updateStep('snapshot', 'active'); await sleep(100);
+                updateStep('snapshot', 'done', 0.1);
+    
+                updateStep('memory', 'active'); await sleep(100);
+                addSubstep('memory', { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' });
+                await sleep(100);
+                addSubstep('memory', { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' });
+                updateStep('memory', 'done', 0.3);
+    
+                updateStep('post-command', 'active'); await sleep(1300);
+                addSubstep('post-command', { id: 's3', title: '`bun run test` ... Passed', status: 'done' });
+                updateStep('post-command', 'done', 2.3);
+    
+                updateStep('linter', 'active'); await sleep(1200);
+                addSubstep('linter', { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' });
+                updateStep('linter', 'done', 1.2);
+    
+                await sleep(500);
+    
+            } else { // failure scenario
+                useReviewStore.getState().actions.simulateFailureScenario();
+                
+                updateStep('snapshot', 'active'); await sleep(100);
+                updateStep('snapshot', 'done', 0.1);
+    
+                updateStep('memory', 'active'); await sleep(100);
+                addSubstep('memory', { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' });
+                await sleep(100);
+                addSubstep('memory', { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' });
+                await sleep(100);
+                addSubstep('memory', { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' });
+                updateStep('memory', 'done', 0.5);
+    
+                await sleep(100);
+                updateStep('post-command', 'skipped', undefined, 'Skipped due to patch application failure');
+                await sleep(100);
+                updateStep('linter', 'skipped', undefined, 'Skipped due to patch application failure');
+                
+                await sleep(500);
+            }
+    
+            showReviewScreen();
+        },
         simulateSuccessScenario: () => set(() => ({
             hash: '4b9d8f03',
             message: 'refactor: simplify clipboard logic',
@@ -323,8 +422,11 @@ export const useReviewStore = create<ReviewState>((set) => ({
                     break;
                 case 4: // Diff for current file
                     if (selectedItemIndex < files.length) {
-                        content = files[selectedItemIndex].diff;
-                        label = `Diff for ${files[selectedItemIndex].path}`;
+                        const file = files[selectedItemIndex];
+                        if (file) {
+                            content = file.diff;
+                            label = `Diff for ${file.path}`;
+                        }
                     }
                     break;
                 case 5: // All Diffs
@@ -334,37 +436,46 @@ export const useReviewStore = create<ReviewState>((set) => ({
             }
             
             // Mock clipboard operation (TUI environment - no real clipboard)
+            // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied ${label}: ${content.substring(0, 100)}...`);
             
             return { copyModeLastCopied: label };
         }),
         copyUUID: () => set(state => {
             const content = `${state.hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+            // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied UUID: ${content}`);
             return { copyModeLastCopied: 'UUID' };
         }),
         copyMessage: () => set(state => {
+            // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied Git Message: ${state.message}`);
             return { copyModeLastCopied: 'Git Message' };
         }),
         copyPrompt: () => set(state => {
+            // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied Prompt: ${state.prompt.substring(0, 100)}...`);
             return { copyModeLastCopied: 'Prompt' };
         }),
         copyReasoning: () => set(state => {
+            // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied Reasoning: ${state.reasoning.substring(0, 100)}...`);
             return { copyModeLastCopied: 'Reasoning' };
         }),
         copyFileDiff: () => set(state => {
             if (state.selectedItemIndex < state.files.length) {
                 const file = state.files[state.selectedItemIndex];
-                console.log(`[CLIPBOARD] Copied diff for: ${file.path}`);
-                return { copyModeLastCopied: `Diff for ${file.path}` };
+                if (file) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[CLIPBOARD] Copied diff for: ${file.path}`);
+                    return { copyModeLastCopied: `Diff for ${file.path}` };
+                }
             }
             return {};
         }),
         copyAllDiffs: () => set(state => {
             const content = state.files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
+            // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied all diffs: ${state.files.length} files`);
             return { copyModeLastCopied: 'All Diffs' };
         }),
@@ -374,7 +485,7 @@ export const useReviewStore = create<ReviewState>((set) => ({
             const { selectedItemIndex, files } = state;
             if (selectedItemIndex < files.length) {
                 const file = files[selectedItemIndex];
-                if (file.status === 'FAILED') {
+                if (file && file.status === 'FAILED') {
                     // Generate repair prompt and copy to clipboard
                     const repairPrompt = `The patch failed to apply to ${file.path}. Please generate a corrected patch.
 
@@ -392,13 +503,14 @@ ${file.diff || '// ... failed diff would be here ...'}
 ---
 
 Please provide a corrected patch that addresses the error.`;
-                    
+
+                    // eslint-disable-next-line no-console
                     console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
-                    
+
                     // Mock: Update file status to show it's being repaired
                     const newFiles = [...files];
                     newFiles[selectedItemIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
-                    
+
                     return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
                 }
             }
@@ -432,7 +544,8 @@ ${file.diff || '// ... failed diff ...'}
 `).join('\n')}
 
 Please analyze all failed files and provide a complete, corrected response.`;
-                    
+
+                    // eslint-disable-next-line no-console
                     console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files`);
                     return { bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied' };
                 }
@@ -462,7 +575,8 @@ ${failedFiles.map(file => `## ${file.path}
 `).join('\n')}
 
 Please resolve these issues and provide updated patches.`;
-                    
+
+                    // eslint-disable-next-line no-console
                     console.log(`[CLIPBOARD] Copied handoff prompt for ${failedFiles.length} files`);
                     return { bodyView: 'none' as const, copyModeLastCopied: 'Handoff prompt copied' };
                 }

@@ -24,6 +24,7 @@
   },
   "include": [
     "package.json",
+    "eslint.config.js",
     "tsconfig.json",
     "index.tsx",
     "src"
@@ -31,9 +32,11 @@
     // "docs/relaycode-tui/initialization-screen.readme.md"
     // "docs/relaycode-tui/dashboard-screen.readme.md",
     // "docs/relaycode-tui/global-help-screen.readme.md"
-    // "docs/relaycode-tui/review-screen.readme.md",
+    // "docs/relaycode-tui/review-screen.readme.md"
     // "docs/relaycode-tui/diff-screen.readme.md",
-    // "docs/relaycode-tui/reason-screen.readme.md"
+    // "docs/relaycode-tui/reason-screen.readme.md",
+    // "docs/relaycode-tui/review-screen.readme.md",
+    // "docs/relaycode-tui/review-processing-screen.readme.md"
   ],
   "ignore": {
     "useGitignore": true,

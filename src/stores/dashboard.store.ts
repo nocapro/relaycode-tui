@@ -41,6 +41,7 @@ interface DashboardState {
         confirmAction: () => Promise<void>;
         cancelAction: () => void;
         toggleHelp: () => void;
+        setStatus: (status: DashboardStatus) => void; // For debug menu
     };
 }
 
@@ -71,6 +72,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         })),
         cancelAction: () => set(state => ({ status: state.previousStatus })),
         toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+        setStatus: (status) => set({ status }),
 
         confirmAction: async () => {
             const { status, previousStatus } = get();

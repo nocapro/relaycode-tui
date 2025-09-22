@@ -1,3 +1,23 @@
+===
+
+create screen list menu screen with state. which can be open from any screen by pressing ctrl+s
+
+so this screen list to debug UI and state and workflow and can be navigated by programmer to directly access any screen with any state as simulation
+
+===
+
+based on
+
+docs/relaycode-tui/review-screen.readme.md
+docs/relaycode-tui/review-processing-screen.readme.md
+
+extract out the processing state screen from review screen to review processing screen
+
+make sure the layout, UI UX is identical to readme
+
+===
+
+review screen: user need to see the simulation screen state flow of processing patches
 
 ===
 

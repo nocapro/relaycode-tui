@@ -63,11 +63,13 @@ const ScriptItemRow = ({
     return (
         <Box>
             <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
-                {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow} {script.summary}
+                {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                {script.summary}
             </Text>
         </Box>
     );
 };
+
 
 // --- Main Component ---
 
@@ -84,18 +86,30 @@ const ReviewScreen = () => {
     const {
         moveSelectionUp, moveSelectionDown, toggleFileApproval,
         toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+        startApplySimulation,
         rejectAllFiles, approve,
         toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
         copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
         tryRepairFile, showBulkRepair, executeBulkRepairOption,
-        scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown
+        scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
     } = store.actions;
 
     const numFiles = files.length;
     const approvedFilesCount = useMemo(() => files.filter(f => f.status === 'APPROVED').length, [files]);
     const canBeRejected = useMemo(() => files.some(f => f.status === 'APPROVED'), [files]);
-    
+
     useInput((input, key) => {
+        // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+        if (input === '1') {
+            startApplySimulation('success');
+            return;
+        }
+        if (input === '2') {
+            // The store's default is failure, but to re-trigger the processing screen
+            startApplySimulation('failure');
+            return;
+        }
+
         if (input.toLowerCase() === 'q') exit();
 
         // Handle Escape key - context-sensitive behavior
@@ -159,6 +173,7 @@ const ReviewScreen = () => {
                 const scriptIndex = selectedItemIndex - numFiles;
                 const selectedScript = scripts[scriptIndex];
                 if (selectedScript) {
+                    // eslint-disable-next-line no-console
                     console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
                 }
             }
@@ -248,7 +263,8 @@ const ReviewScreen = () => {
                     </Box>
                     {reasoningLines.length > 10 && (
                         <Text color="gray">
-                            Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + 10, reasoningLines.length)} of {reasoningLines.length}
+                            Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + 10, reasoningLines.length)}{' '}
+                            of {reasoningLines.length}
                         </Text>
                     )}
                 </Box>
@@ -273,8 +289,8 @@ const ReviewScreen = () => {
              if (!selectedScript) return null;
              
              const outputLines = selectedScript.output.split('\n');
-             const errorLines = outputLines.filter(line => 
-                line.includes('Error') || line.includes('Warning')
+             const errorLines = outputLines.filter(line =>
+                line.includes('Error') || line.includes('Warning'),
              );
              
              return (
@@ -308,12 +324,13 @@ const ReviewScreen = () => {
         }
 
         if (bodyView === 'copy_mode') {
+            const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
             const options = [
                 { key: 'U', label: 'UUID', value: `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
                 { key: 'M', label: 'Git Message', value: message },
-                { key: 'P', label: 'Prompt', value: prompt.substring(0, 50) + '...' },
-                { key: 'R', label: 'Reasoning', value: reasoning.substring(0, 50) + '...' },
-                { key: 'F', label: 'Diff for', value: selectedItemIndex < files.length ? files[selectedItemIndex].path : 'N/A' },
+                { key: 'P', label: 'Prompt', value: `${prompt.substring(0, 50)}...` },
+                { key: 'R', label: 'Reasoning', value: `${reasoning.substring(0, 50)}...` },
+                { key: 'F', label: 'Diff for', value: selectedFile ? selectedFile.path : 'N/A' },
                 { key: 'A', label: 'All Diffs', value: `${files.length} files` },
             ];
 
@@ -366,6 +383,7 @@ const ReviewScreen = () => {
         return null;
     };
 
+
     const renderFooter = () => {
         // Contextual footer for body views
         if (bodyView === 'diff') {
@@ -375,7 +393,9 @@ const ReviewScreen = () => {
             return <Text>(↑↓) Scroll · (R/Esc) Back</Text>;
         }
         if (bodyView === 'script_output') {
-            return <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>;
+            return (
+                <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
+            );
         }
         if (bodyView === 'copy_mode') {
             return <Text>(↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit</Text>;
@@ -424,6 +444,7 @@ const ReviewScreen = () => {
         return <Text>{actions.join(' · ')}</Text>;
     };
 
+
     return (
         <Box flexDirection="column">
             {/* Header */}
@@ -446,7 +467,9 @@ const ReviewScreen = () => {
                 
                 {/* Prompt and Reasoning */}
                 <Text>(P)rompt ▸ {prompt.substring(0, 50)}...</Text>
-                <Text>(R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'} {reasoning.split('\n')[0].substring(0, 50)}...</Text>
+                <Text>(R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                    {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
+                </Text>
                 
                 <Separator/>
                 

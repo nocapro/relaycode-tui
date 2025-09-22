@@ -2,13 +2,12 @@
 
 ## Relaycode TUI: The Stateful Apply & Review Screen
 
-This document specifies the design and behavior of the stateful **Apply & Review Screen**. This screen is the interactive core of the Relaycode workflow, appearing immediately after a patch is detected and applied to the filesystem. It is a command center for analysis, granular control, data extraction, and iterative repair.
+This document specifies the design and behavior of the stateful **Apply & Review Screen**. This screen is the interactive core of the Relaycode workflow, appearing immediately after a patch has been processed and applied to the filesystem. It is a command center for analysis, granular control, data extraction, and iterative repair.
 
 ### 1. Core Philosophy
 
 The Review screen is not a simple "accept/reject" dialog. It is a strategic workspace designed to give the user complete control and insight over incoming code changes.
 
--   **Live Feedback Loop:** The screen provides real-time progress during patch application, giving the user confidence that the system is working and transparency into its performance.
 -   **Information Supremacy:** The UI provides all necessary context at a glance: high-level stats, the AI's reasoning, post-script results, the patch strategy used per file, and deep-dive diffs. Nothing is hidden.
 -   **Granular Control:** The user is empowered to make decisions on a per-file basis. The UI dynamically recalculates and reflects the impact of these decisions in real-time.
 -   **Iterative Repair Workflow:** Failure is treated as a temporary state, not an endpoint. The UI provides a powerful suite of tools—from AI-driven prompts to manual overrides—to handle even complex, multi-file failures gracefully.
@@ -16,73 +15,20 @@ The Review screen is not a simple "accept/reject" dialog. It is a strategic work
 
 ### 2. UI Layout Components
 
-1.  **Header:** `▲ relaycode apply` (during application) transitioning to `▲ relaycode review`.
+1.  **Header:** `▲ relaycode review`.
 2.  **Navigator:** The top section, acting as a command-and-control center. It contains the transaction summary, global stats, expandable reasoning/prompt, script results, and the file list.
 3.  **Body:** A dynamic viewport that renders detailed content—like diffs or script outputs—based on the user's focus in the Navigator.
 4.  **Footer:** The contextual action bar, showing available keyboard shortcuts that change constantly based on the UI's state and focus.
 
-### 3. The State Machine & Workflow
+### 3. The Interactive States & Workflow
 
-The screen flows through several distinct states, from initial application to final resolution.
-
----
-
-#### **State 3.1: Live Application (Success Case)**
-
-This is the initial, ephemeral state shown while Relaycode processes a patch that applies cleanly.
-
-```
- ▲ relaycode apply
- ──────────────────────────────────────────────────────────────────────────────
- Applying patch 4b9d8f03... (refactor: simplify clipboard logic)
-
- (●) Reading initial file snapshot... (0.1s)
- (●) Applying operations to memory... (0.3s)
-     └─ [✓] write: src/core/clipboard.ts (strategy: replace)
-     └─ [✓] write: src/utils/shell.ts (strategy: standard-diff)
- (●) Running post-command script... (2.3s)
-     └─ `bun run test` ... Passed
- (●) Analyzing changes with linter... (1.2s)
-     └─ `bun run lint` ... 0 Errors
-
- ──────────────────────────────────────────────────────────────────────────────
- Elapsed: 3.9s · Processing... Please wait.
-```
--   **Behavior:** Each line updates its status symbol `( ) → (●) → [✓]`. Timings appear as each step completes. The specific patch strategy used for each file is displayed.
--   **Transition:** Upon completion, seamlessly transitions into the **Interactive Review** state (see State 3.5).
+This screen is the interactive workspace that appears after the initial patch application is complete (whether successful or not). It allows the user to review, repair, and resolve the transaction.
 
 ---
 
-#### **State 3.2: Live Application (Partial Failure Case)**
+#### **State 3.1: Interactive Review (Multi-File Failure)**
 
-This state is shown when one or more file operations fail. It demonstrates the **Golden Rule**: post-application scripts are **skipped** if the patch does not apply cleanly.
-
-```
- ▲ relaycode apply
- ──────────────────────────────────────────────────────────────────────────────
- Applying patch e4a7c112... (refactor: rename core utility function)
-
- (●) Reading initial file snapshot... (0.1s)
- (●) Applying operations to memory... (0.5s)
-     └─ [✓] write: src/core/transaction.ts (strategy: replace)
-     └─ [!] failed: src/utils/logger.ts (Hunk #1 failed to apply)
-     └─ [!] failed: src/commands/apply.ts (Context mismatch at line 92)
- (-) SKIPPED Post-command script...
-     └─ Skipped due to patch application failure
- (-) SKIPPED Analyzing changes with linter...
-     └─ Skipped due to patch application failure
-
- ──────────────────────────────────────────────────────────────────────────────
- Elapsed: 0.6s · Transitioning to repair workflow...
-```
--   **Behavior:** Failed operations are marked with `[!]`. Subsequent steps are marked `(-) SKIPPED` with a clear explanation, preventing false results and saving resources.
--   **Transition:** Immediately transitions to the **Failed Application & Repair Workflow** state.
-
----
-
-#### **State 3.3: Interactive Review (Multi-File Failure)**
-
-The screen has transitioned from State 3.2 and is now waiting for user intervention.
+This state appears after a partial failure during the live application phase. The screen is now waiting for user intervention.
 
 ```
  ▲ relaycode review
@@ -105,7 +51,7 @@ The screen has transitioned from State 3.2 and is now waiting for user intervent
 
 ---
 
-#### **State 3.4: Granular File Rejection & Dynamic Recalculation**
+#### **State 3.2: Granular File Rejection & Dynamic Recalculation**
 
 The user decides one of the successful changes is undesirable and rejects it.
 
@@ -132,9 +78,9 @@ The user decides one of the successful changes is undesirable and rejects it.
 
 ---
 
-#### **State 3.5: Interactive Review (Success Case with Script Results)**
+#### **State 3.3: Interactive Review (Success Case with Script Results)**
 
-This is the state after a fully successful application (from State 3.1).
+This is the state after a fully successful patch application.
 
 ```
  ▲ relaycode review
@@ -159,7 +105,7 @@ This is the state after a fully successful application (from State 3.1).
 
 ---
 
-#### **State 3.6: Expanding Script Results (Body View)**
+#### **State 3.4: Expanding Script Results (Body View)**
 
 **Trigger:** User navigates to the Linter line and presses `(Enter)`.
 
@@ -192,7 +138,7 @@ This is the state after a fully successful application (from State 3.1).
 
 ---
 
-#### **State 3.7: Copy Mode**
+#### **State 3.5: Copy Mode**
 
 **Trigger:** User presses `(C)` from any primary review state.
 
@@ -222,7 +168,7 @@ This is the state after a fully successful application (from State 3.1).
 
 #### **State 4.1: Initiating Bulk Repair**
 
-**Trigger:** From the multi-failure state (3.3), the user presses `(Shift+T)`.
+**Trigger:** From the multi-failure state (3.1), the user presses `(Shift+T)`.
 
 ```
  ▲ relaycode review
@@ -250,7 +196,7 @@ This is the state after a fully successful application (from State 3.1).
 
 ---
 
-#### **Flow 4.2.A: The "Re-apply Prompt" (AI-driven Repair)**
+#### **Flow 4.2: The "Re-apply Prompt" (AI-driven Repair)**
 
 **Trigger:** User selects option `(1)`. A detailed prompt is copied to the clipboard, and the UI enters a waiting state.
 
@@ -318,7 +264,7 @@ Please analyze all failed files and provide a complete, corrected response.
 
 ---
 
-#### **Flow 4.2.B: The "Change Strategy" (User-driven Repair)**
+#### **Flow 4.3: The "Change Strategy" (User-driven Repair)**
 
 **Trigger:** User selects option `(2)` and chooses a new strategy (e.g., `replace`). The system re-applies the original patches with the new strategy, providing live feedback.
 
@@ -358,7 +304,7 @@ The re-application finishes with one success and one failure.
 
 ---
 
-#### **Flow 4.2.C: The "Handoff" (Agentic Repair)**
+#### **Flow 4.4: The "Handoff" (Agentic Repair)**
 
 **Trigger:** User selects option `(3)`. A confirmation modal appears first. Upon confirmation, a specialized prompt is copied, and the transaction is finalized with a `Handoff` status.
 
@@ -398,14 +344,11 @@ After handoff, the user is returned to the dashboard, which now logs the action.
 ```
 -   **Behavior:** A new `→ HANDOFF` icon and status provide a permanent record. The transaction is considered "done" by Relaycode's automated systems, and responsibility is now with the user and their external agent.
 
-
-
-
-## The Handoff Prompt: Design & Specification
+### 5. The Handoff Prompt: Design & Specification
 
 The "Handoff Prompt" is a specialized, machine-generated text block copied to the user's clipboard during the Handoff workflow. It is not a simple error message; it is a carefully engineered "briefing document" designed to transfer the entire context of a failed Relaycode transaction to an external, conversational AI assistant (like Claude, GPT-4, or an IDE-integrated agent).
 
-### Core Design Principles
+#### Core Design Principles
 
 1.  **Context is King:** The prompt's primary goal is to eliminate the need for the user to manually explain the situation. It must contain the *goal*, the *plan*, the *partial results*, and the *failures* of the original transaction.
 2.  **Clear Separation of Concerns:** The prompt must unambiguously distinguish between what has already been successfully applied to the filesystem and what remains broken. This prevents the external agent from re-doing completed work.
@@ -414,7 +357,7 @@ The "Handoff Prompt" is a specialized, machine-generated text block copied to th
 
 ---
 
-### Handoff Prompt Template
+#### Handoff Prompt Template
 
 This is the template used by Relaycode to generate the prompt. It dynamically fills in the placeholders with data from the current failed transaction.
 
@@ -446,9 +389,9 @@ Your job is to now work with me to fix the FAILED files and achieve the original
 
 ---
 
-### Concrete Example
+#### Concrete Example
 
-Let's use the multi-file failure scenario from the main `README.MD`.
+Let's use the multi-file failure scenario from this document.
 
 -   **Transaction UUID:** `e4a7c112`
 -   **Goal:** `refactor: rename core utility function`
@@ -486,54 +429,3 @@ FAILED CHANGES (these are the files you need to fix):
 
 Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.
 ```
-
-### How It Works in Practice
-
-1.  The user's Relaycode screen shows the multi-file failure.
-2.  They choose the `(4) Handoff to External Agent` option.
-3.  The text above is copied to their clipboard. Relaycode closes the review and marks the transaction as `HANDOFF`.
-4.  The user switches to their preferred chat-based AI tool (e.g., a Claude or GPT-4 chat window).
-5.  They paste the entire block of text and send it.
-6.  The AI assistant, now fully briefed, responds with something like:
-    > "Understood. It looks like we've successfully renamed the function in `src/core/transaction.ts`, but the updates failed in `logger.ts` and `apply.ts`. Which of the failed files would you like to work on first?"
-
-The user is now seamlessly engaged in a productive, context-aware repair session, having spent zero time explaining the problem. This workflow transforms Relaycode from just a patch tool into a powerful orchestrator for more complex, agent-driven development.
-
-
----
-
-## 🎯 Implementation Status: COMPLETE
-
-### ✅ All Specified Features Implemented
-
-**Core UI/UX Flow:**
-- ✅ Layout matches specification exactly 
-- ✅ All states (3.1-3.7, 4.1-4.2) implemented
-- ✅ Contextual navigation and footers
-
-**Advanced Features:**
-- ✅ **Copy Mode (State 3.7)**: Full modal with U,M,P,R,F,A shortcuts
-- ✅ **Repair Workflows (State 4.x)**: Single file (T) and bulk repair (Shift+T)
-- ✅ **Script Navigation**: J/K error navigation in linter output
-- ✅ **Reasoning Scroll**: Full scroll functionality with ↑↓ keys
-- ✅ **Reject All**: Esc key behavior as specified
-- ✅ **Back/Esc**: Context-sensitive escape behavior
-
-**Keyboard Shortcuts:**
-- ✅ All specified shortcuts working (Space, D, R, Enter, C, T, Shift+T, A, Q)
-- ✅ Contextual shortcuts in each view mode
-- ✅ Hotkey shortcuts in copy mode (U,M,P,R,F,A)
-- ✅ J/K navigation in script output
-- ✅ ↑↓ scroll in reasoning view
-
-**State Management:**
-- ✅ Success vs failure scenario simulation
-- ✅ Dynamic recalculation of stats
-- ✅ Proper file status transitions (APPROVED ↔ REJECTED)
-- ✅ Multi-modal state handling
-
-**Ready for Backend Integration:**
-- ✅ AI repair prompt generation
-- ✅ Clipboard integration (with fallbacks)
-- ✅ Mock workflows demonstrate intended behavior
-- ✅ All UI interactions match specification
