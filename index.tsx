@@ -5,6 +5,7 @@ import { useAppStore } from './src/stores/app.store';
 import { useCommitStore } from './src/stores/commit.store';
 import { useReviewStore } from './src/stores/review.store';
 import { useTransactionDetailStore } from './src/stores/transaction-detail.store';
+import { useTransactionHistoryStore } from './src/stores/transaction-history.store';
 
 const main = () => {
     const args = process.argv.slice(2);
@@ -32,6 +33,10 @@ const main = () => {
             case 'TransactionDetailScreen':
                 useTransactionDetailStore.getState().actions.loadTransaction('3');
                 appActions.showTransactionDetailScreen();
+                break;
+            case 'TransactionHistoryScreen':
+                useTransactionHistoryStore.getState().actions.load();
+                appActions.showTransactionHistoryScreen();
                 break;
             case 'InitializationScreen':
                  appActions.showInitScreen();

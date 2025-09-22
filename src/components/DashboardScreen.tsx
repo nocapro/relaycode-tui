@@ -5,6 +5,7 @@ import { useDashboardStore, type Transaction, type DashboardStatus, type Transac
 import { useAppStore } from '../stores/app.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
+import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import Separator from './Separator';
 import GlobalHelpScreen from './GlobalHelpScreen';
 
@@ -87,6 +88,7 @@ const DashboardScreen = () => {
     const appActions = useAppStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
     const detailActions = useTransactionDetailStore(s => s.actions);
+    const historyActions = useTransactionHistoryStore(s => s.actions);
 
     const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
     const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
@@ -116,7 +118,14 @@ const DashboardScreen = () => {
         if (input.toLowerCase() === 'q') exit();
 
         if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
+        if (key.downArrow) {
+            if (selectedTransactionIndex === transactions.length - 1) {
+                historyActions.load();
+                appActions.showTransactionHistoryScreen();
+            } else {
+                moveSelectionDown();
+            }
+        }
         
         if (key.return) {
             const selectedTx = transactions[selectedTransactionIndex];
@@ -134,6 +143,10 @@ const DashboardScreen = () => {
         if (input.toLowerCase() === 'c' && pendingCommits > 0) {
             commitActions.prepareCommitScreen();
             appActions.showGitCommitScreen();
+        }
+        if (input.toLowerCase() === 'l') {
+            historyActions.load();
+            appActions.showTransactionHistoryScreen();
         }
     });
 
@@ -175,7 +188,7 @@ const DashboardScreen = () => {
 			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
 		return (
             <Text color="gray">
-                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
+                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>L</Text>)og · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
             </Text>
         );
     };

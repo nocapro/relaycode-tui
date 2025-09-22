@@ -1,3 +1,15 @@
+
+based on      "docs/relaycode-tui/transaction-history-screen.readme.md"
+
+1. create the transaction-history-screen, focus on prototyping simulation, not thinking about core backend logic
+
+2. make sure there is keystroke in dashboard that open transaction-history-screen also on scrolling down bottom of event stream, should automatically go to transaction-history-screen
+
+3. dont forget to add to debug menu
+
+4. dont forget to update readme if you have updated design
+
+
 === DONE
 
 add numbering list keystroke for debug menu so beside up down navigation, user can directly hit keyboard

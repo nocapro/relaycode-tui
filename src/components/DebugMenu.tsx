@@ -6,6 +6,7 @@ import { useInitStore } from '../stores/init.store';
 import { useReviewStore } from '../stores/review.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
+import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import Separator from './Separator';
 
 interface MenuItem {
@@ -28,6 +29,7 @@ const DebugMenu = () => {
     const reviewActions = useReviewStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
     const detailActions = useTransactionDetailStore(s => s.actions);
+    const historyActions = useTransactionHistoryStore(s => s.actions);
 
     const menuItems: MenuItem[] = [
         {
@@ -155,6 +157,41 @@ const DebugMenu = () => {
                 // The dashboard store has transactions, we'll just pick one.
                 detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
                 appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Transaction History Screen',
+            action: () => {
+                historyActions.load();
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L1 Drilldown',
+            action: () => {
+                historyActions.prepareDebugState('l1-drill');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L2 Drilldown (Diff)',
+            action: () => {
+                historyActions.prepareDebugState('l2-drill');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: Filter Mode',
+            action: () => {
+                historyActions.prepareDebugState('filter');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: Copy Mode',
+            action: () => {
+                historyActions.prepareDebugState('copy');
+                appActions.showTransactionHistoryScreen();
             },
         },
     ];

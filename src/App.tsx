@@ -8,6 +8,7 @@ import ReviewScreen from './components/ReviewScreen';
 import ReviewProcessingScreen from './components/ReviewProcessingScreen';
 import GitCommitScreen from './components/GitCommitScreen';
 import TransactionDetailScreen from './components/TransactionDetailScreen';
+import TransactionHistoryScreen from './components/TransactionHistoryScreen';
 import DebugMenu from './components/DebugMenu';
 
 const App = () => {
@@ -60,6 +61,10 @@ const App = () => {
 
     if (currentScreen === 'transaction-detail') {
         return <TransactionDetailScreen />;
+    }
+
+    if (currentScreen === 'transaction-history') {
+        return <TransactionHistoryScreen />;
     }
 
     return null;
