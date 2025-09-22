@@ -100,13 +100,37 @@ make sure the screens flows all connected, like navigation to another screens is
 
 ===
 
-tsx files only for renders so please extract out all simulated backend logic to [entity].service.ts files
+extract out all content strings,urls to content/[entity].content.ts files for easier UI strings/copywriting management
 
 ===
+
+extract out all constants to constants/[entitity].constants.ts files
+
+===
+
+extract out all types to types/[entitiy].type.ts files
+
+===
+
+traditional methods should HOF, no classes, no OOP.
+
+=== DONE
+
+tsx files only for renders so please extract out all simulated backend logic to [entity].service.ts files
+
+so service files should only concern about business logic, not UI state or logic
+
+give me transaction in four phase, now please go on for first phase
+
+dont forget final step yaml
+
+=== DONE
 
 tsx files only for renders, so please extract out all hooks to [entity].hook.tsx files.
 
 give me transaction in two phase, now please go on for first phase
+
+dont forget final step yaml
 
 ===
 

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { sleep } from '../utils';
+import { DashboardService } from '../services/dashboard.service';
 
 // --- Types ---
 export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS' | 'HANDOFF';
@@ -85,31 +85,9 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             if (status === 'CONFIRM_APPROVE') {
                 set({ status: 'APPROVING' });
 
-                // Find pending transactions and mark them as in-progress
-                const pendingTxIds: string[] = [];
-                set(state => {
-                    const newTxs = state.transactions.map(tx => {
-                        if (tx.status === 'PENDING') {
-                            pendingTxIds.push(tx.id);
-                            return { ...tx, status: 'IN-PROGRESS' as const };
-                        }
-                        return tx;
-                    });
-                    return { transactions: newTxs };
-                });
+                await DashboardService.approveAll();
 
-                await sleep(2000); // Simulate approval process
-
-                // Mark them as applied
-                set(state => {
-                    const newTxs = state.transactions.map(tx => {
-                        if (pendingTxIds.includes(tx.id)) {
-                            return { ...tx, status: 'APPLIED' as const };
-                        }
-                        return tx;
-                    });
-                    return { transactions: newTxs, status: previousStatus };
-                });
+                set({ status: previousStatus });
             }
         },
     },

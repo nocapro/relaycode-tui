@@ -1,0 +1,1565 @@
+uuid: a3d3e60a-9d65-4d05-b1a7-ec2030f0f498
+projectId: relaycode-tui
+createdAt: '2025-09-22T06:31:09.551Z'
+gitCommitMsg: >-
+  fix(review): correct syntax errors in review store actions
+
+  This commit fixes multiple critical syntax and logic errors within the
+  `executeBulkRepairOption` and `confirmHandoff` actions in `review.store.ts`
+  that were causing linting and TypeScript compilation to fail.
+
+  - Added the `get` parameter to the `create` function for safe state access
+  within actions. - Corrected the implementation of the "Copy Bulk Repair
+  Prompt" option. - Cleaned up invalid syntax and text from the `confirmHandoff`
+  action. - Removed an extra newline in `init.service.ts` to pass linting.
+
+  refactor(history): centralize copy-mode state in store
+
+  This commit refactors the Transaction History screen to improve state
+  management. The local state for managing selected fields in "Copy Mode" has
+  been moved from the `useTransactionHistoryScreen` hook into the
+  `transaction-history.store`.
+
+  - `transaction-history.store` now holds `copyModeSelections` state and a
+  `toggleCopySelection` action. - `useTransactionHistoryScreen` is simplified,
+  consuming the new state and actions from the store, removing its own local
+  state management for this feature.
+promptSummary: >-
+  For the second phase of refactoring, I was asked to fix linting and
+  compilation errors from the previous step and continue improving the code
+  structure. I've fixed a formatting issue in `init.service.ts` and multiple
+  critical syntax errors in `review.store.ts`. I also refactored the transaction
+  history feature by moving copy-mode state from the
+  `useTransactionHistoryScreen` hook into the `transaction-history.store`,
+  simplifying the hook's responsibilities.
+reasoning:
+  - >-
+    Of course, I will proceed with the next phase of refactoring while also
+    fixing the linting and TypeScript errors you've pointed out.
+  - '### Step 1: Fix Linting and Compilation Errors'
+  - >-
+    First, I'll address the errors from the previous step to ensure the codebase
+    is stable.
+  - >-
+    I'll start by removing the extra blank line in
+    `src/services/init.service.ts`.
+  - >-
+    Next, I'll fix the multiple syntax errors in `src/stores/review.store.ts`.
+    The `executeBulkRepairOption` method had incorrect logic and syntax, and the
+    `confirmHandoff` method contained extraneous text. I'll replace them with
+    corrected versions and add the `get` parameter to the store creator
+    function, which is a best practice for accessing state within actions.
+  - '### Step 2: Refactor Transaction History State Management'
+  - >-
+    For the second phase of refactoring, I will simplify the
+    `useTransactionHistoryScreen` hook by moving UI state that is closely tied
+    to the data, such as the selections for the "copy" mode, into the
+    `transaction-history.store`. This centralizes the state logic and makes the
+    hook leaner.
+  - First, I'll update the store to manage the copy mode selections.
+  - >-
+    Now, I'll update the `useTransactionHistoryScreen` hook to remove the local
+    state and use the new state and actions from the store.
+  - >-
+    This completes the second phase. I've resolved all outstanding errors and
+    continued the refactoring process by centralizing more state management
+    logic within the Zustand store, resulting in a cleaner and more maintainable
+    hook.
+operations:
+  - type: write
+    path: src/services/init.service.ts
+    content: |+
+      --- src/services/init.service.ts
+      +++ src/services/init.service.ts
+      @@ -39,7 +39,6 @@
+           }
+       };
+       
+      -
+       export const InitService = {
+           runInitializationProcess,
+           resumeInitializationProcess,
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/review.store.ts
+    content: >
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ -211,7 +211,7 @@
+       
+       // --- Store Implementation ---
+       
+      -export const useReviewStore = create<ReviewState>((set) => ({
+
+      +export const useReviewStore = create<ReviewState>((set, get) => ({
+           // Transaction Info
+           hash: 'e4a7c112',
+           message: 'refactor: rename core utility function',
+      @@ -522,86 +522,77 @@
+               }),
+               showBulkRepair: () => set(() => ({
+                   bodyView: 'bulk_repair' as const,
+               })),
+      -        executeBulkRepairOption: async (option: number) => {
+
+      +        executeBulkRepairOption: async (option: number) => {
+
+      +            const { files } = get();
+
+      +
+                   switch (option) {
+      -                case 1: {
+
+      -                    set(state => {
+
+      -                        // Copy Bulk Re-apply Prompt
+
+      -                        const failedFiles = state.files.filter(f =>
+      f.status === 'FAILED');
+
+      -                        const bulkPrompt = `The previous patch failed to
+      apply to MULTIPLE files. Please generate a new, corrected patch that
+      addresses all the files listed below.
+
+      -
+
+      -${failedFiles.map(file => `--- FILE: ${file.path} ---
+
+      -Strategy: ${file.strategy}
+
+      -Error: ${file.error}
+
+      ----
+
+      -// ... original content of ${file.path} ...
+
+      ----
+
+      ----
+
+      -`).join('\n')}
+
+      -                        // eslint-disable-next-line no-console
+
+      -                        console.log(`[CLIPBOARD] Copied bulk repair
+      prompt for ${failedFiles.length} files`);
+
+      -                                : file,
+
+      -                        );
+
+      -                    });
+
+      +                case 1: { // Generate & Copy Bulk Repair Prompt
+
+      +                    const bulkPrompt =
+      ReviewService.generateBulkRepairPrompt(files);
+
+      +                    const failedFiles = files.filter(f => f.status ===
+      'FAILED');
+
+      +                    // eslint-disable-next-line no-console
+
+      +                    console.log(`[CLIPBOARD] Copied bulk repair prompt
+      for ${failedFiles.length} files.`);
+
+      +                    // In a real app, this would use
+      clipboardy.writeSync(bulkPrompt)
+
+      +                    set({ bodyView: 'none', copyModeLastCopied: 'Bulk
+      repair prompt copied.' });
+                           break;
+                       }
+                           
+      -                case 2: {
+
+      -                    const failedFileIds = new
+      Set(useReviewStore.getState().files.filter(f => f.status ===
+      'FAILED').map(f => f.id));
+
+      -                        const bulkPrompt =
+      ReviewService.generateBulkRepairPrompt(state.files);
+
+      -                        const failedFiles = state.files.filter(f =>
+      f.status === 'FAILED');
+
+      -                        
+
+      +                case 2: { // Attempt Bulk Re-apply
+
+      +                    const failedFileIds = new Set(files.filter(f =>
+      f.status === 'FAILED').map(f => f.id));
+
+      +                    if (failedFileIds.size === 0) {
+
+      +                        set({ bodyView: 'none' });
+
+      +                        break;
+
+      +                    }
+
+      +
+                           set(state => ({
+                               files: state.files.map(file =>
+                                   failedFileIds.has(file.id)
+                                       ? { ...file, status: 'RE_APPLYING' as const }
+                                       : file,
+                               ),
+                               bodyView: 'none' as const,
+                           }));
+       
+                           await sleep(1500); // Simulate re-apply
+       
+                           // Mock a mixed result
+                           let first = true;
+      -                    set(state => ({
+
+      -                        files: state.files.map(file => {
+
+      -                            if (failedFileIds.has(file.id)) {
+
+      -                                if (first) {
+
+      -                                    first = false;
+
+      -                                    return { ...file, status: 'APPROVED'
+      as const, strategy: 'replace' as const, error: undefined, linesAdded: 9,
+      linesRemoved: 2 };
+
+      -                                }
+
+      -                                return { ...file, status: 'FAILED' as
+      const, error: "'replace' failed: markers not found" };
+
+      +                    set(state => ({
+
+      +                        files: state.files.map(file => {
+
+      +                            if (failedFileIds.has(file.id)) {
+
+      +                                if (first) {
+
+      +                                    first = false;
+
+      +                                    return { ...file, status: 'APPROVED'
+      as const, strategy: 'replace' as const, error: undefined, linesAdded: 9,
+      linesRemoved: 2 };
+
+      +                                }
+
+      +                                return { ...file, status: 'FAILED' as
+      const, error: "'replace' failed: markers not found" };
+                                   }
+                                   return file;
+                               }),
+                           }));
+                           break;
+                       }
+                           
+      -                case 3: {
+
+      +                case 3: { // Handoff to Human
+                           set({ bodyView: 'confirm_handoff' as const });
+                           break;
+                       }
+                           
+      -                case 4: {
+
+      +                case 4: { // Reject All Failed
+                           set(state => ({
+                               files: state.files.map(file =>
+                                   file.status === 'FAILED'
+                                       ? { ...file, status: 'REJECTED' as const }
+                                       : file,
+                               ),
+                               bodyView: 'none' as const,
+                           }));
+                           break;
+                       }
+                           
+      -                default:
+
+      +                default: // Close modal
+                           set({ bodyView: 'none' as const });
+                   }
+               },
+               confirmHandoff: () => {
+      -            const { hash, message, reasoning, files } =
+      useReviewStore.getState();
+
+      ---- TRANSACTION SUMMARY ---
+
+      ---- CURRENT FILE STATUS ---
+
+      -            const handoffPrompt =
+      ReviewService.generateHandoffPrompt(hash, message, reasoning, files);
+
+      +            const { hash, message, reasoning, files } = get();
+
+      +            const handoffPrompt =
+      ReviewService.generateHandoffPrompt(hash, message, reasoning, files);
+       
+                   // eslint-disable-next-line no-console
+      -            console.log('[CLIPBOARD] Copied Handoff Prompt.');
+
+      +            console.log('[CLIPBOARD] Copied Handoff Prompt.'); // In real
+      app: clipboardy.writeSync(handoffPrompt)
+                   ReviewService.performHandoff(hash);
+               },
+               
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction-history.store.ts
+    content: >+
+      --- src/stores/transaction-history.store.ts
+
+      +++ src/stores/transaction-history.store.ts
+
+      @@ -31,6 +31,7 @@
+           expandedIds: Set<string>; // holds ids of expanded items
+           filterQuery: string;
+           selectedForAction: Set<string>; // set of transaction IDs
+      +    copyModeSelections: Set<string>;
+           lastCopiedMessage: string | null;
+       
+           actions: {
+      @@ -42,7 +43,8 @@
+               setMode: (mode: HistoryViewMode) => void;
+               setFilterQuery: (query: string) => void;
+               applyFilter: () => void;
+      -        executeCopy: (selections: string[]) => void;
+
+      +        toggleCopySelection: (field: string) => void;
+
+      +        executeCopy: () => void;
+               prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+           }
+       }
+      @@ -66,6 +68,7 @@
+           expandedIds: new Set(),
+           filterQuery: '',
+           selectedForAction: new Set(),
+      +    copyModeSelections: new Set(['Git Messages', 'Reasonings']),
+           lastCopiedMessage: null,
+       
+           actions: {
+      @@ -77,6 +80,7 @@
+                       expandedIds: new Set(),
+                       selectedForAction: new Set(),
+                       filterQuery: '',
+      +                copyModeSelections: new Set(['Git Messages',
+      'Reasonings']),
+                       lastCopiedMessage: null,
+                       ...initialState,
+                   });
+      @@ -141,10 +145,19 @@
+                   // For the demo, we just go back to LIST mode.
+                   set({ mode: 'LIST' });
+               },
+      -        executeCopy: (selections) => {
+
+      +        toggleCopySelection: (field) => set(state => {
+
+      +            const newSelections = new Set(state.copyModeSelections);
+
+      +            if (newSelections.has(field)) {
+
+      +                newSelections.delete(field);
+
+      +            } else {
+
+      +                newSelections.add(field);
+
+      +            }
+
+      +            return { copyModeSelections: newSelections };
+
+      +        }),
+
+      +        executeCopy: () => {
+                    // Mock copy
+      -            const { selectedForAction } = get();
+
+      -            const message = `Copied ${selections.join(' & ')} from
+      ${selectedForAction.size} transactions to clipboard.`;
+
+      +            const { selectedForAction, copyModeSelections } = get();
+
+      +            const message = `Copied
+      ${Array.from(copyModeSelections).join(' & ')} from
+      ${selectedForAction.size} transactions to clipboard.`;
+                   // In real app: clipboardy.writeSync(...)
+                   // eslint-disable-next-line no-console
+                   console.log(`[CLIPBOARD MOCK] ${message}`);
+      @@ -160,7 +173,11 @@
+                           get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
+                           break;
+                       case 'copy':
+      -                    get().actions.load({ mode: 'COPY', selectedForAction:
+      new Set(['tx-0', 'tx-2']) });
+
+      +                    get().actions.load({
+
+      +                        mode: 'COPY',
+
+      +                        selectedForAction: new Set(['tx-0', 'tx-2']),
+
+      +                        copyModeSelections: new Set(['Git Messages',
+      'Diffs', 'UUIDs']),
+
+      +                    });
+                           break;
+                       case 'bulk':
+                           get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionHistoryScreen.tsx
+    content: >+
+      --- src/hooks/useTransactionHistoryScreen.tsx
+
+      +++ src/hooks/useTransactionHistoryScreen.tsx
+
+      @@ -11,21 +11,6 @@
+       
+           const [viewOffset, setViewOffset] = useState(0);
+           
+      -    // State for CopyMode sub-component, managed by the hook
+
+      -    const [selectedFields, setSelectedFields] = useState<Set<string>>(new
+      Set(['Git Messages', 'Reasonings']));
+
+      -
+
+      -    const toggleField = (field: string) => {
+
+      -        const newFields = new Set(selectedFields);
+
+      -        if (newFields.has(field)) {
+
+      -            newFields.delete(field);
+
+      -        } else {
+
+      -            newFields.add(field);
+
+      -        }
+
+      -        setSelectedFields(newFields);
+
+      -    };
+
+      -
+           const visibleItemPaths = useMemo(
+               () => getVisibleItemPaths(store.transactions, store.expandedIds),
+               [store.transactions, store.expandedIds],
+      @@ -48,10 +33,10 @@
+               }
+               if (store.mode === 'COPY') {
+                   if (key.escape || input.toLowerCase() === 'c') store.actions.setMode('LIST');
+      -            if (key.return)
+      store.actions.executeCopy(Array.from(selectedFields));
+
+      -            if (input.toLowerCase() === 'm') toggleField('Git Messages');
+
+      -            if (input.toLowerCase() === 'r') toggleField('Reasonings');
+
+      -            // Add other toggles...
+
+      +            if (key.return) store.actions.executeCopy();
+
+      +            if (input.toLowerCase() === 'm')
+      store.actions.toggleCopySelection('Git Messages');
+
+      +            if (input.toLowerCase() === 'r')
+      store.actions.toggleCopySelection('Reasonings');
+
+      +            // Add other toggles here if needed for other copyFields
+                   return;
+               }
+               if (store.mode === 'BULK_ACTIONS') {
+      @@ -102,7 +87,7 @@
+               visibleItemPaths,
+               
+               // For CopyMode sub-component
+      -        selectedFields,
+
+      +        selectedFields: store.copyModeSelections,
+               copyFields,
+           };
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/init.service.ts: >-
+    import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+    '../stores/init.store';
+
+    import { sleep } from '../utils';
+
+
+    const runInitializationProcess = async () => {
+        const { actions } = useInitStore.getState();
+        actions.resetInit();
+
+        actions.setPhase('ANALYZE');
+        for (const task of initialAnalyzeTasks) {
+            actions.updateAnalyzeTask(task.id, 'active');
+            await sleep(800);
+            actions.updateAnalyzeTask(task.id, 'done');
+        }
+        actions.setAnalysisResults('relaycode (from package.json)', true);
+        await sleep(500);
+
+        actions.setPhase('CONFIGURE');
+        const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+        for (const task of configTasksUntilInteractive) {
+            actions.updateConfigureTask(task.id, 'active');
+            await sleep(800);
+            actions.updateConfigureTask(task.id, 'done');
+        }
+        await sleep(500);
+
+        actions.setPhase('INTERACTIVE');
+    };
+
+
+    const resumeInitializationProcess = async () => {
+        const { actions } = useInitStore.getState();
+        
+        actions.setPhase('CONFIGURE');
+        const lastTask = initialConfigureTasks[2];
+        if (lastTask) {
+            actions.updateConfigureTask(lastTask.id, 'active');
+            await sleep(800);
+            actions.updateConfigureTask(lastTask.id, 'done');
+            await sleep(500);
+
+            actions.setPhase('FINALIZE');
+        }
+    };
+
+
+
+    export const InitService = {
+        runInitializationProcess,
+        resumeInitializationProcess,
+    };
+  src/hooks/useTransactionHistoryScreen.tsx: >-
+    import { useState, useMemo, useEffect } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useTransactionHistoryStore, getVisibleItemPaths } from
+    '../stores/transaction-history.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useStdoutDimensions } from '../utils';
+
+
+    export const useTransactionHistoryScreen = () => {
+        const [, rows] = useStdoutDimensions();
+        const store = useTransactionHistoryStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const [viewOffset, setViewOffset] = useState(0);
+        
+        // State for CopyMode sub-component, managed by the hook
+        const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
+
+        const toggleField = (field: string) => {
+            const newFields = new Set(selectedFields);
+            if (newFields.has(field)) {
+                newFields.delete(field);
+            } else {
+                newFields.add(field);
+            }
+            setSelectedFields(newFields);
+        };
+
+        const visibleItemPaths = useMemo(
+            () => getVisibleItemPaths(store.transactions, store.expandedIds),
+            [store.transactions, store.expandedIds],
+        );
+        const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
+
+        const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+        const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
+
+        useEffect(() => {
+            if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+                setViewOffset(selectedIndex);
+            } else if (selectedIndex >= viewOffset + viewportHeight) {
+                setViewOffset(selectedIndex - viewportHeight + 1);
+            }
+        }, [selectedIndex, viewOffset, viewportHeight]);
+        
+        useInput((input, key) => {
+            if (store.mode === 'FILTER') {
+                if (key.escape) store.actions.setMode('LIST');
+                if (key.return) store.actions.applyFilter();
+                return;
+            }
+            if (store.mode === 'COPY') {
+                if (key.escape || input.toLowerCase() === 'c') store.actions.setMode('LIST');
+                if (key.return) store.actions.executeCopy(Array.from(selectedFields));
+                if (input.toLowerCase() === 'm') toggleField('Git Messages');
+                if (input.toLowerCase() === 'r') toggleField('Reasonings');
+                // Add other toggles...
+                return;
+            }
+            if (store.mode === 'BULK_ACTIONS') {
+                if (key.escape) store.actions.setMode('LIST');
+                // Add number handlers...
+                return;
+            }
+
+            // LIST mode inputs
+            if (key.upArrow) store.actions.navigateUp();
+            if (key.downArrow) store.actions.navigateDown();
+            if (key.rightArrow) store.actions.expandOrDrillDown();
+            if (key.leftArrow) store.actions.collapseOrBubbleUp();
+            if (input === ' ') store.actions.toggleSelection();
+
+            if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
+            if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
+            if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
+            
+            if (key.escape || input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+        const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+        const transactionsInView = useMemo(
+            () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
+            [store.transactions, txIdsInView],
+        );
+        const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+        const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
+        const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
+        
+        const copyFields = [
+            { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
+            { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
+        ];
+
+        return {
+            store,
+            viewOffset,
+            itemsInView,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus,
+            showingStatus,
+            visibleItemPaths,
+            
+            // For CopyMode sub-component
+            selectedFields,
+            copyFields,
+        };
+    };
+  src/stores/transaction-history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+
+    // --- Types ---
+
+
+    export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
+
+    export interface FileChange {
+        id: string;
+        path: string;
+        type: FileChangeType;
+        diff: string;
+        linesAdded: number;
+        linesRemoved: number;
+    }
+
+
+    export type TransactionStatus = 'Committed' | 'Handoff' | 'Reverted';
+
+    export interface HistoryTransaction {
+        id: string;
+        hash: string;
+        timestamp: number;
+        status: TransactionStatus;
+        message: string;
+        files: FileChange[];
+        stats: {
+            files: number;
+            linesAdded: number;
+            linesRemoved: number;
+        };
+    }
+
+    export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' | 'BULK_ACTIONS';
+
+
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
+
+
+    interface TransactionHistoryState {
+        transactions: HistoryTransaction[];
+        mode: HistoryViewMode;
+        selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
+        expandedIds: Set<string>; // holds ids of expanded items
+        filterQuery: string;
+        selectedForAction: Set<string>; // set of transaction IDs
+        lastCopiedMessage: string | null;
+
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            expandOrDrillDown: () => void;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            executeCopy: (selections: string[]) => void;
+            prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+        }
+    }
+
+
+    export const getVisibleItemPaths = (transactions: HistoryTransaction[],
+    expandedIds: Set<string>): string[] => {
+        const paths: string[] = [];
+        for (const tx of transactions) {
+            paths.push(tx.id);
+            if (expandedIds.has(tx.id)) {
+                for (const file of tx.files) {
+                    paths.push(`${tx.id}/${file.id}`);
+                }
+            }
+        }
+        return paths;
+    };
+
+
+    // --- Store ---
+
+    export const useTransactionHistoryStore =
+    create<TransactionHistoryState>((set, get) => ({
+        transactions: [],
+        mode: 'LIST',
+        selectedItemPath: 'tx-0',
+        expandedIds: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        lastCopiedMessage: null,
+
+        actions: {
+            load: (initialState) => {
+                const transactions = TransactionService.createMockTransactions();
+                set({
+                    transactions,
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: 'LIST',
+                    expandedIds: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    lastCopiedMessage: null,
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { transactions, expandedIds, selectedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex > 0) {
+                    set({ selectedItemPath: visibleItems[currentIndex - 1] });
+                }
+            },
+            navigateDown: () => {
+                const { transactions, expandedIds, selectedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex < visibleItems.length - 1) {
+                    set({ selectedItemPath: visibleItems[currentIndex + 1] });
+                }
+            },
+            expandOrDrillDown: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (!newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.add(selectedItemPath);
+                }
+                return { expandedIds: newExpandedIds };
+            }),
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    // If it's expanded, collapse it
+                    newExpandedIds.delete(selectedItemPath);
+                    
+                    // Also collapse children
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+
+                    return { expandedIds: newExpandedIds };
+                } else if (selectedItemPath.includes('/')) {
+                    // If it's a file, move selection to parent transaction
+                    const parentId = selectedItemPath.split('/')[0];
+                    return { selectedItemPath: parentId || '' };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = selectedItemPath.split('/')[0];
+                if (!txId) return {};
+
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode, lastCopiedMessage: null }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                // In a real app, this would filter `transactions`.
+                // For the demo, we just go back to LIST mode.
+                set({ mode: 'LIST' });
+            },
+            executeCopy: (selections) => {
+                 // Mock copy
+                const { selectedForAction } = get();
+                const message = `Copied ${selections.join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
+                // In real app: clipboardy.writeSync(...)
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD MOCK] ${message}`);
+                set({ lastCopiedMessage: message });
+            },
+            prepareDebugState: (stateName) => {
+                switch (stateName) {
+                    case 'l1-drill':
+                        get().actions.load({ expandedIds: new Set(['tx-0']), selectedItemPath: 'tx-0' });
+                        break;
+                    case 'l2-drill':
+                        get().actions.load({ expandedIds: new Set(['tx-0', 'tx-0/0-1']), selectedItemPath: 'tx-0/0-1' });
+                        break;
+                    case 'filter':
+                        get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
+                        break;
+                    case 'copy':
+                        get().actions.load({ mode: 'COPY', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                        break;
+                    case 'bulk':
+                        get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                        break;
+                }
+            },
+        },
+    }));
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { sleep } from '../utils';
+
+    import { useAppStore } from './app.store';
+
+    import { useDashboardStore } from './dashboard.store';
+
+    import { ReviewService } from '../services/review.service';
+
+
+    // --- Types ---
+
+
+    export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' |
+    'RE_APPLYING';
+
+    export interface FileItem {
+        id: string;
+        path: string;
+        status: FileStatus;
+        diff: string;
+        linesAdded: number;
+        linesRemoved: number;
+        error?: string;
+        strategy: 'replace' | 'standard-diff';
+    }
+
+
+    export interface ScriptResult {
+        command: string;
+        success: boolean;
+        duration: number;
+        summary: string;
+        output: string;
+    }
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        duration?: number;
+    }
+
+
+    const initialApplySteps: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+
+    export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'copy_mode'
+    | 'bulk_repair' | 'confirm_handoff' | 'none';
+
+    export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+
+
+    interface ReviewState {
+        // Transaction Info
+        hash: string;
+        message: string;
+        prompt: string;
+        reasoning: string;
+        linesAdded: number;
+        linesRemoved: number;
+        duration: number;
+        patchStatus: PatchStatus;
+
+        // File & Script Info
+        files: FileItem[];
+        scripts: ScriptResult[];
+
+        // UI State
+        applySteps: ApplyStep[];
+        selectedItemIndex: number; // Can be file or script
+        bodyView: BodyView;
+        isDiffExpanded: boolean;
+        
+        // Copy Mode State
+        copyModeSelectedIndex: number;
+        copyModeLastCopied: string | null;
+        
+        // Reasoning Scroll State
+        reasoningScrollIndex: number;
+        
+        // Script Navigation State
+        scriptErrorIndex: number;
+
+        actions: {
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            toggleFileApproval: () => void;
+            rejectAllFiles: () => void;
+            toggleDiffView: () => void;
+            toggleReasoningView: () => void;
+            toggleScriptView: () => void;
+            expandDiff: () => void;
+            approve: () => void;
+            simulateSuccessScenario: () => void;
+            startApplySimulation: (scenario: 'success' | 'failure') => void;
+            simulateFailureScenario: () => void;
+            
+            // Copy Mode Actions
+            toggleCopyMode: () => void;
+            moveCopySelectionUp: () => void;
+            moveCopySelectionDown: () => void;
+            copySelectedItem: () => void;
+            copyUUID: () => void;
+            copyMessage: () => void;
+            copyPrompt: () => void;
+            copyReasoning: () => void;
+            copyFileDiff: () => void;
+            copyAllDiffs: () => void;
+            
+            // Repair Actions
+            tryRepairFile: () => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+            
+            // Navigation Actions
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void,
+        };
+    }
+
+
+    // --- Mock Data ---
+
+
+    const mockFiles: FileItem[] = [
+        { 
+            id: '1', 
+            path: 'src/core/transaction.ts', 
+            status: 'APPROVED', 
+            linesAdded: 18, 
+            linesRemoved: 5, 
+            diff: `--- a/src/core/transaction.ts
+    +++ b/src/core/transaction.ts
+
+    @@ -15,7 +15,7 @@ export class Transaction {
+       }
+     
+    -  calculateChanges(): ChangeSet {
+
+    +  computeDelta(): ChangeSet {
+         return this.changes;
+       }
+     }`, 
+            strategy: 'replace', 
+        },
+        { 
+            id: '2', 
+            path: 'src/utils/logger.ts', 
+            status: 'FAILED', 
+            linesAdded: 0, 
+            linesRemoved: 0, 
+            diff: '', 
+            error: 'Hunk #1 failed to apply', 
+            strategy: 'standard-diff', 
+        },
+        { 
+            id: '3', 
+            path: 'src/commands/apply.ts', 
+            status: 'FAILED', 
+            linesAdded: 0, 
+            linesRemoved: 0, 
+            diff: '', 
+            error: 'Context mismatch at line 92', 
+            strategy: 'standard-diff', 
+        },
+    ];
+
+
+    const mockScripts: ScriptResult[] = [
+        { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
+        { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: `src/core/clipboard.ts
+      45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+      88:5   Warning  Unexpected console statement. (no-console)` },
+    ];
+
+
+    const mockReasoning = `1. Identified a potential uncaught exception in the
+    \`restoreSnapshot\` function
+       if a file operation fails midway through a loop of many files. This could
+       leave the project in a partially-reverted, inconsistent state.
+
+    2. Wrapped the file restoration loop in a \`Promise.all\` and added a
+    dedicated
+       error collection array. This ensures that all file operations are
+       attempted and that a comprehensive list of failures is available
+       afterward for better error reporting or partial rollback logic.`;
+
+    // --- Store Implementation ---
+
+
+    export const useReviewStore = create<ReviewState>((set) => ({
+        // Transaction Info
+        hash: 'e4a7c112',
+        message: 'refactor: rename core utility function',
+        prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+        reasoning: mockReasoning,
+        linesAdded: 18,
+        linesRemoved: 5,
+        duration: 0.6,
+        patchStatus: 'PARTIAL_FAILURE',
+
+        // File & Script Info
+        files: mockFiles,
+        scripts: [], // Empty for partial failure scenario
+
+        // UI State
+        applySteps: initialApplySteps,
+        selectedItemIndex: 0, // Start with first file
+        bodyView: 'none',
+        isDiffExpanded: false,
+        
+        // Copy Mode State
+        copyModeSelectedIndex: 0,
+        copyModeLastCopied: null,
+        
+        // Reasoning Scroll State
+        reasoningScrollIndex: 0,
+        
+        // Script Navigation State
+        scriptErrorIndex: 0,
+
+        actions: {
+            moveSelectionUp: () => set(state => ({
+                selectedItemIndex: Math.max(0, state.selectedItemIndex - 1),
+            })),
+            moveSelectionDown: () => set(state => ({
+                selectedItemIndex: Math.min(state.files.length + state.scripts.length - 1, state.selectedItemIndex + 1),
+            })),
+            toggleFileApproval: () => set(state => {
+                const { selectedItemIndex, files } = state;
+                if (selectedItemIndex >= files.length) return {}; // Not a file
+                
+                const newFiles = [...files];
+                const file = newFiles[selectedItemIndex];
+                if (file) {
+                    if (file.status === 'APPROVED') {
+                        file.status = 'REJECTED';
+                    } else if (file.status === 'REJECTED') {
+                        file.status = 'APPROVED';
+                    }
+                }
+                return { files: newFiles };
+            }),
+            rejectAllFiles: () => set(state => {
+                const newFiles = state.files.map(file => {
+                    if (file.status === 'APPROVED') {
+                        return { ...file, status: 'REJECTED' as const };
+                    }
+                    return file;
+                });
+                return { files: newFiles };
+            }),
+            toggleDiffView: () => set(state => {
+                const { bodyView } = state;
+                if (state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
+                return {
+                    bodyView: bodyView === 'diff' ? 'none' : 'diff',
+                    isDiffExpanded: false, // Always start collapsed
+                };
+            }),
+            toggleReasoningView: () => set(state => {
+                const { bodyView } = state;
+                return {
+                    bodyView: bodyView === 'reasoning' ? 'none' : 'reasoning',
+                };
+            }),
+            toggleScriptView: () => set(state => {
+                const { bodyView } = state;
+                return {
+                    bodyView: bodyView === 'script_output' ? 'none' : 'script_output',
+                };
+            }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => { /* NOP for now, would trigger commit and screen change */ },
+            startApplySimulation: async (scenario: 'success' | 'failure') => {
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                
+                set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
+                showReviewProcessingScreen();
+                
+                const updateStep = (id: string, status: ApplyStep['status'], duration?: number, details?: string) => {
+                    set(state => ({
+                        applySteps: state.applySteps.map(s => {
+                            if (s.id === id) {
+                                const newStep = { ...s, status };
+                                if (duration !== undefined) newStep.duration = duration;
+                                if (details !== undefined) newStep.details = details;
+                                return newStep;
+                            }
+                            return s;
+                        }),
+                    }));
+                };
+        
+                const addSubstep = (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => {
+                     set(state => ({
+                        applySteps: state.applySteps.map(s => {
+                            if (s.id === parentId) {
+                                const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                                return { ...s, substeps: newSubsteps };
+                            }
+                            return s;
+                        }),
+                    }));
+                };
+        
+                if (scenario === 'success') {
+                    useReviewStore.getState().actions.simulateSuccessScenario();
+                    
+                    updateStep('snapshot', 'active'); await sleep(100);
+                    updateStep('snapshot', 'done', 0.1);
+        
+                    updateStep('memory', 'active'); await sleep(100);
+                    addSubstep('memory', { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' });
+                    await sleep(100);
+                    addSubstep('memory', { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' });
+                    updateStep('memory', 'done', 0.3);
+        
+                    updateStep('post-command', 'active'); await sleep(1300);
+                    addSubstep('post-command', { id: 's3', title: '`bun run test` ... Passed', status: 'done' });
+                    updateStep('post-command', 'done', 2.3);
+        
+                    updateStep('linter', 'active'); await sleep(1200);
+                    addSubstep('linter', { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' });
+                    updateStep('linter', 'done', 1.2);
+        
+                    await sleep(500);
+        
+                } else { // failure scenario
+                    useReviewStore.getState().actions.simulateFailureScenario();
+                    
+                    updateStep('snapshot', 'active'); await sleep(100);
+                    updateStep('snapshot', 'done', 0.1);
+        
+                    updateStep('memory', 'active'); await sleep(100);
+                    addSubstep('memory', { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' });
+                    await sleep(100);
+                    addSubstep('memory', { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' });
+                    await sleep(100);
+                    addSubstep('memory', { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' });
+                    updateStep('memory', 'done', 0.5);
+        
+                    await sleep(100);
+                    updateStep('post-command', 'skipped', undefined, 'Skipped due to patch application failure');
+                    await sleep(100);
+                    updateStep('linter', 'skipped', undefined, 'Skipped due to patch application failure');
+                    
+                    await sleep(500);
+                }
+        
+                showReviewScreen();
+            },
+            simulateSuccessScenario: () => set(() => ({
+                hash: '4b9d8f03',
+                message: 'refactor: simplify clipboard logic',
+                prompt: 'Simplify the clipboard logic using an external library...',
+                linesAdded: 22,
+                linesRemoved: 11,
+                duration: 3.9,
+                patchStatus: 'SUCCESS' as const,
+                files: [
+                    { 
+                        id: '1', 
+                        path: 'src/core/clipboard.ts', 
+                        status: 'APPROVED' as const, 
+                        linesAdded: 15, 
+                        linesRemoved: 8, 
+                        diff: `--- a/src/core/clipboard.ts
+    +++ b/src/core/clipboard.ts
+
+    @@ -1,5 +1,6 @@
+     import { copy as copyToClipboard } from 'clipboardy';`, 
+                        strategy: 'replace' as const,
+                    },
+                    { 
+                        id: '2', 
+                        path: 'src/utils/shell.ts', 
+                        status: 'APPROVED' as const, 
+                        linesAdded: 7, 
+                        linesRemoved: 3, 
+                        diff: `--- a/src/utils/shell.ts
+    +++ b/src/utils/shell.ts`, 
+                        strategy: 'standard-diff' as const,
+                    },
+                ],
+                scripts: mockScripts,
+                selectedItemIndex: 0,
+                bodyView: 'none' as const,
+            })),
+            simulateFailureScenario: () => set(() => ({
+                hash: 'e4a7c112',
+                message: 'refactor: rename core utility function',
+                prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+                linesAdded: 18,
+                linesRemoved: 5,
+                duration: 0.6,
+                patchStatus: 'PARTIAL_FAILURE' as const,
+                files: mockFiles,
+                scripts: [],
+                // Reset UI state
+                bodyView: 'none',
+                isDiffExpanded: false,
+                reasoningScrollIndex: 0,
+                scriptErrorIndex: 0,
+                selectedItemIndex: 0,
+            })),
+            
+            // Copy Mode Actions
+            toggleCopyMode: () => set(state => ({
+                bodyView: state.bodyView === 'copy_mode' ? 'none' : 'copy_mode',
+                copyModeSelectedIndex: 0,
+                copyModeLastCopied: null,
+            })),
+            moveCopySelectionUp: () => set(state => ({
+                copyModeSelectedIndex: Math.max(0, state.copyModeSelectedIndex - 1),
+            })),
+            moveCopySelectionDown: () => set(state => ({
+                copyModeSelectedIndex: Math.min(5, state.copyModeSelectedIndex + 1), // 6 total options (U,M,P,R,F,A)
+            })),
+            copySelectedItem: () => set(state => {
+                const { copyModeSelectedIndex, hash, message, prompt, reasoning, files, selectedItemIndex } = state;
+                let content = '';
+                let label = '';
+                
+                switch (copyModeSelectedIndex) {
+                    case 0: // UUID
+                        content = `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+                        label = 'UUID';
+                        break;
+                    case 1: // Git Message
+                        content = message;
+                        label = 'Git Message';
+                        break;
+                    case 2: // Prompt
+                        content = prompt;
+                        label = 'Prompt';
+                        break;
+                    case 3: // Reasoning
+                        content = reasoning;
+                        label = 'Reasoning';
+                        break;
+                    case 4: // Diff for current file
+                        if (selectedItemIndex < files.length) {
+                            const file = files[selectedItemIndex];
+                            if (file) {
+                                content = file.diff;
+                                label = `Diff for ${file.path}`;
+                            }
+                        }
+                        break;
+                    case 5: // All Diffs
+                        content = files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
+                        label = 'All Diffs';
+                        break;
+                }
+                
+                // Mock clipboard operation (TUI environment - no real clipboard)
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied ${label}: ${content.substring(0, 100)}...`);
+                
+                return { copyModeLastCopied: label };
+            }),
+            copyUUID: () => set(state => {
+                const content = `${state.hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied UUID: ${content}`);
+                return { copyModeLastCopied: 'UUID' };
+            }),
+            copyMessage: () => set(state => {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied Git Message: ${state.message}`);
+                return { copyModeLastCopied: 'Git Message' };
+            }),
+            copyPrompt: () => set(state => {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied Prompt: ${state.prompt.substring(0, 100)}...`);
+                return { copyModeLastCopied: 'Prompt' };
+            }),
+            copyReasoning: () => set(state => {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied Reasoning: ${state.reasoning.substring(0, 100)}...`);
+                return { copyModeLastCopied: 'Reasoning' };
+            }),
+            copyFileDiff: () => set(state => {
+                if (state.selectedItemIndex < state.files.length) {
+                    const file = state.files[state.selectedItemIndex];
+                    if (file) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied diff for: ${file.path}`);
+                        return { copyModeLastCopied: `Diff for ${file.path}` };
+                    }
+                }
+                return {};
+            }),
+            copyAllDiffs: () => set(state => {
+                const content = state.files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied all diffs: ${state.files.length} files`);
+                return { copyModeLastCopied: 'All Diffs' };
+            }),
+            
+            // Repair Actions
+            tryRepairFile: () => set(state => {
+                const { selectedItemIndex, files } = state;
+                if (selectedItemIndex < files.length) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status === 'FAILED') {
+                        // Generate repair prompt and copy to clipboard
+                        const repairPrompt = `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+
+    Error: ${file.error}
+
+    Strategy: ${file.strategy}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original file content would be here ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff would be here ...'}
+
+    ---
+
+
+    Please provide a corrected patch that addresses the error.`;
+
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+
+                        // Mock: Update file status to show it's being repaired
+                        const newFiles = [...files];
+                        newFiles[selectedItemIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
+
+                        return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
+                    }
+                }
+                return {};
+            }),
+            showBulkRepair: () => set(() => ({
+                bodyView: 'bulk_repair' as const,
+            })),
+            executeBulkRepairOption: async (option: number) => {
+                switch (option) {
+                    case 1: {
+                        set(state => {
+                            // Copy Bulk Re-apply Prompt
+                            const failedFiles = state.files.filter(f => f.status === 'FAILED');
+                            const bulkPrompt = `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+
+    ${failedFiles.map(file => `--- FILE: ${file.path} ---
+
+    Strategy: ${file.strategy}
+
+    Error: ${file.error}
+
+    ---
+
+    // ... original content of ${file.path} ...
+
+    ---
+
+    ---
+
+    `).join('\n')}
+                            // eslint-disable-next-line no-console
+                            console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files`);
+                                    : file,
+                            );
+                        });
+                        break;
+                    }
+                        
+                    case 2: {
+                        const failedFileIds = new Set(useReviewStore.getState().files.filter(f => f.status === 'FAILED').map(f => f.id));
+                            const bulkPrompt = ReviewService.generateBulkRepairPrompt(state.files);
+                            const failedFiles = state.files.filter(f => f.status === 'FAILED');
+                            
+                        set(state => ({
+                            files: state.files.map(file =>
+                                failedFileIds.has(file.id)
+                                    ? { ...file, status: 'RE_APPLYING' as const }
+                                    : file,
+                            ),
+                            bodyView: 'none' as const,
+                        }));
+
+                        await sleep(1500); // Simulate re-apply
+
+                        // Mock a mixed result
+                        let first = true;
+                        set(state => ({
+                            files: state.files.map(file => {
+                                if (failedFileIds.has(file.id)) {
+                                    if (first) {
+                                        first = false;
+                                        return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
+                                    }
+                                    return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
+                                }
+                                return file;
+                            }),
+                        }));
+                        break;
+                    }
+                        
+                    case 3: {
+                        set({ bodyView: 'confirm_handoff' as const });
+                        break;
+                    }
+                        
+                    case 4: {
+                        set(state => ({
+                            files: state.files.map(file =>
+                                file.status === 'FAILED'
+                                    ? { ...file, status: 'REJECTED' as const }
+                                    : file,
+                            ),
+                            bodyView: 'none' as const,
+                        }));
+                        break;
+                    }
+                        
+                    default:
+                        set({ bodyView: 'none' as const });
+                }
+            },
+            confirmHandoff: () => {
+                const { hash, message, reasoning, files } = useReviewStore.getState();
+    --- TRANSACTION SUMMARY ---
+
+    --- CURRENT FILE STATUS ---
+                const handoffPrompt = ReviewService.generateHandoffPrompt(hash, message, reasoning, files);
+
+                // eslint-disable-next-line no-console
+                console.log('[CLIPBOARD] Copied Handoff Prompt.');
+                ReviewService.performHandoff(hash);
+            },
+            
+            // Navigation Actions
+            scrollReasoningUp: () => set(state => ({
+                reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1),
+            })),
+            scrollReasoningDown: () => set(state => {
+                const maxLines = state.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({
+                scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1),
+            })),
+            navigateScriptErrorDown: () => set(state => {
+                const selectedScript = state.scripts[state.selectedItemIndex - state.files.length];
+                if (selectedScript && selectedScript.output) {
+                    const errorLines = selectedScript.output.split('\n').filter(line => 
+                        line.includes('Error') || line.includes('Warning'),
+                    );
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 45

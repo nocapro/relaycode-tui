@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useDashboardStore, type Transaction } from './dashboard.store';
+import { TransactionService } from '../services/transaction.service';
 
 // Types from README
 export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
@@ -229,9 +230,7 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
         confirmRevert: () => {
             const { transaction } = get();
             if (!transaction) return;
-            // In a real app, this would create a new transaction. Here we'll just update status.
-            const { updateTransactionStatus } = useDashboardStore.getState().actions;
-            updateTransactionStatus(transaction.id, 'REVERTED');
+            TransactionService.revertTransaction(transaction.id);
             set({ bodyView: 'NONE' });
         },
     },

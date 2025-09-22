@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { sleep } from '../utils';
 import { useAppStore } from './app.store';
 import { useDashboardStore } from './dashboard.store';
+import { ReviewService } from '../services/review.service';
 
 // --- Types ---
 
@@ -34,7 +35,7 @@ export interface ApplyStep {
     duration?: number;
 }
 
-const initialApplySteps: ApplyStep[] = [
+export const initialApplySteps: ApplyStep[] = [
     { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
     { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
     { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
@@ -112,6 +113,10 @@ interface ReviewState {
         scrollReasoningDown: () => void;
         navigateScriptErrorUp: () => void;
         navigateScriptErrorDown: () => void,
+        
+        // "Private" actions for service layer
+        _updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+        _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
     };
 }
 
@@ -176,7 +181,7 @@ const mockReasoning = `1. Identified a potential uncaught exception in the \`res
 
 // --- Store Implementation ---
 
-export const useReviewStore = create<ReviewState>((set) => ({
+export const useReviewStore = create<ReviewState>((set, get) => ({
     // Transaction Info
     hash: 'e4a7c112',
     message: 'refactor: rename core utility function',
@@ -265,76 +270,8 @@ export const useReviewStore = create<ReviewState>((set) => ({
             
             set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
             showReviewProcessingScreen();
-            
-            const updateStep = (id: string, status: ApplyStep['status'], duration?: number, details?: string) => {
-                set(state => ({
-                    applySteps: state.applySteps.map(s => {
-                        if (s.id === id) {
-                            const newStep = { ...s, status };
-                            if (duration !== undefined) newStep.duration = duration;
-                            if (details !== undefined) newStep.details = details;
-                            return newStep;
-                        }
-                        return s;
-                    }),
-                }));
-            };
-    
-            const addSubstep = (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => {
-                 set(state => ({
-                    applySteps: state.applySteps.map(s => {
-                        if (s.id === parentId) {
-                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
-                            return { ...s, substeps: newSubsteps };
-                        }
-                        return s;
-                    }),
-                }));
-            };
-    
-            if (scenario === 'success') {
-                useReviewStore.getState().actions.simulateSuccessScenario();
-                
-                updateStep('snapshot', 'active'); await sleep(100);
-                updateStep('snapshot', 'done', 0.1);
-    
-                updateStep('memory', 'active'); await sleep(100);
-                addSubstep('memory', { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' });
-                await sleep(100);
-                addSubstep('memory', { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' });
-                updateStep('memory', 'done', 0.3);
-    
-                updateStep('post-command', 'active'); await sleep(1300);
-                addSubstep('post-command', { id: 's3', title: '`bun run test` ... Passed', status: 'done' });
-                updateStep('post-command', 'done', 2.3);
-    
-                updateStep('linter', 'active'); await sleep(1200);
-                addSubstep('linter', { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' });
-                updateStep('linter', 'done', 1.2);
-    
-                await sleep(500);
-    
-            } else { // failure scenario
-                useReviewStore.getState().actions.simulateFailureScenario();
-                
-                updateStep('snapshot', 'active'); await sleep(100);
-                updateStep('snapshot', 'done', 0.1);
-    
-                updateStep('memory', 'active'); await sleep(100);
-                addSubstep('memory', { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' });
-                await sleep(100);
-                addSubstep('memory', { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' });
-                await sleep(100);
-                addSubstep('memory', { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' });
-                updateStep('memory', 'done', 0.5);
-    
-                await sleep(100);
-                updateStep('post-command', 'skipped', undefined, 'Skipped due to patch application failure');
-                await sleep(100);
-                updateStep('linter', 'skipped', undefined, 'Skipped due to patch application failure');
-                
-                await sleep(500);
-            }
+
+            await ReviewService.runApplySimulation(scenario);
     
             showReviewScreen();
         },
@@ -480,129 +417,50 @@ export const useReviewStore = create<ReviewState>((set) => ({
             return {};
         }),
         copyAllDiffs: () => set(state => {
-            const content = state.files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
             // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied all diffs: ${state.files.length} files`);
             return { copyModeLastCopied: 'All Diffs' };
         }),
         
-        // Repair Actions
-        tryRepairFile: () => set(state => {
-            const { selectedItemIndex, files } = state;
-            if (selectedItemIndex < files.length) {
-                const file = files[selectedItemIndex];
-                if (file && file.status === 'FAILED') {
-                    // Generate repair prompt and copy to clipboard
-                    const repairPrompt = `The patch failed to apply to ${file.path}. Please generate a corrected patch.
-
-Error: ${file.error}
-Strategy: ${file.strategy}
-
-ORIGINAL CONTENT:
----
-// ... original file content would be here ...
----
-
-FAILED PATCH:
----
-${file.diff || '// ... failed diff would be here ...'}
----
-
-Please provide a corrected patch that addresses the error.`;
-
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
-
-                    // Mock: Update file status to show it's being repaired
-                    const newFiles = [...files];
-                    newFiles[selectedItemIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
-
-                    return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
-                }
-            }
-            return {};
-        }),
+// Repair Actions
+tryRepairFile: () => {
+    const { selectedItemIndex, files } = get();
+    if (selectedItemIndex < files.length) {
+        const file = files[selectedItemIndex];
+        if (file && file.status === 'FAILED') {
+            ReviewService.tryRepairFile(file, selectedItemIndex);
+        }
+    }
+},
         showBulkRepair: () => set(() => ({
             bodyView: 'bulk_repair' as const,
         })),
         executeBulkRepairOption: async (option: number) => {
+            const { files } = get();
+
             switch (option) {
-                case 1: {
-                    set(state => {
-                        // Copy Bulk Re-apply Prompt
-                        const failedFiles = state.files.filter(f => f.status === 'FAILED');
-                        const bulkPrompt = `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
-
-IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
-
-${failedFiles.map(file => `--- FILE: ${file.path} ---
-Strategy: ${file.strategy}
-Error: ${file.error}
-
-ORIGINAL CONTENT:
----
-// ... original content of ${file.path} ...
----
-
-FAILED PATCH:
----
-${file.diff || '// ... failed diff ...'}
----
-`).join('\n')}
-
-Please analyze all failed files and provide a complete, corrected response.`;
-
-                        // eslint-disable-next-line no-console
-                        console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files`);
-
-                        const newFiles = state.files.map(file =>
-                            file.status === 'FAILED'
-                                ? { ...file, status: 'AWAITING' as const }
-                                : file,
-                        );
-
-                        return { files: newFiles, bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied' };
-                    });
+                case 1: { // Generate & Copy Bulk Repair Prompt
+                    const bulkPrompt = ReviewService.generateBulkRepairPrompt(files);
+                    const failedFiles = files.filter(f => f.status === 'FAILED');
+                    // eslint-disable-next-line no-console
+                    console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files.`);
+                    // In a real app, this would use clipboardy.writeSync(bulkPrompt)
+                    set({ bodyView: 'none', copyModeLastCopied: 'Bulk repair prompt copied.' });
                     break;
                 }
                     
-                case 2: {
-                    const failedFileIds = new Set(useReviewStore.getState().files.filter(f => f.status === 'FAILED').map(f => f.id));
-
-                    set(state => ({
-                        files: state.files.map(file =>
-                            failedFileIds.has(file.id)
-                                ? { ...file, status: 'RE_APPLYING' as const }
-                                : file,
-                        ),
-                        bodyView: 'none' as const,
-                    }));
-
-                    await sleep(1500); // Simulate re-apply
-
-                    // Mock a mixed result
-                    let first = true;
-                    set(state => ({
-                        files: state.files.map(file => {
-                            if (failedFileIds.has(file.id)) {
-                                if (first) {
-                                    first = false;
-                                    return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
-                                }
-                                return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
-                            }
-                            return file;
-                        }),
-                    }));
+                case 2: { // Attempt Bulk Re-apply
+                    set({ bodyView: 'none' as const });
+                    await ReviewService.runBulkReapply();
                     break;
                 }
                     
-                case 3: {
+                case 3: { // Handoff to Human
                     set({ bodyView: 'confirm_handoff' as const });
                     break;
                 }
                     
-                case 4: {
+                case 4: { // Reject All Failed
                     set(state => ({
                         files: state.files.map(file =>
                             file.status === 'FAILED'
@@ -614,48 +472,17 @@ Please analyze all failed files and provide a complete, corrected response.`;
                     break;
                 }
                     
-                default:
+                default: // Close modal
                     set({ bodyView: 'none' as const });
             }
         },
         confirmHandoff: () => {
-            const { hash, message, reasoning, files } = useReviewStore.getState();
-            const { updateTransactionStatus } = useDashboardStore.getState().actions;
-            const { showDashboardScreen } = useAppStore.getState().actions;
-
-            const successfulFiles = files.filter(f => f.status === 'APPROVED');
-            const failedFiles = files.filter(f => f.status === 'FAILED');
-
-            const handoffPrompt = `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
-
-The full plan for this transaction is detailed in the YAML file located at: .relay/transactions/${hash}.yml. Please use this file as your primary source of truth for the overall goal.
-
-Here is the current status of the transaction:
-
---- TRANSACTION SUMMARY ---
-Goal: ${message}
-Reasoning:
-${reasoning}
-
---- CURRENT FILE STATUS ---
-SUCCESSFUL CHANGES (already applied, no action needed):
-${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || '  (None)'}
-
-FAILED CHANGES (these are the files you need to fix):
-${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${f.error})`).join('\n')}
-
-Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.`;
+            const { hash, message, reasoning, files } = get();
+            const handoffPrompt = ReviewService.generateHandoffPrompt(hash, message, reasoning, files);
 
             // eslint-disable-next-line no-console
-            console.log('[CLIPBOARD] Copied Handoff Prompt.');
-
-            // This is a bit of a hack to find the right transaction to update in the demo
-            const txToUpdate = useDashboardStore.getState().transactions.find(tx => tx.hash === hash);
-            if (txToUpdate) {
-                updateTransactionStatus(txToUpdate.id, 'HANDOFF');
-            }
-
-            showDashboardScreen();
+            console.log('[CLIPBOARD] Copied Handoff Prompt.'); // In real app: clipboardy.writeSync(handoffPrompt)
+            ReviewService.performHandoff(hash);
         },
         
         // Navigation Actions
@@ -679,5 +506,31 @@ Your job is to now work with me to fix the FAILED files and achieve the original
             }
             return {};
         }),
+        
+        // "Private" actions for service layer
+        _updateApplyStep: (id, status, duration, details) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === id) {
+                        const newStep = { ...s, status };
+                        if (duration !== undefined) newStep.duration = duration;
+                        if (details !== undefined) newStep.details = details;
+                        return newStep;
+                    }
+                    return s;
+                }),
+            }));
+        },
+        _addApplySubstep: (parentId, substep) => {
+             set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId) {
+                        const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
     },
 }));

@@ -11,19 +11,6 @@ export const useTransactionHistoryScreen = () => {
 
     const [viewOffset, setViewOffset] = useState(0);
     
-    // State for CopyMode sub-component, managed by the hook
-    const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
-
-    const toggleField = (field: string) => {
-        const newFields = new Set(selectedFields);
-        if (newFields.has(field)) {
-            newFields.delete(field);
-        } else {
-            newFields.add(field);
-        }
-        setSelectedFields(newFields);
-    };
-
     const visibleItemPaths = useMemo(
         () => getVisibleItemPaths(store.transactions, store.expandedIds),
         [store.transactions, store.expandedIds],
@@ -49,10 +36,10 @@ export const useTransactionHistoryScreen = () => {
         }
         if (store.mode === 'COPY') {
             if (key.escape || input.toLowerCase() === 'c') store.actions.setMode('LIST');
-            if (key.return) store.actions.executeCopy(Array.from(selectedFields));
-            if (input.toLowerCase() === 'm') toggleField('Git Messages');
-            if (input.toLowerCase() === 'r') toggleField('Reasonings');
-            // Add other toggles...
+            if (key.return) store.actions.executeCopy();
+            if (input.toLowerCase() === 'm') store.actions.toggleCopySelection('Git Messages');
+            if (input.toLowerCase() === 'r') store.actions.toggleCopySelection('Reasonings');
+            // Add other toggles here if needed for other copyFields
             return;
         }
         if (store.mode === 'BULK_ACTIONS') {
@@ -104,7 +91,7 @@ export const useTransactionHistoryScreen = () => {
         visibleItemPaths,
         
         // For CopyMode sub-component
-        selectedFields,
+        selectedFields: store.copyModeSelections,
         copyFields,
     };
 };

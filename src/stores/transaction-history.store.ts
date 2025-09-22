@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { TransactionService } from '../services/transaction.service';
 
 // --- Types ---
 
@@ -38,6 +39,7 @@ interface TransactionHistoryState {
     expandedIds: Set<string>; // holds ids of expanded items
     filterQuery: string;
     selectedForAction: Set<string>; // set of transaction IDs
+    copyModeSelections: Set<string>;
     lastCopiedMessage: string | null;
 
     actions: {
@@ -50,35 +52,11 @@ interface TransactionHistoryState {
         setMode: (mode: HistoryViewMode) => void;
         setFilterQuery: (query: string) => void;
         applyFilter: () => void;
-        executeCopy: (selections: string[]) => void;
+        toggleCopySelection: (field: string) => void;
+        executeCopy: () => void;
         prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
     }
 }
-
-// --- Mock Data ---
-const createMockTransactions = (): HistoryTransaction[] => {
-    const now = Date.now();
-    return Array.from({ length: 42 }, (_, i) => {
-        const status: TransactionStatus = i % 5 === 2 ? 'Handoff' : i % 5 === 3 ? 'Reverted' : 'Committed';
-        const files: FileChange[] = [
-            { id: `${i}-1`, path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 25, linesRemoved: 8, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -45,7 +45,9 @@\n-    for (const [filePath, content] of entries) {\n+    const restoreErrors: { path: string, error: unknown }[] = [];\n...\n...\n...\n...\n-    another line removed' },
-            { id: `${i}-2`, path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 10, linesRemoved: 2, diff: 'diff for logger' },
-            { id: `${i}-3`, path: 'src/utils/old-helper.ts', type: 'DEL', linesAdded: 0, linesRemoved: 30, diff: 'diff for old-helper' },
-        ];
-        const linesAdded = files.reduce((sum, f) => sum + f.linesAdded, 0);
-        const linesRemoved = files.reduce((sum, f) => sum + f.linesRemoved, 0);
-
-        return {
-            id: `tx-${i}`,
-            hash: Math.random().toString(16).slice(2, 10),
-            timestamp: now - i * 24 * 60 * 60 * 1000,
-            status,
-            message: `feat: commit message number ${42 - i}`,
-            files,
-            stats: { files: files.length, linesAdded, linesRemoved },
-        };
-    });
-};
 
 export const getVisibleItemPaths = (transactions: HistoryTransaction[], expandedIds: Set<string>): string[] => {
     const paths: string[] = [];
@@ -101,11 +79,12 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
     expandedIds: new Set(),
     filterQuery: '',
     selectedForAction: new Set(),
+    copyModeSelections: new Set(['Git Messages', 'Reasonings']),
     lastCopiedMessage: null,
 
     actions: {
         load: (initialState) => {
-            const transactions = createMockTransactions();
+            const transactions = TransactionService.createMockTransactions();
             set({
                 transactions,
                 selectedItemPath: transactions[0]?.id || '',
@@ -113,6 +92,7 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
                 expandedIds: new Set(),
                 selectedForAction: new Set(),
                 filterQuery: '',
+                copyModeSelections: new Set(['Git Messages', 'Reasonings']),
                 lastCopiedMessage: null,
                 ...initialState,
             });
@@ -183,10 +163,19 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
             // For the demo, we just go back to LIST mode.
             set({ mode: 'LIST' });
         },
-        executeCopy: (selections) => {
+        toggleCopySelection: (field) => set(state => {
+            const newSelections = new Set(state.copyModeSelections);
+            if (newSelections.has(field)) {
+                newSelections.delete(field);
+            } else {
+                newSelections.add(field);
+            }
+            return { copyModeSelections: newSelections };
+        }),
+        executeCopy: () => {
              // Mock copy
-            const { selectedForAction } = get();
-            const message = `Copied ${selections.join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
+            const { selectedForAction, copyModeSelections } = get();
+            const message = `Copied ${Array.from(copyModeSelections).join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
             // In real app: clipboardy.writeSync(...)
             // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD MOCK] ${message}`);
@@ -204,7 +193,11 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
                     get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
                     break;
                 case 'copy':
-                    get().actions.load({ mode: 'COPY', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                    get().actions.load({
+                        mode: 'COPY',
+                        selectedForAction: new Set(['tx-0', 'tx-2']),
+                        copyModeSelections: new Set(['Git Messages', 'Diffs', 'UUIDs']),
+                    });
                     break;
                 case 'bulk':
                     get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });

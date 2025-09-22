@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Text, useApp, useInput } from 'ink';
 import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
 import { useAppStore } from '../stores/app.store';
-import { sleep } from '../utils';
+import { InitService } from '../services/init.service';
 
 export const useInitializationScreen = () => {
     const phase = useInitStore(s => s.phase);
@@ -29,49 +29,14 @@ export const useInitializationScreen = () => {
     });
 
     useEffect(() => {
-        actions.resetInit();
-        const runSimulation = async () => {
-            actions.setPhase('ANALYZE');
-            for (const task of initialAnalyzeTasks) {
-                actions.updateAnalyzeTask(task.id, 'active');
-                await sleep(800);
-                actions.updateAnalyzeTask(task.id, 'done');
-            }
-            actions.setAnalysisResults('relaycode (from package.json)', true);
-            await sleep(500);
-
-            actions.setPhase('CONFIGURE');
-            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
-            for (const task of configTasksUntilInteractive) {
-                actions.updateConfigureTask(task.id, 'active');
-                await sleep(800);
-                actions.updateConfigureTask(task.id, 'done');
-            }
-            await sleep(500);
-
-            actions.setPhase('INTERACTIVE');
-        };
-
-        runSimulation();
-    }, [actions]);
+        InitService.runInitializationProcess();
+    }, []);
 
     useEffect(() => {
         if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
-            const resumeSimulation = async () => {
-                actions.setPhase('CONFIGURE');
-                const lastTask = initialConfigureTasks[2];
-                if (lastTask) {
-                    actions.updateConfigureTask(lastTask.id, 'active');
-                    await sleep(800);
-                    actions.updateConfigureTask(lastTask.id, 'done');
-                    await sleep(500);
-
-                    actions.setPhase('FINALIZE');
-                }
-            };
-            resumeSimulation();
+            InitService.resumeInitializationProcess();
         }
-    }, [interactiveChoice, phase, actions]);
+    }, [interactiveChoice, phase]);
 
     const {
         analyzeTasks,

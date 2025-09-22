@@ -45,6 +45,7 @@
     "useGitignore": true,
     "useDefaultPatterns": true,
     "customPatterns": [
+      "src/components"
       // "src/components/GlobalHelpScreen.tsx",
       // "src/components/DashboardScreen.tsx",
       // "src/components/InitializationScreen.tsx",
