@@ -1,0 +1,2218 @@
+uuid: c32c525f-25c2-401d-bd3b-a9121a505b22
+projectId: relaycode-tui
+createdAt: '2025-09-22T05:33:07.396Z'
+gitCommitMsg: >-
+  refactor: move component hooks to dedicated hooks directory
+
+  - Created a new `src/hooks` directory to centralize all custom React hooks. -
+  Moved all `*.hook.tsx` files from `src/components` to `src/hooks`. - Renamed
+  hook files to follow the `use[Name].tsx` convention for better discoverability
+  and consistency. - Updated import paths in all relevant components to point to
+  the new hook locations.
+promptSummary: >-
+  I want to refactor the project to move all React hook files from the
+  `src/components` directory into a new `src/hooks` directory.
+reasoning:
+  - >-
+    I've analyzed your request to refactor the project structure by moving all
+    hook files into a dedicated `src/hooks` directory. As an expert AI
+    programmer, I'll also follow best practices by renaming the hook files to be
+    more idiomatic (e.g., `useMyHook.tsx`).
+  - 'Here is my step-by-step plan:'
+  - >-
+    1.  **Move and Rename Hook Files**: I will move all files ending in
+    `.hook.tsx` from `src/components` to a new `src/hooks` directory. During
+    this move, I will also rename them from `ComponentName.hook.tsx` to
+    `useComponentName.tsx` to align with React conventions.
+  - >-
+    2.  **Update Import Paths**: I will then update the corresponding component
+    files in `src/components` to import their hooks from the new `src/hooks`
+    directory with the updated file names.
+  - >-
+    This refactoring will improve the project's organization and
+    maintainability.
+  - '### Move and Rename Hook Files'
+  - First, I'll move and rename the eight hook files.
+  - '### Update Component Imports'
+  - >-
+    Next, I'll update the component files to reflect the new location and names
+    of the hooks they use.
+  - These changes complete the requested refactoring.
+operations:
+  - type: rename
+    from: src/components/DashboardScreen.hook.tsx
+    to: src/hooks/useDashboardScreen.tsx
+  - type: rename
+    from: src/components/DebugMenu.hook.tsx
+    to: src/hooks/useDebugMenu.tsx
+  - type: rename
+    from: src/components/GitCommitScreen.hook.tsx
+    to: src/hooks/useGitCommitScreen.tsx
+  - type: rename
+    from: src/components/InitializationScreen.hook.tsx
+    to: src/hooks/useInitializationScreen.tsx
+  - type: rename
+    from: src/components/ReviewScreen.hook.tsx
+    to: src/hooks/useReviewScreen.tsx
+  - type: rename
+    from: src/components/SplashScreen.hook.tsx
+    to: src/hooks/useSplashScreen.tsx
+  - type: rename
+    from: src/components/TransactionDetailScreen.hook.tsx
+    to: src/hooks/useTransactionDetailScreen.tsx
+  - type: rename
+    from: src/components/TransactionHistoryScreen.hook.tsx
+    to: src/hooks/useTransactionHistoryScreen.tsx
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: |+
+      --- src/components/DashboardScreen.tsx
+      +++ src/components/DashboardScreen.tsx
+      @@ -3,8 +3,8 @@
+       import Spinner from 'ink-spinner';
+       import { type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
+       import Separator from './Separator';
+       import GlobalHelpScreen from './GlobalHelpScreen';
+      -import { useDashboardScreen } from './DashboardScreen.hook';
+      +import { useDashboardScreen } from '../hooks/useDashboardScreen';
+       
+       // --- Sub-components & Helpers ---
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugMenu.tsx
+    content: |+
+      --- src/components/DebugMenu.tsx
+      +++ src/components/DebugMenu.tsx
+      @@ -2,7 +2,7 @@
+       import { Box, Text } from 'ink';
+       import Separator from './Separator';
+      -import { useDebugMenu, type MenuItem } from './DebugMenu.hook';
+      +import { useDebugMenu, type MenuItem } from '../hooks/useDebugMenu';
+       
+       const getKeyForIndex = (index: number): string => {
+           if (index < 9) {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/GitCommitScreen.tsx
+    content: |+
+      --- src/components/GitCommitScreen.tsx
+      +++ src/components/GitCommitScreen.tsx
+      @@ -3,7 +3,7 @@
+       import { Box, Text } from 'ink';
+       import Spinner from 'ink-spinner';
+       import Separator from './Separator';
+      -import { useGitCommitScreen } from './GitCommitScreen.hook';
+      +import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+       
+       const GitCommitScreen = () => {
+           const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: "--- src/components/InitializationScreen.tsx\n+++ src/components/InitializationScreen.tsx\n@@ -3,7 +3,7 @@\n import { Box, Text } from 'ink';\n import { type Task } from '../stores/init.store';\n import Separator from './Separator';\n-import { useInitializationScreen } from './InitializationScreen.hook';\n+import { useInitializationScreen } from '../hooks/useInitializationScreen';\n \n const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n \tlet symbol: React.ReactNode;\n\n"
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: |+
+      --- src/components/ReviewScreen.tsx
+      +++ src/components/ReviewScreen.tsx
+      @@ -4,7 +4,7 @@
+       import Separator from './Separator';
+       import DiffScreen from './DiffScreen';
+       import ReasonScreen from './ReasonScreen';
+      -import { useReviewScreen } from './ReviewScreen.hook';
+      +import { useReviewScreen } from '../hooks/useReviewScreen';
+       
+       // --- Sub-components ---
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: |+
+      --- src/components/SplashScreen.tsx
+      +++ src/components/SplashScreen.tsx
+      @@ -2,7 +2,7 @@
+       import { Box, Text } from 'ink';
+       import Separator from './Separator';
+      -import { useSplashScreen } from './SplashScreen.hook';
+      +import { useSplashScreen } from '../hooks/useSplashScreen';
+       
+       const SplashScreen = () => {
+           const { countdown } = useSplashScreen();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionDetailScreen.tsx
+    content: >+
+      --- src/components/TransactionDetailScreen.tsx
+
+      +++ src/components/TransactionDetailScreen.tsx
+
+      @@ -3,7 +3,7 @@
+       import { Box, Text } from 'ink';
+       import { type FileChangeType } from '../stores/transaction-detail.store';
+       import Separator from './Separator';
+      -import { useTransactionDetailScreen } from
+      './TransactionDetailScreen.hook';
+
+      +import { useTransactionDetailScreen } from
+      '../hooks/useTransactionDetailScreen';
+       
+       const getFileChangeTypeIcon = (type: FileChangeType) => {
+           switch (type) {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionHistoryScreen.tsx
+    content: >+
+      --- src/components/TransactionHistoryScreen.tsx
+
+      +++ src/components/TransactionHistoryScreen.tsx
+
+      @@ -3,7 +3,7 @@
+       import TextInput from 'ink-text-input';
+       import { type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
+       import Separator from './Separator';
+      -import { useTransactionHistoryScreen } from
+      './TransactionHistoryScreen.hook';
+
+      +import { useTransactionHistoryScreen } from
+      '../hooks/useTransactionHistoryScreen';
+       
+       // --- Sub-components ---
+       
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useDashboardScreen.tsx: null
+  src/hooks/useGitCommitScreen.tsx: null
+  src/hooks/useDebugMenu.tsx: null
+  src/hooks/useInitializationScreen.tsx: null
+  src/hooks/useReviewScreen.tsx: null
+  src/hooks/useSplashScreen.tsx: null
+  src/hooks/useTransactionDetailScreen.tsx: null
+  src/hooks/useTransactionHistoryScreen.tsx: null
+  src/components/DashboardScreen.hook.tsx: >-
+    import { useMemo, useState, useEffect } from 'react';
+
+    import { useApp, useInput } from 'ink';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+    import { useStdoutDimensions } from '../utils';
+
+
+    export const useDashboardScreen = () => {
+        const [, rows] = useStdoutDimensions();
+        const [viewOffset, setViewOffset] = useState(0);
+        const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
+        const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
+        const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+        const {
+            togglePause,
+            moveSelectionUp,
+            moveSelectionDown,
+            startApproveAll,
+            confirmAction,
+            cancelAction,
+            toggleHelp,
+        } = useDashboardStore(s => s.actions);
+        const { exit } = useApp();
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+        const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+        const isModal = status === 'CONFIRM_APPROVE';
+        const isProcessing = status === 'APPROVING';
+
+        useEffect(() => {
+            if (selectedTransactionIndex < viewOffset) {
+                setViewOffset(selectedTransactionIndex);
+            } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {
+                setViewOffset(selectedTransactionIndex - viewportHeight + 1);
+            }
+        }, [selectedTransactionIndex, viewOffset, viewportHeight]);
+
+        useInput((input, key) => {
+            if (input === '?') {
+                toggleHelp();
+                return;
+            }
+
+            if (showHelp) {
+                if (key.escape || input === '?') toggleHelp();
+                return;
+            }
+
+            if (isModal) {
+                if (key.return) confirmAction();
+                if (key.escape) cancelAction();
+                return;
+            }
+
+            if (isProcessing) return; // No input while processing
+            
+            if (input.toLowerCase() === 'q') exit();
+
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+            
+            if (key.return) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (selectedTx?.status === 'PENDING') {
+                    // For PENDING transactions, we still go to the review screen.
+                    appActions.showReviewScreen();
+                } else if (selectedTx) {
+                    detailActions.loadTransaction(selectedTx.id);
+                    appActions.showTransactionDetailScreen();
+                }
+            }
+            
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                historyActions.load();
+                appActions.showTransactionHistoryScreen();
+            }
+        });
+        
+        const transactionsToConfirm = useMemo(() => {
+            if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+            return [];
+        }, [status, transactions]);
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            showHelp,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/components/DebugMenu.hook.tsx: >-
+    import { useState } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+
+    export interface MenuItem {
+        title: string;
+        action: () => void;
+    }
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const reviewActions = useReviewStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleDiffView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleReasoningView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleCopyMode();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    reviewActions.toggleScriptView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.showBulkRepair();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.executeBulkRepairOption(3); // Option 3 is Handoff
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => Math.max(0, i - 1));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+                return;
+            }
+            if (key.escape || (key.ctrl && input === 'b')) {
+                appActions.toggleDebugMenu();
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+  src/components/GitCommitScreen.hook.tsx: |-
+    import { useInput } from 'ink';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useAppStore } from '../stores/app.store';
+
+    export const useGitCommitScreen = () => {
+        const { transactionsToCommit, finalCommitMessage, isCommitting } = useCommitStore();
+        const { commit } = useCommitStore(s => s.actions);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        useInput((input, key) => {
+            if (isCommitting) return;
+
+            if (key.escape) {
+                showDashboardScreen();
+            }
+            if (key.return) {
+                commit().then(() => {
+                    showDashboardScreen();
+                });
+            }
+        });
+
+        return { transactionsToCommit, finalCommitMessage, isCommitting };
+    };
+  src/components/InitializationScreen.hook.tsx: >-
+    import React, { useEffect } from 'react';
+
+    import { Text, useApp, useInput } from 'ink';
+
+    import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+    '../stores/init.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { sleep } from '../utils';
+
+
+    export const useInitializationScreen = () => {
+        const phase = useInitStore(s => s.phase);
+        const interactiveChoice = useInitStore(s => s.interactiveChoice);
+        const actions = useInitStore(s => s.actions);
+        const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+        const { exit } = useApp();
+
+        useInput((input, key) => {
+            if (phase === 'INTERACTIVE') {
+                if (key.return) {
+                    actions.setInteractiveChoice('ignore');
+                } else if (input.toLowerCase() === 's') {
+                    actions.setInteractiveChoice('share');
+                }
+            }
+            if (phase === 'FINALIZE') {
+                if (input.toLowerCase() === 'q') {
+                    exit();
+                } else if (input.toLowerCase() === 'w') {
+                    showDashboardScreen();
+                }
+            }
+        });
+
+        useEffect(() => {
+            actions.resetInit();
+            const runSimulation = async () => {
+                actions.setPhase('ANALYZE');
+                for (const task of initialAnalyzeTasks) {
+                    actions.updateAnalyzeTask(task.id, 'active');
+                    await sleep(800);
+                    actions.updateAnalyzeTask(task.id, 'done');
+                }
+                actions.setAnalysisResults('relaycode (from package.json)', true);
+                await sleep(500);
+
+                actions.setPhase('CONFIGURE');
+                const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+                for (const task of configTasksUntilInteractive) {
+                    actions.updateConfigureTask(task.id, 'active');
+                    await sleep(800);
+                    actions.updateConfigureTask(task.id, 'done');
+                }
+                await sleep(500);
+
+                actions.setPhase('INTERACTIVE');
+            };
+
+            runSimulation();
+        }, [actions]);
+
+        useEffect(() => {
+            if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+                const resumeSimulation = async () => {
+                    actions.setPhase('CONFIGURE');
+                    const lastTask = initialConfigureTasks[2];
+                    if (lastTask) {
+                        actions.updateConfigureTask(lastTask.id, 'active');
+                        await sleep(800);
+                        actions.updateConfigureTask(lastTask.id, 'done');
+                        await sleep(500);
+
+                        actions.setPhase('FINALIZE');
+                    }
+                };
+                resumeSimulation();
+            }
+        }, [interactiveChoice, phase, actions]);
+
+        const {
+            analyzeTasks,
+            configureTasks,
+            projectId,
+        } = useInitStore();
+
+        let footerText;
+        switch (phase) {
+            case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+            case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+            case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+            case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+        }
+
+        return {
+            phase,
+            analyzeTasks,
+            configureTasks,
+            interactiveChoice,
+            projectId,
+            footerText,
+        };
+    };
+  src/components/ReviewScreen.hook.tsx: |-
+    import { useMemo } from 'react';
+    import { useInput, useApp } from 'ink';
+    import { useReviewStore } from '../stores/review.store';
+    import { useAppStore } from '../stores/app.store';
+
+    export const useReviewScreen = () => {
+        const { exit } = useApp();
+        const store = useReviewStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const {
+            hash, message, prompt, reasoning, files, scripts, patchStatus,
+            selectedItemIndex, bodyView,
+        } = store;
+        const {
+            moveSelectionUp, moveSelectionDown, toggleFileApproval,
+            toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+            startApplySimulation,
+            rejectAllFiles, approve,
+            toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
+            copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
+            tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
+            scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+        } = store.actions;
+
+        const {
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useMemo(() => {
+            const approvedFiles = files.filter(f => f.status === 'APPROVED');
+            return {
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+                approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+                approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+            };
+        }, [files]);
+
+        useInput((input, key) => {
+            // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+            if (input === '1') {
+                startApplySimulation('success');
+                return;
+            }
+            if (input === '2') {
+                // The store's default is failure, but to re-trigger the processing screen
+                startApplySimulation('failure');
+                return;
+            }
+
+            if (input.toLowerCase() === 'q') exit();
+
+            // Handle Escape key - context-sensitive behavior
+            if (key.escape) {
+                if (bodyView === 'copy_mode') {
+                    toggleCopyMode();
+                } else if (bodyView === 'confirm_handoff') {
+                    // Pressing Esc on confirm handoff goes back to the main view
+                    toggleReasoningView(); // Toggles any view off
+                } else if (bodyView === 'bulk_repair') {
+                    showBulkRepair(); // Close bulk repair modal
+                } else if (bodyView !== 'none') {
+                    if (bodyView === 'diff') toggleDiffView();
+                    if (bodyView === 'reasoning') toggleReasoningView();
+                    if (bodyView === 'script_output') toggleScriptView();
+                } else {
+                    showDashboardScreen();
+                }
+                return;
+            }
+
+            // Copy Mode Navigation
+            if (bodyView === 'copy_mode') {
+                if (key.upArrow) moveCopySelectionUp();
+                if (key.downArrow) moveCopySelectionDown();
+                if (key.return) copySelectedItem();
+                
+                // Hotkey shortcuts
+                if (input.toLowerCase() === 'u') copyUUID();
+                if (input.toLowerCase() === 'm') copyMessage();
+                if (input.toLowerCase() === 'p') copyPrompt();
+                if (input.toLowerCase() === 'r') copyReasoning();
+                if (input.toLowerCase() === 'f') copyFileDiff();
+                if (input.toLowerCase() === 'a') copyAllDiffs();
+                if (input.toLowerCase() === 'c') toggleCopyMode();
+                return;
+            }
+
+            // Handoff Confirmation
+            if (bodyView === 'confirm_handoff') {
+                if (key.return) {
+                    confirmHandoff();
+                }
+                return;
+            }
+
+            // Bulk Repair Navigation
+            if (bodyView === 'bulk_repair') {
+                if (input >= '1' && input <= '4') {
+                    executeBulkRepairOption(parseInt(input));
+                }
+                return;
+            }
+
+            // Reasoning Scroll Navigation
+            if (bodyView === 'reasoning') {
+                if (key.upArrow) scrollReasoningUp();
+                if (key.downArrow) scrollReasoningDown();
+                if (input.toLowerCase() === 'r') toggleReasoningView();
+                return;
+            }
+
+            // Script Output Navigation
+            if (bodyView === 'script_output') {
+                if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+                if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+                if (key.return) toggleScriptView();
+                if (input.toLowerCase() === 'c') {
+                    // Copy script output
+                    const scriptIndex = selectedItemIndex - numFiles;
+                    const selectedScript = scripts[scriptIndex];
+                    if (selectedScript) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                    }
+                }
+                return;
+            }
+
+            // Diff View Navigation
+            if (bodyView === 'diff') {
+                if (input.toLowerCase() === 'x') expandDiff();
+                if (input.toLowerCase() === 'd') toggleDiffView();
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleReasoningView();
+
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status !== 'FAILED') {
+                        toggleFileApproval();
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleDiffView();
+                }
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleScriptView();
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                toggleCopyMode();
+            }
+
+            // Handle T for single repair and Shift+T for bulk repair
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = files.some(f => f.status === 'FAILED');
+                    if (hasFailedFiles) {
+                        showBulkRepair();
+                    }
+                } else {
+                    if (selectedItemIndex < numFiles) {
+                        const file = files[selectedItemIndex];
+                        if (file && file.status === 'FAILED') {
+                            tryRepairFile();
+                        }
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        return { ...store, numFiles, approvedFilesCount, approvedLinesAdded, approvedLinesRemoved };
+    };
+  src/components/SplashScreen.hook.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState(5);
+
+        const handleSkip = () => {
+            showInitScreen();
+        };
+
+        useInput(() => {
+            handleSkip();
+        });
+
+        useEffect(() => {
+            if (countdown === 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen]);
+
+        return { countdown };
+    };
+  src/components/TransactionDetailScreen.hook.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+
+    export const useTransactionDetailScreen = () => {
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const store = useTransactionDetailStore();
+        const {
+            transaction,
+            files,
+            bodyView,
+        } = store;
+
+        const {
+            // Main nav
+            navigateUp, navigateDown, handleEnterOrRight, handleEscapeOrLeft,
+            toggleCopyMode, toggleRevertConfirm,
+            // Copy mode nav
+            copyModeNavigateUp,
+            copyModeNavigateDown,
+            copyModeToggleSelection,
+            copyModeExecuteCopy,
+            // Revert modal nav
+            confirmRevert,
+        } = store.actions;
+
+        useInput((input, key) => {
+            if (bodyView === 'COPY_MODE') {
+                if (key.upArrow) copyModeNavigateUp();
+                if (key.downArrow) copyModeNavigateDown();
+                if (input === ' ') copyModeToggleSelection();
+                if (key.return) copyModeExecuteCopy();
+                if (key.escape || input.toLowerCase() === 'c') toggleCopyMode();
+                return;
+            }
+            
+            if (bodyView === 'REVERT_CONFIRM') {
+                if (key.escape) toggleRevertConfirm();
+                if (key.return) confirmRevert();
+                return;
+            }
+
+            // Main view input
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+            if (input.toLowerCase() === 'c') {
+                toggleCopyMode();
+            }
+            if (input.toLowerCase() === 'u') {
+                toggleRevertConfirm();
+            }
+
+            if (key.upArrow) navigateUp();
+            if (key.downArrow) navigateDown();
+            if (key.return || key.rightArrow) handleEnterOrRight();
+            if (key.escape || key.leftArrow) handleEscapeOrLeft();
+        });
+
+        const copyOptions = [
+            { key: 'M', label: 'Git Message' },
+            { key: 'P', label: 'Prompt' },
+            { key: 'R', label: 'Reasoning' },
+            { key: 'A', label: `All Diffs (${files.length} files)` },
+            { key: 'F', label: `Diff for: ${files[store.selectedFileIndex]?.path || 'No file selected'}` },
+            { key: 'U', label: 'UUID' },
+            { key: 'Y', label: 'Full YAML representation' },
+        ];
+
+        return {
+            ...store,
+            copyOptions,
+            actions: {
+                ...store.actions,
+                showDashboardScreen,
+            },
+        };
+    };
+  src/components/TransactionHistoryScreen.hook.tsx: >-
+    import { useState, useMemo, useEffect } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useTransactionHistoryStore, getVisibleItemPaths } from
+    '../stores/transaction-history.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useStdoutDimensions } from '../utils';
+
+
+    export const useTransactionHistoryScreen = () => {
+        const [, rows] = useStdoutDimensions();
+        const store = useTransactionHistoryStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const [viewOffset, setViewOffset] = useState(0);
+        
+        // State for CopyMode sub-component, managed by the hook
+        const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
+
+        const toggleField = (field: string) => {
+            const newFields = new Set(selectedFields);
+            if (newFields.has(field)) {
+                newFields.delete(field);
+            } else {
+                newFields.add(field);
+            }
+            setSelectedFields(newFields);
+        };
+
+        const visibleItemPaths = useMemo(
+            () => getVisibleItemPaths(store.transactions, store.expandedIds),
+            [store.transactions, store.expandedIds],
+        );
+        const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
+
+        const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+        const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
+
+        useEffect(() => {
+            if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+                setViewOffset(selectedIndex);
+            } else if (selectedIndex >= viewOffset + viewportHeight) {
+                setViewOffset(selectedIndex - viewportHeight + 1);
+            }
+        }, [selectedIndex, viewOffset, viewportHeight]);
+        
+        useInput((input, key) => {
+            if (store.mode === 'FILTER') {
+                if (key.escape) store.actions.setMode('LIST');
+                if (key.return) store.actions.applyFilter();
+                return;
+            }
+            if (store.mode === 'COPY') {
+                if (key.escape || input.toLowerCase() === 'c') store.actions.setMode('LIST');
+                if (key.return) store.actions.executeCopy(Array.from(selectedFields));
+                if (input.toLowerCase() === 'm') toggleField('Git Messages');
+                if (input.toLowerCase() === 'r') toggleField('Reasonings');
+                // Add other toggles...
+                return;
+            }
+            if (store.mode === 'BULK_ACTIONS') {
+                if (key.escape) store.actions.setMode('LIST');
+                // Add number handlers...
+                return;
+            }
+
+            // LIST mode inputs
+            if (key.upArrow) store.actions.navigateUp();
+            if (key.downArrow) store.actions.navigateDown();
+            if (key.rightArrow) store.actions.expandOrDrillDown();
+            if (key.leftArrow) store.actions.collapseOrBubbleUp();
+            if (input === ' ') store.actions.toggleSelection();
+
+            if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
+            if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
+            if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
+            
+            if (key.escape || input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+        const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+        const transactionsInView = useMemo(
+            () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
+            [store.transactions, txIdsInView],
+        );
+        const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+        const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
+        const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
+        
+        const copyFields = [
+            { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
+            { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
+        ];
+
+        return {
+            store,
+            viewOffset,
+            itemsInView,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus,
+            showingStatus,
+            visibleItemPaths,
+            
+            // For CopyMode sub-component
+            selectedFields,
+            copyFields,
+        };
+    };
+  src/components/DashboardScreen.tsx: "import React from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport { type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';\nimport Separator from './Separator';\nimport GlobalHelpScreen from './GlobalHelpScreen';\nimport { useDashboardScreen } from './DashboardScreen.hook';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'HANDOFF': return <Text color=\"magenta\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `-${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `-${minutes}m`;\n};\n\nconst EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    \n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        showHelp,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n    } = useDashboardScreen();\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <Text>\n                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n            </Text>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const pauseAction = status === 'PAUSED'\n\t\t\t? <Text>(<Text color=\"cyan\" bold>R</Text>)esume</Text>\n\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n\t\treturn (\n            <Text color=\"gray\">\n                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>Enter</Text>) Review · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n            </Text>\n        );\n    };\n    \n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            {showHelp && <GlobalHelpScreen />}\n\n            <Box flexDirection=\"column\" display={showHelp ? 'none' : 'flex'}>\n                <Text color=\"cyan\">▲ relaycode dashboard</Text>\n                <Separator />\n                <Box marginY={1}>\n                    {renderStatusBar()}\n                </Box>\n                \n                {isModal && (\n                    <>\n                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                        <Separator />\n                    </>\n                )}\n                \n                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n                <Box flexDirection=\"column\" marginTop={1}>\n                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                        const actualIndex = viewOffset + index;\n                        return (\n                            <EventStreamItem\n                                key={tx.id}\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                            />\n                        );\n                    })}\n                </Box>\n\n                <Box marginTop={1}><Separator /></Box>\n                {renderFooter()}\n            </Box>\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/components/DebugMenu.tsx: |-
+    import React from 'react';
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useDebugMenu, type MenuItem } from './DebugMenu.hook';
+
+    const getKeyForIndex = (index: number): string => {
+        if (index < 9) {
+            return (index + 1).toString();
+        }
+        return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+    };
+
+    const DebugMenu = () => {
+        const { selectedIndex, menuItems } = useDebugMenu();
+
+        return (
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="yellow"
+                width="100%"
+                paddingX={2}
+            >
+                <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+                <Separator />
+                <Box flexDirection="column" marginY={1}>
+                    {menuItems.map((item, index) => (
+                        <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                            {selectedIndex === index ? '> ' : '  '}
+                            ({getKeyForIndex(index)}) {item.title}
+                        </Text>
+                    ))}
+                </Box>
+                <Separator />
+                <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc / Ctrl+B) Close</Text>
+            </Box>
+        );
+    };
+
+    export default DebugMenu;
+  src/components/GitCommitScreen.tsx: |-
+    import React from 'react';
+    import { Box, Text } from 'ink';
+    import Spinner from 'ink-spinner';
+    import Separator from './Separator';
+    import { useGitCommitScreen } from './GitCommitScreen.hook';
+
+    const GitCommitScreen = () => {
+        const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+        const transactionLines = transactionsToCommit.map(tx => (
+            <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+        ));
+
+        const footer = isCommitting
+            ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+            : <Text>(Enter) Confirm & Commit      (Esc) Cancel</Text>;
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode git commit</Text>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text bold>TRANSACTIONS INCLUDED</Text>
+                        {transactionLines}
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text bold>FINAL COMMIT MESSAGE</Text>
+                    <Box marginTop={1}>
+                        <Text>{finalCommitMessage}</Text>
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} paddingX={2}>
+                     <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+                </Box>
+                <Separator />
+                {footer}
+            </Box>
+        );
+    };
+
+    export default GitCommitScreen;
+  src/components/InitializationScreen.tsx: "import React from 'react';\nimport { Box, Text } from 'ink';\nimport { type Task } from '../stores/init.store';\nimport Separator from './Separator';\nimport { useInitializationScreen } from './InitializationScreen.hook';\n\nconst TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n\tlet symbol: React.ReactNode;\n\tswitch (task.status) {\n\t\tcase 'pending': symbol = '( )'; break;\n\t\tcase 'active': symbol = <Text color=\"cyan\">(●)</Text>; break;\n\t\tcase 'done': symbol = <Text color=\"green\">{doneSymbol}</Text>; break;\n\t}\n\n\tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n\n\treturn (\n\t\t<Box flexDirection=\"column\">\n\t\t\t<Text>\n\t\t\t\t{symbol} {title}\n\t\t\t</Text>\n\t\t\t{task.subtext && task.status !== 'done' && (\n\t\t\t\t<Text italic color=\"gray\">\n\t\t\t\t\t{'     └─ '}{task.subtext}\n\t\t\t\t</Text>\n\t\t\t)}\n\t\t</Box>\n\t);\n};\n\nconst InitializationScreen = () => {\n    const {\n        phase,\n        analyzeTasks,\n        configureTasks,\n        interactiveChoice,\n        projectId,\n        footerText,\n    } = useInitializationScreen();\n\n    const renderAnalyze = () => (\n        <Box flexDirection=\"column\">\n            <Text bold color=\"cyan\">PHASE 1: ANALYZE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}\n            </Box>\n        </Box>\n    );\n\n    const renderContext = () => (\n        <Box flexDirection=\"column\" marginBottom={1}>\n            <Text bold color=\"cyan\">CONTEXT</Text>\n            <Text>  <Text color=\"green\">✓</Text> Project ID: {projectId}</Text>\n            <Text>  <Text color=\"green\">✓</Text> Gitignore:  Found at ./</Text>\n        </Box>\n    );\n\n    const renderConfigure = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n            </Box>\n        </Box>\n    );\n\n    const renderInteractive = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n                <Box flexDirection=\"column\" marginTop={1}>\n                    <Text><Text color=\"cyan\">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>\n                    <Text>  Do you want to share its state with your team by committing it?</Text>\n                </Box>\n            </Box>\n        </Box>\n    );\n\n    const renderFinalize = () => {\n        const stateText = interactiveChoice === 'share'\n            ? '.relay/ directory initialized. It will be committed to git.'\n            : '.relay/ directory initialized and added to .gitignore.';\n        const stateSubText = interactiveChoice === 'share'\n            ? undefined\n            : 'Local transaction history will be stored here.';\n        \n        return (\n            <Box flexDirection=\"column\">\n                <Text bold color=\"green\"> SYSTEM READY</Text>\n                <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Config:   relay.config.json created.</Text>\n                        <Text color=\"gray\" italic>          › Edit this file to tune linters, git integration, etc.</Text>\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> State:    {stateText}</Text>\n                        {stateSubText && <Text color=\"gray\" italic>          › {stateSubText}</Text>}\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n                        <Text color=\"gray\" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>\n                    </Box>\n                </Box>\n            </Box>\n        );\n    };\n\n    const renderPhase = () => {\n        switch (phase) {\n            case 'ANALYZE': return renderAnalyze();\n            case 'CONFIGURE': return renderConfigure();\n            case 'INTERACTIVE': return renderInteractive();\n            case 'FINALIZE': return renderFinalize();\n        }\n    };\n\n    return (\n        <Box flexDirection=\"column\">\n            <Text color=\"cyan\">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>\n            <Separator />\n            <Box marginY={1}>{renderPhase()}</Box>\n            <Separator />\n            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}\n        </Box>\n    );\n};\n\nexport default InitializationScreen;"
+  src/components/ReviewScreen.tsx: >-
+    import React from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import { type FileItem, type ScriptResult } from '../stores/review.store';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import { useReviewScreen } from './ReviewScreen.hook';
+
+
+    // --- Sub-components ---
+
+
+    const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+    boolean }) => {
+        let icon;
+        let iconColor;
+        switch (file.status) {
+            case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
+            case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
+            case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+            case 'AWAITING': icon = '[●]'; iconColor = 'yellow'; break;
+            case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
+        }
+
+        const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+        const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+        const prefix = isSelected ? '> ' : '  ';
+
+        if (file.status === 'FAILED') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
+                        <Text color="red">    ({file.error})</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (file.status === 'AWAITING') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
+                        <Text color="yellow">    (Bulk re-apply prompt copied!)</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (file.status === 'RE_APPLYING') {
+            return (
+                 <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} RE-APPLYING... {file.path}</Text>
+                        <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> MOD {file.path} {diffStats} [{strategy}]
+                </Text>
+            </Box>
+        );
+    };
+
+
+    const ScriptItemRow = ({
+        script,
+        isSelected,
+        isExpanded,
+    }: {
+        script: ScriptResult;
+        isSelected: boolean;
+        isExpanded: boolean;
+    }) => {
+        const icon = script.success ? '✓' : '✗';
+        const iconColor = script.success ? 'green' : 'red';
+        const arrow = isExpanded ? '▾' : '▸';
+        const prefix = isSelected ? '> ' : '  ';
+        
+        // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+        const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                          script.command.includes('lint') ? 'Linter' : 
+                          'Script';
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                    {script.summary}
+                </Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const ReviewScreen = () => {
+        const {
+            hash, message, prompt, reasoning, files, scripts, patchStatus,
+            linesAdded, linesRemoved, duration,
+            selectedItemIndex, bodyView, isDiffExpanded,
+            copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useReviewScreen();
+
+        const renderBody = () => {
+            if (bodyView === 'none') return null;
+
+            if (bodyView === 'reasoning') {
+                const reasoningLinesCount = reasoning.split('\n').length;
+                const visibleLinesCount = 10;
+                return (
+                    <Box flexDirection="column">
+                        <ReasonScreen
+                            reasoning={reasoning}
+                            scrollIndex={reasoningScrollIndex}
+                            visibleLinesCount={visibleLinesCount}
+                        />
+                        {reasoningLinesCount > visibleLinesCount && (
+                            <Text color="gray">
+                                Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                                of {reasoningLinesCount}
+                            </Text>
+                        )}
+                    </Box>
+                );
+            }
+            
+            if (bodyView === 'diff') {
+                const selectedFile = files[selectedItemIndex];
+                if (!selectedFile) return null;
+                return (
+                    <DiffScreen
+                        filePath={selectedFile.path}
+                        diffContent={selectedFile.diff}
+                        isExpanded={isDiffExpanded}
+                    />
+                );
+            }
+
+            if (bodyView === 'script_output') {
+                 const scriptIndex = selectedItemIndex - numFiles;
+                 const selectedScript = scripts[scriptIndex];
+                 if (!selectedScript) return null;
+                 
+                 const outputLines = selectedScript.output.split('\n');
+                 const errorLines = outputLines.filter(line =>
+                    line.includes('Error') || line.includes('Warning'),
+                 );
+                 
+                 return (
+                    <Box flexDirection="column">
+                        <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                        <Box marginTop={1}>
+                            {outputLines.map((line, index) => {
+                                const isError = line.includes('Error');
+                                const isWarning = line.includes('Warning');
+                                const isHighlighted = errorLines[scriptErrorIndex] === line;
+                                
+                                return (
+                                    <Text 
+                                        key={index} 
+                                        color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                        bold={isHighlighted}
+                                        backgroundColor={isHighlighted ? 'blue' : undefined}
+                                    >
+                                        {line}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                        {errorLines.length > 0 && (
+                            <Text color="gray">
+                                Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                            </Text>
+                        )}
+                    </Box>
+                 );
+            }
+
+            if (bodyView === 'copy_mode') {
+                const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                const options = [
+                    { key: 'U', label: 'UUID', value: `${hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                    { key: 'M', label: 'Git Message', value: message },
+                    { key: 'P', label: 'Prompt', value: `${prompt.substring(0, 45)}...` },
+                    { key: 'R', label: 'Reasoning', value: `${(reasoning.split('\n')[0] ?? '').substring(0, 45)}...` },
+                ];
+                const fileOptions = [
+                    { key: 'F', label: 'Diff for', value: selectedFile ? selectedFile.path : 'N/A' },
+                    { key: 'A', label: 'All Diffs', value: `${files.length} files` },
+                ];
+
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>Select item to copy to clipboard:</Text>
+
+                        <Box flexDirection="column">
+                            {options.map((option, index) => (
+                                <Text key={option.key} bold={index === copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                    {index === copyModeSelectedIndex ? '> ' : '  '}
+                                    [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
+                                </Text>
+                            ))}
+                        </Box>
+
+                        <Separator/>
+
+                        <Box flexDirection="column">
+                            {fileOptions.map((option, index) => {
+                                const overallIndex = index + options.length;
+                                return (
+                                    <Text key={option.key} bold={overallIndex === copyModeSelectedIndex} color={overallIndex === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                        {overallIndex === copyModeSelectedIndex ? '> ' : '  '}
+                                        [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+
+                        <Separator/>
+
+                        {copyModeLastCopied && (
+                            <Text color="green">✓ Copied {copyModeLastCopied} to clipboard.</Text>
+                        )}
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'confirm_handoff') {
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+                        <Box flexDirection="column">
+                            <Text>This action will:</Text>
+                            <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
+                            <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
+                            <Text>3. Assume that you and the external agent will complete the work.</Text>
+                        </Box>
+                        <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
+                        <Text bold color="yellow">Are you sure you want to proceed?</Text>
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'bulk_repair') {
+                const failedFiles = files.filter(f => f.status === 'FAILED');
+                const repairOptions = [
+                    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+                    '(2) Bulk Change Strategy & Re-apply',
+                    '(3) Handoff to External Agent',
+                    '(4) Bulk Abandon All Failed Files',
+                    '(Esc) Cancel',
+                ];
+
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>BULK REPAIR ACTION</Text>
+
+                        <Box flexDirection="column">
+                            <Text>The following {failedFiles.length} files failed to apply:</Text>
+                            {failedFiles.map(file => (
+                                <Text key={file.id}>- {file.path}</Text>
+                            ))}
+                        </Box>
+
+                        <Text>How would you like to proceed?</Text>
+
+                        <Box flexDirection="column">
+                            {repairOptions.map((opt, i) => (
+                                <Text key={i}>
+                                    {i === 0 ? '> ' : '  '}
+                                    {opt}
+                                </Text>
+                            ))}
+                        </Box>
+                    </Box>
+                );
+            }
+
+            return null;
+        };
+
+        const renderFooter = () => {
+            // Contextual footer for body views
+            if (bodyView === 'diff') {
+                return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
+            }
+            if (bodyView === 'reasoning') {
+                return <Text>(↑↓) Scroll Text · (R)Collapse View · (C)opy Mode</Text>;
+            }
+            if (bodyView === 'script_output') {
+                return (
+                    <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
+                );
+            }
+            if (bodyView === 'copy_mode') {
+                return <Text>(↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit</Text>;
+            }
+            if (bodyView === 'bulk_repair') {
+                return <Text>Choose an option [1-4, Esc]:</Text>;
+            }
+            if (bodyView === 'confirm_handoff') {
+                return <Text>(Enter) Confirm Handoff      (Esc) Cancel</Text>;
+            }
+
+            // Main footer
+            const actions = ['(↑↓) Nav'];
+
+            const isFileSelected = selectedItemIndex < numFiles;
+            const hasFailedFiles = files.some(f => f.status === 'FAILED');
+            
+            if (isFileSelected) {
+                const selectedFile = files[selectedItemIndex];
+                if (selectedFile && selectedFile.status !== 'FAILED') {
+                    actions.push('(Spc) Toggle');
+                }
+                actions.push('(D)iff');
+                
+                // Add repair options for failed files
+                if (selectedFile && selectedFile.status === 'FAILED') {
+                    actions.push('(T)ry Repair');
+                }
+            } else { // script selected
+                actions.push('(Ent) Expand Details');
+            }
+
+            actions.push('(R)easoning');
+            
+            // Add bulk repair if there are failed files
+            if (hasFailedFiles) {
+                actions.push('(Shift+T) Bulk Repair');
+            }
+            
+            actions.push('(C)opy');
+
+            if (approvedFilesCount > 0) {
+                actions.push('(A)pprove');
+            }
+
+            if (files.some(f => f.status === 'APPROVED' || f.status === 'FAILED')) {
+                actions.push('(Shift+R) Reject All');
+            }
+            actions.push('(Q)uit');
+
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text color="cyan">▲ relaycode review{bodyView === 'copy_mode' ? ' · copy mode' : ''}</Text>
+                <Separator />
+                
+                {/* Navigator Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Box flexDirection="column">
+                        <Text>{hash} · {message}</Text>
+                        <Text>
+                            (<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files · {duration}s
+                            {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+                            {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                        </Text>
+                    </Box>
+
+                    <Box flexDirection="column" marginTop={1}>
+                        <Text>
+                            (P)rompt ▸ {prompt.substring(0, 60)}...
+                        </Text>
+                        <Text>
+                            (R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                            {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
+                        </Text>
+                    </Box>
+                </Box>
+
+                <Separator/>
+
+                {/* Script Results (if any) */}
+                {scripts.length > 0 && (
+                    <>
+                        <Box flexDirection="column" marginY={1}>
+                            {scripts.map((script, index) => (
+                                <ScriptItemRow
+                                    key={script.command}
+                                    script={script}
+                                    isSelected={selectedItemIndex === numFiles + index}
+                                    isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                                />
+                            ))}
+                        </Box>
+                        <Separator/>
+                    </>
+                )}
+
+                {/* Files Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Text bold>FILES</Text>
+                    {files.map((file, index) => (
+                        <FileItemRow
+                            key={file.id}
+                            file={file}
+                            isSelected={selectedItemIndex === index}
+                        />
+                    ))}
+                </Box>
+                
+                <Separator/>
+                
+                {/* Body Viewport */}
+                {bodyView !== 'none' && (
+                    <>
+                        <Box marginY={1}>
+                            {renderBody()}
+                        </Box>
+                        <Separator />
+                    </>
+                )}
+
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default ReviewScreen;
+  src/components/SplashScreen.tsx: |-
+    import React from 'react';
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useSplashScreen } from './SplashScreen.hook';
+
+    const SplashScreen = () => {
+        const { countdown } = useSplashScreen();
+
+        const logo = `
+             ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+             ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+             ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+    `;
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode</Text>
+                <Separator />
+                <Text color="cyan">{logo}</Text>
+                <Box flexDirection="column" alignItems="center">
+                    <Text italic>A zero-friction, AI-native patch engine.</Text>
+                    <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+                </Box>
+                
+                <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                    <Box flexDirection="column" width="45%">
+                        <Text>Version 1.1.5</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>relaycode</Text>
+                        <Text>relaycode-core</Text>
+                        <Text>apply-multi-diff</Text>
+                        <Text>konro</Text>
+                    </Box>
+                     <Box flexDirection="column" width="45%">
+                        <Text>Build Timestamps</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>2025-09-20 13:58:05</Text>
+                        <Text>2025-09-20 10:59:05</Text>
+                        <Text>(versioned)</Text>
+                        <Text>(versioned)</Text>
+                    </Box>
+                </Box>
+                
+                <Box marginTop={1}><Separator /></Box>
+                <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+                <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                <Separator />
+                <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                <Separator />
+                <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
+            </Box>
+        );
+    };
+
+    export default SplashScreen;
+  src/components/TransactionHistoryScreen.tsx: >-
+    import React from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import { type HistoryTransaction, type FileChange } from
+    '../stores/transaction-history.store';
+
+    import Separator from './Separator';
+
+    import { useTransactionHistoryScreen } from
+    './TransactionHistoryScreen.hook';
+
+
+    // --- Sub-components ---
+
+
+    const DiffPreview = ({ diff }: { diff: string }) => {
+        const lines = diff.split('\n');
+        const previewLines = lines.slice(0, 5);
+        const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+        return (
+            <Box flexDirection="column" paddingLeft={8}>
+                {previewLines.map((line, i) => {
+                    let color = 'white';
+                    if (line.startsWith('+')) color = 'green';
+                    if (line.startsWith('-')) color = 'red';
+                    if (line.startsWith('@@')) color = 'cyan';
+                    return <Text key={i} color={color}>{line}</Text>;
+                })}
+                {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+            </Box>
+        );
+    };
+
+
+    const FileRow = ({ file, isSelected, isExpanded }: { file: FileChange,
+    isSelected: boolean, isExpanded: boolean }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
+        
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {icon} {typeMap[file.type]} {file.path}
+                </Text>
+                {isExpanded && <DiffPreview diff={file.diff} />}
+            </Box>
+        );
+    };
+
+
+    const TransactionRow = ({
+        tx,
+        isSelected,
+        isExpanded,
+        isSelectedForAction,
+    }: {
+        tx: HistoryTransaction,
+        isSelected: boolean,
+        isExpanded: boolean,
+        isSelectedForAction: boolean,
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const statusMap = {
+            Committed: <Text color="green">✓ Committed</Text>,
+            Handoff: <Text color="magenta">→ Handoff</Text>,
+            Reverted: <Text color="gray">↩ Reverted</Text>,
+        };
+        const date = new Date(tx.timestamp).toISOString().split('T')[0];
+        const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
+        
+        return (
+            <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {selectionIndicator} {icon} {statusMap[tx.status]} · {tx.hash} · {date} · {tx.message}
+                </Text>
+                {isExpanded && (
+                    <Box flexDirection="column" paddingLeft={8}>
+                        <Text color="gray">Stats: {tx.stats.files} Files · +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>
+                        <Text>Files:</Text>
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    interface CopyModeProps {
+        selectedForActionCount: number;
+        lastCopiedMessage: string | null;
+        selectedFields: Set<string>;
+        fields: { key: string; name: string }[];
+    }
+
+
+    const CopyMode = ({
+        selectedForActionCount,
+        lastCopiedMessage,
+        selectedFields,
+        fields,
+    }: CopyModeProps) => {
+
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text>Select data to copy from {selectedForActionCount} transactions:</Text>
+                <Box marginY={1}>
+                    {fields.map(f => (
+                        <Text key={f.key}>
+                            [{selectedFields.has(f.name) ? 'x' : ' '}] ({f.key}) {f.name.padEnd(15)}
+                        </Text>
+                    ))}
+                </Box>
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+            </Box>
+        );
+    };
+
+
+    const BulkActionsMode = ({ selectedForActionCount }: {
+    selectedForActionCount: number }) => {
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
+                <Box marginY={1}>
+                    <Text>This action is often irreversible. Are you sure?</Text>
+                </Box>
+                <Text>(1) Revert Selected Transactions</Text>
+                <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+                <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
+                <Text>(Esc) Cancel</Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const TransactionHistoryScreen = () => {
+        const {
+            store,
+            itemsInView,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus,
+            showingStatus,
+            visibleItemPaths,
+            selectedFields,
+            copyFields,
+        } = useTransactionHistoryScreen();
+
+        const renderFooter = () => {
+            if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>;
+            if (store.mode === 'COPY') return <Text>(M,R,...) Toggle · (Enter) Copy · (C, Esc) Exit</Text>;
+            if (store.mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
+            
+            const actions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
+            if (store.selectedForAction.size > 0) {
+                actions.push('(C)opy', '(B)ulk');
+            }
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode transaction history</Text>
+                <Separator />
+
+                <Box>
+                    <Text>Filter: </Text>
+                    {store.mode === 'FILTER' ? (
+                        <TextInput value={store.filterQuery} onChange={store.actions.setFilterQuery} />
+                    ) : (
+                        <Text>{filterStatus}</Text>
+                    )}
+                    <Text> · {showingStatus} ({store.transactions.length} txns)</Text>
+                </Box>
+
+                <Box flexDirection="column" marginY={1}>
+                    {store.mode === 'COPY' && <CopyMode
+                        selectedForActionCount={store.selectedForAction.size}
+                        lastCopiedMessage={store.lastCopiedMessage}
+                        selectedFields={selectedFields}
+                        fields={copyFields}
+                    />}
+                    {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
+
+                    {store.mode === 'LIST' && transactionsInView.map(tx => {
+                        const isTxSelected = store.selectedItemPath.startsWith(tx.id);
+                        const isTxExpanded = store.expandedIds.has(tx.id);
+                        const isSelectedForAction = store.selectedForAction.has(tx.id);
+
+                        const showTxRow = pathsInViewSet.has(tx.id);
+
+                        return (
+                            <Box flexDirection="column" key={tx.id}>
+                                {showTxRow && (
+                                    <TransactionRow
+                                        tx={tx}
+                                        isSelected={isTxSelected && !store.selectedItemPath.includes('/')}
+                                        isExpanded={isTxExpanded}
+                                        isSelectedForAction={isSelectedForAction}
+                                    />
+                                )}
+                                {isTxExpanded && tx.files.map(file => {
+                                    if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
+                                    const filePath = `${tx.id}/${file.id}`;
+                                    const isFileSelected = store.selectedItemPath === filePath;
+                                    const isFileExpanded = store.expandedIds.has(filePath);
+                                    return (
+                                        <FileRow
+                                            key={file.id}
+                                            file={file}
+                                            isSelected={isFileSelected}
+                                            isExpanded={isFileExpanded}
+                                        />
+                                    );
+                                })}
+                            </Box>
+                        );
+                    })}
+                </Box>
+
+                <Separator />
+                {renderFooter()}
+            </Box>
+        );
+    };
+
+
+    export default TransactionHistoryScreen;
+  src/components/TransactionDetailScreen.tsx: |-
+    import React from 'react';
+    import { Box, Text } from 'ink';
+    import { type FileChangeType } from '../stores/transaction-detail.store';
+    import Separator from './Separator';
+    import { useTransactionDetailScreen } from './TransactionDetailScreen.hook';
+
+    const getFileChangeTypeIcon = (type: FileChangeType) => {
+        switch (type) {
+            case 'MOD': return '[MOD]';
+            case 'ADD': return '[ADD]';
+            case 'DEL': return '[DEL]';
+            case 'REN': return '[REN]';
+        }
+    };
+
+    interface CopyModeProps {
+        transactionHash: string;
+        copyOptions: { key: string; label: string }[];
+        copyModeSelectionIndex: number;
+        copyModeSelections: Record<string, boolean>;
+        copyModeLastCopied: string | null;
+    }
+
+    const CopyMode = ({
+        transactionHash,
+        copyOptions,
+        copyModeSelectionIndex,
+        copyModeSelections,
+        copyModeLastCopied,
+    }: CopyModeProps) => {
+        
+        return (
+            <Box flexDirection="column" width="100%">
+                <Text>Select data to copy from transaction {transactionHash} (use Space to toggle):</Text>
+                <Box flexDirection="column" marginY={1}>
+                    {copyOptions.map((opt, index) => {
+                        const isSelected = index === copyModeSelectionIndex;
+                        const isChecked = copyModeSelections[opt.label] || false;
+                        return (
+                            <Text key={opt.label} color={isSelected ? 'cyan' : undefined}>
+                                {isSelected ? '> ' : '  '}
+                                [{isChecked ? 'x' : ' '}] ({opt.key}) {opt.label}
+                            </Text>
+                        );
+                    })}
+                </Box>
+                <Separator />
+                {copyModeLastCopied && <Text color="green">✓ {copyModeLastCopied}</Text>}
+            </Box>
+        );
+    };
+
+    const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
+        return (
+            <Box 
+                borderStyle="round"
+                borderColor="yellow"
+                flexDirection="column"
+                paddingX={2}
+                width="80%"
+                alignSelf='center'
+            >
+                <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
+                <Box height={1} />
+                <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
+                <Box height={1} />
+                <Text wrap="wrap">Are you sure?</Text>
+            </Box>
+        );
+    };
+
+    const TransactionDetailScreen = () => {
+        const {
+            transaction, prompt, reasoning, files,
+            navigatorFocus, expandedSection, selectedFileIndex, bodyView,
+            copyOptions, copyModeSelectionIndex, copyModeSelections, copyModeLastCopied,
+        } = useTransactionDetailScreen();
+
+        if (!transaction) {
+            return <Text>Loading transaction...</Text>;
+        }
+
+        const renderNavigator = () => {
+            const isPromptFocused = navigatorFocus === 'PROMPT';
+            const isReasoningFocused = navigatorFocus === 'REASONING';
+            const isFilesFocused = navigatorFocus === 'FILES' || navigatorFocus === 'FILES_LIST';
+            
+            const isPromptExpanded = expandedSection === 'PROMPT';
+            const isReasoningExpanded = expandedSection === 'REASONING';
+            const isFilesExpanded = expandedSection === 'FILES';
+            
+            return (
+                <Box flexDirection="column">
+                    <Text color={isPromptFocused && !isFilesFocused ? 'cyan' : undefined}>
+                        {isPromptFocused && !isFilesFocused ? '> ' : '  '}
+                        {isPromptExpanded ? '▾' : '▸'} (P)rompt
+                    </Text>
+                    <Text color={isReasoningFocused && !isFilesFocused ? 'cyan' : undefined}>
+                        {isReasoningFocused && !isFilesFocused ? '> ' : '  '}
+                        {isReasoningExpanded ? '▾' : '▸'} (R)easoning ({reasoning.split('\n\n').length} steps)
+                    </Text>
+                    <Text color={isFilesFocused ? 'cyan' : undefined}>
+                        {isFilesFocused && navigatorFocus !== 'FILES_LIST' ? '> ' : '  '}
+                        {isFilesExpanded ? '▾' : '▸'} (F)iles ({files.length})
+                    </Text>
+                    {isFilesExpanded && (
+                        <Box flexDirection="column" paddingLeft={2}>
+                            {files.map((file, index) => {
+                                 const isFileSelected = navigatorFocus === 'FILES_LIST' && selectedFileIndex === index;
+                                 const stats = file.type === 'DEL' ? '' : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                                 return (
+                                    <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                        {isFileSelected ? '> ' : '  '}
+                                        {`${getFileChangeTypeIcon(file.type)} ${file.path}${stats}`}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                    )}
+                </Box>
+            );
+        };
+
+        const renderBody = () => {
+            if (bodyView === 'NONE') {
+                return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
+            }
+            if (bodyView === 'PROMPT') {
+                return (
+                    <Box flexDirection="column">
+                        <Text>PROMPT</Text>
+                        <Box marginTop={1}><Text>{prompt}</Text></Box>
+                    </Box>
+                );
+            }
+            if (bodyView === 'REASONING') {
+                return (
+                    <Box flexDirection="column">
+                        <Text>REASONING</Text>
+                        <Box marginTop={1}>
+                            {reasoning.split('\n').map((line, i) => <Text key={i}>{line}</Text>)}
+                        </Box>
+                    </Box>
+                );
+            }
+            if (bodyView === 'FILES_LIST') {
+                 return <Text color="gray">(Select a file and press → to view the diff)</Text>;
+            }
+            if (bodyView === 'DIFF_VIEW') {
+                const file = files[selectedFileIndex];
+                if (!file) return null;
+                return (
+                    <Box flexDirection="column">
+                        <Text>DIFF: {file.path}</Text>
+                        <Box flexDirection="column" marginTop={1}>
+                            {file.diff.split('\n').map((line, i) => {
+                                let color = 'white';
+                                if (line.startsWith('+')) color = 'green';
+                                if (line.startsWith('-')) color = 'red';
+                                if (line.startsWith('@@')) color = 'cyan';
+                                return <Text key={i} color={color}>{line}</Text>;
+                            })}
+                        </Box>
+                    </Box>
+                );
+            }
+            return null;
+        };
+
+        const renderFooter = () => {
+            if (bodyView === 'REVERT_CONFIRM') {
+                return <Text>(Enter) Confirm Revert      (Esc) Cancel</Text>;
+            }
+            if (bodyView === 'COPY_MODE') {
+                 return <Text>(↑↓) Nav · (Spc) Toggle · (Enter) Copy Selected · (C)opy/Exit</Text>;
+            }
+            
+            if (navigatorFocus === 'FILES_LIST') {
+                if (bodyView === 'DIFF_VIEW') {
+                    return <Text>(↑↓) Nav Files · (←) Back to Files · (C)opy Mode · (U)ndo · (Q)uit</Text>;
+                }
+                return <Text>(↑↓) Nav Files · (→) View Diff · (←) Back to Sections · (C)opy Mode · (Q)uit</Text>;
+            }
+            
+            if (expandedSection) {
+                return <Text>(↑↓) Nav/Scroll · (←) Collapse · (C)opy Mode · (U)ndo · (Q)uit</Text>;
+            }
+            
+            return <Text>(↑↓) Nav · (→) Expand · (C)opy Mode · (U)ndo · (Q)uit</Text>;
+        };
+
+        const { message, timestamp, status } = transaction;
+        const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
+        const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text>▲ relaycode {bodyView === 'COPY_MODE' ? 'details · copy mode' : 'transaction details'}</Text>
+                <Separator />
+                
+                {/* Modal takeover for Revert */}
+                {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
+                
+                {/* Main view */}
+                <Box flexDirection="column" display={bodyView === 'REVERT_CONFIRM' ? 'none' : 'flex'}>
+                    {/* Navigator Part A */}
+                    <Box flexDirection="column" marginY={1}>
+                        <Text>UUID: {transaction.id}</Text>
+                        <Text>Git: {message}</Text>
+                        <Text>Date: {date} · Status: {status}</Text>
+                        <Text>Stats: {fileStats}</Text>
+                    </Box>
+                    
+                    {/* Navigator Part B */}
+                    {renderNavigator()}
+                    
+                    <Separator />
+                    
+                    {/* Body */}
+                    <Box marginY={1}>
+                        {bodyView === 'COPY_MODE' ? <CopyMode
+                            transactionHash={transaction.hash}
+                            copyOptions={copyOptions}
+                            copyModeSelectionIndex={copyModeSelectionIndex}
+                            copyModeSelections={copyModeSelections}
+                            copyModeLastCopied={copyModeLastCopied}
+                        />
+                        : renderBody()}
+                    </Box>
+                    
+                    <Separator />
+                </Box>
+                
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+    export default TransactionDetailScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 43

@@ -4,7 +4,7 @@ import { type FileItem, type ScriptResult } from '../stores/review.store';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
-import { useReviewScreen } from './ReviewScreen.hook';
+import { useReviewScreen } from '../hooks/useReviewScreen';
 
 // --- Sub-components ---
 

@@ -4,7 +4,7 @@ import Spinner from 'ink-spinner';
 import { type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
 import Separator from './Separator';
 import GlobalHelpScreen from './GlobalHelpScreen';
-import { useDashboardScreen } from './DashboardScreen.hook';
+import { useDashboardScreen } from '../hooks/useDashboardScreen';
 
 // --- Sub-components & Helpers ---
 

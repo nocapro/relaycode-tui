@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
 import Separator from './Separator';
-import { useTransactionHistoryScreen } from './TransactionHistoryScreen.hook';
+import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
 
 // --- Sub-components ---
 

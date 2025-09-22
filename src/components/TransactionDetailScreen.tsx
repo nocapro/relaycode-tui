@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import { type FileChangeType } from '../stores/transaction-detail.store';
 import Separator from './Separator';
-import { useTransactionDetailScreen } from './TransactionDetailScreen.hook';
+import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
 
 const getFileChangeTypeIcon = (type: FileChangeType) => {
     switch (type) {

@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import { type Task } from '../stores/init.store';
 import Separator from './Separator';
-import { useInitializationScreen } from './InitializationScreen.hook';
+import { useInitializationScreen } from '../hooks/useInitializationScreen';
 
 const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
 	let symbol: React.ReactNode;

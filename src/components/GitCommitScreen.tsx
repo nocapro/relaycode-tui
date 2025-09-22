@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import Separator from './Separator';
-import { useGitCommitScreen } from './GitCommitScreen.hook';
+import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
 
 const GitCommitScreen = () => {
     const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import Separator from './Separator';
-import { useSplashScreen } from './SplashScreen.hook';
+import { useSplashScreen } from '../hooks/useSplashScreen';
 
 const SplashScreen = () => {
     const { countdown } = useSplashScreen();

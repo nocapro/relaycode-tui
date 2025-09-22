@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import Separator from './Separator';
-import { useDebugMenu, type MenuItem } from './DebugMenu.hook';
+import { useDebugMenu, type MenuItem } from '../hooks/useDebugMenu';
 
 const getKeyForIndex = (index: number): string => {
     if (index < 9) {
