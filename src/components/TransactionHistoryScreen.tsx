@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
-import { type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
+import { type HistoryTransaction as Transaction, type FileChange } from '../stores/transaction-history.store';
 import Separator from './Separator';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
 
@@ -47,16 +47,16 @@ const TransactionRow = ({
     isExpanded,
     isSelectedForAction,
 }: {
-    tx: HistoryTransaction,
+    tx: Transaction,
     isSelected: boolean,
     isExpanded: boolean,
     isSelectedForAction: boolean,
 }) => {
     const icon = isExpanded ? '▾' : '▸';
     const statusMap = {
-        Committed: <Text color="green">✓ Committed</Text>,
-        Handoff: <Text color="magenta">→ Handoff</Text>,
-        Reverted: <Text color="gray">↩ Reverted</Text>,
+        COMMITTED: <Text color="green">✓ Committed</Text>,
+        HANDOFF: <Text color="magenta">→ Handoff</Text>,
+        REVERTED: <Text color="gray">↩ Reverted</Text>,
     };
     const date = new Date(tx.timestamp).toISOString().split('T')[0];
     const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
@@ -65,11 +65,11 @@ const TransactionRow = ({
         <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
             <Text color={isSelected ? 'cyan' : undefined}>
                 {isSelected ? '> ' : '  '}
-                {selectionIndicator} {icon} {statusMap[tx.status]} · {tx.hash} · {date} · {tx.message}
+                {selectionIndicator} {icon} {statusMap[tx.status as keyof typeof statusMap] || tx.status} · {tx.hash} · {date} · {tx.message}
             </Text>
             {isExpanded && (
                 <Box flexDirection="column" paddingLeft={8}>
-                    <Text color="gray">Stats: {tx.stats.files} Files · +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>
+                    {tx.stats && <Text color="gray">Stats: {tx.stats.files} Files · +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>}
                     <Text>Files:</Text>
                 </Box>
             )}
@@ -189,7 +189,7 @@ const TransactionHistoryScreen = () => {
                                     isSelectedForAction={isSelectedForAction}
                                 />
                             )}
-                            {isTxExpanded && tx.files.map(file => {
+                            {isTxExpanded && tx.files?.map(file => {
                                 if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
                                 const filePath = `${tx.id}/${file.id}`;
                                 const isFileSelected = store.selectedItemPath === filePath;

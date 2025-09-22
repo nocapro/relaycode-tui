@@ -27,7 +27,17 @@
     "eslint.config.js",
     "tsconfig.json",
     "index.tsx",
-    "src"
+    // "src"
+    "src/types/transaction.types.ts",
+    "src/data/mocks.ts",
+    "src/stores/dashboard.store.ts",
+    "src/stores/transaction-history.store.ts",
+    "src/stores/transaction-detail.store.ts",
+    "src/components/DashboardScreen.tsx",
+    "src/components/TransactionHistoryScreen.tsx",
+    "src/hooks/useTransactionHistoryScreen.tsx",
+    "src/components/TransactionDetailScreen.tsx",
+    "src/services/transaction.service.ts"
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"
     // "docs/relaycode-tui/dashboard-screen.readme.md",
@@ -45,7 +55,7 @@
     "useGitignore": true,
     "useDefaultPatterns": true,
     "customPatterns": [
-      "src/components"
+      // "src/components"
       // "src/components/GlobalHelpScreen.tsx",
       // "src/components/DashboardScreen.tsx",
       // "src/components/InitializationScreen.tsx",

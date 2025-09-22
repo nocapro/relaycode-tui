@@ -1,0 +1,76 @@
+uuid: 45781604-18c7-43a0-b570-521946896e38
+projectId: relaycode-tui
+createdAt: '2025-09-22T07:58:19.755Z'
+gitCommitMsg: >-
+  fix(types): Correct type imports in TransactionService
+
+  Updates `src/services/transaction.service.ts` to use the unified `Transaction`
+  type, resolving the TypeScript compilation errors introduced during the
+  previous refactoring. The service now correctly imports the consolidated
+  transaction type definition.
+promptSummary: >-
+  Fix TypeScript compilation errors in `src/services/transaction.service.ts`
+  caused by the previous refactoring.
+reasoning:
+  - >-
+    You are absolutely right. I apologize for that oversight. My previous
+    refactoring was incomplete and missed updating the `transaction.service.ts`
+    file, which was still referencing the old, now-deleted types.
+  - >-
+    Here is the patch to fix the TypeScript errors by updating the type imports
+    in `src/services/transaction.service.ts`.
+  - >-
+    I will replace the defunct `HistoryTransaction` and
+    `HistoryTransactionStatus` imports with the unified `Transaction` type. I'll
+    also remove the unused `FileChange` import for cleanliness.
+operations:
+  - type: write
+    path: src/services/transaction.service.ts
+    content: >+
+      --- src/services/transaction.service.ts
+
+      +++ src/services/transaction.service.ts
+
+      @@ -1,6 +1,5 @@
+       import { useDashboardStore } from '../stores/dashboard.store';
+       import { createMockHistoryTransactions } from '../data/mocks';
+      -import type { HistoryTransaction, HistoryTransactionStatus } from
+      '../types/transaction.types';
+
+      -import type { FileChange } from '../types/file.types';
+
+      +import type { Transaction } from '../types/transaction.types';
+       
+       const revertTransaction = (transactionId: string) => {
+           const { updateTransactionStatus } = useDashboardStore.getState().actions;
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/transaction.service.ts: >-
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { createMockHistoryTransactions } from '../data/mocks';
+
+    import type { HistoryTransaction, HistoryTransactionStatus } from
+    '../types/transaction.types';
+
+    import type { FileChange } from '../types/file.types';
+
+
+    const revertTransaction = (transactionId: string) => {
+        const { updateTransactionStatus } = useDashboardStore.getState().actions;
+        updateTransactionStatus(transactionId, 'REVERTED');
+    };
+
+
+    export const TransactionService = {
+        revertTransaction,
+        createMockTransactions: createMockHistoryTransactions,
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 58

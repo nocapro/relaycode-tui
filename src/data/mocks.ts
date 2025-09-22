@@ -1,5 +1,4 @@
-import type { Transaction } from '../types/transaction.types';
-import type { HistoryTransaction, HistoryTransactionStatus } from '../types/transaction.types';
+import type { Transaction, TransactionStatus } from '../types/transaction.types';
 import type { FileChange, ReviewFileItem } from '../types/file.types';
 import type { ScriptResult } from '../types/review.types';
 
@@ -105,10 +104,10 @@ export const mockDetailedTransactionData = {
 };
 
 // From transaction.service.ts
-export const createMockHistoryTransactions = (): HistoryTransaction[] => {
+export const createMockHistoryTransactions = (): Transaction[] => {
     const now = Date.now();
     return Array.from({ length: 42 }, (_, i) => {
-        const status: HistoryTransactionStatus = i % 5 === 2 ? 'Handoff' : i % 5 === 3 ? 'Reverted' : 'Committed';
+        const status: TransactionStatus = i % 5 === 2 ? 'HANDOFF' : i % 5 === 3 ? 'REVERTED' : 'COMMITTED';
         const files: FileChange[] = [
             { id: `${i}-1`, path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 25, linesRemoved: 8, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -45,7 +45,9 @@\n-    for (const [filePath, content] of entries) {\n+    const restoreErrors: { path: string, error: unknown }[] = [];\n...\n...\n...\n...\n-    another line removed' },
             { id: `${i}-2`, path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 10, linesRemoved: 2, diff: 'diff for logger' },

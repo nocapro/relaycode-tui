@@ -1,17 +1,17 @@
 import { create } from 'zustand';
 import { TransactionService } from '../services/transaction.service';
-import type { HistoryTransaction } from '../types/transaction.types';
+import type { Transaction } from '../types/transaction.types';
 import type { FileChange } from '../types/file.types';
 import type { HistoryViewMode } from '../types/transaction-history.types';
 
-export type { HistoryTransaction } from '../types/transaction.types';
+export type { Transaction as HistoryTransaction } from '../types/transaction.types';
 export type { FileChange } from '../types/file.types';
 
 // Omit 'actions' from state type for partial updates
 type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
 
 interface TransactionHistoryState {
-    transactions: HistoryTransaction[];
+    transactions: Transaction[];
     mode: HistoryViewMode;
     selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
     expandedIds: Set<string>; // holds ids of expanded items
@@ -36,11 +36,11 @@ interface TransactionHistoryState {
     }
 }
 
-export const getVisibleItemPaths = (transactions: HistoryTransaction[], expandedIds: Set<string>): string[] => {
+export const getVisibleItemPaths = (transactions: Transaction[], expandedIds: Set<string>): string[] => {
     const paths: string[] = [];
     for (const tx of transactions) {
         paths.push(tx.id);
-        if (expandedIds.has(tx.id)) {
+        if (expandedIds.has(tx.id) && tx.files) {
             for (const file of tx.files) {
                 paths.push(`${tx.id}/${file.id}`);
             }

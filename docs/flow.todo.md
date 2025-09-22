@@ -108,12 +108,56 @@ extract out all constants to constants/[entitity].constants.ts files
 
 ===
 
+do DRYness refactor radically to eliminate redundancy. but first analyse the priority areas and pick that one area to solve in one attempt at a time
+
+redundancy is like something below
+
+interface HistoryTransaction and interface Transaction. where as entity basically its Transaction thats need to be backward addressed accross UI, hook, State, store, data, type
+
+do not think about backward compability, it cause code boat.
+
+dont forget final step yaml in fenced codeblock
+
+
+--------------
+
+```json
+[
+  "src/types/transaction.types.ts",
+  "src/data/mocks.ts",
+  "src/stores/dashboard.store.ts",
+  "src/stores/transaction-history.store.ts",
+  "src/stores/transaction-detail.store.ts",
+  "src/components/DashboardScreen.tsx",
+  "src/components/TransactionHistoryScreen.tsx",
+  "src/hooks/useTransactionHistoryScreen.tsx",
+  "src/components/TransactionDetailScreen.tsx"
+]
+```
+
+### Reasoning
+
+The most significant area of redundancy is the split between `Transaction` and `HistoryTransaction` types. They represent the same core entity but are defined and used separately, leading to duplicated logic and potential inconsistencies.
+
+The refactor should focus on creating a single, unified `Transaction` entity.
+
+1.  **`src/types/transaction.types.ts`**: This is the source of truth. The `Transaction` and `HistoryTransaction` interfaces should be merged into a single `Transaction` type. The `TransactionStatus` and `HistoryTransactionStatus` enums should also be unified into one.
+2.  **`src/data/mocks.ts`**: The mock data generation functions (`createDashboardTransactions`, `createMockHistoryTransactions`) must be updated to produce instances of the new unified `Transaction` object, using the standardized status enum.
+3.  **`src/stores/*.store.ts`**: The stores for the dashboard, history, and detail views are the primary state managers for these entities. They must be updated to use the single `Transaction` type instead of their specialized versions.
+4.  **`src/components/*.tsx` & `src/hooks/*.tsx`**: The components (`DashboardScreen`, `TransactionHistoryScreen`, `TransactionDetailScreen`) and the corresponding hook for the most complex screen (`useTransactionHistoryScreen`) directly render and process these objects. They need to be modified to handle the new unified structure and status values (e.g., updating `getStatusIcon` or status maps from `'Committed'` to `'COMMITTED'`).
+
+
+
+
+
+=== DONE
+
 1. extract out all types to types/[entitiy].type.ts files
 2. implement types.ts files to necessary areas for DRYness
 
 give me transaction in four phase, now please go on for first phase
 
-dont forget final step yaml
+dont forget final step yaml in fenced codeblock
 
 ===
 

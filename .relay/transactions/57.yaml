@@ -1,0 +1,901 @@
+uuid: c24f7292-628d-4e94-a1a2-1d6ac36d8d69
+projectId: relaycode-tui
+createdAt: '2025-09-22T07:56:16.338Z'
+gitCommitMsg: >-
+  refactor(types): Unify Transaction and HistoryTransaction types
+
+  Consolidates `Transaction` and `HistoryTransaction` into a single, unified
+  `Transaction` type to eliminate redundancy and improve code maintainability.
+  This change simplifies the data model across the application.
+
+  - Merged `HistoryTransaction` properties into `Transaction` as optional
+  fields. - Removed the redundant `HistoryTransactionStatus` type. - Updated
+  mock data, stores, and components to use the new unified type. - Added
+  defensive checks for optional properties in the UI to prevent errors.
+promptSummary: >-
+  Refactor the codebase to eliminate redundancy by unifying the Transaction and
+  HistoryTransaction types into a single entity.
+reasoning:
+  - >-
+    This refactor addresses the redundancy between `Transaction` and
+    `HistoryTransaction` by merging them into a single, unified `Transaction`
+    type. This change simplifies the data model, improves type safety, and makes
+    the codebase more maintainable.
+  - '### 1. Unify Transaction Types'
+  - >-
+    First, I'll consolidate `Transaction` and `HistoryTransaction` into a single
+    `Transaction` interface in `src/types/transaction.types.ts`. The `files` and
+    `stats` properties, which were specific to historical transactions, are now
+    optional properties on the unified type. I've also removed the redundant
+    `HistoryTransactionStatus` type.
+  - '### 2. Update Mock Data Generation'
+  - >-
+    Next, I'll update the mock data generation in `src/data/mocks.ts` to use the
+    new unified `Transaction` type and `TransactionStatus` enum values. This
+    ensures our mock data conforms to the new, stricter data model.
+  - '### 3. Refactor Transaction History Store'
+  - >-
+    The transaction history store is a primary consumer of the old
+    `HistoryTransaction` type. I'll refactor it to use the new `Transaction`
+    type. I've also added a check for the now-optional `files` property in
+    `getVisibleItemPaths` to prevent runtime errors.
+  - '### 4. Update Transaction History Screen Component'
+  - >-
+    Finally, I'll update the `TransactionHistoryScreen` component to work with
+    the unified `Transaction` type. This involves changing type imports,
+    updating the `statusMap` to use the correct enum values, and adding
+    defensive checks for the optional `stats` and `files` properties to ensure
+    the UI renders correctly without causing shifts or errors.
+operations:
+  - type: write
+    path: src/types/transaction.types.ts
+    content: |-
+      import type { FileChange } from './file.types';
+
+      export type TransactionStatus =
+          | 'PENDING'
+          | 'APPLIED'
+          | 'COMMITTED'
+          | 'FAILED'
+          | 'REVERTED'
+          | 'IN-PROGRESS'
+          | 'HANDOFF';
+
+      export interface Transaction {
+          id: string;
+          timestamp: number;
+          status: TransactionStatus;
+          hash: string;
+          message: string;
+          error?: string;
+          // Fields for history/detail view
+          files?: FileChange[];
+          stats?: {
+              files: number;
+              linesAdded: number;
+              linesRemoved: number;
+          };
+      }
+    patchStrategy: replace
+  - type: write
+    path: src/data/mocks.ts
+    content: >+
+      --- src/data/mocks.ts
+
+      +++ src/data/mocks.ts
+
+      @@ -1,5 +1,4 @@
+
+      -import type { Transaction } from '../types/transaction.types';
+
+      -import type { HistoryTransaction, HistoryTransactionStatus } from
+      '../types/transaction.types';
+
+      +import type { Transaction, TransactionStatus } from
+      '../types/transaction.types';
+       import type { FileChange, ReviewFileItem } from '../types/file.types';
+       import type { ScriptResult } from '../types/review.types';
+       
+      @@ -107,10 +106,10 @@
+       };
+       
+       // From transaction.service.ts
+      -export const createMockHistoryTransactions = (): HistoryTransaction[] =>
+      {
+
+      +export const createMockHistoryTransactions = (): Transaction[] => {
+           const now = Date.now();
+           return Array.from({ length: 42 }, (_, i) => {
+      -        const status: HistoryTransactionStatus = i % 5 === 2 ? 'Handoff'
+      : i % 5 === 3 ? 'Reverted' : 'Committed';
+
+      +        const status: TransactionStatus = i % 5 === 2 ? 'HANDOFF' : i % 5
+      === 3 ? 'REVERTED' : 'COMMITTED';
+               const files: FileChange[] = [
+                   { id: `${i}-1`, path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 25, linesRemoved: 8, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -45,7 +45,9 @@\n-    for (const [filePath, content] of entries) {\n+    const restoreErrors: { path: string, error: unknown }[] = [];\n...\n...\n...\n...\n-    another line removed' },
+                   { id: `${i}-2`, path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 10, linesRemoved: 2, diff: 'diff for logger' },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction-history.store.ts
+    content: >+
+      --- src/stores/transaction-history.store.ts
+
+      +++ src/stores/transaction-history.store.ts
+
+      @@ -1,16 +1,15 @@
+       import { create } from 'zustand';
+       import { TransactionService } from '../services/transaction.service';
+      -import type { HistoryTransaction } from '../types/transaction.types';
+
+      +import type { Transaction } from '../types/transaction.types';
+       import type { FileChange } from '../types/file.types';
+       import type { HistoryViewMode } from '../types/transaction-history.types';
+       
+      -export type { HistoryTransaction } from '../types/transaction.types';
+
+      +export type { Transaction as HistoryTransaction } from
+      '../types/transaction.types';
+       export type { FileChange } from '../types/file.types';
+       
+       // Omit 'actions' from state type for partial updates
+       type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
+       
+       interface TransactionHistoryState {
+      -    transactions: HistoryTransaction[];
+
+      +    transactions: Transaction[];
+           mode: HistoryViewMode;
+           selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
+           expandedIds: Set<string>; // holds ids of expanded items
+      @@ -33,11 +32,11 @@
+           }
+       }
+       
+      -export const getVisibleItemPaths = (transactions: HistoryTransaction[],
+      expandedIds: Set<string>): string[] => {
+
+      +export const getVisibleItemPaths = (transactions: Transaction[],
+      expandedIds: Set<string>): string[] => {
+           const paths: string[] = [];
+           for (const tx of transactions) {
+               paths.push(tx.id);
+      -        if (expandedIds.has(tx.id)) {
+
+      +        if (expandedIds.has(tx.id) && tx.files) {
+                   for (const file of tx.files) {
+                       paths.push(`${tx.id}/${file.id}`);
+                   }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionHistoryScreen.tsx
+    content: >+
+      --- src/components/TransactionHistoryScreen.tsx
+
+      +++ src/components/TransactionHistoryScreen.tsx
+
+      @@ -2,7 +2,7 @@
+       import React from 'react';
+       import { Box, Text } from 'ink';
+       import TextInput from 'ink-text-input';
+      -import { type HistoryTransaction, type FileChange } from
+      '../stores/transaction-history.store';
+
+      +import { type HistoryTransaction as Transaction, type FileChange } from
+      '../stores/transaction-history.store';
+       import Separator from './Separator';
+       import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
+       
+      @@ -51,28 +51,28 @@
+           isExpanded,
+           isSelectedForAction,
+       }: {
+      -    tx: HistoryTransaction,
+
+      +    tx: Transaction,
+           isSelected: boolean,
+           isExpanded: boolean,
+           isSelectedForAction: boolean,
+       }) => {
+           const icon = isExpanded ? '▾' : '▸';
+           const statusMap = {
+      -        Committed: <Text color="green">✓ Committed</Text>,
+
+      -        Handoff: <Text color="magenta">→ Handoff</Text>,
+
+      -        Reverted: <Text color="gray">↩ Reverted</Text>,
+
+      +        COMMITTED: <Text color="green">✓ Committed</Text>,
+
+      +        HANDOFF: <Text color="magenta">→ Handoff</Text>,
+
+      +        REVERTED: <Text color="gray">↩ Reverted</Text>,
+           };
+           const date = new Date(tx.timestamp).toISOString().split('T')[0];
+           const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
+           
+           return (
+               <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                   <Text color={isSelected ? 'cyan' : undefined}>
+                       {isSelected ? '> ' : '  '}
+      -                {selectionIndicator} {icon} {statusMap[tx.status]} ·
+      {tx.hash} · {date} · {tx.message}
+
+      +                {selectionIndicator} {icon} {statusMap[tx.status as keyof
+      typeof statusMap] || tx.status} · {tx.hash} · {date} · {tx.message}
+                   </Text>
+                   {isExpanded && (
+                       <Box flexDirection="column" paddingLeft={8}>
+      -                    <Text color="gray">Stats: {tx.stats.files} Files ·
+      +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>
+
+      +                    {tx.stats && <Text color="gray">Stats:
+      {tx.stats.files} Files · +{tx.stats.linesAdded} lines,
+      -{tx.stats.linesRemoved} lines</Text>}
+                           <Text>Files:</Text>
+                       </Box>
+                   )}
+      @@ -201,7 +201,7 @@
+                                           isSelectedForAction={isSelectedForAction}
+                                       />
+                                   )}
+      -                            {isTxExpanded && tx.files.map(file => {
+
+      +                            {isTxExpanded && tx.files?.map(file => {
+                                       if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
+                                       const filePath = `${tx.id}/${file.id}`;
+                                       const isFileSelected = store.selectedItemPath === filePath;
+
+    patchStrategy: standard-diff
+snapshot:
+  src/types/transaction.types.ts: >-
+    import type { FileChange } from './file.types';
+
+
+    export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' |
+    'FAILED' | 'REVERTED' | 'IN-PROGRESS' | 'HANDOFF';
+
+    export type HistoryTransactionStatus = 'Committed' | 'Handoff' | 'Reverted';
+
+
+    export interface Transaction {
+        id: string;
+        timestamp: number;
+        status: TransactionStatus;
+        hash: string;
+        message: string;
+        error?: string;
+    }
+
+
+    // From transaction-history.store.ts
+
+    export interface HistoryTransaction {
+        id: string;
+        hash: string;
+        timestamp: number;
+        status: HistoryTransactionStatus;
+        message: string;
+        files: FileChange[];
+        stats: {
+            files: number;
+            linesAdded: number;
+            linesRemoved: number;
+        };
+    }
+  src/data/mocks.ts: >-
+    import type { Transaction } from '../types/transaction.types';
+
+    import type { HistoryTransaction, HistoryTransactionStatus } from
+    '../types/transaction.types';
+
+    import type { FileChange, ReviewFileItem } from '../types/file.types';
+
+    import type { ScriptResult } from '../types/review.types';
+
+
+    // From dashboard.store.ts
+
+    export const createDashboardTransactions = (): Transaction[] => [
+        { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+        { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+        { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+        { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+        { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+        { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+    ];
+
+
+    // From review.store.ts
+
+    export const mockReviewFiles: ReviewFileItem[] = [
+        {
+            id: '1',
+            path: 'src/core/transaction.ts',
+            status: 'APPROVED',
+            linesAdded: 18,
+            linesRemoved: 5,
+            diff: `--- a/src/core/transaction.ts
+    +++ b/src/core/transaction.ts
+
+    @@ -15,7 +15,7 @@ export class Transaction {
+       }
+
+    -  calculateChanges(): ChangeSet {
+
+    +  computeDelta(): ChangeSet {
+         return this.changes;
+       }
+     }`,
+            strategy: 'replace',
+        },
+        {
+            id: '2',
+            path: 'src/utils/logger.ts',
+            status: 'FAILED',
+            linesAdded: 0,
+            linesRemoved: 0,
+            diff: '',
+            error: 'Hunk #1 failed to apply',
+            strategy: 'standard-diff',
+        },
+        {
+            id: '3',
+            path: 'src/commands/apply.ts',
+            status: 'FAILED',
+            linesAdded: 0,
+            linesRemoved: 0,
+            diff: '',
+            error: 'Context mismatch at line 92',
+            strategy: 'standard-diff',
+        },
+    ];
+
+
+    export const mockReviewScripts: ScriptResult[] = [
+        { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
+        { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: `src/core/clipboard.ts
+      45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+      88:5   Warning  Unexpected console statement. (no-console)` },
+    ];
+
+
+    export const mockReviewReasoning = `1. Identified a potential uncaught
+    exception in the \`restoreSnapshot\` function
+       if a file operation fails midway through a loop of many files. This could
+       leave the project in a partially-reverted, inconsistent state.
+
+    2. Wrapped the file restoration loop in a \`Promise.all\` and added a
+    dedicated
+       error collection array. This ensures that all file operations are
+       attempted and that a comprehensive list of failures is available
+       afterward for better error reporting or partial rollback logic.`;
+
+    // From transaction-detail.store.ts
+
+    export const mockDetailedTransactionData = {
+        prompt: 'The user requested to add more robust error handling to the `restoreSnapshot` function. Specifically, it should not halt on the first error but instead attempt all file restorations and then report a summary of any failures.',
+        reasoning: `1. The primary goal was to make the rollback functionality in \`restoreSnapshot\` more robust. The previous implementation used a simple for-loop which would halt on the first error, leaving the project in a partially restored state.
+
+    2. I opted for a \`Promise.all\` approach to run file restorations in
+    parallel. This improves performance slightly but, more importantly, ensures
+    all restoration attempts are completed, even if some fail.
+
+
+    3. An \`restoreErrors\` array was introduced to collect any exceptions that
+    occur during the process. If this array is not empty after the
+    \`Promise.all\` completes, a comprehensive error is thrown, informing the
+    user exactly which files failed to restore. This provides much better
+    diagnostics.`,
+        files: [
+            { id: '1', path: 'src/core/transaction.ts', type: 'MOD' as const, linesAdded: 18, linesRemoved: 5, diff: `   export const restoreSnapshot = async (snapshot: FileSnapshot, ...): ... => {
+         ...
+    -    for (const [filePath, content] of entries) {
+
+    -        if (content === null) {
+
+    -            await deleteFile(filePath, cwd);
+
+    -        }
+
+    -    }
+
+    +    const restoreErrors: { path: string, error: unknown }[] = [];
+
+    +
+
+    +    await Promise.all(entries.map(async ([filePath, content]) => {
+
+    +        try {
+
+    +          if (content === null) { ... }
+
+    +        } catch (error) {
+
+    +          restoreErrors.push({ path: filePath, error });
+
+    +        }
+
+    +    }));
+
+    +
+
+    +    if (restoreErrors.length > 0) { ... }
+       }` },
+            { id: '2', path: 'src/utils/logger.ts', type: 'MOD' as const, linesAdded: 7, linesRemoved: 3, diff: '... diff content for logger.ts ...' },
+            { id: '3', path: 'src/utils/old-helper.ts', type: 'DEL' as const, linesAdded: 0, linesRemoved: 0, diff: '... diff content for old-helper.ts ...' },
+        ],
+    };
+
+
+    // From transaction.service.ts
+
+    export const createMockHistoryTransactions = (): HistoryTransaction[] => {
+        const now = Date.now();
+        return Array.from({ length: 42 }, (_, i) => {
+            const status: HistoryTransactionStatus = i % 5 === 2 ? 'Handoff' : i % 5 === 3 ? 'Reverted' : 'Committed';
+            const files: FileChange[] = [
+                { id: `${i}-1`, path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 25, linesRemoved: 8, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -45,7 +45,9 @@\n-    for (const [filePath, content] of entries) {\n+    const restoreErrors: { path: string, error: unknown }[] = [];\n...\n...\n...\n...\n-    another line removed' },
+                { id: `${i}-2`, path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 10, linesRemoved: 2, diff: 'diff for logger' },
+                { id: `${i}-3`, path: 'src/utils/old-helper.ts', type: 'DEL', linesAdded: 0, linesRemoved: 30, diff: 'diff for old-helper' },
+            ];
+            const linesAdded = files.reduce((sum, f) => sum + f.linesAdded, 0);
+            const linesRemoved = files.reduce((sum, f) => sum + f.linesRemoved, 0);
+
+            return {
+                id: `tx-${i}`,
+                hash: Math.random().toString(16).slice(2, 10),
+                timestamp: now - i * 24 * 60 * 60 * 1000,
+                status,
+                message: `feat: commit message number ${42 - i}`,
+                files,
+                stats: { files: files.length, linesAdded, linesRemoved },
+            };
+        });
+    };
+  src/stores/transaction-history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import type { HistoryTransaction } from '../types/transaction.types';
+
+    import type { FileChange } from '../types/file.types';
+
+    import type { HistoryViewMode } from '../types/transaction-history.types';
+
+
+    export type { HistoryTransaction } from '../types/transaction.types';
+
+    export type { FileChange } from '../types/file.types';
+
+
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
+
+
+    interface TransactionHistoryState {
+        transactions: HistoryTransaction[];
+        mode: HistoryViewMode;
+        selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
+        expandedIds: Set<string>; // holds ids of expanded items
+        filterQuery: string;
+        selectedForAction: Set<string>; // set of transaction IDs
+        copyModeSelections: Set<string>;
+        lastCopiedMessage: string | null;
+
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            expandOrDrillDown: () => void;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            toggleCopySelection: (field: string) => void;
+            executeCopy: () => void;
+            prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+        }
+    }
+
+
+    export const getVisibleItemPaths = (transactions: HistoryTransaction[],
+    expandedIds: Set<string>): string[] => {
+        const paths: string[] = [];
+        for (const tx of transactions) {
+            paths.push(tx.id);
+            if (expandedIds.has(tx.id)) {
+                for (const file of tx.files) {
+                    paths.push(`${tx.id}/${file.id}`);
+                }
+            }
+        }
+        return paths;
+    };
+
+
+    // --- Store ---
+
+    export const useTransactionHistoryStore =
+    create<TransactionHistoryState>((set, get) => ({
+        transactions: [],
+        mode: 'LIST',
+        selectedItemPath: 'tx-0',
+        expandedIds: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        copyModeSelections: new Set(['Git Messages', 'Reasonings']),
+        lastCopiedMessage: null,
+
+        actions: {
+            load: (initialState) => {
+                const transactions = TransactionService.createMockTransactions();
+                set({
+                    transactions,
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: 'LIST',
+                    expandedIds: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    copyModeSelections: new Set(['Git Messages', 'Reasonings']),
+                    lastCopiedMessage: null,
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { transactions, expandedIds, selectedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex > 0) {
+                    set({ selectedItemPath: visibleItems[currentIndex - 1] });
+                }
+            },
+            navigateDown: () => {
+                const { transactions, expandedIds, selectedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex < visibleItems.length - 1) {
+                    set({ selectedItemPath: visibleItems[currentIndex + 1] });
+                }
+            },
+            expandOrDrillDown: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (!newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.add(selectedItemPath);
+                }
+                return { expandedIds: newExpandedIds };
+            }),
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    // If it's expanded, collapse it
+                    newExpandedIds.delete(selectedItemPath);
+                    
+                    // Also collapse children
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+
+                    return { expandedIds: newExpandedIds };
+                } else if (selectedItemPath.includes('/')) {
+                    // If it's a file, move selection to parent transaction
+                    const parentId = selectedItemPath.split('/')[0];
+                    return { selectedItemPath: parentId || '' };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = selectedItemPath.split('/')[0];
+                if (!txId) return {};
+
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode, lastCopiedMessage: null }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                // In a real app, this would filter `transactions`.
+                // For the demo, we just go back to LIST mode.
+                set({ mode: 'LIST' });
+            },
+            toggleCopySelection: (field) => set(state => {
+                const newSelections = new Set(state.copyModeSelections);
+                if (newSelections.has(field)) {
+                    newSelections.delete(field);
+                } else {
+                    newSelections.add(field);
+                }
+                return { copyModeSelections: newSelections };
+            }),
+            executeCopy: () => {
+                 // Mock copy
+                const { selectedForAction, copyModeSelections } = get();
+                const message = `Copied ${Array.from(copyModeSelections).join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
+                // In real app: clipboardy.writeSync(...)
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD MOCK] ${message}`);
+                set({ lastCopiedMessage: message });
+            },
+            prepareDebugState: (stateName) => {
+                switch (stateName) {
+                    case 'l1-drill':
+                        get().actions.load({ expandedIds: new Set(['tx-0']), selectedItemPath: 'tx-0' });
+                        break;
+                    case 'l2-drill':
+                        get().actions.load({ expandedIds: new Set(['tx-0', 'tx-0/0-1']), selectedItemPath: 'tx-0/0-1' });
+                        break;
+                    case 'filter':
+                        get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
+                        break;
+                    case 'copy':
+                        get().actions.load({
+                            mode: 'COPY',
+                            selectedForAction: new Set(['tx-0', 'tx-2']),
+                            copyModeSelections: new Set(['Git Messages', 'Diffs', 'UUIDs']),
+                        });
+                        break;
+                    case 'bulk':
+                        get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                        break;
+                }
+            },
+        },
+    }));
+  src/components/TransactionHistoryScreen.tsx: >-
+    import React from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import { type HistoryTransaction, type FileChange } from
+    '../stores/transaction-history.store';
+
+    import Separator from './Separator';
+
+    import { useTransactionHistoryScreen } from
+    '../hooks/useTransactionHistoryScreen';
+
+
+    // --- Sub-components ---
+
+
+    const DiffPreview = ({ diff }: { diff: string }) => {
+        const lines = diff.split('\n');
+        const previewLines = lines.slice(0, 5);
+        const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+        return (
+            <Box flexDirection="column" paddingLeft={8}>
+                {previewLines.map((line, i) => {
+                    let color = 'white';
+                    if (line.startsWith('+')) color = 'green';
+                    if (line.startsWith('-')) color = 'red';
+                    if (line.startsWith('@@')) color = 'cyan';
+                    return <Text key={i} color={color}>{line}</Text>;
+                })}
+                {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+            </Box>
+        );
+    };
+
+
+    const FileRow = ({ file, isSelected, isExpanded }: { file: FileChange,
+    isSelected: boolean, isExpanded: boolean }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
+        
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {icon} {typeMap[file.type]} {file.path}
+                </Text>
+                {isExpanded && <DiffPreview diff={file.diff} />}
+            </Box>
+        );
+    };
+
+
+    const TransactionRow = ({
+        tx,
+        isSelected,
+        isExpanded,
+        isSelectedForAction,
+    }: {
+        tx: HistoryTransaction,
+        isSelected: boolean,
+        isExpanded: boolean,
+        isSelectedForAction: boolean,
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const statusMap = {
+            Committed: <Text color="green">✓ Committed</Text>,
+            Handoff: <Text color="magenta">→ Handoff</Text>,
+            Reverted: <Text color="gray">↩ Reverted</Text>,
+        };
+        const date = new Date(tx.timestamp).toISOString().split('T')[0];
+        const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
+        
+        return (
+            <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {selectionIndicator} {icon} {statusMap[tx.status]} · {tx.hash} · {date} · {tx.message}
+                </Text>
+                {isExpanded && (
+                    <Box flexDirection="column" paddingLeft={8}>
+                        <Text color="gray">Stats: {tx.stats.files} Files · +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>
+                        <Text>Files:</Text>
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    interface CopyModeProps {
+        selectedForActionCount: number;
+        lastCopiedMessage: string | null;
+        selectedFields: Set<string>;
+        fields: { key: string; name: string }[];
+    }
+
+
+    const CopyMode = ({
+        selectedForActionCount,
+        lastCopiedMessage,
+        selectedFields,
+        fields,
+    }: CopyModeProps) => {
+
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text>Select data to copy from {selectedForActionCount} transactions:</Text>
+                <Box marginY={1}>
+                    {fields.map(f => (
+                        <Text key={f.key}>
+                            [{selectedFields.has(f.name) ? 'x' : ' '}] ({f.key}) {f.name.padEnd(15)}
+                        </Text>
+                    ))}
+                </Box>
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+            </Box>
+        );
+    };
+
+
+    const BulkActionsMode = ({ selectedForActionCount }: {
+    selectedForActionCount: number }) => {
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
+                <Box marginY={1}>
+                    <Text>This action is often irreversible. Are you sure?</Text>
+                </Box>
+                <Text>(1) Revert Selected Transactions</Text>
+                <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+                <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
+                <Text>(Esc) Cancel</Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const TransactionHistoryScreen = () => {
+        const {
+            store,
+            itemsInView,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus,
+            showingStatus,
+            visibleItemPaths,
+            selectedFields,
+            copyFields,
+        } = useTransactionHistoryScreen();
+
+        const renderFooter = () => {
+            if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>;
+            if (store.mode === 'COPY') return <Text>(M,R,...) Toggle · (Enter) Copy · (C, Esc) Exit</Text>;
+            if (store.mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
+            
+            const actions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
+            if (store.selectedForAction.size > 0) {
+                actions.push('(C)opy', '(B)ulk');
+            }
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode transaction history</Text>
+                <Separator />
+
+                <Box>
+                    <Text>Filter: </Text>
+                    {store.mode === 'FILTER' ? (
+                        <TextInput value={store.filterQuery} onChange={store.actions.setFilterQuery} />
+                    ) : (
+                        <Text>{filterStatus}</Text>
+                    )}
+                    <Text> · {showingStatus} ({store.transactions.length} txns)</Text>
+                </Box>
+
+                <Box flexDirection="column" marginY={1}>
+                    {store.mode === 'COPY' && <CopyMode
+                        selectedForActionCount={store.selectedForAction.size}
+                        lastCopiedMessage={store.lastCopiedMessage}
+                        selectedFields={selectedFields}
+                        fields={copyFields}
+                    />}
+                    {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
+
+                    {store.mode === 'LIST' && transactionsInView.map(tx => {
+                        const isTxSelected = store.selectedItemPath.startsWith(tx.id);
+                        const isTxExpanded = store.expandedIds.has(tx.id);
+                        const isSelectedForAction = store.selectedForAction.has(tx.id);
+
+                        const showTxRow = pathsInViewSet.has(tx.id);
+
+                        return (
+                            <Box flexDirection="column" key={tx.id}>
+                                {showTxRow && (
+                                    <TransactionRow
+                                        tx={tx}
+                                        isSelected={isTxSelected && !store.selectedItemPath.includes('/')}
+                                        isExpanded={isTxExpanded}
+                                        isSelectedForAction={isSelectedForAction}
+                                    />
+                                )}
+                                {isTxExpanded && tx.files.map(file => {
+                                    if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
+                                    const filePath = `${tx.id}/${file.id}`;
+                                    const isFileSelected = store.selectedItemPath === filePath;
+                                    const isFileExpanded = store.expandedIds.has(filePath);
+                                    return (
+                                        <FileRow
+                                            key={file.id}
+                                            file={file}
+                                            isSelected={isFileSelected}
+                                            isExpanded={isFileExpanded}
+                                        />
+                                    );
+                                })}
+                            </Box>
+                        );
+                    })}
+                </Box>
+
+                <Separator />
+                {renderFooter()}
+            </Box>
+        );
+    };
+
+
+    export default TransactionHistoryScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 57
