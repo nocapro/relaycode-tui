@@ -56,7 +56,7 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
 
     actions: {
         load: (initialState) => {
-            const transactions = TransactionService.createMockTransactions();
+            const transactions = TransactionService.getAllTransactions();
             set({
                 transactions,
                 selectedItemPath: transactions[0]?.id || '',

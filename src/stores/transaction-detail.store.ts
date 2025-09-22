@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { useDashboardStore } from './dashboard.store';
 import { TransactionService } from '../services/transaction.service';
-import { mockDetailedTransactionData } from '../data/mocks';
 import type { Transaction } from '../types/transaction.types';
 import type { FileChange as FileDetail } from '../types/file.types';
 export type { FileChangeType } from '../types/file.types';
@@ -10,8 +9,6 @@ import type { NavigatorSection, DetailBodyView } from '../types/transaction-deta
 interface TransactionDetailState {
     // Data
     transaction: Transaction | null;
-    prompt: string;
-    reasoning: string;
     files: FileDetail[];
 
     // UI State
@@ -36,8 +33,6 @@ const navigatorOrder: NavigatorSection[] = ['PROMPT', 'REASONING', 'FILES'];
 
 export const useTransactionDetailStore = create<TransactionDetailState>((set, get) => ({
     transaction: null,
-    prompt: '',
-    reasoning: '',
     files: [],
 
     navigatorFocus: 'PROMPT',
@@ -52,7 +47,7 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
             if (transaction) {
                 set({
                     transaction,
-                    ...mockDetailedTransactionData,
+                    files: transaction.files || [],
                     // Reset UI state
                     navigatorFocus: 'PROMPT',
                     expandedSection: null,
@@ -141,6 +136,7 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
             const { transaction } = get();
             if (!transaction) return;
             TransactionService.revertTransaction(transaction.id);
+            useDashboardStore.getState().actions.updateTransactionStatus(transaction.id, 'REVERTED');
             set({ bodyView: 'NONE' });
         },
     },

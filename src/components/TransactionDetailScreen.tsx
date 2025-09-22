@@ -36,7 +36,7 @@ const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
 
 const TransactionDetailScreen = () => {
     const {
-        transaction, prompt, reasoning, files,
+        transaction, files,
         navigatorFocus, expandedSection, selectedFileIndex, bodyView
     } = useTransactionDetailScreen();
 
@@ -61,7 +61,7 @@ const TransactionDetailScreen = () => {
                 </Text>
                 <Text color={isReasoningFocused && !isFilesFocused ? 'cyan' : undefined}>
                     {isReasoningFocused && !isFilesFocused ? '> ' : '  '}
-                    {isReasoningExpanded ? '▾' : '▸'} (R)easoning ({reasoning.split('\n\n').length} steps)
+                    {isReasoningExpanded ? '▾' : '▸'} (R)easoning ({transaction.reasoning?.split('\n\n').length || 0} steps)
                 </Text>
                 <Text color={isFilesFocused ? 'cyan' : undefined}>
                     {isFilesFocused && navigatorFocus !== 'FILES_LIST' ? '> ' : '  '}
@@ -93,14 +93,13 @@ const TransactionDetailScreen = () => {
             return (
                 <Box flexDirection="column">
                     <Text>PROMPT</Text>
-                    <Box marginTop={1}><Text>{prompt}</Text></Box>
+                    <Box marginTop={1}><Text>{transaction.prompt}</Text></Box>
                 </Box>
             );
         }
         if (bodyView === 'REASONING') {
-            return (
-                <ReasonScreen reasoning={reasoning} />
-            );
+            if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
+            return <ReasonScreen reasoning={transaction.reasoning} />;
         }
         if (bodyView === 'FILES_LIST') {
              return <Text color="gray">(Select a file and press → to view the diff)</Text>;

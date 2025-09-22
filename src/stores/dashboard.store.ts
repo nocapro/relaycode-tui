@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DashboardService } from '../services/dashboard.service';
-import { createDashboardTransactions } from '../data/mocks';
+import { TransactionService } from '../services/transaction.service';
 import type { Transaction, TransactionStatus } from '../types/transaction.types';
 import type { DashboardStatus } from '../types/dashboard.types';
 import { moveIndex } from './navigation.utils';
@@ -32,7 +32,7 @@ interface DashboardState {
 export const useDashboardStore = create<DashboardState>((set, get) => ({
     status: 'LISTENING',
     previousStatus: 'LISTENING',
-    transactions: createDashboardTransactions(),
+    transactions: TransactionService.getAllTransactions(),
     selectedTransactionIndex: 0,
     showHelp: false,
     actions: {

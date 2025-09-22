@@ -15,6 +15,8 @@ export interface Transaction {
     status: TransactionStatus;
     hash: string;
     message: string;
+    prompt?: string;
+    reasoning?: string;
     error?: string;
     // Fields for history/detail view
     files?: FileChange[];

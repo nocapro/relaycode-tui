@@ -149,7 +149,7 @@ The refactor should focus on creating a single, unified `Transaction` entity.
 
 ------
 
-do DRYness refactor radically to eliminate redundancy.
+do DRYness refactor radically to eliminate redundancy and prevent data integrity compromise.
 
 addressed accross UI, hook, State, store, data, type
 

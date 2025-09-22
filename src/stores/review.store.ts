@@ -3,7 +3,7 @@ import { sleep } from '../utils';
 import { useAppStore } from './app.store';
 import { useDashboardStore } from './dashboard.store';
 import { ReviewService } from '../services/review.service';
-import { mockReviewFiles, mockReviewScripts, mockReviewReasoning } from '../data/mocks';
+import { mockReviewFiles, mockReviewScripts, allMockTransactions } from '../data/mocks';
 import { moveIndex } from './navigation.utils';
 import type { ReviewFileItem } from '../types/file.types';
 import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types'; 
@@ -76,12 +76,14 @@ interface ReviewState {
     };
 }
 
+const initialFailureTx = allMockTransactions[0]!;
+
 export const useReviewStore = create<ReviewState>((set, get) => ({
     // Transaction Info
-    hash: 'e4a7c112',
-    message: 'refactor: rename core utility function',
-    prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
-    reasoning: mockReviewReasoning,
+    hash: initialFailureTx.hash,
+    message: initialFailureTx.message,
+    prompt: initialFailureTx.prompt!,
+    reasoning: initialFailureTx.reasoning!,
     linesAdded: 18,
     linesRemoved: 5,
     duration: 0.6,
@@ -154,10 +156,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
             showReviewScreen();
         },
-        simulateSuccessScenario: () => set(() => ({
-            hash: '4b9d8f03',
-            message: 'refactor: simplify clipboard logic',
-            prompt: 'Simplify the clipboard logic using an external library...',
+        simulateSuccessScenario: () => {
+            const tx = allMockTransactions[1]!;
+            set(() => ({
+            hash: tx.hash,
+            message: tx.message,
+            prompt: tx.prompt!,
+            reasoning: tx.reasoning!,
             linesAdded: 22,
             linesRemoved: 11,
             duration: 3.9,
@@ -189,11 +194,15 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             scripts: mockReviewScripts,
             selectedItemIndex: 0,
             bodyView: 'none' as const,
-        })),
-        simulateFailureScenario: () => set(() => ({
-            hash: 'e4a7c112',
-            message: 'refactor: rename core utility function',
-            prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+        }));
+    },
+        simulateFailureScenario: () => {
+            const tx = allMockTransactions[0]!;
+            set(() => ({
+            hash: tx.hash,
+            message: tx.message,
+            prompt: tx.prompt!,
+            reasoning: tx.reasoning!,
             linesAdded: 18,
             linesRemoved: 5,
             duration: 0.6,
@@ -206,7 +215,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             reasoningScrollIndex: 0,
             scriptErrorIndex: 0,
             selectedItemIndex: 0,
-        })),
+        }));
+    },
 
         // Repair Actions
         tryRepairFile: () => {

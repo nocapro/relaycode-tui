@@ -2,9 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useInput } from 'ink';
 import { useTransactionHistoryStore, getVisibleItemPaths } from '../stores/transaction-history.store';
 import { useAppStore } from '../stores/app.store';
-import { useCopyStore, type CopyItem } from '../stores/copy.store';
-import { COPYABLE_ITEMS } from '../types/copy.types';
 import { useStdoutDimensions } from '../utils';
+import { CopyService } from '../services/copy.service';
 
 export const useTransactionHistoryScreen = () => {
     const [, rows] = useStdoutDimensions();
@@ -35,17 +34,7 @@ export const useTransactionHistoryScreen = () => {
         const selectedTxs = transactions.filter(tx => selectedForAction.has(tx.id));
 
         if (selectedTxs.length === 0) return;
-
-        const items: CopyItem[] = [
-            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => selectedTxs.map(tx => tx.message).join('\n'), isDefaultSelected: true },
-            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => '...prompts data...', isDefaultSelected: false }, // Mocking, no prompt data here
-            { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => '...reasonings data...', isDefaultSelected: true }, // Mocking, no reasoning data
-            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => selectedTxs.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
-            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => selectedTxs.map(tx => tx.id).join('\n') },
-            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
-        ];
-
-        useCopyStore.getState().actions.open(`Select data to copy from ${selectedTxs.length} transactions:`, items);
+        CopyService.openCopyForTransactionHistory(selectedTxs);
     };
 
     useInput((input, key) => {

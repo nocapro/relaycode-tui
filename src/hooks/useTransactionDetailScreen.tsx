@@ -1,8 +1,7 @@
 import { useInput } from 'ink';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useAppStore } from '../stores/app.store';
-import { useCopyStore, type CopyItem } from '../stores/copy.store';
-import { COPYABLE_ITEMS } from '../types/copy.types';
+import { CopyService } from '../services/copy.service';
 
 export const useTransactionDetailScreen = () => {
     const { showDashboardScreen } = useAppStore(s => s.actions);
@@ -22,21 +21,10 @@ export const useTransactionDetailScreen = () => {
     } = store.actions;
 
     const openCopyMode = () => {
-        const { transaction, prompt, reasoning, files, selectedFileIndex } = store;
+        const { transaction, files, selectedFileIndex } = store;
         if (!transaction) return;
         const selectedFile = files[selectedFileIndex];
-
-        const items: CopyItem[] = [
-            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message, isDefaultSelected: true },
-            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => prompt },
-            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => reasoning, isDefaultSelected: true },
-            { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${files.length} files)`, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
-            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
-            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
-            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
-        ];
-
-        useCopyStore.getState().actions.open(`Select data to copy from transaction ${transaction.hash}:`, items);
+        CopyService.openCopyForTransactionDetail(transaction, selectedFile);
     };
 
     useInput((input, key) => {
