@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { useDashboardStore } from './dashboard.store';
 import { TransactionService } from '../services/transaction.service';
+import { mockDetailedTransactionData } from '../data/mocks';
 import type { Transaction } from '../types/transaction.types';
 import type { FileChange as FileDetail } from '../types/file.types';
+export type { FileChangeType } from '../types/file.types';
 import type { NavigatorSection, DetailBodyView } from '../types/transaction-detail.types';
 
 interface TransactionDetailState {
@@ -11,7 +13,7 @@ interface TransactionDetailState {
     prompt: string;
     reasoning: string;
     files: FileDetail[];
-    
+
     // UI State
     navigatorFocus: NavigatorSection | 'FILES_LIST';
     expandedSection: NavigatorSection | null;
@@ -38,42 +40,9 @@ interface TransactionDetailState {
     }
 }
 
-// Mock data based on README
-const mockTransactionData = {
-    prompt: 'The user requested to add more robust error handling to the `restoreSnapshot` function. Specifically, it should not halt on the first error but instead attempt all file restorations and then report a summary of any failures.',
-    reasoning: `1. The primary goal was to make the rollback functionality in \`restoreSnapshot\` more robust. The previous implementation used a simple for-loop which would halt on the first error, leaving the project in a partially restored state.
-
-2. I opted for a \`Promise.all\` approach to run file restorations in parallel. This improves performance slightly but, more importantly, ensures all restoration attempts are completed, even if some fail.
-
-3. An \`restoreErrors\` array was introduced to collect any exceptions that occur during the process. If this array is not empty after the \`Promise.all\` completes, a comprehensive error is thrown, informing the user exactly which files failed to restore. This provides much better diagnostics.`,
-    files: [
-        { id: '1', path: 'src/core/transaction.ts', type: 'MOD' as const, linesAdded: 18, linesRemoved: 5, diff: `   export const restoreSnapshot = async (snapshot: FileSnapshot, ...): ... => {
-     ...
--    for (const [filePath, content] of entries) {
--        if (content === null) {
--            await deleteFile(filePath, cwd);
--        }
--    }
-+    const restoreErrors: { path: string, error: unknown }[] = [];
-+
-+    await Promise.all(entries.map(async ([filePath, content]) => {
-+        try {
-+          if (content === null) { ... }
-+        } catch (error) {
-+          restoreErrors.push({ path: filePath, error });
-+        }
-+    }));
-+
-+    if (restoreErrors.length > 0) { ... }
-   }` },
-        { id: '2', path: 'src/utils/logger.ts', type: 'MOD' as const, linesAdded: 7, linesRemoved: 3, diff: '... diff content for logger.ts ...' },
-        { id: '3', path: 'src/utils/old-helper.ts', type: 'DEL' as const, linesAdded: 0, linesRemoved: 0, diff: '... diff content for old-helper.ts ...' },
-    ],
-};
-
 const navigatorOrder: NavigatorSection[] = ['PROMPT', 'REASONING', 'FILES'];
 const copyOptionsList = [
-    'Git Message', 'Prompt', 'Reasoning', `All Diffs (${mockTransactionData.files.length} files)`, `Diff for: ${mockTransactionData.files[0]?.path}`, 'UUID', 'Full YAML representation',
+    'Git Message', 'Prompt', 'Reasoning', `All Diffs (${mockDetailedTransactionData.files.length} files)`, `Diff for: ${mockDetailedTransactionData.files[0]?.path}`, 'UUID', 'Full YAML representation',
 ];
 
 export const useTransactionDetailStore = create<TransactionDetailState>((set, get) => ({
@@ -81,7 +50,7 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
     prompt: '',
     reasoning: '',
     files: [],
-    
+
     navigatorFocus: 'PROMPT',
     expandedSection: null,
     selectedFileIndex: 0,
@@ -97,7 +66,7 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
             if (transaction) {
                 set({
                     transaction,
-                    ...mockTransactionData,
+                    ...mockDetailedTransactionData,
                     // Reset UI state
                     navigatorFocus: 'PROMPT',
                     expandedSection: null,

@@ -1,0 +1,130 @@
+import type { Transaction } from '../types/transaction.types';
+import type { HistoryTransaction, HistoryTransactionStatus } from '../types/transaction.types';
+import type { FileChange, ReviewFileItem } from '../types/file.types';
+import type { ScriptResult } from '../types/review.types';
+
+// From dashboard.store.ts
+export const createDashboardTransactions = (): Transaction[] => [
+    { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+    { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+    { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+    { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+    { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+    { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+];
+
+// From review.store.ts
+export const mockReviewFiles: ReviewFileItem[] = [
+    {
+        id: '1',
+        path: 'src/core/transaction.ts',
+        status: 'APPROVED',
+        linesAdded: 18,
+        linesRemoved: 5,
+        diff: `--- a/src/core/transaction.ts
++++ b/src/core/transaction.ts
+@@ -15,7 +15,7 @@ export class Transaction {
+   }
+
+-  calculateChanges(): ChangeSet {
++  computeDelta(): ChangeSet {
+     return this.changes;
+   }
+ }`,
+        strategy: 'replace',
+    },
+    {
+        id: '2',
+        path: 'src/utils/logger.ts',
+        status: 'FAILED',
+        linesAdded: 0,
+        linesRemoved: 0,
+        diff: '',
+        error: 'Hunk #1 failed to apply',
+        strategy: 'standard-diff',
+    },
+    {
+        id: '3',
+        path: 'src/commands/apply.ts',
+        status: 'FAILED',
+        linesAdded: 0,
+        linesRemoved: 0,
+        diff: '',
+        error: 'Context mismatch at line 92',
+        strategy: 'standard-diff',
+    },
+];
+
+export const mockReviewScripts: ScriptResult[] = [
+    { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
+    { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: `src/core/clipboard.ts
+  45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+  88:5   Warning  Unexpected console statement. (no-console)` },
+];
+
+export const mockReviewReasoning = `1. Identified a potential uncaught exception in the \`restoreSnapshot\` function
+   if a file operation fails midway through a loop of many files. This could
+   leave the project in a partially-reverted, inconsistent state.
+
+2. Wrapped the file restoration loop in a \`Promise.all\` and added a dedicated
+   error collection array. This ensures that all file operations are
+   attempted and that a comprehensive list of failures is available
+   afterward for better error reporting or partial rollback logic.`;
+
+// From transaction-detail.store.ts
+export const mockDetailedTransactionData = {
+    prompt: 'The user requested to add more robust error handling to the `restoreSnapshot` function. Specifically, it should not halt on the first error but instead attempt all file restorations and then report a summary of any failures.',
+    reasoning: `1. The primary goal was to make the rollback functionality in \`restoreSnapshot\` more robust. The previous implementation used a simple for-loop which would halt on the first error, leaving the project in a partially restored state.
+
+2. I opted for a \`Promise.all\` approach to run file restorations in parallel. This improves performance slightly but, more importantly, ensures all restoration attempts are completed, even if some fail.
+
+3. An \`restoreErrors\` array was introduced to collect any exceptions that occur during the process. If this array is not empty after the \`Promise.all\` completes, a comprehensive error is thrown, informing the user exactly which files failed to restore. This provides much better diagnostics.`,
+    files: [
+        { id: '1', path: 'src/core/transaction.ts', type: 'MOD' as const, linesAdded: 18, linesRemoved: 5, diff: `   export const restoreSnapshot = async (snapshot: FileSnapshot, ...): ... => {
+     ...
+-    for (const [filePath, content] of entries) {
+-        if (content === null) {
+-            await deleteFile(filePath, cwd);
+-        }
+-    }
++    const restoreErrors: { path: string, error: unknown }[] = [];
++
++    await Promise.all(entries.map(async ([filePath, content]) => {
++        try {
++          if (content === null) { ... }
++        } catch (error) {
++          restoreErrors.push({ path: filePath, error });
++        }
++    }));
++
++    if (restoreErrors.length > 0) { ... }
+   }` },
+        { id: '2', path: 'src/utils/logger.ts', type: 'MOD' as const, linesAdded: 7, linesRemoved: 3, diff: '... diff content for logger.ts ...' },
+        { id: '3', path: 'src/utils/old-helper.ts', type: 'DEL' as const, linesAdded: 0, linesRemoved: 0, diff: '... diff content for old-helper.ts ...' },
+    ],
+};
+
+// From transaction.service.ts
+export const createMockHistoryTransactions = (): HistoryTransaction[] => {
+    const now = Date.now();
+    return Array.from({ length: 42 }, (_, i) => {
+        const status: HistoryTransactionStatus = i % 5 === 2 ? 'Handoff' : i % 5 === 3 ? 'Reverted' : 'Committed';
+        const files: FileChange[] = [
+            { id: `${i}-1`, path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 25, linesRemoved: 8, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -45,7 +45,9 @@\n-    for (const [filePath, content] of entries) {\n+    const restoreErrors: { path: string, error: unknown }[] = [];\n...\n...\n...\n...\n-    another line removed' },
+            { id: `${i}-2`, path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 10, linesRemoved: 2, diff: 'diff for logger' },
+            { id: `${i}-3`, path: 'src/utils/old-helper.ts', type: 'DEL', linesAdded: 0, linesRemoved: 30, diff: 'diff for old-helper' },
+        ];
+        const linesAdded = files.reduce((sum, f) => sum + f.linesAdded, 0);
+        const linesRemoved = files.reduce((sum, f) => sum + f.linesRemoved, 0);
+
+        return {
+            id: `tx-${i}`,
+            hash: Math.random().toString(16).slice(2, 10),
+            timestamp: now - i * 24 * 60 * 60 * 1000,
+            status,
+            message: `feat: commit message number ${42 - i}`,
+            files,
+            stats: { files: files.length, linesAdded, linesRemoved },
+        };
+    });
+};

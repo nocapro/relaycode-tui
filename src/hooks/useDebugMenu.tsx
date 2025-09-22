@@ -8,6 +8,7 @@ import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import type { MenuItem } from '../types/debug.types';
+export type { MenuItem } from '../types/debug.types';
 
 export const useDebugMenu = () => {
     const [selectedIndex, setSelectedIndex] = useState(0);

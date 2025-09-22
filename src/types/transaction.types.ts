@@ -1,7 +1,7 @@
 import type { FileChange } from './file.types';
 
 export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS' | 'HANDOFF';
-export type HistoryTransactionStatus = 'COMMITTED' | 'HANDOFF' | 'REVERTED';
+export type HistoryTransactionStatus = 'Committed' | 'Handoff' | 'Reverted';
 
 export interface Transaction {
     id: string;

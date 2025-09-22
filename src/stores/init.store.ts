@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Task, TaskStatus, InitPhase, GitignoreChoice } from '../types/init.types';
+export type { Task } from '../types/init.types';
 
 // Initial State definitions from README
 export const initialAnalyzeTasks: Task[] = [

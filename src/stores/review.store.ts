@@ -3,8 +3,12 @@ import { sleep } from '../utils';
 import { useAppStore } from './app.store';
 import { useDashboardStore } from './dashboard.store';
 import { ReviewService } from '../services/review.service';
+import { mockReviewFiles, mockReviewScripts, mockReviewReasoning } from '../data/mocks';
 import type { ReviewFileItem } from '../types/file.types';
 import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types';
+
+export type { ReviewFileItem as FileItem, ReviewFileItem } from '../types/file.types';
+export type { ScriptResult, ApplyStep } from '../types/review.types';
 
 export const initialApplySteps: ApplyStep[] = [
     { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
@@ -33,14 +37,14 @@ interface ReviewState {
     selectedItemIndex: number; // Can be file or script
     bodyView: ReviewBodyView;
     isDiffExpanded: boolean;
-    
+
     // Copy Mode State
     copyModeSelectedIndex: number;
     copyModeLastCopied: string | null;
-    
+
     // Reasoning Scroll State
     reasoningScrollIndex: number;
-    
+
     // Script Navigation State
     scriptErrorIndex: number;
 
@@ -57,7 +61,7 @@ interface ReviewState {
         simulateSuccessScenario: () => void;
         startApplySimulation: (scenario: 'success' | 'failure') => void;
         simulateFailureScenario: () => void;
-        
+
         // Copy Mode Actions
         toggleCopyMode: () => void;
         moveCopySelectionUp: () => void;
@@ -69,83 +73,24 @@ interface ReviewState {
         copyReasoning: () => void;
         copyFileDiff: () => void;
         copyAllDiffs: () => void;
-        
+
         // Repair Actions
         tryRepairFile: () => void;
         showBulkRepair: () => void;
         executeBulkRepairOption: (option: number) => Promise<void>;
         confirmHandoff: () => void;
-        
+
         // Navigation Actions
         scrollReasoningUp: () => void;
         scrollReasoningDown: () => void;
         navigateScriptErrorUp: () => void;
         navigateScriptErrorDown: () => void,
-        
+
         // "Private" actions for service layer
         _updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
         _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
     };
 }
-
-// --- Mock Data ---
-
-const mockFiles: ReviewFileItem[] = [
-    { 
-        id: '1', 
-        path: 'src/core/transaction.ts', 
-        status: 'APPROVED', 
-        linesAdded: 18, 
-        linesRemoved: 5, 
-        diff: `--- a/src/core/transaction.ts
-+++ b/src/core/transaction.ts
-@@ -15,7 +15,7 @@ export class Transaction {
-   }
- 
--  calculateChanges(): ChangeSet {
-+  computeDelta(): ChangeSet {
-     return this.changes;
-   }
- }`, 
-        strategy: 'replace', 
-    },
-    { 
-        id: '2', 
-        path: 'src/utils/logger.ts', 
-        status: 'FAILED', 
-        linesAdded: 0, 
-        linesRemoved: 0, 
-        diff: '', 
-        error: 'Hunk #1 failed to apply', 
-        strategy: 'standard-diff', 
-    },
-    { 
-        id: '3', 
-        path: 'src/commands/apply.ts', 
-        status: 'FAILED', 
-        linesAdded: 0, 
-        linesRemoved: 0, 
-        diff: '', 
-        error: 'Context mismatch at line 92', 
-        strategy: 'standard-diff', 
-    },
-];
-
-const mockScripts: ScriptResult[] = [
-    { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
-    { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: `src/core/clipboard.ts
-  45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
-  88:5   Warning  Unexpected console statement. (no-console)` },
-];
-
-const mockReasoning = `1. Identified a potential uncaught exception in the \`restoreSnapshot\` function
-   if a file operation fails midway through a loop of many files. This could
-   leave the project in a partially-reverted, inconsistent state.
-
-2. Wrapped the file restoration loop in a \`Promise.all\` and added a dedicated
-   error collection array. This ensures that all file operations are
-   attempted and that a comprehensive list of failures is available
-   afterward for better error reporting or partial rollback logic.`;
 
 // --- Store Implementation ---
 
@@ -154,14 +99,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     hash: 'e4a7c112',
     message: 'refactor: rename core utility function',
     prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
-    reasoning: mockReasoning,
+    reasoning: mockReviewReasoning,
     linesAdded: 18,
     linesRemoved: 5,
     duration: 0.6,
     patchStatus: 'PARTIAL_FAILURE',
 
     // File & Script Info
-    files: mockFiles,
+    files: mockReviewFiles,
     scripts: [], // Empty for partial failure scenario
 
     // UI State
@@ -169,14 +114,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     selectedItemIndex: 0, // Start with first file
     bodyView: 'none' as const,
     isDiffExpanded: false,
-    
+
     // Copy Mode State
     copyModeSelectedIndex: 0,
     copyModeLastCopied: null,
-    
+
     // Reasoning Scroll State
     reasoningScrollIndex: 0,
-    
+
     // Script Navigation State
     scriptErrorIndex: 0,
 
@@ -190,7 +135,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         toggleFileApproval: () => set(state => {
             const { selectedItemIndex, files } = state;
             if (selectedItemIndex >= files.length) return {}; // Not a file
-            
+
             const newFiles = [...files];
             const file = newFiles[selectedItemIndex];
             if (file) {
@@ -235,12 +180,12 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         approve: () => { /* NOP for now, would trigger commit and screen change */ },
         startApplySimulation: async (scenario: 'success' | 'failure') => {
             const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
-            
+
             set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
             showReviewProcessingScreen();
 
             await ReviewService.runApplySimulation(scenario);
-    
+
             showReviewScreen();
         },
         simulateSuccessScenario: () => set(() => ({
@@ -252,30 +197,30 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             duration: 3.9,
             patchStatus: 'SUCCESS' as const,
             files: [
-                { 
-                    id: '1', 
-                    path: 'src/core/clipboard.ts', 
-                    status: 'APPROVED' as const, 
-                    linesAdded: 15, 
-                    linesRemoved: 8, 
+                {
+                    id: '1',
+                    path: 'src/core/clipboard.ts',
+                    status: 'APPROVED' as const,
+                    linesAdded: 15,
+                    linesRemoved: 8,
                     diff: `--- a/src/core/clipboard.ts
 +++ b/src/core/clipboard.ts
 @@ -1,5 +1,6 @@
- import { copy as copyToClipboard } from 'clipboardy';`, 
+ import { copy as copyToClipboard } from 'clipboardy';`,
                     strategy: 'replace' as const,
                 },
-                { 
-                    id: '2', 
-                    path: 'src/utils/shell.ts', 
-                    status: 'APPROVED' as const, 
-                    linesAdded: 7, 
-                    linesRemoved: 3, 
+                {
+                    id: '2',
+                    path: 'src/utils/shell.ts',
+                    status: 'APPROVED' as const,
+                    linesAdded: 7,
+                    linesRemoved: 3,
                     diff: `--- a/src/utils/shell.ts
-+++ b/src/utils/shell.ts`, 
++++ b/src/utils/shell.ts`,
                     strategy: 'standard-diff' as const,
                 },
             ],
-            scripts: mockScripts,
+            scripts: mockReviewScripts,
             selectedItemIndex: 0,
             bodyView: 'none' as const,
         })),
@@ -287,7 +232,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             linesRemoved: 5,
             duration: 0.6,
             patchStatus: 'PARTIAL_FAILURE' as const,
-            files: mockFiles,
+            files: mockReviewFiles,
             scripts: [],
             // Reset UI state
             bodyView: 'none',
@@ -296,7 +241,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             scriptErrorIndex: 0,
             selectedItemIndex: 0,
         })),
-        
+
         // Copy Mode Actions
         toggleCopyMode: () => set(state => ({
             bodyView: state.bodyView === 'copy_mode' ? 'none' as const : 'copy_mode' as const,
@@ -313,7 +258,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             const { copyModeSelectedIndex, hash, message, prompt, reasoning, files, selectedItemIndex } = state;
             let content = '';
             let label = '';
-            
+
             switch (copyModeSelectedIndex) {
                 case 0: // UUID
                     content = `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
@@ -345,11 +290,11 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                     label = 'All Diffs';
                     break;
             }
-            
+
             // Mock clipboard operation (TUI environment - no real clipboard)
             // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD] Copied ${label}: ${content.substring(0, 100)}...`);
-            
+
             return { copyModeLastCopied: label };
         }),
         copyUUID: () => set(state => {
@@ -389,17 +334,17 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             console.log(`[CLIPBOARD] Copied all diffs: ${state.files.length} files`);
             return { copyModeLastCopied: 'All Diffs' };
         }),
-        
-// Repair Actions
-tryRepairFile: () => {
-    const { selectedItemIndex, files } = get();
-    if (selectedItemIndex < files.length) {
-        const file = files[selectedItemIndex];
-        if (file && file.status === 'FAILED') {
-            ReviewService.tryRepairFile(file, selectedItemIndex);
-        }
-    }
-},
+
+        // Repair Actions
+        tryRepairFile: () => {
+            const { selectedItemIndex, files } = get();
+            if (selectedItemIndex < files.length) {
+                const file = files[selectedItemIndex];
+                if (file && file.status === 'FAILED') {
+                    ReviewService.tryRepairFile(file, selectedItemIndex);
+                }
+            }
+        },
         showBulkRepair: () => set(() => ({
             bodyView: 'bulk_repair' as const,
         })),
@@ -416,18 +361,18 @@ tryRepairFile: () => {
                     set({ bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied.' });
                     break;
                 }
-                    
+
                 case 2: { // Attempt Bulk Re-apply
                     set({ bodyView: 'none' as const });
                     await ReviewService.runBulkReapply();
                     break;
                 }
-                    
+
                 case 3: { // Handoff to Human
                     set({ bodyView: 'confirm_handoff' as const });
                     break;
                 }
-                    
+
                 case 4: { // Reject All Failed
                     set(state => ({
                         files: state.files.map(file =>
@@ -439,7 +384,7 @@ tryRepairFile: () => {
                     }));
                     break;
                 }
-                    
+
                 default: // Close modal
                     set({ bodyView: 'none' as const });
             }
@@ -452,7 +397,7 @@ tryRepairFile: () => {
             console.log('[CLIPBOARD] Copied Handoff Prompt.'); // In real app: clipboardy.writeSync(handoffPrompt)
             ReviewService.performHandoff(hash);
         },
-        
+
         // Navigation Actions
         scrollReasoningUp: () => set(state => ({
             reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1),
@@ -467,14 +412,14 @@ tryRepairFile: () => {
         navigateScriptErrorDown: () => set(state => {
             const selectedScript = state.scripts[state.selectedItemIndex - state.files.length];
             if (selectedScript && selectedScript.output) {
-                const errorLines = selectedScript.output.split('\n').filter(line => 
+                const errorLines = selectedScript.output.split('\n').filter(line =>
                     line.includes('Error') || line.includes('Warning'),
                 );
                 return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
             }
             return {};
         }),
-        
+
         // "Private" actions for service layer
         _updateApplyStep: (id, status, duration, details) => {
             set(state => ({

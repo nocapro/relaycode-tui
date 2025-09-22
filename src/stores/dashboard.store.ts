@@ -1,17 +1,11 @@
 import { create } from 'zustand';
 import { DashboardService } from '../services/dashboard.service';
+import { createDashboardTransactions } from '../data/mocks';
 import type { Transaction, TransactionStatus } from '../types/transaction.types';
 import type { DashboardStatus } from '../types/dashboard.types';
 
-// --- Initial State (for simulation) ---
-const createInitialTransactions = (): Transaction[] => [
-    { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
-    { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
-    { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
-    { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
-    { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
-    { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
-];
+export type { Transaction, TransactionStatus } from '../types/transaction.types';
+export type { DashboardStatus } from '../types/dashboard.types';
 
 // --- Store Interface ---
 interface DashboardState {
@@ -37,7 +31,7 @@ interface DashboardState {
 export const useDashboardStore = create<DashboardState>((set, get) => ({
     status: 'LISTENING',
     previousStatus: 'LISTENING',
-    transactions: createInitialTransactions(),
+    transactions: createDashboardTransactions(),
     selectedTransactionIndex: 0,
     showHelp: false,
     actions: {
