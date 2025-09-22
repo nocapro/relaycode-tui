@@ -4,12 +4,12 @@ import { Box, Text } from 'ink';
 interface ReasonScreenProps {
     reasoning: string,
     scrollIndex?: number,
-    visibleLinesCount?: number,
+    visibleLinesCount?: number, // if not provided, all lines are shown
 }
 
-const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount = 10 }: ReasonScreenProps) => {
+const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonScreenProps) => {
     const lines = reasoning.split('\n');
-    const visibleLines = lines.slice(scrollIndex, scrollIndex + visibleLinesCount);
+    const visibleLines = visibleLinesCount ? lines.slice(scrollIndex, scrollIndex + visibleLinesCount) : lines;
 
     return (
         <Box flexDirection="column">

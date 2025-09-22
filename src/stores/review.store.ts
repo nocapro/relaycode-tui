@@ -4,6 +4,7 @@ import { useAppStore } from './app.store';
 import { useDashboardStore } from './dashboard.store';
 import { ReviewService } from '../services/review.service';
 import { mockReviewFiles, mockReviewScripts, mockReviewReasoning } from '../data/mocks';
+import { moveIndex } from './navigation.utils';
 import type { ReviewFileItem } from '../types/file.types';
 import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types';
 
@@ -127,10 +128,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
     actions: {
         moveSelectionUp: () => set(state => ({
-            selectedItemIndex: Math.max(0, state.selectedItemIndex - 1),
+            selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', state.files.length + state.scripts.length),
         })),
         moveSelectionDown: () => set(state => ({
-            selectedItemIndex: Math.min(state.files.length + state.scripts.length - 1, state.selectedItemIndex + 1),
+            selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', state.files.length + state.scripts.length),
         })),
         toggleFileApproval: () => set(state => {
             const { selectedItemIndex, files } = state;
@@ -249,10 +250,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             copyModeLastCopied: null,
         })),
         moveCopySelectionUp: () => set(state => ({
-            copyModeSelectedIndex: Math.max(0, state.copyModeSelectedIndex - 1),
+            copyModeSelectedIndex: moveIndex(state.copyModeSelectedIndex, 'up', 6), // 6 total options
         })),
         moveCopySelectionDown: () => set(state => ({
-            copyModeSelectedIndex: Math.min(5, state.copyModeSelectedIndex + 1), // 6 total options (U,M,P,R,F,A)
+            copyModeSelectedIndex: moveIndex(state.copyModeSelectedIndex, 'down', 6), // 6 total options
         })),
         copySelectedItem: () => set(state => {
             const { copyModeSelectedIndex, hash, message, prompt, reasoning, files, selectedItemIndex } = state;

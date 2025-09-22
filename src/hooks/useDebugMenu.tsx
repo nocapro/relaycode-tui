@@ -8,6 +8,7 @@ import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import type { MenuItem } from '../types/debug.types';
+import { moveIndex } from '../stores/navigation.utils';
 export type { MenuItem } from '../types/debug.types';
 
 export const useDebugMenu = () => {
@@ -187,11 +188,11 @@ export const useDebugMenu = () => {
 
     useInput((input, key) => {
         if (key.upArrow) {
-            setSelectedIndex(i => Math.max(0, i - 1));
+            setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
             return;
         }
         if (key.downArrow) {
-            setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+            setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
             return;
         }
         if (key.return) {

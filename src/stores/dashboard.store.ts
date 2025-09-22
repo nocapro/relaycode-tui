@@ -3,6 +3,7 @@ import { DashboardService } from '../services/dashboard.service';
 import { createDashboardTransactions } from '../data/mocks';
 import type { Transaction, TransactionStatus } from '../types/transaction.types';
 import type { DashboardStatus } from '../types/dashboard.types';
+import { moveIndex } from './navigation.utils';
 
 export type { Transaction, TransactionStatus } from '../types/transaction.types';
 export type { DashboardStatus } from '../types/dashboard.types';
@@ -39,10 +40,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
         })),
         moveSelectionUp: () => set(state => ({
-            selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1),
+            selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', state.transactions.length),
         })),
         moveSelectionDown: () => set(state => ({
-            selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1),
+            selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', state.transactions.length),
         })),
         startApproveAll: () => set(state => ({
             status: 'CONFIRM_APPROVE',

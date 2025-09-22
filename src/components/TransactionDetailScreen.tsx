@@ -1,7 +1,9 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { type FileChangeType } from '../stores/transaction-detail.store';
+import { type FileChangeType } from '../types/file.types';
 import Separator from './Separator';
+import DiffScreen from './DiffScreen';
+import ReasonScreen from './ReasonScreen';
 import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
 
 const getFileChangeTypeIcon = (type: FileChangeType) => {
@@ -135,12 +137,7 @@ const TransactionDetailScreen = () => {
         }
         if (bodyView === 'REASONING') {
             return (
-                <Box flexDirection="column">
-                    <Text>REASONING</Text>
-                    <Box marginTop={1}>
-                        {reasoning.split('\n').map((line, i) => <Text key={i}>{line}</Text>)}
-                    </Box>
-                </Box>
+                <ReasonScreen reasoning={reasoning} />
             );
         }
         if (bodyView === 'FILES_LIST') {
@@ -149,20 +146,7 @@ const TransactionDetailScreen = () => {
         if (bodyView === 'DIFF_VIEW') {
             const file = files[selectedFileIndex];
             if (!file) return null;
-            return (
-                <Box flexDirection="column">
-                    <Text>DIFF: {file.path}</Text>
-                    <Box flexDirection="column" marginTop={1}>
-                        {file.diff.split('\n').map((line, i) => {
-                            let color = 'white';
-                            if (line.startsWith('+')) color = 'green';
-                            if (line.startsWith('-')) color = 'red';
-                            if (line.startsWith('@@')) color = 'cyan';
-                            return <Text key={i} color={color}>{line}</Text>;
-                        })}
-                    </Box>
-                </Box>
-            );
+            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} />;
         }
         return null;
     };
