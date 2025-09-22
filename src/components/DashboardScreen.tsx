@@ -4,6 +4,7 @@ import Spinner from 'ink-spinner';
 import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
 import { useCommitStore } from '../stores/commit.store';
+import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import Separator from './Separator';
 import GlobalHelpScreen from './GlobalHelpScreen';
 
@@ -85,6 +86,7 @@ const DashboardScreen = () => {
     const { exit } = useApp();
     const appActions = useAppStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
+    const detailActions = useTransactionDetailStore(s => s.actions);
 
     const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
     const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
@@ -117,7 +119,14 @@ const DashboardScreen = () => {
         if (key.downArrow) moveSelectionDown();
         
         if (key.return) {
-            appActions.showReviewScreen();
+            const selectedTx = transactions[selectedTransactionIndex];
+            if (selectedTx?.status === 'PENDING') {
+                // For PENDING transactions, we still go to the review screen.
+                appActions.showReviewScreen();
+            } else if (selectedTx) {
+                detailActions.loadTransaction(selectedTx.id);
+                appActions.showTransactionDetailScreen();
+            }
         }
         
         if (input.toLowerCase() === 'p') togglePause();

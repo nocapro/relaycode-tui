@@ -5,12 +5,20 @@ import { useDashboardStore } from '../stores/dashboard.store';
 import { useInitStore } from '../stores/init.store';
 import { useReviewStore } from '../stores/review.store';
 import { useCommitStore } from '../stores/commit.store';
+import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import Separator from './Separator';
 
 interface MenuItem {
     title: string;
     action: () => void;
 }
+
+const getKeyForIndex = (index: number): string => {
+    if (index < 9) {
+        return (index + 1).toString();
+    }
+    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+};
 
 const DebugMenu = () => {
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -19,6 +27,7 @@ const DebugMenu = () => {
     const initActions = useInitStore(s => s.actions);
     const reviewActions = useReviewStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
+    const detailActions = useTransactionDetailStore(s => s.actions);
 
     const menuItems: MenuItem[] = [
         {
@@ -140,14 +149,24 @@ const DebugMenu = () => {
                 appActions.showGitCommitScreen();
             },
         },
+        {
+            title: 'Transaction Detail Screen',
+            action: () => {
+                // The dashboard store has transactions, we'll just pick one.
+                detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                appActions.showTransactionDetailScreen();
+            },
+        },
     ];
 
     useInput((input, key) => {
         if (key.upArrow) {
             setSelectedIndex(i => Math.max(0, i - 1));
+            return;
         }
         if (key.downArrow) {
             setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+            return;
         }
         if (key.return) {
             const item = menuItems[selectedIndex];
@@ -155,9 +174,26 @@ const DebugMenu = () => {
                 item.action();
                 appActions.toggleDebugMenu();
             }
+            return;
         }
         if (key.escape || (key.ctrl && input === 'b')) {
             appActions.toggleDebugMenu();
+            return;
+        }
+
+        // No ctrl/meta keys for selection shortcuts, and only single characters
+        if (key.ctrl || key.meta || input.length !== 1) return;
+
+        if (input >= '1' && input <= '9') {
+            const targetIndex = parseInt(input, 10) - 1;
+            if (targetIndex < menuItems.length) {
+                setSelectedIndex(targetIndex);
+            }
+        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+            if (targetIndex < menuItems.length) {
+                setSelectedIndex(targetIndex);
+            }
         }
     });
 
@@ -175,12 +211,12 @@ const DebugMenu = () => {
                 {menuItems.map((item, index) => (
                     <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
                         {selectedIndex === index ? '> ' : '  '}
-                        {item.title}
+                        ({getKeyForIndex(index)}) {item.title}
                     </Text>
                 ))}
             </Box>
             <Separator />
-            <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+B) Close</Text>
+            <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc / Ctrl+B) Close</Text>
         </Box>
     );
 };

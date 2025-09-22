@@ -1,10 +1,20 @@
-===
+=== DONE
+
+add numbering list keystroke for debug menu so beside up down navigation, user can directly hit keyboard
+
+=== DONE
+
+add feature about debug menu where run terminal command like `bun start debug-screen [screen-file-name]` example `bun start debug-screen TransactionDetailScreen.tsx` should directly open the screen , so AI agent can debug the screen whether it is successful renders or not of has UI problems or something
+
+=== DONE
 
 based on     "docs/relaycode-tui/transaction-detail-screen.readme.md"
 
-create the gtransaction-detail-scree, focus on prototyping simulation, not thinking about core backend logic
+1. create the transaction-detail-screen, focus on prototyping simulation, not thinking about core backend logic
 
-dont forget to add to debug menu
+2. dont forget to add to debug menu
+
+3. dont forget to update docs/relaycode-tui/review-screen.readme.md if you have updated design
 
 === DONE
 

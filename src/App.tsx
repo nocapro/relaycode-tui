@@ -7,6 +7,7 @@ import DashboardScreen from './components/DashboardScreen';
 import ReviewScreen from './components/ReviewScreen';
 import ReviewProcessingScreen from './components/ReviewProcessingScreen';
 import GitCommitScreen from './components/GitCommitScreen';
+import TransactionDetailScreen from './components/TransactionDetailScreen';
 import DebugMenu from './components/DebugMenu';
 
 const App = () => {
@@ -55,6 +56,10 @@ const App = () => {
 
     if (currentScreen === 'git-commit') {
         return <GitCommitScreen />;
+    }
+
+    if (currentScreen === 'transaction-detail') {
+        return <TransactionDetailScreen />;
     }
 
     return null;
