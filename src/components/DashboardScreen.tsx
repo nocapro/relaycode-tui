@@ -1,14 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
+import React from 'react';
+import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
-import { useAppStore } from '../stores/app.store';
-import { useCommitStore } from '../stores/commit.store';
-import { useTransactionDetailStore } from '../stores/transaction-detail.store';
-import { useTransactionHistoryStore } from '../stores/transaction-history.store';
+import { type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
 import Separator from './Separator';
-import { useStdoutDimensions } from '../utils';
 import GlobalHelpScreen from './GlobalHelpScreen';
+import { useDashboardScreen } from './DashboardScreen.hook';
 
 // --- Sub-components & Helpers ---
 
@@ -75,86 +71,19 @@ const ConfirmationContent = ({
 // --- Main Component ---
 
 const DashboardScreen = () => {
-    const [, rows] = useStdoutDimensions();
-    const [viewOffset, setViewOffset] = useState(0);
-    const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
-    const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
-    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
     const {
-        togglePause,
-        moveSelectionUp,
-        moveSelectionDown,
-        startApproveAll,
-        confirmAction,
-        cancelAction,
-        toggleHelp,
-    } = useDashboardStore(s => s.actions);
-    const { exit } = useApp();
-    const appActions = useAppStore(s => s.actions);
-    const commitActions = useCommitStore(s => s.actions);
-    const detailActions = useTransactionDetailStore(s => s.actions);
-    const historyActions = useTransactionHistoryStore(s => s.actions);
-
-    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
-    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
-
-    const isModal = status === 'CONFIRM_APPROVE';
-    const isProcessing = status === 'APPROVING';
-
-    useEffect(() => {
-        if (selectedTransactionIndex < viewOffset) {
-            setViewOffset(selectedTransactionIndex);
-        } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {
-            setViewOffset(selectedTransactionIndex - viewportHeight + 1);
-        }
-    }, [selectedTransactionIndex, viewOffset, viewportHeight]);
-
-    useInput((input, key) => {
-        if (input === '?') {
-            toggleHelp();
-            return;
-        }
-
-        if (showHelp) {
-            if (key.escape || input === '?') toggleHelp();
-            return;
-        }
-
-        if (isModal) {
-            if (key.return) confirmAction();
-            if (key.escape) cancelAction();
-            return;
-        }
-
-        if (isProcessing) return; // No input while processing
-        
-        if (input.toLowerCase() === 'q') exit();
-
-        if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
-        
-        if (key.return) {
-            const selectedTx = transactions[selectedTransactionIndex];
-            if (selectedTx?.status === 'PENDING') {
-                // For PENDING transactions, we still go to the review screen.
-                appActions.showReviewScreen();
-            } else if (selectedTx) {
-                detailActions.loadTransaction(selectedTx.id);
-                appActions.showTransactionDetailScreen();
-            }
-        }
-        
-        if (input.toLowerCase() === 'p') togglePause();
-        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
-        if (input.toLowerCase() === 'c' && pendingCommits > 0) {
-            commitActions.prepareCommitScreen();
-            appActions.showGitCommitScreen();
-        }
-        if (input.toLowerCase() === 'l') {
-            historyActions.load();
-            appActions.showTransactionHistoryScreen();
-        }
-    });
+        status,
+        transactions,
+        selectedTransactionIndex,
+        showHelp,
+        pendingApprovals,
+        pendingCommits,
+        isModal,
+        isProcessing,
+        viewOffset,
+        viewportHeight,
+        transactionsToConfirm,
+    } = useDashboardScreen();
 
     const renderStatusBar = () => {
         let statusText: string;
@@ -199,11 +128,6 @@ const DashboardScreen = () => {
         );
     };
     
-    const transactionsToConfirm = useMemo(() => {
-        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
-        return [];
-    }, [status, transactions]);
-
     return (
         <Box flexDirection="column" height="100%">
             {showHelp && <GlobalHelpScreen />}

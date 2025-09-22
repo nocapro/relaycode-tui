@@ -1,0 +1,1912 @@
+uuid: c295ac28-c1f0-4d40-b384-5a23f2f558a5
+projectId: relaycode-tui
+createdAt: '2025-09-22T05:26:48.475Z'
+gitCommitMsg: >-
+  refactor(hooks): extract component logic into custom hooks (phase 1)
+
+  This commit introduces a pattern of separating component logic and side
+  effects (like input handling, state management, and lifecycle effects) from
+  the rendering/presentational parts of components.
+
+  New `.hook.tsx` files have been created for the following components: -
+  DashboardScreen - DebugMenu - GitCommitScreen - InitializationScreen -
+  SplashScreen
+
+  The original `.tsx` component files have been updated to use these new custom
+  hooks, resulting in cleaner and more focused presentational components. This
+  improves readability, maintainability, and testability. This is the first of a
+  two-phase refactor.
+promptSummary: >-
+  The user wants to refactor components to separate hooks from rendering logic.
+  This is the first of two phases.
+reasoning:
+  - >-
+    This is the first phase of refactoring. I've extracted the hooks and logic
+    from five components (`DashboardScreen`, `DebugMenu`, `GitCommitScreen`,
+    `InitializationScreen`, and `SplashScreen`) into corresponding `.hook.tsx`
+    files. This separation makes the original `tsx` files primarily responsible
+    for rendering, improving clarity and maintainability.
+  - '### Refactoring `DashboardScreen`'
+  - >-
+    I'll start by creating a new file to house the hooks and logic for the
+    `DashboardScreen`.
+  - >-
+    Now, I'll update `DashboardScreen.tsx` to use this new hook, making it a
+    cleaner, presentation-focused component.
+  - '### Refactoring `DebugMenu`'
+  - Next, I'll apply the same pattern to the `DebugMenu` component.
+  - I'll then update the `DebugMenu.tsx` component.
+  - '### Refactoring `GitCommitScreen`'
+  - This is a simple one, but it follows the pattern. Here's the hook.
+  - And here is the updated `GitCommitScreen.tsx`.
+  - '### Refactoring `InitializationScreen`'
+  - >-
+    The `InitializationScreen` has a more complex simulation logic in
+    `useEffect`, which is perfect for extraction.
+  - The component becomes much simpler.
+  - '### Refactoring `SplashScreen`'
+  - Finally, I'll refactor the `SplashScreen` component.
+  - And update the component file.
+  - This completes the first phase of the requested refactoring.
+operations:
+  - type: write
+    path: src/components/DashboardScreen.hook.tsx
+    content: >-
+      import { useMemo, useState, useEffect } from 'react';
+
+      import { useApp, useInput } from 'ink';
+
+      import { useDashboardStore } from '../stores/dashboard.store';
+
+      import { useAppStore } from '../stores/app.store';
+
+      import { useCommitStore } from '../stores/commit.store';
+
+      import { useTransactionDetailStore } from
+      '../stores/transaction-detail.store';
+
+      import { useTransactionHistoryStore } from
+      '../stores/transaction-history.store';
+
+      import { useStdoutDimensions } from '../utils';
+
+
+      export const useDashboardScreen = () => {
+          const [, rows] = useStdoutDimensions();
+          const [viewOffset, setViewOffset] = useState(0);
+          const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
+          const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
+          const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+          const {
+              togglePause,
+              moveSelectionUp,
+              moveSelectionDown,
+              startApproveAll,
+              confirmAction,
+              cancelAction,
+              toggleHelp,
+          } = useDashboardStore(s => s.actions);
+          const { exit } = useApp();
+          const appActions = useAppStore(s => s.actions);
+          const commitActions = useCommitStore(s => s.actions);
+          const detailActions = useTransactionDetailStore(s => s.actions);
+          const historyActions = useTransactionHistoryStore(s => s.actions);
+
+          const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+          const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+          const isModal = status === 'CONFIRM_APPROVE';
+          const isProcessing = status === 'APPROVING';
+
+          useEffect(() => {
+              if (selectedTransactionIndex < viewOffset) {
+                  setViewOffset(selectedTransactionIndex);
+              } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {
+                  setViewOffset(selectedTransactionIndex - viewportHeight + 1);
+              }
+          }, [selectedTransactionIndex, viewOffset, viewportHeight]);
+
+          useInput((input, key) => {
+              if (input === '?') {
+                  toggleHelp();
+                  return;
+              }
+
+              if (showHelp) {
+                  if (key.escape || input === '?') toggleHelp();
+                  return;
+              }
+
+              if (isModal) {
+                  if (key.return) confirmAction();
+                  if (key.escape) cancelAction();
+                  return;
+              }
+
+              if (isProcessing) return; // No input while processing
+              
+              if (input.toLowerCase() === 'q') exit();
+
+              if (key.upArrow) moveSelectionUp();
+              if (key.downArrow) moveSelectionDown();
+              
+              if (key.return) {
+                  const selectedTx = transactions[selectedTransactionIndex];
+                  if (selectedTx?.status === 'PENDING') {
+                      // For PENDING transactions, we still go to the review screen.
+                      appActions.showReviewScreen();
+                  } else if (selectedTx) {
+                      detailActions.loadTransaction(selectedTx.id);
+                      appActions.showTransactionDetailScreen();
+                  }
+              }
+              
+              if (input.toLowerCase() === 'p') togglePause();
+              if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+              if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                  commitActions.prepareCommitScreen();
+                  appActions.showGitCommitScreen();
+              }
+              if (input.toLowerCase() === 'l') {
+                  historyActions.load();
+                  appActions.showTransactionHistoryScreen();
+              }
+          });
+          
+          const transactionsToConfirm = useMemo(() => {
+              if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+              return [];
+          }, [status, transactions]);
+
+          return {
+              status,
+              transactions,
+              selectedTransactionIndex,
+              showHelp,
+              pendingApprovals,
+              pendingCommits,
+              isModal,
+              isProcessing,
+              viewOffset,
+              viewportHeight,
+              transactionsToConfirm,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: >+
+      --- src/components/DashboardScreen.tsx
+
+      +++ src/components/DashboardScreen.tsx
+
+      @@ -1,18 +1,9 @@
+
+      -import React, { useMemo, useState, useEffect } from 'react';
+
+      -import { Box, Text, useApp, useInput } from 'ink';
+
+      +import React from 'react';
+
+      +import { Box, Text } from 'ink';
+       import Spinner from 'ink-spinner';
+      -import { useDashboardStore, type Transaction, type DashboardStatus, type
+      TransactionStatus } from '../stores/dashboard.store';
+
+      -import { useAppStore } from '../stores/app.store';
+
+      -import { useCommitStore } from '../stores/commit.store';
+
+      -import { useTransactionDetailStore } from
+      '../stores/transaction-detail.store';
+
+      -import { useTransactionHistoryStore } from
+      '../stores/transaction-history.store';
+
+      +import { type Transaction, type DashboardStatus, type TransactionStatus }
+      from '../stores/dashboard.store';
+       import Separator from './Separator';
+      -import { useStdoutDimensions } from '../utils';
+       import GlobalHelpScreen from './GlobalHelpScreen';
+      +import { useDashboardScreen } from './DashboardScreen.hook';
+       
+       // --- Sub-components & Helpers ---
+       
+      @@ -88,88 +79,18 @@
+       // --- Main Component ---
+       
+       const DashboardScreen = () => {
+      -    const [, rows] = useStdoutDimensions();
+
+      -    const [viewOffset, setViewOffset] = useState(0);
+
+      -    const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status,
+      footer, etc.
+
+      -    const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
+
+      -    const { status, transactions, selectedTransactionIndex, showHelp } =
+      useDashboardStore();
+
+      -    const {
+
+      -        togglePause,
+
+      -        moveSelectionUp,
+
+      -        moveSelectionDown,
+
+      -        startApproveAll,
+
+      -        confirmAction,
+
+      -        cancelAction,
+
+      -        toggleHelp,
+
+      -    } = useDashboardStore(s => s.actions);
+
+      -    const { exit } = useApp();
+
+      -    const appActions = useAppStore(s => s.actions);
+
+      -    const commitActions = useCommitStore(s => s.actions);
+
+      -    const detailActions = useTransactionDetailStore(s => s.actions);
+
+      -    const historyActions = useTransactionHistoryStore(s => s.actions);
+
+      -
+
+      -    const pendingApprovals = useMemo(() => transactions.filter(t =>
+      t.status === 'PENDING').length, [transactions]);
+
+      -    const pendingCommits = useMemo(() => transactions.filter(t =>
+      t.status === 'APPLIED').length, [transactions]);
+
+      -
+
+      -    const isModal = status === 'CONFIRM_APPROVE';
+
+      -    const isProcessing = status === 'APPROVING';
+
+      -
+
+      -    useEffect(() => {
+
+      -        if (selectedTransactionIndex < viewOffset) {
+
+      -            setViewOffset(selectedTransactionIndex);
+
+      -        } else if (selectedTransactionIndex >= viewOffset +
+      viewportHeight) {
+
+      -            setViewOffset(selectedTransactionIndex - viewportHeight + 1);
+
+      -        }
+
+      -    }, [selectedTransactionIndex, viewOffset, viewportHeight]);
+
+      -
+
+      -    useInput((input, key) => {
+
+      -        if (input === '?') {
+
+      -            toggleHelp();
+
+      -            return;
+
+      -        }
+
+      -
+
+      -        if (showHelp) {
+
+      -            if (key.escape || input === '?') toggleHelp();
+
+      -            return;
+
+      -        }
+
+      -
+
+      -        if (isModal) {
+
+      -            if (key.return) confirmAction();
+
+      -            if (key.escape) cancelAction();
+
+      -            return;
+
+      -        }
+
+      -
+
+      -        if (isProcessing) return; // No input while processing
+
+      -        
+
+      -        if (input.toLowerCase() === 'q') exit();
+
+      -
+
+      -        if (key.upArrow) moveSelectionUp();
+
+      -        if (key.downArrow) moveSelectionDown();
+
+      -        
+
+      -        if (key.return) {
+
+      -            const selectedTx = transactions[selectedTransactionIndex];
+
+      -            if (selectedTx?.status === 'PENDING') {
+
+      -                // For PENDING transactions, we still go to the review
+      screen.
+
+      -                appActions.showReviewScreen();
+
+      -            } else if (selectedTx) {
+
+      -                detailActions.loadTransaction(selectedTx.id);
+
+      -                appActions.showTransactionDetailScreen();
+
+      -            }
+
+      -        }
+
+      -        
+
+      -        if (input.toLowerCase() === 'p') togglePause();
+
+      -        if (input.toLowerCase() === 'a' && pendingApprovals > 0)
+      startApproveAll();
+
+      -        if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+
+      -            commitActions.prepareCommitScreen();
+
+      -            appActions.showGitCommitScreen();
+
+      -        }
+
+      -        if (input.toLowerCase() === 'l') {
+
+      -            historyActions.load();
+
+      -            appActions.showTransactionHistoryScreen();
+
+      -        }
+
+      -    });
+
+      +    const {
+
+      +        status,
+
+      +        transactions,
+
+      +        selectedTransactionIndex,
+
+      +        showHelp,
+
+      +        pendingApprovals,
+
+      +        pendingCommits,
+
+      +        isModal,
+
+      +        isProcessing,
+
+      +        viewOffset,
+
+      +        viewportHeight,
+
+      +        transactionsToConfirm,
+
+      +    } = useDashboardScreen();
+       
+           const renderStatusBar = () => {
+               let statusText: string;
+      @@ -226,11 +147,6 @@
+               );
+           };
+           
+      -    const transactionsToConfirm = useMemo(() => {
+
+      -        if (status === 'CONFIRM_APPROVE') return transactions.filter(t =>
+      t.status === 'PENDING');
+
+      -        return [];
+
+      -    }, [status, transactions]);
+
+      -
+           return (
+               <Box flexDirection="column" height="100%">
+                   {showHelp && <GlobalHelpScreen />}
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugMenu.hook.tsx
+    content: >-
+      import { useState } from 'react';
+
+      import { useInput } from 'ink';
+
+      import { useAppStore } from '../stores/app.store';
+
+      import { useDashboardStore } from '../stores/dashboard.store';
+
+      import { useInitStore } from '../stores/init.store';
+
+      import { useReviewStore } from '../stores/review.store';
+
+      import { useCommitStore } from '../stores/commit.store';
+
+      import { useTransactionDetailStore } from
+      '../stores/transaction-detail.store';
+
+      import { useTransactionHistoryStore } from
+      '../stores/transaction-history.store';
+
+
+      export interface MenuItem {
+          title: string;
+          action: () => void;
+      }
+
+
+      export const useDebugMenu = () => {
+          const [selectedIndex, setSelectedIndex] = useState(0);
+          const appActions = useAppStore(s => s.actions);
+          const dashboardActions = useDashboardStore(s => s.actions);
+          const initActions = useInitStore(s => s.actions);
+          const reviewActions = useReviewStore(s => s.actions);
+          const commitActions = useCommitStore(s => s.actions);
+          const detailActions = useTransactionDetailStore(s => s.actions);
+          const historyActions = useTransactionHistoryStore(s => s.actions);
+
+          const menuItems: MenuItem[] = [
+              {
+                  title: 'Splash Screen',
+                  action: () => appActions.showSplashScreen(),
+              },
+              {
+                  title: 'Init: Analyze Phase',
+                  action: () => {
+                      initActions.setPhase('ANALYZE');
+                      appActions.showInitScreen();
+                  },
+              },
+              {
+                  title: 'Init: Interactive Phase',
+                  action: () => {
+                      initActions.setPhase('INTERACTIVE');
+                      appActions.showInitScreen();
+                  },
+              },
+              {
+                  title: 'Init: Finalize Phase',
+                  action: () => {
+                      initActions.setPhase('FINALIZE');
+                      appActions.showInitScreen();
+                  },
+              },
+              {
+                  title: 'Dashboard: Listening',
+                  action: () => {
+                      dashboardActions.setStatus('LISTENING');
+                      appActions.showDashboardScreen();
+                  },
+              },
+              {
+                  title: 'Dashboard: Confirm Approve',
+                  action: () => {
+                      dashboardActions.setStatus('CONFIRM_APPROVE');
+                      appActions.showDashboardScreen();
+                  },
+              },
+              {
+                  title: 'Dashboard: Approving',
+                  action: () => {
+                      dashboardActions.setStatus('APPROVING');
+                      appActions.showDashboardScreen();
+                  },
+              },
+              {
+                  title: 'Review: Partial Failure (Default)',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Success',
+                  action: () => {
+                      reviewActions.simulateSuccessScenario();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Diff View',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.toggleDiffView();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Reasoning View',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.toggleReasoningView();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Copy Mode',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.toggleCopyMode();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Script Output',
+                  action: () => {
+                      reviewActions.simulateSuccessScenario();
+                      reviewActions.toggleScriptView();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Bulk Repair',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.showBulkRepair();
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review: Handoff Confirm',
+                  action: () => {
+                      reviewActions.simulateFailureScenario();
+                      reviewActions.executeBulkRepairOption(3); // Option 3 is Handoff
+                      appActions.showReviewScreen();
+                  },
+              },
+              {
+                  title: 'Review Processing',
+                  action: () => appActions.showReviewProcessingScreen(),
+              },
+              {
+                  title: 'Git Commit Screen',
+                  action: () => {
+                      commitActions.prepareCommitScreen();
+                      appActions.showGitCommitScreen();
+                  },
+              },
+              {
+                  title: 'Transaction Detail Screen',
+                  action: () => {
+                      // The dashboard store has transactions, we'll just pick one.
+                      detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                      appActions.showTransactionDetailScreen();
+                  },
+              },
+              {
+                  title: 'Transaction History Screen',
+                  action: () => {
+                      historyActions.load();
+                      appActions.showTransactionHistoryScreen();
+                  },
+              },
+              {
+                  title: 'History: L1 Drilldown',
+                  action: () => {
+                      historyActions.prepareDebugState('l1-drill');
+                      appActions.showTransactionHistoryScreen();
+                  },
+              },
+              {
+                  title: 'History: L2 Drilldown (Diff)',
+                  action: () => {
+                      historyActions.prepareDebugState('l2-drill');
+                      appActions.showTransactionHistoryScreen();
+                  },
+              },
+              {
+                  title: 'History: Filter Mode',
+                  action: () => {
+                      historyActions.prepareDebugState('filter');
+                      appActions.showTransactionHistoryScreen();
+                  },
+              },
+              {
+                  title: 'History: Copy Mode',
+                  action: () => {
+                      historyActions.prepareDebugState('copy');
+                      appActions.showTransactionHistoryScreen();
+                  },
+              },
+          ];
+
+          useInput((input, key) => {
+              if (key.upArrow) {
+                  setSelectedIndex(i => Math.max(0, i - 1));
+                  return;
+              }
+              if (key.downArrow) {
+                  setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+                  return;
+              }
+              if (key.return) {
+                  const item = menuItems[selectedIndex];
+                  if (item) {
+                      item.action();
+                      appActions.toggleDebugMenu();
+                  }
+                  return;
+              }
+              if (key.escape || (key.ctrl && input === 'b')) {
+                  appActions.toggleDebugMenu();
+                  return;
+              }
+
+              // No ctrl/meta keys for selection shortcuts, and only single characters
+              if (key.ctrl || key.meta || input.length !== 1) return;
+
+              if (input >= '1' && input <= '9') {
+                  const targetIndex = parseInt(input, 10) - 1;
+                  if (targetIndex < menuItems.length) {
+                      setSelectedIndex(targetIndex);
+                  }
+              } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                  const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                  if (targetIndex < menuItems.length) {
+                      setSelectedIndex(targetIndex);
+                  }
+              }
+          });
+
+          return {
+              selectedIndex,
+              menuItems,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/DebugMenu.tsx
+    content: >+
+      --- src/components/DebugMenu.tsx
+
+      +++ src/components/DebugMenu.tsx
+
+      @@ -1,22 +1,11 @@
+
+      -import React, { useState } from 'react';
+
+      -import { Box, Text, useInput } from 'ink';
+
+      -import { useAppStore } from '../stores/app.store';
+
+      -import { useDashboardStore } from '../stores/dashboard.store';
+
+      -import { useInitStore } from '../stores/init.store';
+
+      -import { useReviewStore } from '../stores/review.store';
+
+      -import { useCommitStore } from '../stores/commit.store';
+
+      -import { useTransactionDetailStore } from
+      '../stores/transaction-detail.store';
+
+      -import { useTransactionHistoryStore } from
+      '../stores/transaction-history.store';
+
+      +import React from 'react';
+
+      +import { Box, Text } from 'ink';
+       import Separator from './Separator';
+      -
+
+      -interface MenuItem {
+
+      -    title: string;
+
+      -    action: () => void;
+
+      -}
+
+      +import { useDebugMenu, type MenuItem } from './DebugMenu.hook';
+       
+       const getKeyForIndex = (index: number): string => {
+           if (index < 9) {
+               return (index + 1).toString();
+           }
+           return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+       };
+       
+       const DebugMenu = () => {
+      -    const [selectedIndex, setSelectedIndex] = useState(0);
+
+      -    const appActions = useAppStore(s => s.actions);
+
+      -    const dashboardActions = useDashboardStore(s => s.actions);
+
+      -    const initActions = useInitStore(s => s.actions);
+
+      -    const reviewActions = useReviewStore(s => s.actions);
+
+      -    const commitActions = useCommitStore(s => s.actions);
+
+      -    const detailActions = useTransactionDetailStore(s => s.actions);
+
+      -    const historyActions = useTransactionHistoryStore(s => s.actions);
+
+      -
+
+      -    const menuItems: MenuItem[] = [
+
+      -        {
+
+      -            title: 'Splash Screen',
+
+      -            action: () => appActions.showSplashScreen(),
+
+      -        },
+
+      -        {
+
+      -            title: 'Init: Analyze Phase',
+
+      -            action: () => {
+
+      -                initActions.setPhase('ANALYZE');
+
+      -                appActions.showInitScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Init: Interactive Phase',
+
+      -            action: () => {
+
+      -                initActions.setPhase('INTERACTIVE');
+
+      -                appActions.showInitScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Init: Finalize Phase',
+
+      -            action: () => {
+
+      -                initActions.setPhase('FINALIZE');
+
+      -                appActions.showInitScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Dashboard: Listening',
+
+      -            action: () => {
+
+      -                dashboardActions.setStatus('LISTENING');
+
+      -                appActions.showDashboardScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Dashboard: Confirm Approve',
+
+      -            action: () => {
+
+      -                dashboardActions.setStatus('CONFIRM_APPROVE');
+
+      -                appActions.showDashboardScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Dashboard: Approving',
+
+      -            action: () => {
+
+      -                dashboardActions.setStatus('APPROVING');
+
+      -                appActions.showDashboardScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Partial Failure (Default)',
+
+      -            action: () => {
+
+      -                reviewActions.simulateFailureScenario();
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Success',
+
+      -            action: () => {
+
+      -                reviewActions.simulateSuccessScenario();
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Diff View',
+
+      -            action: () => {
+
+      -                reviewActions.simulateFailureScenario();
+
+      -                reviewActions.toggleDiffView();
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Reasoning View',
+
+      -            action: () => {
+
+      -                reviewActions.simulateFailureScenario();
+
+      -                reviewActions.toggleReasoningView();
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Copy Mode',
+
+      -            action: () => {
+
+      -                reviewActions.simulateFailureScenario();
+
+      -                reviewActions.toggleCopyMode();
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Script Output',
+
+      -            action: () => {
+
+      -                reviewActions.simulateSuccessScenario();
+
+      -                reviewActions.toggleScriptView();
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Bulk Repair',
+
+      -            action: () => {
+
+      -                reviewActions.simulateFailureScenario();
+
+      -                reviewActions.showBulkRepair();
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review: Handoff Confirm',
+
+      -            action: () => {
+
+      -                reviewActions.simulateFailureScenario();
+
+      -                reviewActions.executeBulkRepairOption(3); // Option 3 is
+      Handoff
+
+      -                appActions.showReviewScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Review Processing',
+
+      -            action: () => appActions.showReviewProcessingScreen(),
+
+      -        },
+
+      -        {
+
+      -            title: 'Git Commit Screen',
+
+      -            action: () => {
+
+      -                commitActions.prepareCommitScreen();
+
+      -                appActions.showGitCommitScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Transaction Detail Screen',
+
+      -            action: () => {
+
+      -                // The dashboard store has transactions, we'll just pick
+      one.
+
+      -                detailActions.loadTransaction('3'); // 'feat: implement
+      new dashboard UI'
+
+      -                appActions.showTransactionDetailScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'Transaction History Screen',
+
+      -            action: () => {
+
+      -                historyActions.load();
+
+      -                appActions.showTransactionHistoryScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'History: L1 Drilldown',
+
+      -            action: () => {
+
+      -                historyActions.prepareDebugState('l1-drill');
+
+      -                appActions.showTransactionHistoryScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'History: L2 Drilldown (Diff)',
+
+      -            action: () => {
+
+      -                historyActions.prepareDebugState('l2-drill');
+
+      -                appActions.showTransactionHistoryScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'History: Filter Mode',
+
+      -            action: () => {
+
+      -                historyActions.prepareDebugState('filter');
+
+      -                appActions.showTransactionHistoryScreen();
+
+      -            },
+
+      -        },
+
+      -        {
+
+      -            title: 'History: Copy Mode',
+
+      -            action: () => {
+
+      -                historyActions.prepareDebugState('copy');
+
+      -                appActions.showTransactionHistoryScreen();
+
+      -            },
+
+      -        },
+
+      -    ];
+
+      -
+
+      -    useInput((input, key) => {
+
+      -        if (key.upArrow) {
+
+      -            setSelectedIndex(i => Math.max(0, i - 1));
+
+      -            return;
+
+      -        }
+
+      -        if (key.downArrow) {
+
+      -            setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+
+      -            return;
+
+      -        }
+
+      -        if (key.return) {
+
+      -            const item = menuItems[selectedIndex];
+
+      -            if (item) {
+
+      -                item.action();
+
+      -                appActions.toggleDebugMenu();
+
+      -            }
+
+      -            return;
+
+      -        }
+
+      -        if (key.escape || (key.ctrl && input === 'b')) {
+
+      -            appActions.toggleDebugMenu();
+
+      -            return;
+
+      -        }
+
+      -
+
+      -        // No ctrl/meta keys for selection shortcuts, and only single
+      characters
+
+      -        if (key.ctrl || key.meta || input.length !== 1) return;
+
+      -
+
+      -        if (input >= '1' && input <= '9') {
+
+      -            const targetIndex = parseInt(input, 10) - 1;
+
+      -            if (targetIndex < menuItems.length) {
+
+      -                setSelectedIndex(targetIndex);
+
+      -            }
+
+      -        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <=
+      'z') {
+
+      -            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) -
+      'a'.charCodeAt(0));
+
+      -            if (targetIndex < menuItems.length) {
+
+      -                setSelectedIndex(targetIndex);
+
+      -            }
+
+      -        }
+
+      -    });
+
+      +    const { selectedIndex, menuItems } = useDebugMenu();
+       
+           return (
+               <Box
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/GitCommitScreen.hook.tsx
+    content: |-
+      import { useInput } from 'ink';
+      import { useCommitStore } from '../stores/commit.store';
+      import { useAppStore } from '../stores/app.store';
+
+      export const useGitCommitScreen = () => {
+          const { transactionsToCommit, finalCommitMessage, isCommitting } = useCommitStore();
+          const { commit } = useCommitStore(s => s.actions);
+          const { showDashboardScreen } = useAppStore(s => s.actions);
+
+          useInput((input, key) => {
+              if (isCommitting) return;
+
+              if (key.escape) {
+                  showDashboardScreen();
+              }
+              if (key.return) {
+                  commit().then(() => {
+                      showDashboardScreen();
+                  });
+              }
+          });
+
+          return { transactionsToCommit, finalCommitMessage, isCommitting };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/GitCommitScreen.tsx
+    content: >+
+      --- src/components/GitCommitScreen.tsx
+
+      +++ src/components/GitCommitScreen.tsx
+
+      @@ -1,28 +1,10 @@
+       import React from 'react';
+      -import { Box, Text, useInput } from 'ink';
+
+      +import { Box, Text } from 'ink';
+       import Spinner from 'ink-spinner';
+      -import { useCommitStore } from '../stores/commit.store';
+
+      -import { useAppStore } from '../stores/app.store';
+       import Separator from './Separator';
+      +import { useGitCommitScreen } from './GitCommitScreen.hook';
+       
+       const GitCommitScreen = () => {
+      -    const { transactionsToCommit, finalCommitMessage, isCommitting } =
+      useCommitStore();
+
+      -    const { commit } = useCommitStore(s => s.actions);
+
+      -    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+      -
+
+      -    useInput((input, key) => {
+
+      -        if (isCommitting) return;
+
+      -
+
+      -        if (key.escape) {
+
+      -            showDashboardScreen();
+
+      -        }
+
+      -        if (key.return) {
+
+      -            commit().then(() => {
+
+      -                showDashboardScreen();
+
+      -            });
+
+      -        }
+
+      -    });
+
+      +    const { transactionsToCommit, finalCommitMessage, isCommitting } =
+      useGitCommitScreen();
+       
+           const transactionLines = transactionsToCommit.map(tx => (
+               <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/InitializationScreen.hook.tsx
+    content: >-
+      import React, { useEffect } from 'react';
+
+      import { Text, useApp, useInput } from 'ink';
+
+      import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+      '../stores/init.store';
+
+      import { useAppStore } from '../stores/app.store';
+
+      import { sleep } from '../utils';
+
+
+      export const useInitializationScreen = () => {
+          const phase = useInitStore(s => s.phase);
+          const interactiveChoice = useInitStore(s => s.interactiveChoice);
+          const actions = useInitStore(s => s.actions);
+          const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+          const { exit } = useApp();
+
+          useInput((input, key) => {
+              if (phase === 'INTERACTIVE') {
+                  if (key.return) {
+                      actions.setInteractiveChoice('ignore');
+                  } else if (input.toLowerCase() === 's') {
+                      actions.setInteractiveChoice('share');
+                  }
+              }
+              if (phase === 'FINALIZE') {
+                  if (input.toLowerCase() === 'q') {
+                      exit();
+                  } else if (input.toLowerCase() === 'w') {
+                      showDashboardScreen();
+                  }
+              }
+          });
+
+          useEffect(() => {
+              actions.resetInit();
+              const runSimulation = async () => {
+                  actions.setPhase('ANALYZE');
+                  for (const task of initialAnalyzeTasks) {
+                      actions.updateAnalyzeTask(task.id, 'active');
+                      await sleep(800);
+                      actions.updateAnalyzeTask(task.id, 'done');
+                  }
+                  actions.setAnalysisResults('relaycode (from package.json)', true);
+                  await sleep(500);
+
+                  actions.setPhase('CONFIGURE');
+                  const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+                  for (const task of configTasksUntilInteractive) {
+                      actions.updateConfigureTask(task.id, 'active');
+                      await sleep(800);
+                      actions.updateConfigureTask(task.id, 'done');
+                  }
+                  await sleep(500);
+
+                  actions.setPhase('INTERACTIVE');
+              };
+
+              runSimulation();
+          }, [actions]);
+
+          useEffect(() => {
+              if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+                  const resumeSimulation = async () => {
+                      actions.setPhase('CONFIGURE');
+                      const lastTask = initialConfigureTasks[2];
+                      if (lastTask) {
+                          actions.updateConfigureTask(lastTask.id, 'active');
+                          await sleep(800);
+                          actions.updateConfigureTask(lastTask.id, 'done');
+                          await sleep(500);
+
+                          actions.setPhase('FINALIZE');
+                      }
+                  };
+                  resumeSimulation();
+              }
+          }, [interactiveChoice, phase, actions]);
+
+          const {
+              analyzeTasks,
+              configureTasks,
+              projectId,
+          } = useInitStore();
+
+          let footerText;
+          switch (phase) {
+              case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+              case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+              case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+              case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+          }
+
+          return {
+              phase,
+              analyzeTasks,
+              configureTasks,
+              interactiveChoice,
+              projectId,
+              footerText,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: "--- src/components/InitializationScreen.tsx\n+++ src/components/InitializationScreen.tsx\n@@ -1,11 +1,8 @@\n-import React, { useEffect } from 'react';\n-import { Box, Text, useApp, useInput } from 'ink';\n-import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';\n+import React from 'react';\n+import { Box, Text } from 'ink';\n+import { type Task } from '../stores/init.store';\n import Separator from './Separator';\n-import { useAppStore } from '../stores/app.store';\n-import { sleep } from '../utils';\n+import { useInitializationScreen } from './InitializationScreen.hook';\n \n const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n \tlet symbol: React.ReactNode;\n@@ -32,77 +29,15 @@\n };\n \n const InitializationScreen = () => {\n-    const phase = useInitStore(s => s.phase);\n-    const analyzeTasks = useInitStore(s => s.analyzeTasks);\n-    const configureTasks = useInitStore(s => s.configureTasks);\n-    const interactiveChoice = useInitStore(s => s.interactiveChoice);\n-    const projectId = useInitStore(s => s.projectId);\n-    const actions = useInitStore(s => s.actions);\n-    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);\n-    const { exit } = useApp();\n-\n-    useInput((input, key) => {\n-        if (phase === 'INTERACTIVE') {\n-            if (key.return) {\n-                actions.setInteractiveChoice('ignore');\n-            } else if (input.toLowerCase() === 's') {\n-                actions.setInteractiveChoice('share');\n-            }\n-        }\n-        if (phase === 'FINALIZE') {\n-            if (input.toLowerCase() === 'q') {\n-                exit();\n-            } else if (input.toLowerCase() === 'w') {\n-                showDashboardScreen();\n-            }\n-        }\n-    });\n-\n-    useEffect(() => {\n-        actions.resetInit();\n-        const runSimulation = async () => {\n-            actions.setPhase('ANALYZE');\n-            for (const task of initialAnalyzeTasks) {\n-                actions.updateAnalyzeTask(task.id, 'active');\n-                await sleep(800);\n-                actions.updateAnalyzeTask(task.id, 'done');\n-            }\n-            actions.setAnalysisResults('relaycode (from package.json)', true);\n-            await sleep(500);\n-\n-            actions.setPhase('CONFIGURE');\n-            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);\n-            for (const task of configTasksUntilInteractive) {\n-                actions.updateConfigureTask(task.id, 'active');\n-                await sleep(800);\n-                actions.updateConfigureTask(task.id, 'done');\n-            }\n-            await sleep(500);\n-\n-            actions.setPhase('INTERACTIVE');\n-        };\n-\n-        runSimulation();\n-    }, [actions]);\n-\n-    useEffect(() => {\n-        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {\n-            const resumeSimulation = async () => {\n-                actions.setPhase('CONFIGURE');\n-                const lastTask = initialConfigureTasks[2];\n-                if (lastTask) {\n-                    actions.updateConfigureTask(lastTask.id, 'active');\n-                    await sleep(800);\n-                    actions.updateConfigureTask(lastTask.id, 'done');\n-                    await sleep(500);\n-\n-                    actions.setPhase('FINALIZE');\n-                }\n-            };\n-            resumeSimulation();\n-        }\n-    }, [interactiveChoice, phase, actions]);\n+    const {\n+        phase,\n+        analyzeTasks,\n+        configureTasks,\n+        interactiveChoice,\n+        projectId,\n+        footerText,\n+    } = useInitializationScreen();\n \n     const renderAnalyze = () => (\n         <Box flexDirection=\"column\">\n@@ -194,15 +129,6 @@\n             case 'FINALIZE': return renderFinalize();\n         }\n     };\n-    \n-    let footerText;\n-    switch (phase) {\n-        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;\n-        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;\n-        case 'INTERACTIVE': footerText = <Text>(<Text color=\"cyan\" bold>Enter</Text>) No, ignore it (default)      (<Text color=\"cyan\" bold>S</Text>) Yes, share it</Text>; break;\n-        case 'FINALIZE': footerText = <Text>(<Text color=\"cyan\" bold>W</Text>)atch for Patches · (<Text color=\"cyan\" bold>L</Text>)View Logs · (<Text color=\"cyan\" bold>Q</Text>)uit</Text>; break;\n-    }\n \n     return (\n         <Box flexDirection=\"column\">\n\n"
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SplashScreen.hook.tsx
+    content: |-
+      import { useState, useEffect } from 'react';
+      import { useInput } from 'ink';
+      import { useAppStore } from '../stores/app.store';
+
+      export const useSplashScreen = () => {
+          const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+          const [countdown, setCountdown] = useState(5);
+
+          const handleSkip = () => {
+              showInitScreen();
+          };
+
+          useInput(() => {
+              handleSkip();
+          });
+
+          useEffect(() => {
+              if (countdown === 0) {
+                  showInitScreen();
+                  return;
+              }
+
+              const timer = setTimeout(() => {
+                  setCountdown(c => c - 1);
+              }, 1000);
+
+              return () => clearTimeout(timer);
+          }, [countdown, showInitScreen]);
+
+          return { countdown };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: >+
+      --- src/components/SplashScreen.tsx
+
+      +++ src/components/SplashScreen.tsx
+
+      @@ -1,33 +1,11 @@
+
+      -import React, { useState, useEffect } from 'react';
+
+      -import { Box, Text, useInput } from 'ink';
+
+      -import { useAppStore } from '../stores/app.store';
+
+      +import React from 'react';
+
+      +import { Box, Text } from 'ink';
+       import Separator from './Separator';
+      +import { useSplashScreen } from './SplashScreen.hook';
+       
+       const SplashScreen = () => {
+      -    const showInitScreen = useAppStore(state =>
+      state.actions.showInitScreen);
+
+      -    const [countdown, setCountdown] = useState(5);
+
+      -
+
+      -    const handleSkip = () => {
+
+      -        showInitScreen();
+
+      -    };
+
+      -
+
+      -    useInput(() => {
+
+      -        handleSkip();
+
+      -    });
+
+      -
+
+      -    useEffect(() => {
+
+      -        if (countdown === 0) {
+
+      -            showInitScreen();
+
+      -            return;
+
+      -        }
+
+      -
+
+      -        const timer = setTimeout(() => {
+
+      -            setCountdown(c => c - 1);
+
+      -        }, 1000);
+
+      -
+
+      -        return () => clearTimeout(timer);
+
+      -    }, [countdown, showInitScreen]);
+
+      +    const { countdown } = useSplashScreen();
+       
+           const logo = `
+                ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/DebugMenu.hook.tsx: null
+  src/components/GitCommitScreen.hook.tsx: null
+  src/components/InitializationScreen.hook.tsx: null
+  src/components/DashboardScreen.hook.tsx: null
+  src/components/SplashScreen.hook.tsx: null
+  src/components/DashboardScreen.tsx: "import React, { useMemo, useState, useEffect } from 'react';\nimport { Box, Text, useApp, useInput } from 'ink';\nimport Spinner from 'ink-spinner';\nimport { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';\nimport { useAppStore } from '../stores/app.store';\nimport { useCommitStore } from '../stores/commit.store';\nimport { useTransactionDetailStore } from '../stores/transaction-detail.store';\nimport { useTransactionHistoryStore } from '../stores/transaction-history.store';\nimport Separator from './Separator';\nimport { useStdoutDimensions } from '../utils';\nimport GlobalHelpScreen from './GlobalHelpScreen';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'HANDOFF': return <Text color=\"magenta\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `-${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `-${minutes}m`;\n};\n\nconst EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    \n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const [, rows] = useStdoutDimensions();\n    const [viewOffset, setViewOffset] = useState(0);\n    const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.\n    const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);\n    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();\n    const {\n        togglePause,\n        moveSelectionUp,\n        moveSelectionDown,\n        startApproveAll,\n        confirmAction,\n        cancelAction,\n        toggleHelp,\n    } = useDashboardStore(s => s.actions);\n    const { exit } = useApp();\n    const appActions = useAppStore(s => s.actions);\n    const commitActions = useCommitStore(s => s.actions);\n    const detailActions = useTransactionDetailStore(s => s.actions);\n    const historyActions = useTransactionHistoryStore(s => s.actions);\n\n    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);\n    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);\n\n    const isModal = status === 'CONFIRM_APPROVE';\n    const isProcessing = status === 'APPROVING';\n\n    useEffect(() => {\n        if (selectedTransactionIndex < viewOffset) {\n            setViewOffset(selectedTransactionIndex);\n        } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {\n            setViewOffset(selectedTransactionIndex - viewportHeight + 1);\n        }\n    }, [selectedTransactionIndex, viewOffset, viewportHeight]);\n\n    useInput((input, key) => {\n        if (input === '?') {\n            toggleHelp();\n            return;\n        }\n\n        if (showHelp) {\n            if (key.escape || input === '?') toggleHelp();\n            return;\n        }\n\n        if (isModal) {\n            if (key.return) confirmAction();\n            if (key.escape) cancelAction();\n            return;\n        }\n\n        if (isProcessing) return; // No input while processing\n        \n        if (input.toLowerCase() === 'q') exit();\n\n        if (key.upArrow) moveSelectionUp();\n        if (key.downArrow) moveSelectionDown();\n        \n        if (key.return) {\n            const selectedTx = transactions[selectedTransactionIndex];\n            if (selectedTx?.status === 'PENDING') {\n                // For PENDING transactions, we still go to the review screen.\n                appActions.showReviewScreen();\n            } else if (selectedTx) {\n                detailActions.loadTransaction(selectedTx.id);\n                appActions.showTransactionDetailScreen();\n            }\n        }\n        \n        if (input.toLowerCase() === 'p') togglePause();\n        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();\n        if (input.toLowerCase() === 'c' && pendingCommits > 0) {\n            commitActions.prepareCommitScreen();\n            appActions.showGitCommitScreen();\n        }\n        if (input.toLowerCase() === 'l') {\n            historyActions.load();\n            appActions.showTransactionHistoryScreen();\n        }\n    });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <Text>\n                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n            </Text>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const pauseAction = status === 'PAUSED'\n\t\t\t? <Text>(<Text color=\"cyan\" bold>R</Text>)esume</Text>\n\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n\t\treturn (\n            <Text color=\"gray\">\n                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>Enter</Text>) Review · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n            </Text>\n        );\n    };\n    \n    const transactionsToConfirm = useMemo(() => {\n        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');\n        return [];\n    }, [status, transactions]);\n\n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            {showHelp && <GlobalHelpScreen />}\n\n            <Box flexDirection=\"column\" display={showHelp ? 'none' : 'flex'}>\n                <Text color=\"cyan\">▲ relaycode dashboard</Text>\n                <Separator />\n                <Box marginY={1}>\n                    {renderStatusBar()}\n                </Box>\n                \n                {isModal && (\n                    <>\n                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                        <Separator />\n                    </>\n                )}\n                \n                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n                <Box flexDirection=\"column\" marginTop={1}>\n                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                        const actualIndex = viewOffset + index;\n                        return (\n                            <EventStreamItem\n                                key={tx.id}\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                            />\n                        );\n                    })}\n                </Box>\n\n                <Box marginTop={1}><Separator /></Box>\n                {renderFooter()}\n            </Box>\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/components/DebugMenu.tsx: >-
+    import React, { useState } from 'react';
+
+    import { Box, Text, useInput } from 'ink';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+    import Separator from './Separator';
+
+
+    interface MenuItem {
+        title: string;
+        action: () => void;
+    }
+
+
+    const getKeyForIndex = (index: number): string => {
+        if (index < 9) {
+            return (index + 1).toString();
+        }
+        return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+    };
+
+
+    const DebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const reviewActions = useReviewStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleDiffView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleReasoningView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleCopyMode();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    reviewActions.toggleScriptView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.showBulkRepair();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.executeBulkRepairOption(3); // Option 3 is Handoff
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => Math.max(0, i - 1));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+                return;
+            }
+            if (key.escape || (key.ctrl && input === 'b')) {
+                appActions.toggleDebugMenu();
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return (
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="yellow"
+                width="100%"
+                paddingX={2}
+            >
+                <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+                <Separator />
+                <Box flexDirection="column" marginY={1}>
+                    {menuItems.map((item, index) => (
+                        <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                            {selectedIndex === index ? '> ' : '  '}
+                            ({getKeyForIndex(index)}) {item.title}
+                        </Text>
+                    ))}
+                </Box>
+                <Separator />
+                <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc / Ctrl+B) Close</Text>
+            </Box>
+        );
+    };
+
+
+    export default DebugMenu;
+  src/components/GitCommitScreen.tsx: |-
+    import React from 'react';
+    import { Box, Text, useInput } from 'ink';
+    import Spinner from 'ink-spinner';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useAppStore } from '../stores/app.store';
+    import Separator from './Separator';
+
+    const GitCommitScreen = () => {
+        const { transactionsToCommit, finalCommitMessage, isCommitting } = useCommitStore();
+        const { commit } = useCommitStore(s => s.actions);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        useInput((input, key) => {
+            if (isCommitting) return;
+
+            if (key.escape) {
+                showDashboardScreen();
+            }
+            if (key.return) {
+                commit().then(() => {
+                    showDashboardScreen();
+                });
+            }
+        });
+
+        const transactionLines = transactionsToCommit.map(tx => (
+            <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+        ));
+
+        const footer = isCommitting
+            ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+            : <Text>(Enter) Confirm & Commit      (Esc) Cancel</Text>;
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode git commit</Text>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text bold>TRANSACTIONS INCLUDED</Text>
+                        {transactionLines}
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text bold>FINAL COMMIT MESSAGE</Text>
+                    <Box marginTop={1}>
+                        <Text>{finalCommitMessage}</Text>
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} paddingX={2}>
+                     <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+                </Box>
+                <Separator />
+                {footer}
+            </Box>
+        );
+    };
+
+    export default GitCommitScreen;
+  src/components/InitializationScreen.tsx: "import React, { useEffect } from 'react';\nimport { Box, Text, useApp, useInput } from 'ink';\nimport { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';\nimport Separator from './Separator';\nimport { useAppStore } from '../stores/app.store';\nimport { sleep } from '../utils';\n\nconst TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n\tlet symbol: React.ReactNode;\n\tswitch (task.status) {\n\t\tcase 'pending': symbol = '( )'; break;\n\t\tcase 'active': symbol = <Text color=\"cyan\">(●)</Text>; break;\n\t\tcase 'done': symbol = <Text color=\"green\">{doneSymbol}</Text>; break;\n\t}\n\n\tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n\n\treturn (\n\t\t<Box flexDirection=\"column\">\n\t\t\t<Text>\n\t\t\t\t{symbol} {title}\n\t\t\t</Text>\n\t\t\t{task.subtext && task.status !== 'done' && (\n\t\t\t\t<Text italic color=\"gray\">\n\t\t\t\t\t{'     └─ '}{task.subtext}\n\t\t\t\t</Text>\n\t\t\t)}\n\t\t</Box>\n\t);\n};\n\nconst InitializationScreen = () => {\n    const phase = useInitStore(s => s.phase);\n    const analyzeTasks = useInitStore(s => s.analyzeTasks);\n    const configureTasks = useInitStore(s => s.configureTasks);\n    const interactiveChoice = useInitStore(s => s.interactiveChoice);\n    const projectId = useInitStore(s => s.projectId);\n    const actions = useInitStore(s => s.actions);\n    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);\n    const { exit } = useApp();\n\n    useInput((input, key) => {\n        if (phase === 'INTERACTIVE') {\n            if (key.return) {\n                actions.setInteractiveChoice('ignore');\n            } else if (input.toLowerCase() === 's') {\n                actions.setInteractiveChoice('share');\n            }\n        }\n        if (phase === 'FINALIZE') {\n            if (input.toLowerCase() === 'q') {\n                exit();\n            } else if (input.toLowerCase() === 'w') {\n                showDashboardScreen();\n            }\n        }\n    });\n\n    useEffect(() => {\n        actions.resetInit();\n        const runSimulation = async () => {\n            actions.setPhase('ANALYZE');\n            for (const task of initialAnalyzeTasks) {\n                actions.updateAnalyzeTask(task.id, 'active');\n                await sleep(800);\n                actions.updateAnalyzeTask(task.id, 'done');\n            }\n            actions.setAnalysisResults('relaycode (from package.json)', true);\n            await sleep(500);\n\n            actions.setPhase('CONFIGURE');\n            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);\n            for (const task of configTasksUntilInteractive) {\n                actions.updateConfigureTask(task.id, 'active');\n                await sleep(800);\n                actions.updateConfigureTask(task.id, 'done');\n            }\n            await sleep(500);\n\n            actions.setPhase('INTERACTIVE');\n        };\n\n        runSimulation();\n    }, [actions]);\n\n    useEffect(() => {\n        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {\n            const resumeSimulation = async () => {\n                actions.setPhase('CONFIGURE');\n                const lastTask = initialConfigureTasks[2];\n                if (lastTask) {\n                    actions.updateConfigureTask(lastTask.id, 'active');\n                    await sleep(800);\n                    actions.updateConfigureTask(lastTask.id, 'done');\n                    await sleep(500);\n\n                    actions.setPhase('FINALIZE');\n                }\n            };\n            resumeSimulation();\n        }\n    }, [interactiveChoice, phase, actions]);\n\n    const renderAnalyze = () => (\n        <Box flexDirection=\"column\">\n            <Text bold color=\"cyan\">PHASE 1: ANALYZE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}\n            </Box>\n        </Box>\n    );\n\n    const renderContext = () => (\n        <Box flexDirection=\"column\" marginBottom={1}>\n            <Text bold color=\"cyan\">CONTEXT</Text>\n            <Text>  <Text color=\"green\">✓</Text> Project ID: {projectId}</Text>\n            <Text>  <Text color=\"green\">✓</Text> Gitignore:  Found at ./</Text>\n        </Box>\n    );\n\n    const renderConfigure = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n            </Box>\n        </Box>\n    );\n\n    const renderInteractive = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n                <Box flexDirection=\"column\" marginTop={1}>\n                    <Text><Text color=\"cyan\">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>\n                    <Text>  Do you want to share its state with your team by committing it?</Text>\n                </Box>\n            </Box>\n        </Box>\n    );\n\n    const renderFinalize = () => {\n        const stateText = interactiveChoice === 'share'\n            ? '.relay/ directory initialized. It will be committed to git.'\n            : '.relay/ directory initialized and added to .gitignore.';\n        const stateSubText = interactiveChoice === 'share'\n            ? undefined\n            : 'Local transaction history will be stored here.';\n        \n        return (\n            <Box flexDirection=\"column\">\n                <Text bold color=\"green\"> SYSTEM READY</Text>\n                <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Config:   relay.config.json created.</Text>\n                        <Text color=\"gray\" italic>          › Edit this file to tune linters, git integration, etc.</Text>\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> State:    {stateText}</Text>\n                        {stateSubText && <Text color=\"gray\" italic>          › {stateSubText}</Text>}\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n                        <Text color=\"gray\" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>\n                    </Box>\n                </Box>\n            </Box>\n        );\n    };\n\n    const renderPhase = () => {\n        switch (phase) {\n            case 'ANALYZE': return renderAnalyze();\n            case 'CONFIGURE': return renderConfigure();\n            case 'INTERACTIVE': return renderInteractive();\n            case 'FINALIZE': return renderFinalize();\n        }\n    };\n    \n    let footerText;\n    switch (phase) {\n        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;\n        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;\n        case 'INTERACTIVE': footerText = <Text>(<Text color=\"cyan\" bold>Enter</Text>) No, ignore it (default)      (<Text color=\"cyan\" bold>S</Text>) Yes, share it</Text>; break;\n        case 'FINALIZE': footerText = <Text>(<Text color=\"cyan\" bold>W</Text>)atch for Patches · (<Text color=\"cyan\" bold>L</Text>)View Logs · (<Text color=\"cyan\" bold>Q</Text>)uit</Text>; break;\n    }\n\n    return (\n        <Box flexDirection=\"column\">\n            <Text color=\"cyan\">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>\n            <Separator />\n            <Box marginY={1}>{renderPhase()}</Box>\n            <Separator />\n            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}\n        </Box>\n    );\n};\n\nexport default InitializationScreen;"
+  src/components/SplashScreen.tsx: |-
+    import React, { useState, useEffect } from 'react';
+    import { Box, Text, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import Separator from './Separator';
+
+    const SplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState(5);
+
+        const handleSkip = () => {
+            showInitScreen();
+        };
+
+        useInput(() => {
+            handleSkip();
+        });
+
+        useEffect(() => {
+            if (countdown === 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen]);
+
+        const logo = `
+             ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+             ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+             ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+    `;
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode</Text>
+                <Separator />
+                <Text color="cyan">{logo}</Text>
+                <Box flexDirection="column" alignItems="center">
+                    <Text italic>A zero-friction, AI-native patch engine.</Text>
+                    <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+                </Box>
+                
+                <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                    <Box flexDirection="column" width="45%">
+                        <Text>Version 1.1.5</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>relaycode</Text>
+                        <Text>relaycode-core</Text>
+                        <Text>apply-multi-diff</Text>
+                        <Text>konro</Text>
+                    </Box>
+                     <Box flexDirection="column" width="45%">
+                        <Text>Build Timestamps</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>2025-09-20 13:58:05</Text>
+                        <Text>2025-09-20 10:59:05</Text>
+                        <Text>(versioned)</Text>
+                        <Text>(versioned)</Text>
+                    </Box>
+                </Box>
+                
+                <Box marginTop={1}><Separator /></Box>
+                <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+                <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                <Separator />
+                <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                <Separator />
+                <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
+            </Box>
+        );
+    };
+
+    export default SplashScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 41

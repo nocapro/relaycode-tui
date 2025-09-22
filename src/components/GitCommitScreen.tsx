@@ -1,27 +1,11 @@
 import React from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import { useCommitStore } from '../stores/commit.store';
-import { useAppStore } from '../stores/app.store';
 import Separator from './Separator';
+import { useGitCommitScreen } from './GitCommitScreen.hook';
 
 const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting } = useCommitStore();
-    const { commit } = useCommitStore(s => s.actions);
-    const { showDashboardScreen } = useAppStore(s => s.actions);
-
-    useInput((input, key) => {
-        if (isCommitting) return;
-
-        if (key.escape) {
-            showDashboardScreen();
-        }
-        if (key.return) {
-            commit().then(() => {
-                showDashboardScreen();
-            });
-        }
-    });
+    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
 
     const transactionLines = transactionsToCommit.map(tx => (
         <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>

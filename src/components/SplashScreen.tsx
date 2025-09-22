@@ -1,32 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
+import React from 'react';
+import { Box, Text } from 'ink';
 import Separator from './Separator';
+import { useSplashScreen } from './SplashScreen.hook';
 
 const SplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState(5);
-
-    const handleSkip = () => {
-        showInitScreen();
-    };
-
-    useInput(() => {
-        handleSkip();
-    });
-
-    useEffect(() => {
-        if (countdown === 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
+    const { countdown } = useSplashScreen();
 
     const logo = `
          ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
