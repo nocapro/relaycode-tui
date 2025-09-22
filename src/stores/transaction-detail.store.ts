@@ -1,20 +1,9 @@
 import { create } from 'zustand';
-import { useDashboardStore, type Transaction } from './dashboard.store';
+import { useDashboardStore } from './dashboard.store';
 import { TransactionService } from '../services/transaction.service';
-
-// Types from README
-export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
-export interface FileDetail {
-    id: string;
-    path: string;
-    type: FileChangeType;
-    diff: string;
-    linesAdded: number;
-    linesRemoved: number;
-}
-
-export type NavigatorSection = 'PROMPT' | 'REASONING' | 'FILES';
-export type BodyView = 'PROMPT' | 'REASONING' | 'FILES_LIST' | 'DIFF_VIEW' | 'COPY_MODE' | 'REVERT_CONFIRM' | 'NONE';
+import type { Transaction } from '../types/transaction.types';
+import type { FileChange as FileDetail } from '../types/file.types';
+import type { NavigatorSection, DetailBodyView } from '../types/transaction-detail.types';
 
 interface TransactionDetailState {
     // Data
@@ -27,7 +16,7 @@ interface TransactionDetailState {
     navigatorFocus: NavigatorSection | 'FILES_LIST';
     expandedSection: NavigatorSection | null;
     selectedFileIndex: number;
-    bodyView: BodyView;
+    bodyView: DetailBodyView;
     copyModeSelectionIndex: number;
     copyModeSelections: Record<string, boolean>;
     copyModeLastCopied: string | null;

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { useDashboardStore, type Transaction } from './dashboard.store';
+import { useDashboardStore } from './dashboard.store';
+import type { Transaction } from '../types/transaction.types';
 import { CommitService } from '../services/commit.service';
 
 interface CommitState {

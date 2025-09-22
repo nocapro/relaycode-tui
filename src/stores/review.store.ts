@@ -3,37 +3,8 @@ import { sleep } from '../utils';
 import { useAppStore } from './app.store';
 import { useDashboardStore } from './dashboard.store';
 import { ReviewService } from '../services/review.service';
-
-// --- Types ---
-
-export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' | 'RE_APPLYING';
-export interface FileItem {
-    id: string;
-    path: string;
-    status: FileStatus;
-    diff: string;
-    linesAdded: number;
-    linesRemoved: number;
-    error?: string;
-    strategy: 'replace' | 'standard-diff';
-}
-
-export interface ScriptResult {
-    command: string;
-    success: boolean;
-    duration: number;
-    summary: string;
-    output: string;
-}
-
-export interface ApplyStep {
-    id: string;
-    title: string;
-    status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
-    details?: string;
-    substeps?: ApplyStep[];
-    duration?: number;
-}
+import type { ReviewFileItem } from '../types/file.types';
+import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types';
 
 export const initialApplySteps: ApplyStep[] = [
     { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
@@ -41,9 +12,6 @@ export const initialApplySteps: ApplyStep[] = [
     { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
     { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
 ];
-
-export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'copy_mode' | 'bulk_repair' | 'confirm_handoff' | 'none';
-export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
 
 interface ReviewState {
     // Transaction Info
@@ -57,13 +25,13 @@ interface ReviewState {
     patchStatus: PatchStatus;
 
     // File & Script Info
-    files: FileItem[];
+    files: ReviewFileItem[];
     scripts: ScriptResult[];
 
     // UI State
     applySteps: ApplyStep[];
     selectedItemIndex: number; // Can be file or script
-    bodyView: BodyView;
+    bodyView: ReviewBodyView;
     isDiffExpanded: boolean;
     
     // Copy Mode State
@@ -122,7 +90,7 @@ interface ReviewState {
 
 // --- Mock Data ---
 
-const mockFiles: FileItem[] = [
+const mockFiles: ReviewFileItem[] = [
     { 
         id: '1', 
         path: 'src/core/transaction.ts', 
@@ -199,7 +167,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     // UI State
     applySteps: initialApplySteps,
     selectedItemIndex: 0, // Start with first file
-    bodyView: 'none',
+    bodyView: 'none' as const,
     isDiffExpanded: false,
     
     // Copy Mode State
@@ -331,7 +299,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         
         // Copy Mode Actions
         toggleCopyMode: () => set(state => ({
-            bodyView: state.bodyView === 'copy_mode' ? 'none' : 'copy_mode',
+            bodyView: state.bodyView === 'copy_mode' ? 'none' as const : 'copy_mode' as const,
             copyModeSelectedIndex: 0,
             copyModeLastCopied: null,
         })),
@@ -444,8 +412,8 @@ tryRepairFile: () => {
                     const failedFiles = files.filter(f => f.status === 'FAILED');
                     // eslint-disable-next-line no-console
                     console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files.`);
-                    // In a real app, this would use clipboardy.writeSync(bulkPrompt)
-                    set({ bodyView: 'none', copyModeLastCopied: 'Bulk repair prompt copied.' });
+                    // In a real app, this would use clipboardy.writeSync(bulkPrompt),
+                    set({ bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied.' });
                     break;
                 }
                     

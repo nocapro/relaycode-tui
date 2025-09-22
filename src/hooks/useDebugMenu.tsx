@@ -7,11 +7,7 @@ import { useReviewStore } from '../stores/review.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
-
-export interface MenuItem {
-    title: string;
-    action: () => void;
-}
+import type { MenuItem } from '../types/debug.types';
 
 export const useDebugMenu = () => {
     const [selectedIndex, setSelectedIndex] = useState(0);

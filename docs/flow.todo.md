@@ -108,7 +108,12 @@ extract out all constants to constants/[entitity].constants.ts files
 
 ===
 
-extract out all types to types/[entitiy].type.ts files
+1. extract out all types to types/[entitiy].type.ts files
+2. implement types.ts files to necessary areas for DRYness
+
+give me transaction in four phase, now please go on for first phase
+
+dont forget final step yaml
 
 ===
 

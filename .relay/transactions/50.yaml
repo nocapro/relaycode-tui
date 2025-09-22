@@ -1,311 +1,455 @@
-uuid: 18b0e77d-788e-491c-b5f7-873b88b2eb59
+uuid: f191244c-9f69-4254-8c88-1c9f809d3b45
 projectId: relaycode-tui
-createdAt: '2025-09-22T06:40:09.682Z'
+createdAt: '2025-09-22T06:58:34.076Z'
 gitCommitMsg: >-
-  refactor(review): extract all remaining business logic to service
+  refactor: extract app, init, and review types
 
-  This commit completes the refactoring of the review feature by moving all
-  remaining business process logic from `review.store.ts` into `ReviewService`.
+  This commit continues the type refactoring by extracting types related to the
+  application state machine, initialization process, and review screen into
+  dedicated files within `src/types`.
 
-  - `ReviewService` now contains `generateSingleFileRepairPrompt`,
-  `tryRepairFile`, and `runBulkReapply` to handle repair and re-apply
-  simulations. - The `tryRepairFile` and `executeBulkRepairOption` actions in
-  `review.store.ts` have been simplified to be direct wrappers around calls to
-  the `ReviewService`.
-
-  This change finalizes the separation of concerns, leaving the store to manage
-  state and the service to orchestrate all complex business logic.
+  - Created `app.types.ts`, `init.types.ts`, and `review.types.ts`. - Updated
+  the corresponding stores (`app.store.ts`, `init.store.ts`, `review.store.ts`)
+  to import these centralized types. - Updated `review.service.ts` to import
+  types directly, decoupling it further from the store's implementation details.
+  - Renamed `BodyView` in the review store to `ReviewBodyView` for better
+  clarity and to avoid potential naming collisions.
 promptSummary: >-
-  For the final phase of refactoring, I was asked to complete the separation of
-  business logic from the stores. I have moved the remaining simulation and
-  prompt-generation logic from `review.store.ts` into new, dedicated functions
-  within `ReviewService`. The store's actions now simply delegate to these
-  service functions, resulting in a cleaner architecture.
+  Continue refactoring by extracting types for the app state, initialization
+  process, and review screen into their own dedicated files in `src/types` and
+  updating all dependent files.
 reasoning:
   - >-
-    This is the final phase of the refactoring. I will complete the separation
-    of business logic from the UI stores and hooks by moving the remaining
-    complex logic from `review.store.ts` into `ReviewService`.
-  - '### Step 1: Add New Logic to `ReviewService`'
+    Excellent. Phase 1 established a solid foundation. For Phase 2 of our
+    refactoring, I will continue extracting domain-specific types from the
+    stores into our new `src/types` directory. This phase will focus on types
+    related to the application's state machine, the initialization process, and
+    the review screen.
+  - '### Phase 2: Extracting App, Init, and Review Types'
+  - '1.  **New Type Files Created**:'
   - >-
-    I'll start by adding new functions to `review.service.ts` to handle the
-    logic for repairing a single file and for running the bulk re-apply
-    simulation. This encapsulates the remaining business processes that were
-    still inside the review store.
-  - '### Step 2: Refactor `review.store.ts` to Use New Service Functions'
+    *   `src/types/app.types.ts`: Contains the `AppScreen` type, which defines
+    the possible screens in the application's navigation state.
   - >-
-    Now, I will refactor the `tryRepairFile` and `executeBulkRepairOption`
-    actions in `review.store.ts`. Instead of containing complex logic
-    themselves, they will now be simple wrappers that call the new functions in
-    `ReviewService`. This ensures the store is only responsible for state and
-    simple actions, not business process orchestration. I will use a precise
-    `search-replace` strategy to avoid any patching errors.
+    *   `src/types/init.types.ts`: Centralizes all types related to the
+    initialization sequence, such as `Task`, `TaskStatus`, and `InitPhase`.
   - >-
-    This completes the final phase of refactoring. The application now has a
-    clear separation of concerns: services handle business logic and processes,
-    stores manage state, and hooks connect user input to store actions.
+    *   `src/types/review.types.ts`: Groups together types used exclusively in
+    the review process, including `ScriptResult`, `ApplyStep`, and the screen's
+    view states. I have renamed the review screen's `BodyView` to
+    `ReviewBodyView` to prevent potential naming conflicts.
+  - '2.  **Stores Refactored**:'
+  - >-
+    *   `app.store.ts`, `init.store.ts`, and `review.store.ts` have been updated
+    to remove their local type definitions and import them from the newly
+    created files.
+  - '3.  **Services Updated**:'
+  - >-
+    *   `review.service.ts`, which depends on the `ApplyStep` type, now imports
+    it directly from `review.types.ts` instead of from the review store, further
+    decoupling the service from the store's implementation.
+  - 'Here are the changes for the second phase:'
+  - First, I'll create the new type definition files.
+  - Now, I'll update the existing files to use these new types.
 operations:
   - type: write
-    path: src/services/review.service.ts
+    path: src/types/app.types.ts
+    content: >-
+      export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' |
+      'review-processing' | 'git-commit' | 'transaction-detail' |
+      'transaction-history';
+    patchStrategy: replace
+  - type: write
+    path: src/types/init.types.ts
+    content: >-
+      export type TaskStatus = 'pending' | 'active' | 'done';
+
+      export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' |
+      'FINALIZE';
+
+      export type GitignoreChoice = 'ignore' | 'share';
+
+
+      export interface Task {
+          id: string;
+          title: string;
+          subtext?: string;
+          status: TaskStatus;
+      }
+    patchStrategy: replace
+  - type: write
+    path: src/types/review.types.ts
+    content: >-
+      export interface ScriptResult {
+          command: string;
+          success: boolean;
+          duration: number;
+          summary: string;
+          output: string;
+      }
+
+
+      export interface ApplyStep {
+          id: string;
+          title: string;
+          status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+          details?: string;
+          substeps?: ApplyStep[];
+          duration?: number;
+      }
+
+
+      export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' |
+      'copy_mode' | 'bulk_repair' | 'confirm_handoff' | 'none';
+
+      export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+    patchStrategy: replace
+  - type: write
+    path: src/stores/app.store.ts
     content: >+
-      --- src/services/review.service.ts
+      --- src/stores/app.store.ts
 
-      +++ src/services/review.service.ts
+      +++ src/stores/app.store.ts
 
-      @@ -124,8 +124,76 @@
-           }
-       };
+      @@ -1,6 +1,5 @@
+       import { create } from 'zustand';
+      +import type { AppScreen } from '../types/app.types';
        
-      +const generateSingleFileRepairPrompt = (file: FileItem): string => {
+      -export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' |
+      'review-processing' | 'git-commit' | 'transaction-detail' |
+      'transaction-history';
 
-      +    return `The patch failed to apply to ${file.path}. Please generate a
-      corrected patch.
+      -
+       interface AppState {
+           isDebugMenuOpen: boolean;
+           currentScreen: AppScreen;
 
-      +
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/init.store.ts
+    content: >+
+      --- src/stores/init.store.ts
 
-      +Error: ${file.error}
+      +++ src/stores/init.store.ts
 
-      +Strategy: ${file.strategy}
+      @@ -1,19 +1,5 @@
+       import { create } from 'zustand';
+      -
 
-      +
+      -// Types
 
-      +ORIGINAL CONTENT:
+      -export type TaskStatus = 'pending' | 'active' | 'done';
 
-      +---
+      -export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' |
+      'FINALIZE';
 
-      +// ... original file content would be here ...
+      -export type GitignoreChoice = 'ignore' | 'share';
 
-      +---
+      -
 
-      +
+      -export interface Task {
 
-      +FAILED PATCH:
+      -    id: string;
 
-      +---
+      -    title: string;
 
-      +${file.diff || '// ... failed diff would be here ...'}
+      -    subtext?: string;
 
-      +---
+      -    status: TaskStatus;
 
-      +
+      -}
 
-      +Please provide a corrected patch that addresses the error.`;
+      +import type { Task, TaskStatus, InitPhase, GitignoreChoice } from
+      '../types/init.types';
+       
+       // Initial State definitions from README
+       export const initialAnalyzeTasks: Task[] = [
 
-      +};
-
-      +
-
-      +const tryRepairFile = (file: FileItem, selectedIndex: number): void => {
-
-      +    const repairPrompt = generateSingleFileRepairPrompt(file);
-
-      +    // In a real app: clipboardy.writeSync(repairPrompt)
-
-      +    // eslint-disable-next-line no-console
-
-      +    console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
-
-      +
-
-      +    // Mock: Update file status to show it's being repaired
-
-      +    useReviewStore.setState(state => {
-
-      +        const newFiles = [...state.files];
-
-      +        newFiles[selectedIndex] = { ...file, status: 'APPROVED' as const,
-      error: undefined, linesAdded: 5, linesRemoved: 2 };
-
-      +        return { files: newFiles, copyModeLastCopied: 'Repair prompt
-      copied to clipboard' };
-
-      +    });
-
-      +};
-
-      +
-
-      +const runBulkReapply = async (): Promise<void> => {
-
-      +    const { files } = useReviewStore.getState();
-
-      +    const failedFileIds = new Set(files.filter(f => f.status ===
-      'FAILED').map(f => f.id));
-
-      +    if (failedFileIds.size === 0) {
-
-      +        return;
-
-      +    }
-
-      +
-
-      +    useReviewStore.setState(state => ({
-
-      +        files: state.files.map(file =>
-
-      +            failedFileIds.has(file.id)
-
-      +                ? { ...file, status: 'RE_APPLYING' as const }
-
-      +                : file,
-
-      +        ),
-
-      +    }));
-
-      +
-
-      +    await sleep(1500); // Simulate re-apply
-
-      +
-
-      +    // Mock a mixed result
-
-      +    let first = true;
-
-      +    useReviewStore.setState(state => ({
-
-      +        files: state.files.map(file => {
-
-      +            if (failedFileIds.has(file.id)) {
-
-      +                if (first) {
-
-      +                    first = false;
-
-      +                    return { ...file, status: 'APPROVED' as const,
-      strategy: 'replace' as const, error: undefined, linesAdded: 9,
-      linesRemoved: 2 };
-
-      +                }
-
-      +                return { ...file, status: 'FAILED' as const, error:
-      "'replace' failed: markers not found" };
-
-      +            }
-
-      +            return file;
-
-      +        }),
-
-      +    }));
-
-      +};
-
-      +
-       export const ReviewService = {
-           generateBulkRepairPrompt,
-           generateHandoffPrompt,
-           performHandoff,
-           runApplySimulation,
-      +    generateSingleFileRepairPrompt,
-
-      +    tryRepairFile,
-
-      +    runBulkReapply,
-       };
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/review.service.ts
+    content: |+
+      --- src/services/review.service.ts
+      +++ src/services/review.service.ts
+      @@ -1,5 +1,6 @@
+      -import { useReviewStore, type ApplyStep } from '../stores/review.store';
+      +import { useReviewStore } from '../stores/review.store';
+       import { useDashboardStore } from '../stores/dashboard.store';
+       import { useAppStore } from '../stores/app.store';
+       import { sleep } from '../utils';
+      +import type { ApplyStep } from '../types/review.types';
+       import type { ReviewFileItem } from '../types/file.types';
+       
+       const generateBulkRepairPrompt = (files: ReviewFileItem[]): string => {
 
     patchStrategy: standard-diff
   - type: write
     path: src/stores/review.store.ts
-    content: |
-      <<<<<<< SEARCH
-              // Repair Actions
-              tryRepairFile: () => set(state => {
-                  const { selectedItemIndex, files } = state;
-                  if (selectedItemIndex < files.length) {
-                      const file = files[selectedItemIndex];
-                      if (file && file.status === 'FAILED') {
-                          // Generate repair prompt and copy to clipboard
-                          const repairPrompt = `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+    content: >+
+      --- src/stores/review.store.ts
 
-      Error: ${file.error}
-      Strategy: ${file.strategy}
+      +++ src/stores/review.store.ts
 
-      ORIGINAL CONTENT:
-      ---
-      // ... original file content would be here ...
-      ---
+      @@ -2,32 +2,15 @@
+       import { sleep } from '../utils';
+       import { useAppStore } from './app.store';
+       import { useDashboardStore } from './dashboard.store';
+       import { ReviewService } from '../services/review.service';
+       import type { ReviewFileItem } from '../types/file.types';
+      -
 
-      FAILED PATCH:
-      ---
-      ${file.diff || '// ... failed diff would be here ...'}
-      ---
+      -// --- Types ---
 
-      Please provide a corrected patch that addresses the error.`;
+      -
 
-                          // eslint-disable-next-line no-console
-                          console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+      -export interface ScriptResult {
 
-                          // Mock: Update file status to show it's being repaired
-                          const newFiles = [...files];
-                          newFiles[selectedItemIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
+      -    command: string;
 
-                          return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
-                      }
-                  }
-                  return {};
-              }),
-      =======
-              // Repair Actions
-              tryRepairFile: () => {
-                  const { selectedItemIndex, files } = get();
-                  if (selectedItemIndex < files.length) {
-                      const file = files[selectedItemIndex];
-                      if (file && file.status === 'FAILED') {
-                          ReviewService.tryRepairFile(file, selectedItemIndex);
-                      }
-                  }
-              },
-      >>>>>>> REPLACE
-      <<<<<<< SEARCH
-                      case 2: { // Attempt Bulk Re-apply
-                          const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
-                          if (failedFileIds.size === 0) {
-                              set({ bodyView: 'none' });
-                              break;
-                          }
+      -    success: boolean;
 
-                          set(state => ({
-                              files: state.files.map(file =>
-                                  failedFileIds.has(file.id)
-                                      ? { ...file, status: 'RE_APPLYING' as const }
-                                      : file,
-                              ),
-                              bodyView: 'none' as const,
-                          }));
+      -    duration: number;
 
-                          await sleep(1500); // Simulate re-apply
+      -    summary: string;
 
-                          // Mock a mixed result
-                          let first = true;
-                          set(state => ({
-                              files: state.files.map(file => {
-                                  if (failedFileIds.has(file.id)) {
-                                      if (first) {
-                                          first = false;
-                                          return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
-                                      }
-                                      return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
-                                  }
-                                  return file;
-                              }),
-                          }));
-                          break;
-                      }
-      =======
-                      case 2: { // Attempt Bulk Re-apply
-                          set({ bodyView: 'none' as const });
-                          await ReviewService.runBulkReapply();
-                          break;
-                      }
-      >>>>>>> REPLACE
-    patchStrategy: search-replace
+      -    output: string;
+
+      -}
+
+      -
+
+      -export interface ApplyStep {
+
+      -    id: string;
+
+      -    title: string;
+
+      -    status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+
+      -    details?: string;
+
+      -    substeps?: ApplyStep[];
+
+      -    duration?: number;
+
+      -}
+
+      +import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from
+      '../types/review.types';
+       
+       export const initialApplySteps: ApplyStep[] = [
+           { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+           { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+           { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+           { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+       ];
+      -
+
+      -export type BodyView = 'diff' | 'reasoning' | 'script_output' |
+      'copy_mode' | 'bulk_repair' | 'confirm_handoff' | 'none';
+
+      -export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+       
+       interface ReviewState {
+           // Transaction Info
+      @@ -46,7 +29,7 @@
+           // UI State
+           applySteps: ApplyStep[];
+           selectedItemIndex: number; // Can be file or script
+      -    bodyView: BodyView;
+
+      +    bodyView: ReviewBodyView;
+           isDiffExpanded: boolean;
+           
+           // Copy Mode State
+      @@ -218,7 +201,7 @@
+           // UI State
+           applySteps: initialApplySteps,
+           selectedItemIndex: 0, // Start with first file
+      -    bodyView: 'none',
+
+      +    bodyView: 'none' as const,
+           isDiffExpanded: false,
+           
+           // Copy Mode State
+      @@ -370,7 +353,7 @@
+               
+               // Copy Mode Actions
+               toggleCopyMode: () => set(state => ({
+      -            bodyView: state.bodyView === 'copy_mode' ? 'none' :
+      'copy_mode',
+
+      +            bodyView: state.bodyView === 'copy_mode' ? 'none' as const :
+      'copy_mode' as const,
+                   copyModeSelectedIndex: 0,
+                   copyModeLastCopied: null,
+               })),
+      @@ -520,7 +503,7 @@
+                           const failedFiles = files.filter(f => f.status === 'FAILED');
+                           // eslint-disable-next-line no-console
+                           console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files.`);
+      -                    // In a real app, this would use
+      clipboardy.writeSync(bulkPrompt)
+
+      -                    set({ bodyView: 'none', copyModeLastCopied: 'Bulk
+      repair prompt copied.' });
+
+      +                    // In a real app, this would use
+      clipboardy.writeSync(bulkPrompt),
+
+      +                    set({ bodyView: 'none' as const, copyModeLastCopied:
+      'Bulk repair prompt copied.' });
+                           break;
+                       }
+                           
+      @@ -547,7 +530,7 @@
+                       }
+                           
+                       default: // Close modal
+      -                    set({ bodyView: 'none' as const });
+
+      +                    set({ bodyView: 'none' as const });
+                   }
+               },
+               confirmHandoff: () => {
+
+    patchStrategy: standard-diff
 snapshot:
+  src/types/init.types.ts: null
+  src/types/review.types.ts: null
+  src/types/app.types.ts: null
+  src/stores/app.store.ts: >-
+    import { create } from 'zustand';
+
+
+    export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' |
+    'review-processing' | 'git-commit' | 'transaction-detail' |
+    'transaction-history';
+
+
+    interface AppState {
+        isDebugMenuOpen: boolean;
+        currentScreen: AppScreen;
+        actions: {
+            showInitScreen: () => void;
+            showReviewProcessingScreen: () => void;
+            showDashboardScreen: () => void;
+            showReviewScreen: () => void;
+            showGitCommitScreen: () => void;
+            showSplashScreen: () => void;
+            showTransactionHistoryScreen: () => void;
+            showTransactionDetailScreen: () => void;
+            toggleDebugMenu: () => void;
+        };
+    }
+
+
+    export const useAppStore = create<AppState>((set) => ({
+        isDebugMenuOpen: false,
+        currentScreen: 'splash',
+        actions: {
+            showInitScreen: () => set({ currentScreen: 'init' }),
+            showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+            showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+            showReviewScreen: () => set({ currentScreen: 'review' }),
+            showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+            showSplashScreen: () => set({ currentScreen: 'splash' }),
+            showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+            showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+            toggleDebugMenu: () => set(state => ({ isDebugMenuOpen: !state.isDebugMenuOpen })),
+        },
+    }));
+  src/stores/init.store.ts: >-
+    import { create } from 'zustand';
+
+
+    // Types
+
+    export type TaskStatus = 'pending' | 'active' | 'done';
+
+    export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' |
+    'FINALIZE';
+
+    export type GitignoreChoice = 'ignore' | 'share';
+
+
+    export interface Task {
+        id: string;
+        title: string;
+        subtext?: string;
+        status: TaskStatus;
+    }
+
+
+    // Initial State definitions from README
+
+    export const initialAnalyzeTasks: Task[] = [
+        { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
+        { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
+        { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
+    ];
+
+
+    export const initialConfigureTasks: Task[] = [
+        { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
+        { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
+        { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
+    ];
+
+
+    // Store Interface
+
+    interface InitState {
+        phase: InitPhase;
+        analyzeTasks: Task[];
+        projectId: string | null;
+        gitignoreFound: boolean | null;
+        configureTasks: Task[];
+        interactiveChoice: GitignoreChoice | null;
+
+        actions: {
+            setPhase: (_phase: InitPhase) => void;
+            updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
+            setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
+            updateConfigureTask: (_id: string, _status: TaskStatus) => void;
+            setInteractiveChoice: (_choice: GitignoreChoice) => void;
+            resetInit: () => void;
+        };
+    }
+
+
+    // Create the store
+
+    export const useInitStore = create<InitState>((set) => ({
+        phase: 'ANALYZE',
+        analyzeTasks: initialAnalyzeTasks,
+        projectId: null,
+        gitignoreFound: null,
+        configureTasks: initialConfigureTasks,
+        interactiveChoice: null,
+
+        actions: {
+            setPhase: (phase) => set({ phase }),
+            updateAnalyzeTask: (id, status) => set(state => ({
+                analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+            updateConfigureTask: (id, status) => set(state => ({
+                configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+            resetInit: () => set({
+                phase: 'ANALYZE',
+                analyzeTasks: JSON.parse(JSON.stringify(initialAnalyzeTasks)),
+                projectId: null,
+                gitignoreFound: null,
+                configureTasks: JSON.parse(JSON.stringify(initialConfigureTasks)),
+                interactiveChoice: null,
+            }),
+        },
+    }));
   src/services/review.service.ts: >-
-    import { useReviewStore, type FileItem, type ApplyStep } from
-    '../stores/review.store';
+    import { useReviewStore, type ApplyStep } from '../stores/review.store';
 
     import { useDashboardStore } from '../stores/dashboard.store';
 
@@ -313,8 +457,10 @@ snapshot:
 
     import { sleep } from '../utils';
 
+    import type { ReviewFileItem } from '../types/file.types';
 
-    const generateBulkRepairPrompt = (files: FileItem[]): string => {
+
+    const generateBulkRepairPrompt = (files: ReviewFileItem[]): string => {
         const failedFiles = files.filter(f => f.status === 'FAILED');
         return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
 
@@ -359,7 +505,7 @@ snapshot:
         hash: string,
         message: string,
         reasoning: string,
-        files: FileItem[],
+        files: ReviewFileItem[],
     ): string => {
         const successfulFiles = files.filter(f => f.status === 'APPROVED');
         const failedFiles = files.filter(f => f.status === 'FAILED');
@@ -465,11 +611,95 @@ snapshot:
     };
 
 
+    const generateSingleFileRepairPrompt = (file: ReviewFileItem): string => {
+        return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+
+    Error: ${file.error}
+
+    Strategy: ${file.strategy}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original file content would be here ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff would be here ...'}
+
+    ---
+
+
+    Please provide a corrected patch that addresses the error.`;
+
+    };
+
+
+    const tryRepairFile = (file: ReviewFileItem, selectedIndex: number): void =>
+    {
+        const repairPrompt = generateSingleFileRepairPrompt(file);
+        // In a real app: clipboardy.writeSync(repairPrompt)
+        // eslint-disable-next-line no-console
+        console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+
+        // Mock: Update file status to show it's being repaired
+        useReviewStore.setState(state => {
+            const newFiles = [...state.files];
+            newFiles[selectedIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
+            return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
+        });
+    };
+
+
+    const runBulkReapply = async (): Promise<void> => {
+        const { files } = useReviewStore.getState();
+        const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
+        if (failedFileIds.size === 0) {
+            return;
+        }
+
+        useReviewStore.setState(state => ({
+            files: state.files.map(file =>
+                failedFileIds.has(file.id)
+                    ? { ...file, status: 'RE_APPLYING' as const }
+                    : file,
+            ),
+        }));
+
+        await sleep(1500); // Simulate re-apply
+
+        // Mock a mixed result
+        let first = true;
+        useReviewStore.setState(state => ({
+            files: state.files.map(file => {
+                if (failedFileIds.has(file.id)) {
+                    if (first) {
+                        first = false;
+                        return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
+                    }
+                    return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
+                }
+                return file;
+            }),
+        }));
+    };
+
+
     export const ReviewService = {
         generateBulkRepairPrompt,
         generateHandoffPrompt,
         performHandoff,
         runApplySimulation,
+        generateSingleFileRepairPrompt,
+        tryRepairFile,
+        runBulkReapply,
     };
   src/stores/review.store.ts: >-
     import { create } from 'zustand';
@@ -482,23 +712,10 @@ snapshot:
 
     import { ReviewService } from '../services/review.service';
 
+    import type { ReviewFileItem } from '../types/file.types';
+
 
     // --- Types ---
-
-
-    export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' |
-    'RE_APPLYING';
-
-    export interface FileItem {
-        id: string;
-        path: string;
-        status: FileStatus;
-        diff: string;
-        linesAdded: number;
-        linesRemoved: number;
-        error?: string;
-        strategy: 'replace' | 'standard-diff';
-    }
 
 
     export interface ScriptResult {
@@ -546,7 +763,7 @@ snapshot:
         patchStatus: PatchStatus;
 
         // File & Script Info
-        files: FileItem[];
+        files: ReviewFileItem[];
         scripts: ScriptResult[];
 
         // UI State
@@ -613,7 +830,7 @@ snapshot:
     // --- Mock Data ---
 
 
-    const mockFiles: FileItem[] = [
+    const mockFiles: ReviewFileItem[] = [
         { 
             id: '1', 
             path: 'src/core/transaction.ts', 
@@ -921,52 +1138,17 @@ snapshot:
                 return { copyModeLastCopied: 'All Diffs' };
             }),
             
-            // Repair Actions
-            tryRepairFile: () => set(state => {
-                const { selectedItemIndex, files } = state;
-                if (selectedItemIndex < files.length) {
-                    const file = files[selectedItemIndex];
-                    if (file && file.status === 'FAILED') {
-                        // Generate repair prompt and copy to clipboard
-                        const repairPrompt = `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+    // Repair Actions
 
-    Error: ${file.error}
-
-    Strategy: ${file.strategy}
-
-
-    ORIGINAL CONTENT:
-
-    ---
-
-    // ... original file content would be here ...
-
-    ---
-
-
-    FAILED PATCH:
-
-    ---
-
-    ${file.diff || '// ... failed diff would be here ...'}
-
-    ---
-
-
-    Please provide a corrected patch that addresses the error.`;
-
-                        // eslint-disable-next-line no-console
-                        console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
-
-                        // Mock: Update file status to show it's being repaired
-                        const newFiles = [...files];
-                        newFiles[selectedItemIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
-
-                        return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
-                    }
-                }
-                return {};
-            }),
+    tryRepairFile: () => {
+        const { selectedItemIndex, files } = get();
+        if (selectedItemIndex < files.length) {
+            const file = files[selectedItemIndex];
+            if (file && file.status === 'FAILED') {
+                ReviewService.tryRepairFile(file, selectedItemIndex);
+            }
+        }
+    },
             showBulkRepair: () => set(() => ({
                 bodyView: 'bulk_repair' as const,
             })),
@@ -985,37 +1167,8 @@ snapshot:
                     }
                         
                     case 2: { // Attempt Bulk Re-apply
-                        const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
-                        if (failedFileIds.size === 0) {
-                            set({ bodyView: 'none' });
-                            break;
-                        }
-
-                        set(state => ({
-                            files: state.files.map(file =>
-                                failedFileIds.has(file.id)
-                                    ? { ...file, status: 'RE_APPLYING' as const }
-                                    : file,
-                            ),
-                            bodyView: 'none' as const,
-                        }));
-
-                        await sleep(1500); // Simulate re-apply
-
-                        // Mock a mixed result
-                        let first = true;
-                        set(state => ({
-                            files: state.files.map(file => {
-                                if (failedFileIds.has(file.id)) {
-                                    if (first) {
-                                        first = false;
-                                        return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
-                                    }
-                                    return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
-                                }
-                                return file;
-                            }),
-                        }));
+                        set({ bodyView: 'none' as const });
+                        await ReviewService.runBulkReapply();
                         break;
                     }
                         
@@ -1098,10 +1251,10 @@ snapshot:
             },
         },
     }));
-approved: true
+approved: false
 linesAdded: null
 linesRemoved: null
 linesDifference: null
-gitCommittedAt: '2025-09-22T06:42:27.279Z'
-status: committed
-id: 48
+gitCommittedAt: null
+status: undone
+id: 50

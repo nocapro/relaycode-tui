@@ -1,4 +1,5 @@
-import { useDashboardStore, type Transaction } from '../stores/dashboard.store';
+import { useDashboardStore } from '../stores/dashboard.store';
+import type { Transaction } from '../types/transaction.types';
 import { sleep } from '../utils';
 
 const generateCommitMessage = (transactions: Transaction[]): string => {

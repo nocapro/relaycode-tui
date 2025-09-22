@@ -1,9 +1,11 @@
-import { useReviewStore, type FileItem, type ApplyStep } from '../stores/review.store';
+import { useReviewStore } from '../stores/review.store';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
+import type { ApplyStep } from '../types/review.types';
+import type { ReviewFileItem } from '../types/file.types';
 
-const generateBulkRepairPrompt = (files: FileItem[]): string => {
+const generateBulkRepairPrompt = (files: ReviewFileItem[]): string => {
     const failedFiles = files.filter(f => f.status === 'FAILED');
     return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
 
@@ -31,7 +33,7 @@ const generateHandoffPrompt = (
     hash: string,
     message: string,
     reasoning: string,
-    files: FileItem[],
+    files: ReviewFileItem[],
 ): string => {
     const successfulFiles = files.filter(f => f.status === 'APPROVED');
     const failedFiles = files.filter(f => f.status === 'FAILED');
@@ -116,7 +118,7 @@ const runApplySimulation = async (scenario: 'success' | 'failure') => {
     }
 };
 
-const generateSingleFileRepairPrompt = (file: FileItem): string => {
+const generateSingleFileRepairPrompt = (file: ReviewFileItem): string => {
     return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
 
 Error: ${file.error}
@@ -135,7 +137,7 @@ ${file.diff || '// ... failed diff would be here ...'}
 Please provide a corrected patch that addresses the error.`;
 };
 
-const tryRepairFile = (file: FileItem, selectedIndex: number): void => {
+const tryRepairFile = (file: ReviewFileItem, selectedIndex: number): void => {
     const repairPrompt = generateSingleFileRepairPrompt(file);
     // In a real app: clipboardy.writeSync(repairPrompt)
     // eslint-disable-next-line no-console

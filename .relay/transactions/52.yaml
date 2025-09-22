@@ -1,0 +1,1032 @@
+uuid: a3a4b67f-2e8c-4a3d-810a-6058e72d2e14
+projectId: relaycode-tui
+createdAt: '2025-09-22T07:03:45.654Z'
+gitCommitMsg: >-
+  refactor: extract ui state and component types
+
+  This commit completes the type extraction process by moving UI-specific state
+  and component-related types from their local scopes into the centralized
+  `src/types` directory.
+
+  - Created `dashboard.types.ts`, `transaction-detail.types.ts`,
+  `transaction-history.types.ts`, and `debug.types.ts`. - Moved UI state types
+  like `DashboardStatus`, `HistoryViewMode`, `NavigatorSection`, and
+  `DetailBodyView` into these new files. - Updated the corresponding stores and
+  hooks to import these types, cleaning up their local definitions and
+  completing the centralization of type definitions.
+promptSummary: >-
+  Continue refactoring by extracting UI-specific state types from stores and
+  hooks into their own dedicated files in `src/types`.
+reasoning:
+  - >-
+    This is the next phase of our type refactoring. I'm focusing on extracting
+    UI-specific state types that were previously defined inside individual
+    stores and hooks. This will complete the process of centralizing all shared
+    type definitions.
+  - '### Phase 3: Extracting UI State and Component Types'
+  - '1.  **New Type Files Created**:'
+  - >-
+    *   `src/types/dashboard.types.ts`: Created to hold the `DashboardStatus`
+    type, which defines the main states of the dashboard view.
+  - >-
+    *   `src/types/transaction-detail.types.ts`: Created for types specific to
+    the transaction detail screen, such as `NavigatorSection` and
+    `DetailBodyView` (renamed from `BodyView` for clarity).
+  - >-
+    *   `src/types/transaction-history.types.ts`: Created to define the
+    `HistoryViewMode` for the transaction history screen.
+  - >-
+    *   `src/types/debug.types.ts`: A small utility type file for the `MenuItem`
+    interface used by the debug menu.
+  - '2.  **Stores and Hooks Refactored**:'
+  - >-
+    *   `dashboard.store.ts`, `transaction-detail.store.ts`, and
+    `transaction-history.store.ts` have been updated to remove their local UI
+    state type definitions and import them from the new, dedicated files.
+  - '*   `useDebugMenu.tsx` has been updated to import the `MenuItem` interface.'
+  - >-
+    This concludes the type extraction process, resulting in a well-organized
+    `src/types` directory where all domain and UI state types are clearly
+    defined and easily accessible.
+  - 'Here are the changes:'
+  - First, I will create the new type files.
+  - >-
+    Now, I will refactor the stores and hooks to use these new centralized
+    types.
+operations:
+  - type: write
+    path: src/types/dashboard.types.ts
+    content: >-
+      export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+      'APPROVING';
+    patchStrategy: replace
+  - type: write
+    path: src/types/transaction-detail.types.ts
+    content: >-
+      export type NavigatorSection = 'PROMPT' | 'REASONING' | 'FILES';
+
+      export type DetailBodyView = 'PROMPT' | 'REASONING' | 'FILES_LIST' |
+      'DIFF_VIEW' | 'COPY_MODE' | 'REVERT_CONFIRM' | 'NONE';
+    patchStrategy: replace
+  - type: write
+    path: src/types/transaction-history.types.ts
+    content: export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' | 'BULK_ACTIONS';
+    patchStrategy: replace
+  - type: write
+    path: src/types/debug.types.ts
+    content: |-
+      export interface MenuItem {
+          title: string;
+          action: () => void;
+      }
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -7,13 +7,8 @@
+       import { useCommitStore } from '../stores/commit.store';
+       import { useTransactionDetailStore } from '../stores/transaction-detail.store';
+       import { useTransactionHistoryStore } from '../stores/transaction-history.store';
+      +import type { MenuItem } from '../types/debug.types';
+       
+      -export interface MenuItem {
+      -    title: string;
+      -    action: () => void;
+      -}
+      -
+       export const useDebugMenu = () => {
+           const [selectedIndex, setSelectedIndex] = useState(0);
+           const appActions = useAppStore(s => s.actions);
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: >+
+      --- src/stores/dashboard.store.ts
+
+      +++ src/stores/dashboard.store.ts
+
+      @@ -2,18 +2,9 @@
+       import { DashboardService } from '../services/dashboard.service';
+       import type { Transaction, TransactionStatus } from '../types/transaction.types';
+      -
+
+      -// --- Types ---
+
+      -export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' |
+      'FAILED' | 'REVERTED' | 'IN-PROGRESS' | 'HANDOFF';
+
+      -
+
+      -export interface Transaction {
+
+      -    id: string;
+
+      -    timestamp: number;
+
+      -    status: TransactionStatus;
+
+      -    hash: string;
+
+      -    message: string;
+
+      -    error?: string;
+
+      -}
+
+      -
+
+      -export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE'
+      | 'APPROVING';
+
+      +import type { DashboardStatus } from '../types/dashboard.types';
+       
+       // --- Initial State (for simulation) ---
+       const createInitialTransactions = (): Transaction[] => [
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction-detail.store.ts
+    content: >+
+      --- src/stores/transaction-detail.store.ts
+
+      +++ src/stores/transaction-detail.store.ts
+
+      @@ -3,22 +3,13 @@
+       import { TransactionService } from '../services/transaction.service';
+       import type { Transaction } from '../types/transaction.types';
+       import type { FileChange as FileDetail } from '../types/file.types';
+      +import type { NavigatorSection, DetailBodyView } from
+      '../types/transaction-detail.types';
+       
+      -// Types from README
+
+      -export type NavigatorSection = 'PROMPT' | 'REASONING' | 'FILES';
+
+      -export type BodyView = 'PROMPT' | 'REASONING' | 'FILES_LIST' |
+      'DIFF_VIEW' | 'COPY_MODE' | 'REVERT_CONFIRM' | 'NONE';
+
+      -
+       interface TransactionDetailState {
+           // Data
+           transaction: Transaction | null;
+           prompt: string;
+           reasoning: string;
+           files: FileDetail[];
+           
+           // UI State
+           navigatorFocus: NavigatorSection | 'FILES_LIST';
+           expandedSection: NavigatorSection | null;
+           selectedFileIndex: number;
+      -    bodyView: BodyView;
+
+      +    bodyView: DetailBodyView;
+           copyModeSelectionIndex: number;
+           copyModeSelections: Record<string, boolean>;
+           copyModeLastCopied: string | null;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction-history.store.ts
+    content: >+
+      --- src/stores/transaction-history.store.ts
+
+      +++ src/stores/transaction-history.store.ts
+
+      @@ -2,9 +2,8 @@
+       import { TransactionService } from '../services/transaction.service';
+       import type { HistoryTransaction } from '../types/transaction.types';
+       import type { FileChange } from '../types/file.types';
+      +import type { HistoryViewMode } from
+      '../types/transaction-history.types';
+       
+      -export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' |
+      'BULK_ACTIONS';
+
+      -
+       // Omit 'actions' from state type for partial updates
+       type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
+       
+
+    patchStrategy: standard-diff
+snapshot:
+  src/types/dashboard.types.ts: null
+  src/types/transaction-detail.types.ts: null
+  src/types/transaction-history.types.ts: null
+  src/types/debug.types.ts: null
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+
+    export interface MenuItem {
+        title: string;
+        action: () => void;
+    }
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const reviewActions = useReviewStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleDiffView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleReasoningView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.toggleCopyMode();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.simulateSuccessScenario();
+                    reviewActions.toggleScriptView();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.showBulkRepair();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.simulateFailureScenario();
+                    reviewActions.executeBulkRepairOption(3); // Option 3 is Handoff
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => Math.max(0, i - 1));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+                return;
+            }
+            if (key.escape || (key.ctrl && input === 'b')) {
+                appActions.toggleDebugMenu();
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import type { Transaction, TransactionStatus } from
+    '../types/transaction.types';
+
+
+    // --- Types ---
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'APPROVING';
+
+
+    // --- Initial State (for simulation) ---
+
+    const createInitialTransactions = (): Transaction[] => [
+        { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+        { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+        { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+        { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+        { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+        { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+    ];
+
+
+    // --- Store Interface ---
+
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus; // To handle cancel from confirmation
+        transactions: Transaction[];
+        selectedTransactionIndex: number;
+        showHelp: boolean;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            toggleHelp: () => void;
+            setStatus: (status: DashboardStatus) => void; // For debug menu
+            updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        };
+    }
+
+
+    // --- Store Implementation ---
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        transactions: createInitialTransactions(),
+        selectedTransactionIndex: 0,
+        showHelp: false,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => ({
+                selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1),
+            })),
+            moveSelectionDown: () => set(state => ({
+                selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1),
+            })),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+            setStatus: (status) => set({ status }),
+            updateTransactionStatus: (id, status) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx =>
+                        tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                    ),
+                }));
+                // After updating, move selection to the updated transaction
+                const index = get().transactions.findIndex(tx => tx.id === id);
+                if (index !== -1) set({ selectedTransactionIndex: index });
+            },
+
+            confirmAction: async () => {
+                const { status, previousStatus } = get();
+                if (status === 'CONFIRM_APPROVE') {
+                    set({ status: 'APPROVING' });
+
+                    await DashboardService.approveAll();
+
+                    set({ status: previousStatus });
+                }
+            },
+        },
+    }));
+  src/stores/transaction-detail.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useDashboardStore } from './dashboard.store';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import type { Transaction } from '../types/transaction.types';
+
+    import type { FileChange as FileDetail } from '../types/file.types';
+
+
+    // Types from README
+
+    export type NavigatorSection = 'PROMPT' | 'REASONING' | 'FILES';
+
+    export type BodyView = 'PROMPT' | 'REASONING' | 'FILES_LIST' | 'DIFF_VIEW' |
+    'COPY_MODE' | 'REVERT_CONFIRM' | 'NONE';
+
+
+    interface TransactionDetailState {
+        // Data
+        transaction: Transaction | null;
+        prompt: string;
+        reasoning: string;
+        files: FileDetail[];
+        
+        // UI State
+        navigatorFocus: NavigatorSection | 'FILES_LIST';
+        expandedSection: NavigatorSection | null;
+        selectedFileIndex: number;
+        bodyView: BodyView;
+        copyModeSelectionIndex: number;
+        copyModeSelections: Record<string, boolean>;
+        copyModeLastCopied: string | null;
+
+        // Actions
+        actions: {
+            loadTransaction: (transactionId: string) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            handleEnterOrRight: () => void;
+            handleEscapeOrLeft: () => void;
+            toggleCopyMode: () => void;
+            toggleRevertConfirm: () => void;
+            copyModeNavigateUp: () => void;
+            copyModeNavigateDown: () => void;
+            copyModeToggleSelection: () => void;
+            copyModeExecuteCopy: () => void;
+            confirmRevert: () => void;
+        }
+    }
+
+
+    // Mock data based on README
+
+    const mockTransactionData = {
+        prompt: 'The user requested to add more robust error handling to the `restoreSnapshot` function. Specifically, it should not halt on the first error but instead attempt all file restorations and then report a summary of any failures.',
+        reasoning: `1. The primary goal was to make the rollback functionality in \`restoreSnapshot\` more robust. The previous implementation used a simple for-loop which would halt on the first error, leaving the project in a partially restored state.
+
+    2. I opted for a \`Promise.all\` approach to run file restorations in
+    parallel. This improves performance slightly but, more importantly, ensures
+    all restoration attempts are completed, even if some fail.
+
+
+    3. An \`restoreErrors\` array was introduced to collect any exceptions that
+    occur during the process. If this array is not empty after the
+    \`Promise.all\` completes, a comprehensive error is thrown, informing the
+    user exactly which files failed to restore. This provides much better
+    diagnostics.`,
+        files: [
+            { id: '1', path: 'src/core/transaction.ts', type: 'MOD' as const, linesAdded: 18, linesRemoved: 5, diff: `   export const restoreSnapshot = async (snapshot: FileSnapshot, ...): ... => {
+         ...
+    -    for (const [filePath, content] of entries) {
+
+    -        if (content === null) {
+
+    -            await deleteFile(filePath, cwd);
+
+    -        }
+
+    -    }
+
+    +    const restoreErrors: { path: string, error: unknown }[] = [];
+
+    +
+
+    +    await Promise.all(entries.map(async ([filePath, content]) => {
+
+    +        try {
+
+    +          if (content === null) { ... }
+
+    +        } catch (error) {
+
+    +          restoreErrors.push({ path: filePath, error });
+
+    +        }
+
+    +    }));
+
+    +
+
+    +    if (restoreErrors.length > 0) { ... }
+       }` },
+            { id: '2', path: 'src/utils/logger.ts', type: 'MOD' as const, linesAdded: 7, linesRemoved: 3, diff: '... diff content for logger.ts ...' },
+            { id: '3', path: 'src/utils/old-helper.ts', type: 'DEL' as const, linesAdded: 0, linesRemoved: 0, diff: '... diff content for old-helper.ts ...' },
+        ],
+    };
+
+
+    const navigatorOrder: NavigatorSection[] = ['PROMPT', 'REASONING', 'FILES'];
+
+    const copyOptionsList = [
+        'Git Message', 'Prompt', 'Reasoning', `All Diffs (${mockTransactionData.files.length} files)`, `Diff for: ${mockTransactionData.files[0]?.path}`, 'UUID', 'Full YAML representation',
+    ];
+
+
+    export const useTransactionDetailStore =
+    create<TransactionDetailState>((set, get) => ({
+        transaction: null,
+        prompt: '',
+        reasoning: '',
+        files: [],
+        
+        navigatorFocus: 'PROMPT',
+        expandedSection: null,
+        selectedFileIndex: 0,
+        bodyView: 'NONE',
+        copyModeSelectionIndex: 0,
+        copyModeSelections: { 'Git Message': true, 'Reasoning': true }, // Default selections from readme
+        copyModeLastCopied: null,
+
+        actions: {
+            loadTransaction: (transactionId) => {
+                const { transactions } = useDashboardStore.getState();
+                const transaction = transactions.find(tx => tx.id === transactionId);
+                if (transaction) {
+                    set({
+                        transaction,
+                        ...mockTransactionData,
+                        // Reset UI state
+                        navigatorFocus: 'PROMPT',
+                        expandedSection: null,
+                        selectedFileIndex: 0,
+                        bodyView: 'NONE',
+                    });
+                }
+            },
+            navigateUp: () => {
+                const { navigatorFocus, selectedFileIndex } = get();
+                if (navigatorFocus === 'FILES_LIST') {
+                    set({ selectedFileIndex: Math.max(0, selectedFileIndex - 1) });
+                } else {
+                    const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
+                    if (currentIndex > 0) {
+                        set({ navigatorFocus: navigatorOrder[currentIndex - 1] });
+                    }
+                }
+            },
+            navigateDown: () => {
+                const { navigatorFocus, selectedFileIndex, files } = get();
+                if (navigatorFocus === 'FILES_LIST') {
+                    set({ selectedFileIndex: Math.min(files.length - 1, selectedFileIndex + 1) });
+                } else {
+                    const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
+                    if (currentIndex < navigatorOrder.length - 1) {
+                        set({ navigatorFocus: navigatorOrder[currentIndex + 1] });
+                    }
+                }
+            },
+            handleEnterOrRight: () => {
+                const { navigatorFocus, expandedSection } = get();
+
+                if (navigatorFocus === 'FILES_LIST') {
+                    // Already in file list, now show diff
+                    set({ bodyView: 'DIFF_VIEW' });
+                    return;
+                }
+
+                if (expandedSection === navigatorFocus) {
+                    // Section is already expanded, handle nested navigation
+                    if (navigatorFocus === 'FILES') {
+                        set({ navigatorFocus: 'FILES_LIST', bodyView: 'FILES_LIST' });
+                    }
+                    return;
+                }
+
+                // Expand the focused section
+                set({ expandedSection: navigatorFocus });
+
+                switch(navigatorFocus) {
+                    case 'PROMPT':
+                        set({ bodyView: 'PROMPT' });
+                        break;
+                    case 'REASONING':
+                        set({ bodyView: 'REASONING' });
+                        break;
+                    case 'FILES':
+                        set({ bodyView: 'FILES_LIST' });
+                        break;
+                }
+            },
+            handleEscapeOrLeft: () => {
+                const { navigatorFocus, expandedSection, bodyView } = get();
+
+                if (bodyView === 'DIFF_VIEW') {
+                    set({ bodyView: 'FILES_LIST' }); // Go back from diff to file list
+                    return;
+                }
+
+                if (navigatorFocus === 'FILES_LIST') {
+                    set({ navigatorFocus: 'FILES', bodyView: 'NONE' }); // Go back from file list to files section
+                    return;
+                }
+
+                // If a section is expanded, collapse it
+                if (expandedSection) {
+                    set({ expandedSection: null, bodyView: 'NONE' });
+                    return;
+                }
+            },
+            toggleCopyMode: () => set(state => {
+                if (state.bodyView === 'COPY_MODE') {
+                    return { bodyView: 'NONE' };
+                }
+                return {
+                    bodyView: 'COPY_MODE',
+                    copyModeSelectionIndex: 0,
+                    copyModeLastCopied: null,
+                };
+            }),
+            toggleRevertConfirm: () => set(state => ({
+                bodyView: state.bodyView === 'REVERT_CONFIRM' ? 'NONE' : 'REVERT_CONFIRM',
+            })),
+            copyModeNavigateUp: () => set(state => ({
+                copyModeSelectionIndex: Math.max(0, state.copyModeSelectionIndex - 1),
+            })),
+            copyModeNavigateDown: () => set(state => ({
+                copyModeSelectionIndex: Math.min(copyOptionsList.length - 1, state.copyModeSelectionIndex + 1),
+            })),
+            copyModeToggleSelection: () => set(state => {
+                const currentOption = copyOptionsList[state.copyModeSelectionIndex];
+                if (!currentOption) return {};
+
+                const newSelections = { ...state.copyModeSelections };
+                newSelections[currentOption] = !newSelections[currentOption];
+                return { copyModeSelections: newSelections };
+            }),
+            copyModeExecuteCopy: () => {
+                // Mock copy to clipboard
+                const { copyModeSelections } = get();
+                const selectedItems = Object.keys(copyModeSelections).filter(key => copyModeSelections[key]);
+                const message = `Copied ${selectedItems.length} items to clipboard.`;
+                // In real app: clipboardy.writeSync(...)
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Mock copy: ${selectedItems.join(', ')}`);
+                set({ copyModeLastCopied: message });
+            },
+            confirmRevert: () => {
+                const { transaction } = get();
+                if (!transaction) return;
+                TransactionService.revertTransaction(transaction.id);
+                set({ bodyView: 'NONE' });
+            },
+        },
+    }));
+  src/stores/transaction-history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import type { HistoryTransaction } from '../types/transaction.types';
+
+    import type { FileChange } from '../types/file.types';
+
+
+    export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' | 'BULK_ACTIONS';
+
+
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
+
+
+    interface TransactionHistoryState {
+        transactions: HistoryTransaction[];
+        mode: HistoryViewMode;
+        selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
+        expandedIds: Set<string>; // holds ids of expanded items
+        filterQuery: string;
+        selectedForAction: Set<string>; // set of transaction IDs
+        copyModeSelections: Set<string>;
+        lastCopiedMessage: string | null;
+
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            expandOrDrillDown: () => void;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            toggleCopySelection: (field: string) => void;
+            executeCopy: () => void;
+            prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+        }
+    }
+
+
+    export const getVisibleItemPaths = (transactions: HistoryTransaction[],
+    expandedIds: Set<string>): string[] => {
+        const paths: string[] = [];
+        for (const tx of transactions) {
+            paths.push(tx.id);
+            if (expandedIds.has(tx.id)) {
+                for (const file of tx.files) {
+                    paths.push(`${tx.id}/${file.id}`);
+                }
+            }
+        }
+        return paths;
+    };
+
+
+    // --- Store ---
+
+    export const useTransactionHistoryStore =
+    create<TransactionHistoryState>((set, get) => ({
+        transactions: [],
+        mode: 'LIST',
+        selectedItemPath: 'tx-0',
+        expandedIds: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        copyModeSelections: new Set(['Git Messages', 'Reasonings']),
+        lastCopiedMessage: null,
+
+        actions: {
+            load: (initialState) => {
+                const transactions = TransactionService.createMockTransactions();
+                set({
+                    transactions,
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: 'LIST',
+                    expandedIds: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    copyModeSelections: new Set(['Git Messages', 'Reasonings']),
+                    lastCopiedMessage: null,
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { transactions, expandedIds, selectedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex > 0) {
+                    set({ selectedItemPath: visibleItems[currentIndex - 1] });
+                }
+            },
+            navigateDown: () => {
+                const { transactions, expandedIds, selectedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex < visibleItems.length - 1) {
+                    set({ selectedItemPath: visibleItems[currentIndex + 1] });
+                }
+            },
+            expandOrDrillDown: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (!newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.add(selectedItemPath);
+                }
+                return { expandedIds: newExpandedIds };
+            }),
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    // If it's expanded, collapse it
+                    newExpandedIds.delete(selectedItemPath);
+                    
+                    // Also collapse children
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+
+                    return { expandedIds: newExpandedIds };
+                } else if (selectedItemPath.includes('/')) {
+                    // If it's a file, move selection to parent transaction
+                    const parentId = selectedItemPath.split('/')[0];
+                    return { selectedItemPath: parentId || '' };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = selectedItemPath.split('/')[0];
+                if (!txId) return {};
+
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode, lastCopiedMessage: null }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                // In a real app, this would filter `transactions`.
+                // For the demo, we just go back to LIST mode.
+                set({ mode: 'LIST' });
+            },
+            toggleCopySelection: (field) => set(state => {
+                const newSelections = new Set(state.copyModeSelections);
+                if (newSelections.has(field)) {
+                    newSelections.delete(field);
+                } else {
+                    newSelections.add(field);
+                }
+                return { copyModeSelections: newSelections };
+            }),
+            executeCopy: () => {
+                 // Mock copy
+                const { selectedForAction, copyModeSelections } = get();
+                const message = `Copied ${Array.from(copyModeSelections).join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
+                // In real app: clipboardy.writeSync(...)
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD MOCK] ${message}`);
+                set({ lastCopiedMessage: message });
+            },
+            prepareDebugState: (stateName) => {
+                switch (stateName) {
+                    case 'l1-drill':
+                        get().actions.load({ expandedIds: new Set(['tx-0']), selectedItemPath: 'tx-0' });
+                        break;
+                    case 'l2-drill':
+                        get().actions.load({ expandedIds: new Set(['tx-0', 'tx-0/0-1']), selectedItemPath: 'tx-0/0-1' });
+                        break;
+                    case 'filter':
+                        get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
+                        break;
+                    case 'copy':
+                        get().actions.load({
+                            mode: 'COPY',
+                            selectedForAction: new Set(['tx-0', 'tx-2']),
+                            copyModeSelections: new Set(['Git Messages', 'Diffs', 'UUIDs']),
+                        });
+                        break;
+                    case 'bulk':
+                        get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                        break;
+                }
+            },
+        },
+    }));
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 52

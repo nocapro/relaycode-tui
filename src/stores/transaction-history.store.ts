@@ -1,33 +1,8 @@
 import { create } from 'zustand';
 import { TransactionService } from '../services/transaction.service';
-
-// --- Types ---
-
-export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
-export interface FileChange {
-    id: string;
-    path: string;
-    type: FileChangeType;
-    diff: string;
-    linesAdded: number;
-    linesRemoved: number;
-}
-
-export type TransactionStatus = 'Committed' | 'Handoff' | 'Reverted';
-export interface HistoryTransaction {
-    id: string;
-    hash: string;
-    timestamp: number;
-    status: TransactionStatus;
-    message: string;
-    files: FileChange[];
-    stats: {
-        files: number;
-        linesAdded: number;
-        linesRemoved: number;
-    };
-}
-export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' | 'BULK_ACTIONS';
+import type { HistoryTransaction } from '../types/transaction.types';
+import type { FileChange } from '../types/file.types';
+import type { HistoryViewMode } from '../types/transaction-history.types';
 
 // Omit 'actions' from state type for partial updates
 type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;

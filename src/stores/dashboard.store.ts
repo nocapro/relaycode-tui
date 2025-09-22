@@ -1,19 +1,7 @@
 import { create } from 'zustand';
 import { DashboardService } from '../services/dashboard.service';
-
-// --- Types ---
-export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS' | 'HANDOFF';
-
-export interface Transaction {
-    id: string;
-    timestamp: number;
-    status: TransactionStatus;
-    hash: string;
-    message: string;
-    error?: string;
-}
-
-export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'APPROVING';
+import type { Transaction, TransactionStatus } from '../types/transaction.types';
+import type { DashboardStatus } from '../types/dashboard.types';
 
 // --- Initial State (for simulation) ---
 const createInitialTransactions = (): Transaction[] => [

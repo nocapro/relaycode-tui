@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-
-export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' | 'review-processing' | 'git-commit' | 'transaction-detail' | 'transaction-history';
+import type { AppScreen } from '../types/app.types';
 
 interface AppState {
     isDebugMenuOpen: boolean;
