@@ -1,8 +1,92 @@
 ===
 
-tsx files only for renders, so please extract out all hooks to [entity].hook.tsx files
+beside debug menu of ctrl+b we want more screen named debug log so user can know the system debug log of what system activities behind is happening, so user has knowledge like why certain clipboard not detected etc
 
 ===
+
+should dim another layout area when screen is asking for user action like what to copy, confirmation, etc
+
+===
+
+on terminal widht height size changes, UI should be responsive. so not appear broken
+
+===
+
+responsive view of action buttons like
+
+(↑↓) Nav · (Enter) Review · (L)og · (A)pprove All ·
+(C)ommit All · (P)ause · (Q)uit
+
+should aware of terminal widht so know when to render as horizontal spread and vertical spread
+
+===
+
+review screen
+
+on certain file patch failed user has options to repair or bulk repair.. I want on certain file patch rejected user should has options to `something` or bulk `something` so they can also get another clipboard to paste to llm and relaycode waiting for new patch for that particular.
+
+===
+
+dashboard screen:
+
+- remove - in timeago
+
+- add empty state of event stream screen to debug menu
+
+- just like transaction history screen, event stream item should also have drilling arrow left right feature to see useful stats, files, also actions can be take by user. only one event stream item can be expanded
+
+===
+
+update review screen
+
+- beside click D, click enter also show the diff
+
+- navigating up down is a bit hustle, I think two active area switching is the problem
+
+- header stats should be the total aggregation, not individual item
+
+- add arrow down up navigation for bulk repair action option item
+
+===
+
+update transaction history screen
+
+- should also can drilling prompt, reasoning, full commit message
+
+- checkbox should only appear while user select at least one item
+
+- show useful status stats to header
+
+
+- we need loading indicator spinner while user drilling loads something like load diffs etc
+
+===
+
+- should streamline the esc and quit behaviour accross screen for consistency
+
+- implement drilling left righ arrow
+
+===
+
+make sure the screens flows all connected, like navigation to another screens is working, etc
+
+===
+
+tsx files only for renders so please extract out all simulated backend logic to [entity].service.ts files
+
+===
+
+tsx files only for renders, so please extract out all hooks to [entity].hook.tsx files.
+
+give me transaction in two phase, now please go on for first phase
+
+===
+
+ implement dynamically creating a scrollable viewport based on the terminal size to more screens and areas
+
+dont forget final checks yaml
+
+=== DONE
 
 paginated scroll for more list not working on transaction-history-screen and dashboard screen
 

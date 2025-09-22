@@ -45,12 +45,12 @@
     "useGitignore": true,
     "useDefaultPatterns": true,
     "customPatterns": [
-      "src/components/GlobalHelpScreen.tsx",
+      // "src/components/GlobalHelpScreen.tsx",
       // "src/components/DashboardScreen.tsx",
-      "src/components/InitializationScreen.tsx",
-      "src/components/SplashScreen.tsx",
-      "src/components/TransactionHistoryScreen.tsx",
-      "src/components/GitCommitScreen.tsx"
+      // "src/components/InitializationScreen.tsx",
+      // "src/components/SplashScreen.tsx",
+      // "src/components/TransactionHistoryScreen.tsx",
+      // "src/components/GitCommitScreen.tsx"
     ]
   },
   "security": {

@@ -5,11 +5,16 @@ src/
     DashboardScreen.tsx
     DebugMenu.tsx
     DiffScreen.tsx
+    GitCommitScreen.tsx
+    GlobalHelpScreen.tsx
+    InitializationScreen.tsx
     ReasonScreen.tsx
     ReviewProcessingScreen.tsx
     ReviewScreen.tsx
     Separator.tsx
+    SplashScreen.tsx
     TransactionDetailScreen.tsx
+    TransactionHistoryScreen.tsx
   stores/
     app.store.ts
     commit.store.ts
@@ -80,6 +85,72 @@ const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
 };
 
 export default DiffScreen;
+```
+
+## File: src/components/GitCommitScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text, useInput } from 'ink';
+import Spinner from 'ink-spinner';
+import { useCommitStore } from '../stores/commit.store';
+import { useAppStore } from '../stores/app.store';
+import Separator from './Separator';
+
+const GitCommitScreen = () => {
+    const { transactionsToCommit, finalCommitMessage, isCommitting } = useCommitStore();
+    const { commit } = useCommitStore(s => s.actions);
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    useInput((input, key) => {
+        if (isCommitting) return;
+
+        if (key.escape) {
+            showDashboardScreen();
+        }
+        if (key.return) {
+            commit().then(() => {
+                showDashboardScreen();
+            });
+        }
+    });
+
+    const transactionLines = transactionsToCommit.map(tx => (
+        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+    ));
+
+    const footer = isCommitting
+        ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+        : <Text>(Enter) Confirm & Commit      (Esc) Cancel</Text>;
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode git commit</Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text bold>TRANSACTIONS INCLUDED</Text>
+                    {transactionLines}
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text bold>FINAL COMMIT MESSAGE</Text>
+                <Box marginTop={1}>
+                    <Text>{finalCommitMessage}</Text>
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} paddingX={2}>
+                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+            </Box>
+            <Separator />
+            {footer}
+        </Box>
+    );
+};
+
+export default GitCommitScreen;
 ```
 
 ## File: src/components/ReviewProcessingScreen.tsx
@@ -235,255 +306,6 @@ export const useCommitStore = create<CommitState>((set, get) => ({
 }));
 ```
 
-## File: src/stores/transaction-history.store.ts
-```typescript
-import { create } from 'zustand';
-
-// --- Types ---
-
-export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
-export interface FileChange {
-    id: string;
-    path: string;
-    type: FileChangeType;
-    diff: string;
-    linesAdded: number;
-    linesRemoved: number;
-}
-
-export type TransactionStatus = 'Committed' | 'Handoff' | 'Reverted';
-export interface HistoryTransaction {
-    id: string;
-    hash: string;
-    timestamp: number;
-    status: TransactionStatus;
-    message: string;
-    files: FileChange[];
-    stats: {
-        files: number;
-        linesAdded: number;
-        linesRemoved: number;
-    };
-}
-export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' | 'BULK_ACTIONS';
-
-// Omit 'actions' from state type for partial updates
-type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
-
-interface TransactionHistoryState {
-    transactions: HistoryTransaction[];
-    mode: HistoryViewMode;
-    selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
-    expandedIds: Set<string>; // holds ids of expanded items
-    filterQuery: string;
-    selectedForAction: Set<string>; // set of transaction IDs
-    lastCopiedMessage: string | null;
-
-    actions: {
-        load: (initialState?: Partial<HistoryStateData>) => void;
-        navigateDown: () => void;
-        navigateUp: () => void;
-        expandOrDrillDown: () => void;
-        collapseOrBubbleUp: () => void;
-        toggleSelection: () => void;
-        setMode: (mode: HistoryViewMode) => void;
-        setFilterQuery: (query: string) => void;
-        applyFilter: () => void;
-        executeCopy: (selections: string[]) => void;
-        prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
-    }
-}
-
-// --- Mock Data ---
-const createMockTransactions = (): HistoryTransaction[] => {
-    const now = Date.now();
-    return Array.from({ length: 42 }, (_, i) => {
-        const status: TransactionStatus = i % 5 === 2 ? 'Handoff' : i % 5 === 3 ? 'Reverted' : 'Committed';
-        const files: FileChange[] = [
-            { id: `${i}-1`, path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 25, linesRemoved: 8, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -45,7 +45,9 @@\n-    for (const [filePath, content] of entries) {\n+    const restoreErrors: { path: string, error: unknown }[] = [];\n...\n...\n...\n...\n-    another line removed' },
-            { id: `${i}-2`, path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 10, linesRemoved: 2, diff: 'diff for logger' },
-            { id: `${i}-3`, path: 'src/utils/old-helper.ts', type: 'DEL', linesAdded: 0, linesRemoved: 30, diff: 'diff for old-helper' },
-        ];
-        const linesAdded = files.reduce((sum, f) => sum + f.linesAdded, 0);
-        const linesRemoved = files.reduce((sum, f) => sum + f.linesRemoved, 0);
-
-        return {
-            id: `tx-${i}`,
-            hash: Math.random().toString(16).slice(2, 10),
-            timestamp: now - i * 24 * 60 * 60 * 1000,
-            status,
-            message: `feat: commit message number ${42 - i}`,
-            files,
-            stats: { files: files.length, linesAdded, linesRemoved },
-        };
-    });
-};
-
-export const getVisibleItemPaths = (transactions: HistoryTransaction[], expandedIds: Set<string>): string[] => {
-    const paths: string[] = [];
-    for (const tx of transactions) {
-        paths.push(tx.id);
-        if (expandedIds.has(tx.id)) {
-            for (const file of tx.files) {
-                paths.push(`${tx.id}/${file.id}`);
-            }
-        }
-    }
-    return paths;
-};
-
-// --- Store ---
-export const useTransactionHistoryStore = create<TransactionHistoryState>((set, get) => ({
-    transactions: [],
-    mode: 'LIST',
-    selectedItemPath: 'tx-0',
-    expandedIds: new Set(),
-    filterQuery: '',
-    selectedForAction: new Set(),
-    lastCopiedMessage: null,
-
-    actions: {
-        load: (initialState) => {
-            const transactions = createMockTransactions();
-            set({
-                transactions,
-                selectedItemPath: transactions[0]?.id || '',
-                mode: 'LIST',
-                expandedIds: new Set(),
-                selectedForAction: new Set(),
-                filterQuery: '',
-                lastCopiedMessage: null,
-                ...initialState,
-            });
-        },
-        navigateUp: () => {
-            const { transactions, expandedIds, selectedItemPath } = get();
-            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
-            const currentIndex = visibleItems.indexOf(selectedItemPath);
-            if (currentIndex > 0) {
-                set({ selectedItemPath: visibleItems[currentIndex - 1] });
-            }
-        },
-        navigateDown: () => {
-            const { transactions, expandedIds, selectedItemPath } = get();
-            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
-            const currentIndex = visibleItems.indexOf(selectedItemPath);
-            if (currentIndex < visibleItems.length - 1) {
-                set({ selectedItemPath: visibleItems[currentIndex + 1] });
-            }
-        },
-        expandOrDrillDown: () => set(state => {
-            const { selectedItemPath, expandedIds } = state;
-            const newExpandedIds = new Set(expandedIds);
-            if (!newExpandedIds.has(selectedItemPath)) {
-                newExpandedIds.add(selectedItemPath);
-            }
-            return { expandedIds: newExpandedIds };
-        }),
-        collapseOrBubbleUp: () => set(state => {
-            const { selectedItemPath, expandedIds } = state;
-            const newExpandedIds = new Set(expandedIds);
-            if (newExpandedIds.has(selectedItemPath)) {
-                // If it's expanded, collapse it
-                newExpandedIds.delete(selectedItemPath);
-                
-                // Also collapse children
-                for (const id of newExpandedIds) {
-                    if (id.startsWith(`${selectedItemPath}/`)) {
-                        newExpandedIds.delete(id);
-                    }
-                }
-
-                return { expandedIds: newExpandedIds };
-            } else if (selectedItemPath.includes('/')) {
-                // If it's a file, move selection to parent transaction
-                const parentId = selectedItemPath.split('/')[0];
-                return { selectedItemPath: parentId || '' };
-            }
-            return {};
-        }),
-        toggleSelection: () => set(state => {
-            const { selectedItemPath, selectedForAction } = state;
-            const txId = selectedItemPath.split('/')[0];
-            if (!txId) return {};
-
-            const newSelection = new Set(selectedForAction);
-            if (newSelection.has(txId)) {
-                newSelection.delete(txId);
-            } else {
-                newSelection.add(txId);
-            }
-            return { selectedForAction: newSelection };
-        }),
-        setMode: (mode) => set({ mode, lastCopiedMessage: null }),
-        setFilterQuery: (query) => set({ filterQuery: query }),
-        applyFilter: () => {
-            // In a real app, this would filter `transactions`.
-            // For the demo, we just go back to LIST mode.
-            set({ mode: 'LIST' });
-        },
-        executeCopy: (selections) => {
-             // Mock copy
-            const { selectedForAction } = get();
-            const message = `Copied ${selections.join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
-            // In real app: clipboardy.writeSync(...)
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD MOCK] ${message}`);
-            set({ lastCopiedMessage: message });
-        },
-        prepareDebugState: (stateName) => {
-            switch (stateName) {
-                case 'l1-drill':
-                    get().actions.load({ expandedIds: new Set(['tx-0']), selectedItemPath: 'tx-0' });
-                    break;
-                case 'l2-drill':
-                    get().actions.load({ expandedIds: new Set(['tx-0', 'tx-0/0-1']), selectedItemPath: 'tx-0/0-1' });
-                    break;
-                case 'filter':
-                    get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
-                    break;
-                case 'copy':
-                    get().actions.load({ mode: 'COPY', selectedForAction: new Set(['tx-0', 'tx-2']) });
-                    break;
-                case 'bulk':
-                    get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });
-                    break;
-            }
-        },
-    },
-}));
-```
-
-## File: src/utils.ts
-```typescript
-import { useState, useEffect } from 'react';
-
-// Utility for simulation
-export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-export const useStdoutDimensions = (): [number, number] => {
-	const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
-
-	useEffect(() => {
-		const updateDimensions = () => {
-			setDimensions({
-				columns: process.stdout.columns || 80,
-				rows: process.stdout.rows || 24,
-			});
-		};
-
-		updateDimensions();
-		process.stdout.on('resize', updateDimensions);
-
-		return () => {
-			process.stdout.off('resize', updateDimensions);
-		};
-	}, []);
-
-	return [dimensions.columns, dimensions.rows];
-};
-```
-
 ## File: eslint.config.js
 ```javascript
 import js from '@eslint/js';
@@ -637,6 +459,63 @@ export default [
 }
 ```
 
+## File: src/components/GlobalHelpScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+const GlobalHelpScreen = () => {
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                paddingX={2}
+                paddingY={1}
+                width="80%"
+            >
+                <Box justifyContent="center" marginBottom={1}>
+                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
+                </Box>
+                <Box flexDirection="column" gap={1}>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">GLOBAL</Text>
+                        <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
+                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (from main screens)</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">DASHBOARD (watch)</Text>
+                        <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                        <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
+                        <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                        <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                        <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
+                        <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
+                        <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
+                    </Box>
+                </Box>
+            </Box>
+            <Box marginTop={1}>
+                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default GlobalHelpScreen;
+```
+
 ## File: src/components/ReasonScreen.tsx
 ```typescript
 import React from 'react';
@@ -663,20 +542,6 @@ const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount = 10 }: Re
 };
 
 export default ReasonScreen;
-```
-
-## File: src/components/Separator.tsx
-```typescript
-import React from 'react';
-import {Text} from 'ink';
-import { useStdoutDimensions } from '../utils';
-
-const Separator = () => {
-	const [columns] = useStdoutDimensions();
-	return <Text>{'─'.repeat(columns || 80)}</Text>;
-};
-
-export default Separator;
 ```
 
 ## File: src/components/TransactionDetailScreen.tsx
@@ -972,6 +837,294 @@ const TransactionDetailScreen = () => {
 };
 
 export default TransactionDetailScreen;
+```
+
+## File: src/components/TransactionHistoryScreen.tsx
+```typescript
+import React, { useState, useMemo, useEffect } from 'react';
+import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
+import { useTransactionHistoryStore, getVisibleItemPaths, type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
+import Separator from './Separator';
+import { useAppStore } from '../stores/app.store';
+import { useStdoutDimensions } from '../utils';
+
+// --- Sub-components ---
+
+const DiffPreview = ({ diff }: { diff: string }) => {
+    const lines = diff.split('\n');
+    const previewLines = lines.slice(0, 5);
+    const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+    return (
+        <Box flexDirection="column" paddingLeft={8}>
+            {previewLines.map((line, i) => {
+                let color = 'white';
+                if (line.startsWith('+')) color = 'green';
+                if (line.startsWith('-')) color = 'red';
+                if (line.startsWith('@@')) color = 'cyan';
+                return <Text key={i} color={color}>{line}</Text>;
+            })}
+            {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+        </Box>
+    );
+};
+
+const FileRow = ({ file, isSelected, isExpanded }: { file: FileChange, isSelected: boolean, isExpanded: boolean }) => {
+    const icon = isExpanded ? '▾' : '▸';
+    const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
+    
+    return (
+        <Box flexDirection="column" paddingLeft={6}>
+            <Text color={isSelected ? 'cyan' : undefined}>
+                {isSelected ? '> ' : '  '}
+                {icon} {typeMap[file.type]} {file.path}
+            </Text>
+            {isExpanded && <DiffPreview diff={file.diff} />}
+        </Box>
+    );
+};
+
+const TransactionRow = ({
+    tx,
+    isSelected,
+    isExpanded,
+    isSelectedForAction,
+}: {
+    tx: HistoryTransaction,
+    isSelected: boolean,
+    isExpanded: boolean,
+    isSelectedForAction: boolean,
+}) => {
+    const icon = isExpanded ? '▾' : '▸';
+    const statusMap = {
+        Committed: <Text color="green">✓ Committed</Text>,
+        Handoff: <Text color="magenta">→ Handoff</Text>,
+        Reverted: <Text color="gray">↩ Reverted</Text>,
+    };
+    const date = new Date(tx.timestamp).toISOString().split('T')[0];
+    const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
+    
+    return (
+        <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+            <Text color={isSelected ? 'cyan' : undefined}>
+                {isSelected ? '> ' : '  '}
+                {selectionIndicator} {icon} {statusMap[tx.status]} · {tx.hash} · {date} · {tx.message}
+            </Text>
+            {isExpanded && (
+                <Box flexDirection="column" paddingLeft={8}>
+                    <Text color="gray">Stats: {tx.stats.files} Files · +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>
+                    <Text>Files:</Text>
+                </Box>
+            )}
+        </Box>
+    );
+};
+
+const CopyMode = () => {
+    const { selectedForAction, lastCopiedMessage } = useTransactionHistoryStore();
+    const { setMode, executeCopy } = useTransactionHistoryStore(s => s.actions);
+    const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
+
+    const toggleField = (field: string) => {
+        const newFields = new Set(selectedFields);
+        if (newFields.has(field)) {
+            newFields.delete(field);
+        } else {
+            newFields.add(field);
+        }
+        setSelectedFields(newFields);
+    };
+    
+    useInput((input, key) => {
+        if (key.escape || input.toLowerCase() === 'c') {
+            setMode('LIST');
+        }
+        if (key.return) {
+            executeCopy(Array.from(selectedFields));
+        }
+        // Basic navigation for demo
+        if (input.toLowerCase() === 'm') toggleField('Git Messages');
+        if (input.toLowerCase() === 'r') toggleField('Reasonings');
+    });
+
+    const fields = [
+        { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
+        { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
+    ];
+
+    return (
+        <Box flexDirection="column" marginY={1}>
+            <Text>Select data to copy from {selectedForAction.size} transactions:</Text>
+            <Box marginY={1}>
+                {fields.map(f => (
+                    <Text key={f.key}>
+                        [{selectedFields.has(f.name) ? 'x' : ' '}] ({f.key}) {f.name.padEnd(15)}
+                    </Text>
+                ))}
+            </Box>
+            {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+        </Box>
+    );
+};
+
+const BulkActionsMode = () => {
+    const { selectedForAction } = useTransactionHistoryStore();
+    const { setMode } = useTransactionHistoryStore(s => s.actions);
+    
+    useInput((input, key) => {
+        if (key.escape) setMode('LIST');
+    });
+
+    return (
+        <Box flexDirection="column" marginY={1}>
+            <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForAction.size} SELECTED ITEMS</Text>
+            <Box marginY={1}>
+                <Text>This action is often irreversible. Are you sure?</Text>
+            </Box>
+            <Text>(1) Revert Selected Transactions</Text>
+            <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+            <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
+            <Text>(Esc) Cancel</Text>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const TransactionHistoryScreen = () => {
+    const [, rows] = useStdoutDimensions();
+    const store = useTransactionHistoryStore();
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const [viewOffset, setViewOffset] = useState(0);
+
+    const visibleItemPaths = useMemo(
+        () => getVisibleItemPaths(store.transactions, store.expandedIds),
+        [store.transactions, store.expandedIds],
+    );
+    const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
+
+    const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+    const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
+
+    useEffect(() => {
+        if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+            setViewOffset(selectedIndex);
+        } else if (selectedIndex >= viewOffset + viewportHeight) {
+            setViewOffset(selectedIndex - viewportHeight + 1);
+        }
+    }, [selectedIndex, viewOffset, viewportHeight]);
+    
+    useInput((input, key) => {
+        if (store.mode === 'FILTER') {
+            if (key.escape) store.actions.setMode('LIST');
+            if (key.return) store.actions.applyFilter();
+            return;
+        }
+        if (store.mode === 'COPY' || store.mode === 'BULK_ACTIONS') return;
+
+        // LIST mode inputs
+        if (key.upArrow) store.actions.navigateUp();
+        if (key.downArrow) store.actions.navigateDown();
+        if (key.rightArrow) store.actions.expandOrDrillDown();
+        if (key.leftArrow) store.actions.collapseOrBubbleUp();
+        if (input === ' ') store.actions.toggleSelection();
+
+        if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
+        if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
+        if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
+        
+        if (key.escape || input.toLowerCase() === 'q') {
+            showDashboardScreen();
+        }
+    });
+
+    const renderFooter = () => {
+        if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>;
+        if (store.mode === 'COPY') return <Text>(M,R,...) Toggle · (Enter) Copy · (C, Esc) Exit</Text>;
+        if (store.mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
+        
+        const actions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
+        if (store.selectedForAction.size > 0) {
+            actions.push('(C)opy', '(B)ulk');
+        }
+        return <Text>{actions.join(' · ')}</Text>;
+    };
+
+    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+    const transactionsInView = useMemo(
+        () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
+        [store.transactions, txIdsInView],
+    );
+    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+    const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
+    const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode transaction history</Text>
+            <Separator />
+
+            <Box>
+                <Text>Filter: </Text>
+                {store.mode === 'FILTER' ? (
+                    <TextInput value={store.filterQuery} onChange={store.actions.setFilterQuery} />
+                ) : (
+                    <Text>{filterStatus}</Text>
+                )}
+                <Text> · {showingStatus} ({store.transactions.length} txns)</Text>
+            </Box>
+
+            <Box flexDirection="column" marginY={1}>
+                {store.mode === 'COPY' && <CopyMode />}
+                {store.mode === 'BULK_ACTIONS' && <BulkActionsMode />}
+
+                {store.mode === 'LIST' && transactionsInView.map(tx => {
+                    const isTxSelected = store.selectedItemPath.startsWith(tx.id);
+                    const isTxExpanded = store.expandedIds.has(tx.id);
+                    const isSelectedForAction = store.selectedForAction.has(tx.id);
+
+                    const showTxRow = pathsInViewSet.has(tx.id);
+
+                    return (
+                        <Box flexDirection="column" key={tx.id}>
+                            {showTxRow && (
+                                <TransactionRow
+                                    tx={tx}
+                                    isSelected={isTxSelected && !store.selectedItemPath.includes('/')}
+                                    isExpanded={isTxExpanded}
+                                    isSelectedForAction={isSelectedForAction}
+                                />
+                            )}
+                            {isTxExpanded && tx.files.map(file => {
+                                if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
+                                const filePath = `${tx.id}/${file.id}`;
+                                const isFileSelected = store.selectedItemPath === filePath;
+                                const isFileExpanded = store.expandedIds.has(filePath);
+                                return (
+                                    <FileRow
+                                        key={file.id}
+                                        file={file}
+                                        isSelected={isFileSelected}
+                                        isExpanded={isFileExpanded}
+                                    />
+                                );
+                            })}
+                        </Box>
+                    );
+                })}
+            </Box>
+
+            <Separator />
+            {renderFooter()}
+        </Box>
+    );
+};
+
+export default TransactionHistoryScreen;
 ```
 
 ## File: src/stores/init.store.ts
@@ -1293,6 +1446,557 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
         },
     },
 }));
+```
+
+## File: src/stores/transaction-history.store.ts
+```typescript
+import { create } from 'zustand';
+
+// --- Types ---
+
+export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
+export interface FileChange {
+    id: string;
+    path: string;
+    type: FileChangeType;
+    diff: string;
+    linesAdded: number;
+    linesRemoved: number;
+}
+
+export type TransactionStatus = 'Committed' | 'Handoff' | 'Reverted';
+export interface HistoryTransaction {
+    id: string;
+    hash: string;
+    timestamp: number;
+    status: TransactionStatus;
+    message: string;
+    files: FileChange[];
+    stats: {
+        files: number;
+        linesAdded: number;
+        linesRemoved: number;
+    };
+}
+export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' | 'BULK_ACTIONS';
+
+// Omit 'actions' from state type for partial updates
+type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
+
+interface TransactionHistoryState {
+    transactions: HistoryTransaction[];
+    mode: HistoryViewMode;
+    selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
+    expandedIds: Set<string>; // holds ids of expanded items
+    filterQuery: string;
+    selectedForAction: Set<string>; // set of transaction IDs
+    lastCopiedMessage: string | null;
+
+    actions: {
+        load: (initialState?: Partial<HistoryStateData>) => void;
+        navigateDown: () => void;
+        navigateUp: () => void;
+        expandOrDrillDown: () => void;
+        collapseOrBubbleUp: () => void;
+        toggleSelection: () => void;
+        setMode: (mode: HistoryViewMode) => void;
+        setFilterQuery: (query: string) => void;
+        applyFilter: () => void;
+        executeCopy: (selections: string[]) => void;
+        prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+    }
+}
+
+// --- Mock Data ---
+const createMockTransactions = (): HistoryTransaction[] => {
+    const now = Date.now();
+    return Array.from({ length: 42 }, (_, i) => {
+        const status: TransactionStatus = i % 5 === 2 ? 'Handoff' : i % 5 === 3 ? 'Reverted' : 'Committed';
+        const files: FileChange[] = [
+            { id: `${i}-1`, path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 25, linesRemoved: 8, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -45,7 +45,9 @@\n-    for (const [filePath, content] of entries) {\n+    const restoreErrors: { path: string, error: unknown }[] = [];\n...\n...\n...\n...\n-    another line removed' },
+            { id: `${i}-2`, path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 10, linesRemoved: 2, diff: 'diff for logger' },
+            { id: `${i}-3`, path: 'src/utils/old-helper.ts', type: 'DEL', linesAdded: 0, linesRemoved: 30, diff: 'diff for old-helper' },
+        ];
+        const linesAdded = files.reduce((sum, f) => sum + f.linesAdded, 0);
+        const linesRemoved = files.reduce((sum, f) => sum + f.linesRemoved, 0);
+
+        return {
+            id: `tx-${i}`,
+            hash: Math.random().toString(16).slice(2, 10),
+            timestamp: now - i * 24 * 60 * 60 * 1000,
+            status,
+            message: `feat: commit message number ${42 - i}`,
+            files,
+            stats: { files: files.length, linesAdded, linesRemoved },
+        };
+    });
+};
+
+export const getVisibleItemPaths = (transactions: HistoryTransaction[], expandedIds: Set<string>): string[] => {
+    const paths: string[] = [];
+    for (const tx of transactions) {
+        paths.push(tx.id);
+        if (expandedIds.has(tx.id)) {
+            for (const file of tx.files) {
+                paths.push(`${tx.id}/${file.id}`);
+            }
+        }
+    }
+    return paths;
+};
+
+// --- Store ---
+export const useTransactionHistoryStore = create<TransactionHistoryState>((set, get) => ({
+    transactions: [],
+    mode: 'LIST',
+    selectedItemPath: 'tx-0',
+    expandedIds: new Set(),
+    filterQuery: '',
+    selectedForAction: new Set(),
+    lastCopiedMessage: null,
+
+    actions: {
+        load: (initialState) => {
+            const transactions = createMockTransactions();
+            set({
+                transactions,
+                selectedItemPath: transactions[0]?.id || '',
+                mode: 'LIST',
+                expandedIds: new Set(),
+                selectedForAction: new Set(),
+                filterQuery: '',
+                lastCopiedMessage: null,
+                ...initialState,
+            });
+        },
+        navigateUp: () => {
+            const { transactions, expandedIds, selectedItemPath } = get();
+            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+            const currentIndex = visibleItems.indexOf(selectedItemPath);
+            if (currentIndex > 0) {
+                set({ selectedItemPath: visibleItems[currentIndex - 1] });
+            }
+        },
+        navigateDown: () => {
+            const { transactions, expandedIds, selectedItemPath } = get();
+            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+            const currentIndex = visibleItems.indexOf(selectedItemPath);
+            if (currentIndex < visibleItems.length - 1) {
+                set({ selectedItemPath: visibleItems[currentIndex + 1] });
+            }
+        },
+        expandOrDrillDown: () => set(state => {
+            const { selectedItemPath, expandedIds } = state;
+            const newExpandedIds = new Set(expandedIds);
+            if (!newExpandedIds.has(selectedItemPath)) {
+                newExpandedIds.add(selectedItemPath);
+            }
+            return { expandedIds: newExpandedIds };
+        }),
+        collapseOrBubbleUp: () => set(state => {
+            const { selectedItemPath, expandedIds } = state;
+            const newExpandedIds = new Set(expandedIds);
+            if (newExpandedIds.has(selectedItemPath)) {
+                // If it's expanded, collapse it
+                newExpandedIds.delete(selectedItemPath);
+                
+                // Also collapse children
+                for (const id of newExpandedIds) {
+                    if (id.startsWith(`${selectedItemPath}/`)) {
+                        newExpandedIds.delete(id);
+                    }
+                }
+
+                return { expandedIds: newExpandedIds };
+            } else if (selectedItemPath.includes('/')) {
+                // If it's a file, move selection to parent transaction
+                const parentId = selectedItemPath.split('/')[0];
+                return { selectedItemPath: parentId || '' };
+            }
+            return {};
+        }),
+        toggleSelection: () => set(state => {
+            const { selectedItemPath, selectedForAction } = state;
+            const txId = selectedItemPath.split('/')[0];
+            if (!txId) return {};
+
+            const newSelection = new Set(selectedForAction);
+            if (newSelection.has(txId)) {
+                newSelection.delete(txId);
+            } else {
+                newSelection.add(txId);
+            }
+            return { selectedForAction: newSelection };
+        }),
+        setMode: (mode) => set({ mode, lastCopiedMessage: null }),
+        setFilterQuery: (query) => set({ filterQuery: query }),
+        applyFilter: () => {
+            // In a real app, this would filter `transactions`.
+            // For the demo, we just go back to LIST mode.
+            set({ mode: 'LIST' });
+        },
+        executeCopy: (selections) => {
+             // Mock copy
+            const { selectedForAction } = get();
+            const message = `Copied ${selections.join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
+            // In real app: clipboardy.writeSync(...)
+            // eslint-disable-next-line no-console
+            console.log(`[CLIPBOARD MOCK] ${message}`);
+            set({ lastCopiedMessage: message });
+        },
+        prepareDebugState: (stateName) => {
+            switch (stateName) {
+                case 'l1-drill':
+                    get().actions.load({ expandedIds: new Set(['tx-0']), selectedItemPath: 'tx-0' });
+                    break;
+                case 'l2-drill':
+                    get().actions.load({ expandedIds: new Set(['tx-0', 'tx-0/0-1']), selectedItemPath: 'tx-0/0-1' });
+                    break;
+                case 'filter':
+                    get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
+                    break;
+                case 'copy':
+                    get().actions.load({ mode: 'COPY', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                    break;
+                case 'bulk':
+                    get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                    break;
+            }
+        },
+    },
+}));
+```
+
+## File: src/utils.ts
+```typescript
+import { useState, useEffect } from 'react';
+
+// Utility for simulation
+export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export const useStdoutDimensions = (): [number, number] => {
+    const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
+
+    useEffect(() => {
+        const updateDimensions = () => {
+            setDimensions({
+                columns: process.stdout.columns || 80,
+                rows: process.stdout.rows || 24,
+            });
+        };
+
+        updateDimensions();
+        process.stdout.on('resize', updateDimensions);
+
+        return () => {
+            process.stdout.off('resize', updateDimensions);
+        };
+    }, []);
+
+    return [dimensions.columns, dimensions.rows];
+};
+```
+
+## File: src/components/Separator.tsx
+```typescript
+import React from 'react';
+import {Text} from 'ink';
+import { useStdoutDimensions } from '../utils';
+
+const Separator = () => {
+	const [columns] = useStdoutDimensions();
+	return <Text>{'─'.repeat(columns || 80)}</Text>;
+};
+
+export default Separator;
+```
+
+## File: src/components/SplashScreen.tsx
+```typescript
+import React, { useState, useEffect } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import Separator from './Separator';
+
+const SplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState(5);
+
+    const handleSkip = () => {
+        showInitScreen();
+    };
+
+    useInput(() => {
+        handleSkip();
+    });
+
+    useEffect(() => {
+        if (countdown === 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
+
+    const logo = `
+         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+`;
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode</Text>
+            <Separator />
+            <Text color="cyan">{logo}</Text>
+            <Box flexDirection="column" alignItems="center">
+                <Text italic>A zero-friction, AI-native patch engine.</Text>
+                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+            </Box>
+            
+            <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                <Box flexDirection="column" width="45%">
+                    <Text>Version 1.1.5</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>relaycode</Text>
+                    <Text>relaycode-core</Text>
+                    <Text>apply-multi-diff</Text>
+                    <Text>konro</Text>
+                </Box>
+                 <Box flexDirection="column" width="45%">
+                    <Text>Build Timestamps</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>2025-09-20 13:58:05</Text>
+                    <Text>2025-09-20 10:59:05</Text>
+                    <Text>(versioned)</Text>
+                    <Text>(versioned)</Text>
+                </Box>
+            </Box>
+            
+            <Box marginTop={1}><Separator /></Box>
+            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+            <Text>web app with repo-wide visual context, history, and rollback.</Text>
+            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+            <Separator />
+            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+            <Separator />
+            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
+        </Box>
+    );
+};
+
+export default SplashScreen;
+```
+
+## File: src/components/InitializationScreen.tsx
+```typescript
+import React, { useEffect } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
+import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
+import Separator from './Separator';
+import { useAppStore } from '../stores/app.store';
+import { sleep } from '../utils';
+
+const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	let symbol: React.ReactNode;
+	switch (task.status) {
+		case 'pending': symbol = '( )'; break;
+		case 'active': symbol = <Text color="cyan">(●)</Text>; break;
+		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
+	}
+
+	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
+
+	return (
+		<Box flexDirection="column">
+			<Text>
+				{symbol} {title}
+			</Text>
+			{task.subtext && task.status !== 'done' && (
+				<Text italic color="gray">
+					{'     └─ '}{task.subtext}
+				</Text>
+			)}
+		</Box>
+	);
+};
+
+const InitializationScreen = () => {
+    const phase = useInitStore(s => s.phase);
+    const analyzeTasks = useInitStore(s => s.analyzeTasks);
+    const configureTasks = useInitStore(s => s.configureTasks);
+    const interactiveChoice = useInitStore(s => s.interactiveChoice);
+    const projectId = useInitStore(s => s.projectId);
+    const actions = useInitStore(s => s.actions);
+    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+    const { exit } = useApp();
+
+    useInput((input, key) => {
+        if (phase === 'INTERACTIVE') {
+            if (key.return) {
+                actions.setInteractiveChoice('ignore');
+            } else if (input.toLowerCase() === 's') {
+                actions.setInteractiveChoice('share');
+            }
+        }
+        if (phase === 'FINALIZE') {
+            if (input.toLowerCase() === 'q') {
+                exit();
+            } else if (input.toLowerCase() === 'w') {
+                showDashboardScreen();
+            }
+        }
+    });
+
+    useEffect(() => {
+        actions.resetInit();
+        const runSimulation = async () => {
+            actions.setPhase('ANALYZE');
+            for (const task of initialAnalyzeTasks) {
+                actions.updateAnalyzeTask(task.id, 'active');
+                await sleep(800);
+                actions.updateAnalyzeTask(task.id, 'done');
+            }
+            actions.setAnalysisResults('relaycode (from package.json)', true);
+            await sleep(500);
+
+            actions.setPhase('CONFIGURE');
+            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+            for (const task of configTasksUntilInteractive) {
+                actions.updateConfigureTask(task.id, 'active');
+                await sleep(800);
+                actions.updateConfigureTask(task.id, 'done');
+            }
+            await sleep(500);
+
+            actions.setPhase('INTERACTIVE');
+        };
+
+        runSimulation();
+    }, [actions]);
+
+    useEffect(() => {
+        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+            const resumeSimulation = async () => {
+                actions.setPhase('CONFIGURE');
+                const lastTask = initialConfigureTasks[2];
+                if (lastTask) {
+                    actions.updateConfigureTask(lastTask.id, 'active');
+                    await sleep(800);
+                    actions.updateConfigureTask(lastTask.id, 'done');
+                    await sleep(500);
+
+                    actions.setPhase('FINALIZE');
+                }
+            };
+            resumeSimulation();
+        }
+    }, [interactiveChoice, phase, actions]);
+
+    const renderAnalyze = () => (
+        <Box flexDirection="column">
+            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
+            </Box>
+        </Box>
+    );
+
+    const renderContext = () => (
+        <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">CONTEXT</Text>
+            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
+            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
+        </Box>
+    );
+
+    const renderConfigure = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+            </Box>
+        </Box>
+    );
+
+    const renderInteractive = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+                <Box flexDirection="column" marginTop={1}>
+                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
+                    <Text>  Do you want to share its state with your team by committing it?</Text>
+                </Box>
+            </Box>
+        </Box>
+    );
+
+    const renderFinalize = () => {
+        const stateText = interactiveChoice === 'share'
+            ? '.relay/ directory initialized. It will be committed to git.'
+            : '.relay/ directory initialized and added to .gitignore.';
+        const stateSubText = interactiveChoice === 'share'
+            ? undefined
+            : 'Local transaction history will be stored here.';
+        
+        return (
+            <Box flexDirection="column">
+                <Text bold color="green"> SYSTEM READY</Text>
+                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> Config:   relay.config.json created.</Text>
+                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> State:    {stateText}</Text>
+                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
+                        <Text color="gray" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
+                    </Box>
+                </Box>
+            </Box>
+        );
+    };
+
+    const renderPhase = () => {
+        switch (phase) {
+            case 'ANALYZE': return renderAnalyze();
+            case 'CONFIGURE': return renderConfigure();
+            case 'INTERACTIVE': return renderInteractive();
+            case 'FINALIZE': return renderFinalize();
+        }
+    };
+    
+    let footerText;
+    switch (phase) {
+        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+    }
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
+            <Separator />
+            <Box marginY={1}>{renderPhase()}</Box>
+            <Separator />
+            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
+        </Box>
+    );
+};
+
+export default InitializationScreen;
 ```
 
 ## File: src/components/ReviewScreen.tsx
@@ -3248,7 +3952,7 @@ const DashboardScreen = () => {
             setViewOffset(selectedTransactionIndex - viewportHeight + 1);
         }
     }, [selectedTransactionIndex, viewOffset, viewportHeight]);
-    
+
     useInput((input, key) => {
         if (input === '?') {
             toggleHelp();
@@ -3367,11 +4071,12 @@ const DashboardScreen = () => {
                     {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
                         const actualIndex = viewOffset + index;
                         return (
-                        <EventStreamItem 
-                            key={tx.id} 
-                            transaction={tx} 
+                            <EventStreamItem
+                                key={tx.id}
+                                transaction={tx}
                                 isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                        />);
+                            />
+                        );
                     })}
                 </Box>
 
