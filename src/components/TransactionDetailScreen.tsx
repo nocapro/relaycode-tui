@@ -17,6 +17,7 @@ const CopyMode = () => {
     const {
         transaction,
         files,
+        selectedFileIndex,
         copyModeSelectionIndex,
         copyModeSelections,
         copyModeLastCopied,
@@ -42,7 +43,7 @@ const CopyMode = () => {
         { key: 'P', label: 'Prompt' },
         { key: 'R', label: 'Reasoning' },
         { key: 'A', label: `All Diffs (${files.length} files)` },
-        { key: 'F', label: `Diff for: ${files[0]?.path}` }, // Example, should be selected file
+        { key: 'F', label: `Diff for: ${files[selectedFileIndex]?.path || 'No file selected'}` },
         { key: 'U', label: 'UUID' },
         { key: 'Y', label: 'Full YAML representation' },
     ];
@@ -260,7 +261,7 @@ const TransactionDetailScreen = () => {
             <Box flexDirection="column" display={bodyView === 'REVERT_CONFIRM' ? 'none' : 'flex'}>
                 {/* Navigator Part A */}
                 <Box flexDirection="column" marginY={1}>
-                    <Text>UUID: {transaction.id.substring(0, 8)}-a8b3-4f2c-9d1e-8a7c1b9d8f03</Text> {/* Match readme */}
+                    <Text>UUID: {transaction.id}</Text>
                     <Text>Git: {message}</Text>
                     <Text>Date: {date} · Status: {status}</Text>
                     <Text>Stats: {fileStats}</Text>

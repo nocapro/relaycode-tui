@@ -148,16 +148,16 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
             }
 
             if (expandedSection === navigatorFocus) {
-                // Section is already expanded, maybe do nothing or handle nested
+                // Section is already expanded, handle nested navigation
                 if (navigatorFocus === 'FILES') {
-                    set({ navigatorFocus: 'FILES_LIST', selectedFileIndex: 0, bodyView: 'FILES_LIST' });
+                    set({ navigatorFocus: 'FILES_LIST', bodyView: 'FILES_LIST' });
                 }
                 return;
             }
-            
+
             // Expand the focused section
             set({ expandedSection: navigatorFocus });
-            
+
             switch(navigatorFocus) {
                 case 'PROMPT':
                     set({ bodyView: 'PROMPT' });
@@ -166,7 +166,7 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
                     set({ bodyView: 'REASONING' });
                     break;
                 case 'FILES':
-                    set({ navigatorFocus: 'FILES_LIST', selectedFileIndex: 0, bodyView: 'FILES_LIST' });
+                    set({ bodyView: 'FILES_LIST' });
                     break;
             }
         },
@@ -177,12 +177,12 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
                 set({ bodyView: 'FILES_LIST' }); // Go back from diff to file list
                 return;
             }
-            
+
             if (navigatorFocus === 'FILES_LIST') {
-                set({ navigatorFocus: 'FILES', bodyView: 'NONE', expandedSection: null }); // Go back from file list to main navigator
+                set({ navigatorFocus: 'FILES', bodyView: 'NONE' }); // Go back from file list to files section
                 return;
             }
-            
+
             // If a section is expanded, collapse it
             if (expandedSection) {
                 set({ expandedSection: null, bodyView: 'NONE' });
