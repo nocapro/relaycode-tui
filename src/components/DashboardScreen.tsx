@@ -3,6 +3,7 @@ import { Box, Text, useApp, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
+import { useCommitStore } from '../stores/commit.store';
 import Separator from './Separator';
 import GlobalHelpScreen from './GlobalHelpScreen';
 
@@ -47,20 +48,17 @@ const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction
 };
 
 const ConfirmationContent = ({
-    status,
     transactionsToConfirm,
 }: {
-    status: DashboardStatus;
     transactionsToConfirm: Transaction[];
 }) => {
-    const isApprove = status === 'CONFIRM_APPROVE';
-    const actionText = isApprove ? 'APPROVE' : 'COMMIT';
+    const actionText = 'APPROVE';
     
     return (
         <Box flexDirection="column" marginY={1} paddingLeft={2}>
             <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
             <Text>
-                The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:
+                The following {transactionsToConfirm.length} transaction(s) will be approved:
             </Text>
             <Box flexDirection="column" paddingLeft={1} marginTop={1}>
                 {transactionsToConfirm.map(tx => (
@@ -80,19 +78,19 @@ const DashboardScreen = () => {
         moveSelectionUp,
         moveSelectionDown,
         startApproveAll,
-        startCommitAll,
         confirmAction,
         cancelAction,
         toggleHelp,
     } = useDashboardStore(s => s.actions);
     const { exit } = useApp();
-    const showReviewScreen = useAppStore(s => s.actions.showReviewScreen);
+    const appActions = useAppStore(s => s.actions);
+    const commitActions = useCommitStore(s => s.actions);
 
     const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
     const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
 
-    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
-    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
+    const isModal = status === 'CONFIRM_APPROVE';
+    const isProcessing = status === 'APPROVING';
     
     useInput((input, key) => {
         if (input === '?') {
@@ -119,12 +117,15 @@ const DashboardScreen = () => {
         if (key.downArrow) moveSelectionDown();
         
         if (key.return) {
-            showReviewScreen();
+            appActions.showReviewScreen();
         }
         
         if (input.toLowerCase() === 'p') togglePause();
         if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
-        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
+        if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+            commitActions.prepareCommitScreen();
+            appActions.showGitCommitScreen();
+        }
     });
 
     const renderStatusBar = () => {
@@ -134,20 +135,15 @@ const DashboardScreen = () => {
             case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
             case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
             case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
             default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
         }
 
         let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
-        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
+        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
 
         if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === 'COMMITTING') commitStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
         if (status === 'CONFIRM_APPROVE') {
             approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
-        }
-        if (status === 'CONFIRM_COMMIT') {
-            commitStr = <Text bold color="yellow">┌ {commitStr} ┐</Text>;
         }
         
         return (
@@ -177,7 +173,6 @@ const DashboardScreen = () => {
     
     const transactionsToConfirm = useMemo(() => {
         if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
-        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
         return [];
     }, [status, transactions]);
 
@@ -194,7 +189,7 @@ const DashboardScreen = () => {
                 
                 {isModal && (
                     <>
-                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
+                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
                         <Separator />
                     </>
                 )}

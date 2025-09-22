@@ -1,5 +1,21 @@
 ===
 
+based on     "docs/relaycode-tui/transaction-detail-screen.readme.md"
+
+create the gtransaction-detail-scree, focus on prototyping simulation, not thinking about core backend logic
+
+dont forget to add to debug menu
+
+=== DONE
+
+based on docs/relaycode-tui/git-commit-screen.readme.md
+
+create the git-commit-screen, focus on prototyping simulation, not thinking about core backend logic
+
+dont forget to add to debug menu
+
+=== DONE
+
 review screen current layout, UI, UX not identical to readme
 
 1. make current implementation design to follow docs/relaycode-tui/review-screen.readme.md

@@ -33,10 +33,12 @@
     // "docs/relaycode-tui/dashboard-screen.readme.md",
     // "docs/relaycode-tui/global-help-screen.readme.md"
     // "docs/relaycode-tui/review-screen.readme.md"
-    "docs/relaycode-tui/diff-screen.readme.md",
-    "docs/relaycode-tui/reason-screen.readme.md",
-    "docs/relaycode-tui/review-screen.readme.md",
-    "docs/relaycode-tui/review-processing-screen.readme.md"
+    // "docs/relaycode-tui/diff-screen.readme.md",
+    // "docs/relaycode-tui/reason-screen.readme.md",
+    // "docs/relaycode-tui/review-screen.readme.md",
+    // "docs/relaycode-tui/review-processing-screen.readme.md"
+    // "docs/relaycode-tui/git-commit-screen.readme.md",
+    "docs/relaycode-tui/transaction-detail-screen.readme.md"
   ],
   "ignore": {
     "useGitignore": true,

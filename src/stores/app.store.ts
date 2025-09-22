@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' | 'review-processing';
+export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' | 'review-processing' | 'git-commit';
 
 interface AppState {
     isDebugMenuOpen: boolean;
@@ -10,6 +10,7 @@ interface AppState {
         showReviewProcessingScreen: () => void;
         showDashboardScreen: () => void;
         showReviewScreen: () => void;
+        showGitCommitScreen: () => void;
         showSplashScreen: () => void;
         toggleDebugMenu: () => void;
     };
@@ -23,6 +24,7 @@ export const useAppStore = create<AppState>((set) => ({
         showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
         showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
         showReviewScreen: () => set({ currentScreen: 'review' }),
+        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
         showSplashScreen: () => set({ currentScreen: 'splash' }),
         toggleDebugMenu: () => set(state => ({ isDebugMenuOpen: !state.isDebugMenuOpen })),
     },

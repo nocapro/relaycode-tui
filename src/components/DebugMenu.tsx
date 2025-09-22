@@ -4,6 +4,7 @@ import { useAppStore } from '../stores/app.store';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useInitStore } from '../stores/init.store';
 import { useReviewStore } from '../stores/review.store';
+import { useCommitStore } from '../stores/commit.store';
 import Separator from './Separator';
 
 interface MenuItem {
@@ -17,6 +18,7 @@ const DebugMenu = () => {
     const dashboardActions = useDashboardStore(s => s.actions);
     const initActions = useInitStore(s => s.actions);
     const reviewActions = useReviewStore(s => s.actions);
+    const commitActions = useCommitStore(s => s.actions);
 
     const menuItems: MenuItem[] = [
         {
@@ -130,6 +132,13 @@ const DebugMenu = () => {
         {
             title: 'Review Processing',
             action: () => appActions.showReviewProcessingScreen(),
+        },
+        {
+            title: 'Git Commit Screen',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            },
         },
     ];
 

@@ -13,7 +13,7 @@ export interface Transaction {
     error?: string;
 }
 
-export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'CONFIRM_COMMIT' | 'APPROVING' | 'COMMITTING';
+export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'APPROVING';
 
 // --- Initial State (for simulation) ---
 const createInitialTransactions = (): Transaction[] => [
@@ -37,7 +37,6 @@ interface DashboardState {
         moveSelectionUp: () => void;
         moveSelectionDown: () => void;
         startApproveAll: () => void;
-        startCommitAll: () => void;
         confirmAction: () => Promise<void>;
         cancelAction: () => void;
         toggleHelp: () => void;
@@ -65,10 +64,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         })),
         startApproveAll: () => set(state => ({
             status: 'CONFIRM_APPROVE',
-            previousStatus: state.status,
-        })),
-        startCommitAll: () => set(state => ({
-            status: 'CONFIRM_COMMIT',
             previousStatus: state.status,
         })),
         cancelAction: () => set(state => ({ status: state.previousStatus })),
@@ -115,33 +110,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
                     });
                     return { transactions: newTxs, status: previousStatus };
                 });
-            } else if (status === 'CONFIRM_COMMIT') {
-                set({ status: 'COMMITTING' });
-                 // Find applied transactions and mark them as in-progress
-                 const appliedTxIds: string[] = [];
-                 set(state => {
-                     const newTxs = state.transactions.map(tx => {
-                         if (tx.status === 'APPLIED') {
-                            appliedTxIds.push(tx.id);
-                             return { ...tx, status: 'IN-PROGRESS' as const };
-                         }
-                         return tx;
-                     });
-                     return { transactions: newTxs };
-                 });
- 
-                 await sleep(2000); // Simulate commit process
- 
-                 // Mark them as committed
-                 set(state => {
-                     const newTxs = state.transactions.map(tx => {
-                         if (appliedTxIds.includes(tx.id)) {
-                             return { ...tx, status: 'COMMITTED' as const };
-                         }
-                         return tx;
-                     });
-                     return { transactions: newTxs, status: previousStatus };
-                 });
             }
         },
     },

@@ -6,6 +6,7 @@ import InitializationScreen from './components/InitializationScreen';
 import DashboardScreen from './components/DashboardScreen';
 import ReviewScreen from './components/ReviewScreen';
 import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+import GitCommitScreen from './components/GitCommitScreen';
 import DebugMenu from './components/DebugMenu';
 
 const App = () => {
@@ -50,6 +51,10 @@ const App = () => {
 
     if (currentScreen === 'review-processing') {
         return <ReviewProcessingScreen />;
+    }
+
+    if (currentScreen === 'git-commit') {
+        return <GitCommitScreen />;
     }
 
     return null;
