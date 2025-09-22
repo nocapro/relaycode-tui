@@ -45,7 +45,7 @@ This state appears after a partial failure during the live application phase. Th
    [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Esc) Reject All · (Q)uit
+ (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Shift+R) Reject All · (Esc) Back
 ```
 -   **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`. The footer presents both single-file `(T)` and `(Shift+T)` bulk repair options.
 
@@ -72,7 +72,7 @@ The user decides one of the successful changes is undesirable and rejects it.
    [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (D)iff · (Esc) Reject All · (Q)uit
+ (↑↓) Nav · (Spc) Toggle · (D)iff · (Shift+R) Reject All · (Esc) Back
 ```
 -   **Behavior:** The UI instantly recalculates. The file icon changes to `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect the new reality. The footer updates as there are no longer any approved files to commit.
 

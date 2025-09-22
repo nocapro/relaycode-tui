@@ -15,6 +15,8 @@ const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean
         case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
         case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
         case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+        case 'AWAITING': icon = '[●]'; iconColor = 'yellow'; break;
+        case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
     }
 
     const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
@@ -27,6 +29,28 @@ const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean
                 <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
                     {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
                     <Text color="red">    ({file.error})</Text>
+                </Text>
+            </Box>
+        );
+    }
+
+    if (file.status === 'AWAITING') {
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
+                    <Text color="yellow">    (Bulk re-apply prompt copied!)</Text>
+                </Text>
+            </Box>
+        );
+    }
+
+    if (file.status === 'RE_APPLYING') {
+        return (
+             <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon} RE-APPLYING... {file.path}</Text>
+                    <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
                 </Text>
             </Box>
         );
@@ -70,7 +94,6 @@ const ScriptItemRow = ({
     );
 };
 
-
 // --- Main Component ---
 
 const ReviewScreen = () => {
@@ -90,13 +113,24 @@ const ReviewScreen = () => {
         rejectAllFiles, approve,
         toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
         copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
-        tryRepairFile, showBulkRepair, executeBulkRepairOption,
+        tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
         scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
     } = store.actions;
 
-    const numFiles = files.length;
-    const approvedFilesCount = useMemo(() => files.filter(f => f.status === 'APPROVED').length, [files]);
-    const canBeRejected = useMemo(() => files.some(f => f.status === 'APPROVED'), [files]);
+    const {
+        numFiles,
+        approvedFilesCount,
+        approvedLinesAdded,
+        approvedLinesRemoved,
+    } = useMemo(() => {
+        const approvedFiles = files.filter(f => f.status === 'APPROVED');
+        return {
+            numFiles: files.length,
+            approvedFilesCount: approvedFiles.length,
+            approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+            approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+        };
+    }, [files]);
 
     useInput((input, key) => {
         // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
@@ -116,14 +150,15 @@ const ReviewScreen = () => {
         if (key.escape) {
             if (bodyView === 'copy_mode') {
                 toggleCopyMode();
+            } else if (bodyView === 'confirm_handoff') {
+                // Pressing Esc on confirm handoff goes back to the main view
+                toggleReasoningView(); // Toggles any view off
             } else if (bodyView === 'bulk_repair') {
                 showBulkRepair(); // Close bulk repair modal
             } else if (bodyView !== 'none') {
                 if (bodyView === 'diff') toggleDiffView();
                 if (bodyView === 'reasoning') toggleReasoningView();
                 if (bodyView === 'script_output') toggleScriptView();
-            } else if (canBeRejected) {
-                rejectAllFiles();
             } else {
                 showDashboardScreen();
             }
@@ -144,6 +179,14 @@ const ReviewScreen = () => {
             if (input.toLowerCase() === 'f') copyFileDiff();
             if (input.toLowerCase() === 'a') copyAllDiffs();
             if (input.toLowerCase() === 'c') toggleCopyMode();
+            return;
+        }
+
+        // Handoff Confirmation
+        if (bodyView === 'confirm_handoff') {
+            if (key.return) {
+                confirmHandoff();
+            }
             return;
         }
 
@@ -187,6 +230,14 @@ const ReviewScreen = () => {
             return;
         }
 
+        // Handle Shift+R for reject all
+        if (key.shift && input.toLowerCase() === 'r') {
+            if (approvedFilesCount > 0) {
+                rejectAllFiles();
+            }
+            return;
+        }
+
         // Main View Navigation
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
@@ -225,20 +276,20 @@ const ReviewScreen = () => {
             toggleCopyMode();
         }
 
+        // Handle T for single repair and Shift+T for bulk repair
         if (input.toLowerCase() === 't') {
-            if (selectedItemIndex < numFiles) {
-                const file = files[selectedItemIndex];
-                if (file && file.status === 'FAILED') {
-                    tryRepairFile();
+            if (key.shift) {
+                const hasFailedFiles = files.some(f => f.status === 'FAILED');
+                if (hasFailedFiles) {
+                    showBulkRepair();
                 }
-            }
-        }
-
-        // Handle Shift+T for bulk repair
-        if (key.shift && input.toLowerCase() === 't') {
-            const hasFailedFiles = files.some(f => f.status === 'FAILED');
-            if (hasFailedFiles) {
-                showBulkRepair();
+            } else {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status === 'FAILED') {
+                        tryRepairFile();
+                    }
+                }
             }
         }
 
@@ -251,20 +302,19 @@ const ReviewScreen = () => {
         if (bodyView === 'none') return null;
 
         if (bodyView === 'reasoning') {
-            const reasoningLines = reasoning.split('\n');
-            const visibleLines = reasoningLines.slice(reasoningScrollIndex, reasoningScrollIndex + 10);
+            const reasoningLinesCount = reasoning.split('\n').length;
+            const visibleLinesCount = 10;
             return (
                 <Box flexDirection="column">
-                    <Text>REASONING DETAILS</Text>
-                    <Box marginTop={1}>
-                        {visibleLines.map((line, index) => (
-                            <Text key={index}>{line}</Text>
-                        ))}
-                    </Box>
-                    {reasoningLines.length > 10 && (
+                    <ReasonScreen
+                        reasoning={reasoning}
+                        scrollIndex={reasoningScrollIndex}
+                        visibleLinesCount={visibleLinesCount}
+                    />
+                    {reasoningLinesCount > visibleLinesCount && (
                         <Text color="gray">
-                            Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + 10, reasoningLines.length)}{' '}
-                            of {reasoningLines.length}
+                            Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                            of {reasoningLinesCount}
                         </Text>
                     )}
                 </Box>
@@ -326,27 +376,45 @@ const ReviewScreen = () => {
         if (bodyView === 'copy_mode') {
             const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
             const options = [
-                { key: 'U', label: 'UUID', value: `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                { key: 'U', label: 'UUID', value: `${hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
                 { key: 'M', label: 'Git Message', value: message },
-                { key: 'P', label: 'Prompt', value: `${prompt.substring(0, 50)}...` },
-                { key: 'R', label: 'Reasoning', value: `${reasoning.substring(0, 50)}...` },
+                { key: 'P', label: 'Prompt', value: `${prompt.substring(0, 45)}...` },
+                { key: 'R', label: 'Reasoning', value: `${(reasoning.split('\n')[0] ?? '').substring(0, 45)}...` },
+            ];
+            const fileOptions = [
                 { key: 'F', label: 'Diff for', value: selectedFile ? selectedFile.path : 'N/A' },
                 { key: 'A', label: 'All Diffs', value: `${files.length} files` },
             ];
 
             return (
-                <Box flexDirection="column">
-                    <Text>Select item to copy to clipboard:</Text>
-                    <Box marginTop={1} />
-                    
-                    {options.map((option, index) => (
-                        <Text key={option.key} bold={index === copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' : undefined}>
-                            {index === copyModeSelectedIndex ? '> ' : '  '}
-                            [{option.key}] {option.label}: {option.value}
-                        </Text>
-                    ))}
-                    
-                    <Box marginTop={1} />
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>Select item to copy to clipboard:</Text>
+
+                    <Box flexDirection="column">
+                        {options.map((option, index) => (
+                            <Text key={option.key} bold={index === copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                {index === copyModeSelectedIndex ? '> ' : '  '}
+                                [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
+                            </Text>
+                        ))}
+                    </Box>
+
+                    <Separator/>
+
+                    <Box flexDirection="column">
+                        {fileOptions.map((option, index) => {
+                            const overallIndex = index + options.length;
+                            return (
+                                <Text key={option.key} bold={overallIndex === copyModeSelectedIndex} color={overallIndex === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                    {overallIndex === copyModeSelectedIndex ? '> ' : '  '}
+                                    [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+
+                    <Separator/>
+
                     {copyModeLastCopied && (
                         <Text color="green">✓ Copied {copyModeLastCopied} to clipboard.</Text>
                     )}
@@ -354,35 +422,59 @@ const ReviewScreen = () => {
             );
         }
 
-        if (bodyView === 'bulk_repair') {
-            const failedFiles = files.filter(f => f.status === 'FAILED');
-            
+        if (bodyView === 'confirm_handoff') {
             return (
-                <Box flexDirection="column">
-                    <Text>BULK REPAIR ACTION</Text>
-                    <Box marginTop={1} />
-                    
-                    <Text>The following {failedFiles.length} files failed to apply:</Text>
-                    {failedFiles.map(file => (
-                        <Text key={file.id}>- {file.path}</Text>
-                    ))}
-                    
-                    <Box marginTop={1} />
-                    <Text>How would you like to proceed?</Text>
-                    <Box marginTop={1} />
-                    
-                    <Text>{'> (1) Copy Bulk Re-apply Prompt (for single-shot AI)'}</Text>
-                    <Text>  (2) Bulk Change Strategy & Re-apply</Text>
-                    <Text>  (3) Handoff to External Agent</Text>
-                    <Text>  (4) Bulk Abandon All Failed Files</Text>
-                    <Text>  (Esc) Cancel</Text>
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+                    <Box flexDirection="column">
+                        <Text>This action will:</Text>
+                        <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
+                        <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
+                        <Text>3. Assume that you and the external agent will complete the work.</Text>
+                    </Box>
+                    <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
+                    <Text bold color="yellow">Are you sure you want to proceed?</Text>
                 </Box>
             );
         }
-        
+
+        if (bodyView === 'bulk_repair') {
+            const failedFiles = files.filter(f => f.status === 'FAILED');
+            const repairOptions = [
+                '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+                '(2) Bulk Change Strategy & Re-apply',
+                '(3) Handoff to External Agent',
+                '(4) Bulk Abandon All Failed Files',
+                '(Esc) Cancel',
+            ];
+
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>BULK REPAIR ACTION</Text>
+
+                    <Box flexDirection="column">
+                        <Text>The following {failedFiles.length} files failed to apply:</Text>
+                        {failedFiles.map(file => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                    </Box>
+
+                    <Text>How would you like to proceed?</Text>
+
+                    <Box flexDirection="column">
+                        {repairOptions.map((opt, i) => (
+                            <Text key={i}>
+                                {i === 0 ? '> ' : '  '}
+                                {opt}
+                            </Text>
+                        ))}
+                    </Box>
+                </Box>
+            );
+        }
+
         return null;
     };
-
 
     const renderFooter = () => {
         // Contextual footer for body views
@@ -390,7 +482,7 @@ const ReviewScreen = () => {
             return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
         }
         if (bodyView === 'reasoning') {
-            return <Text>(↑↓) Scroll · (R/Esc) Back</Text>;
+            return <Text>(↑↓) Scroll Text · (R)Collapse View · (C)opy Mode</Text>;
         }
         if (bodyView === 'script_output') {
             return (
@@ -402,6 +494,9 @@ const ReviewScreen = () => {
         }
         if (bodyView === 'bulk_repair') {
             return <Text>Choose an option [1-4, Esc]:</Text>;
+        }
+        if (bodyView === 'confirm_handoff') {
+            return <Text>(Enter) Confirm Handoff      (Esc) Cancel</Text>;
         }
 
         // Main footer
@@ -437,13 +532,14 @@ const ReviewScreen = () => {
         if (approvedFilesCount > 0) {
             actions.push('(A)pprove');
         }
-        
-        actions.push('(Esc) Reject All');
+
+        if (files.some(f => f.status === 'APPROVED' || f.status === 'FAILED')) {
+            actions.push('(Shift+R) Reject All');
+        }
         actions.push('(Q)uit');
 
         return <Text>{actions.join(' · ')}</Text>;
     };
-
 
     return (
         <Box flexDirection="column">
@@ -452,48 +548,53 @@ const ReviewScreen = () => {
             <Separator />
             
             {/* Navigator Section */}
-            <Box flexDirection="column">
-                {/* Transaction summary */}
-                <Box>
+            <Box flexDirection="column" marginY={1}>
+                <Box flexDirection="column">
                     <Text>{hash} · {message}</Text>
+                    <Text>
+                        (<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files · {duration}s
+                        {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+                        {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                    </Text>
                 </Box>
-                <Box>
-                    <Text>(<Text color="green">+{linesAdded}</Text>/<Text color="red">-{linesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files · {duration}s</Text>
-                    {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
-                    {scripts.length === 0 && patchStatus === 'PARTIAL_FAILURE' && <Text> · Scripts: SKIPPED</Text>}
+
+                <Box flexDirection="column" marginTop={1}>
+                    <Text>
+                        (P)rompt ▸ {prompt.substring(0, 60)}...
+                    </Text>
+                    <Text>
+                        (R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                        {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
+                    </Text>
                 </Box>
-                
-                <Box marginTop={1} />
-                
-                {/* Prompt and Reasoning */}
-                <Text>(P)rompt ▸ {prompt.substring(0, 50)}...</Text>
-                <Text>(R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
-                    {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
-                </Text>
-                
-                <Separator/>
-                
-                {/* Script Results (if any) */}
-                {scripts.length > 0 && (
-                    <>
+            </Box>
+
+            <Separator/>
+
+            {/* Script Results (if any) */}
+            {scripts.length > 0 && (
+                <>
+                    <Box flexDirection="column" marginY={1}>
                         {scripts.map((script, index) => (
-                            <ScriptItemRow 
-                                key={script.command} 
+                            <ScriptItemRow
+                                key={script.command}
                                 script={script}
                                 isSelected={selectedItemIndex === numFiles + index}
                                 isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
                             />
                         ))}
-                        <Separator/>
-                    </>
-                )}
-                
-                {/* Files Section */}
-                <Text>FILES</Text>
+                    </Box>
+                    <Separator/>
+                </>
+            )}
+
+            {/* Files Section */}
+            <Box flexDirection="column" marginY={1}>
+                <Text bold>FILES</Text>
                 {files.map((file, index) => (
-                    <FileItemRow 
-                        key={file.id} 
-                        file={file} 
+                    <FileItemRow
+                        key={file.id}
+                        file={file}
                         isSelected={selectedItemIndex === index}
                     />
                 ))}

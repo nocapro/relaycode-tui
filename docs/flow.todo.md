@@ -1,10 +1,20 @@
 ===
 
+review screen current layout, UI, UX not identical to readme
+
+1. make current implementation design to follow docs/relaycode-tui/review-screen.readme.md
+3. also add states that has not been implemented
+2. add more list of review screen states to debugmenu
+
+dont forget to update docs/relaycode-tui/review-screen.readme.md if you have updated design
+
+=== DONE
+
 create screen list menu screen with state. which can be open from any screen by pressing ctrl+s
 
 so this screen list to debug UI and state and workflow and can be navigated by programmer to directly access any screen with any state as simulation
 
-===
+=== DONE
 
 based on
 
@@ -15,7 +25,7 @@ extract out the processing state screen from review screen to review processing 
 
 make sure the layout, UI UX is identical to readme
 
-===
+=== DONE
 
 review screen: user need to see the simulation screen state flow of processing patches
 
@@ -24,9 +34,7 @@ review screen: user need to see the simulation screen state flow of processing p
 review screen current layout, UI, UX not identical to readme
 
 1. make current implementation comply docs/relaycode-tui/review-screen.readme.md
-2. need reject all action
-3. need back/esc action
-4. no all possible state simulation
+2. reject all should not by ESC, esc only back to dashboard
 
 dont forget to update docs/relaycode-tui/review-screen.readme.md if you have updated design
 

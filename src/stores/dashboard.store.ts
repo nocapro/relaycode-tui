@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { sleep } from '../utils';
 
 // --- Types ---
-export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS';
+export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS' | 'HANDOFF';
 
 export interface Transaction {
     id: string;
@@ -42,6 +42,7 @@ interface DashboardState {
         cancelAction: () => void;
         toggleHelp: () => void;
         setStatus: (status: DashboardStatus) => void; // For debug menu
+        updateTransactionStatus: (id: string, status: TransactionStatus) => void;
     };
 }
 
@@ -73,6 +74,16 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         cancelAction: () => set(state => ({ status: state.previousStatus })),
         toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
         setStatus: (status) => set({ status }),
+        updateTransactionStatus: (id, status) => {
+            set(state => ({
+                transactions: state.transactions.map(tx =>
+                    tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                ),
+            }));
+            // After updating, move selection to the updated transaction
+            const index = get().transactions.findIndex(tx => tx.id === id);
+            if (index !== -1) set({ selectedTransactionIndex: index });
+        },
 
         confirmAction: async () => {
             const { status, previousStatus } = get();

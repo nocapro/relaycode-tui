@@ -104,6 +104,30 @@ const DebugMenu = () => {
             },
         },
         {
+            title: 'Review: Script Output',
+            action: () => {
+                reviewActions.simulateSuccessScenario();
+                reviewActions.toggleScriptView();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Bulk Repair',
+            action: () => {
+                reviewActions.simulateFailureScenario();
+                reviewActions.showBulkRepair();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Handoff Confirm',
+            action: () => {
+                reviewActions.simulateFailureScenario();
+                reviewActions.executeBulkRepairOption(3); // Option 3 is Handoff
+                appActions.showReviewScreen();
+            },
+        },
+        {
             title: 'Review Processing',
             action: () => appActions.showReviewProcessingScreen(),
         },

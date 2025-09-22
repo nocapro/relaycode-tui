@@ -13,6 +13,7 @@ const getStatusIcon = (status: TransactionStatus) => {
         case 'PENDING': return <Text color="yellow">?</Text>;
         case 'APPLIED': return <Text color="green">✓</Text>;
         case 'COMMITTED': return <Text color="blue">→</Text>;
+        case 'HANDOFF': return <Text color="magenta">→</Text>;
         case 'FAILED': return <Text color="red">✗</Text>;
         case 'REVERTED': return <Text color="gray">↩</Text>;
         case 'IN-PROGRESS': return <Spinner type="dots" />;

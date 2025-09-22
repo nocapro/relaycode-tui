@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { sleep } from '../utils';
 import { useAppStore } from './app.store';
+import { useDashboardStore } from './dashboard.store';
 
 // --- Types ---
 
-export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED';
+export type FileStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' | 'RE_APPLYING';
 export interface FileItem {
     id: string;
     path: string;
@@ -40,7 +41,7 @@ const initialApplySteps: ApplyStep[] = [
     { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
 ];
 
-export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'copy_mode' | 'bulk_repair' | 'none';
+export type BodyView = 'diff' | 'reasoning' | 'script_output' | 'copy_mode' | 'bulk_repair' | 'confirm_handoff' | 'none';
 export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
 
 interface ReviewState {
@@ -103,7 +104,8 @@ interface ReviewState {
         // Repair Actions
         tryRepairFile: () => void;
         showBulkRepair: () => void;
-        executeBulkRepairOption: (option: number) => void;
+        executeBulkRepairOption: (option: number) => Promise<void>;
+        confirmHandoff: () => void;
         
         // Navigation Actions
         scrollReasoningUp: () => void;
@@ -382,8 +384,12 @@ export const useReviewStore = create<ReviewState>((set) => ({
             patchStatus: 'PARTIAL_FAILURE' as const,
             files: mockFiles,
             scripts: [],
+            // Reset UI state
+            bodyView: 'none',
+            isDiffExpanded: false,
+            reasoningScrollIndex: 0,
+            scriptErrorIndex: 0,
             selectedItemIndex: 0,
-            bodyView: 'none' as const,
         })),
         
         // Copy Mode Actions
@@ -519,12 +525,13 @@ Please provide a corrected patch that addresses the error.`;
         showBulkRepair: () => set(() => ({
             bodyView: 'bulk_repair' as const,
         })),
-        executeBulkRepairOption: (option: number) => set(state => {
+        executeBulkRepairOption: async (option: number) => {
             switch (option) {
                 case 1: {
-                    // Copy Bulk Re-apply Prompt
-                    const failedFiles = state.files.filter(f => f.status === 'FAILED');
-                    const bulkPrompt = `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+                    set(state => {
+                        // Copy Bulk Re-apply Prompt
+                        const failedFiles = state.files.filter(f => f.status === 'FAILED');
+                        const bulkPrompt = `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
 
 IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
 
@@ -545,56 +552,111 @@ ${file.diff || '// ... failed diff ...'}
 
 Please analyze all failed files and provide a complete, corrected response.`;
 
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files`);
-                    return { bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied' };
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files`);
+
+                        const newFiles = state.files.map(file =>
+                            file.status === 'FAILED'
+                                ? { ...file, status: 'AWAITING' as const }
+                                : file,
+                        );
+
+                        return { files: newFiles, bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied' };
+                    });
+                    break;
                 }
                     
                 case 2: {
-                    // Bulk Change Strategy & Re-apply
-                    // Mock: Change all failed files to 'replace' strategy and mark as successful
-                    const newFiles = state.files.map(file => 
-                        file.status === 'FAILED' 
-                            ? { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 3, linesRemoved: 1 }
-                            : file,
-                    );
-                    return { files: newFiles, bodyView: 'none' as const };
+                    const failedFileIds = new Set(useReviewStore.getState().files.filter(f => f.status === 'FAILED').map(f => f.id));
+
+                    set(state => ({
+                        files: state.files.map(file =>
+                            failedFileIds.has(file.id)
+                                ? { ...file, status: 'RE_APPLYING' as const }
+                                : file,
+                        ),
+                        bodyView: 'none' as const,
+                    }));
+
+                    await sleep(1500); // Simulate re-apply
+
+                    // Mock a mixed result
+                    let first = true;
+                    set(state => ({
+                        files: state.files.map(file => {
+                            if (failedFileIds.has(file.id)) {
+                                if (first) {
+                                    first = false;
+                                    return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
+                                }
+                                return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
+                            }
+                            return file;
+                        }),
+                    }));
+                    break;
                 }
                     
                 case 3: {
-                    // Handoff to External Agent
-                    // Mock: Generate handoff prompt
-                    const failedFiles = state.files.filter(f => f.status === 'FAILED');
-                    const handoffPrompt = `# Relaycode Handoff: Failed Patch Application
-
-The following files failed to apply and require manual intervention:
-
-${failedFiles.map(file => `## ${file.path}
-- Error: ${file.error}
-- Strategy: ${file.strategy}
-`).join('\n')}
-
-Please resolve these issues and provide updated patches.`;
-
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied handoff prompt for ${failedFiles.length} files`);
-                    return { bodyView: 'none' as const, copyModeLastCopied: 'Handoff prompt copied' };
+                    set({ bodyView: 'confirm_handoff' as const });
+                    break;
                 }
                     
                 case 4: {
-                    // Bulk Abandon All Failed Files
-                    const abandonedFiles = state.files.map(file => 
-                        file.status === 'FAILED' 
-                            ? { ...file, status: 'REJECTED' as const }
-                            : file,
-                    );
-                    return { files: abandonedFiles, bodyView: 'none' as const };
+                    set(state => ({
+                        files: state.files.map(file =>
+                            file.status === 'FAILED'
+                                ? { ...file, status: 'REJECTED' as const }
+                                : file,
+                        ),
+                        bodyView: 'none' as const,
+                    }));
+                    break;
                 }
                     
                 default:
-                    return { bodyView: 'none' as const };
+                    set({ bodyView: 'none' as const });
             }
-        }),
+        },
+        confirmHandoff: () => {
+            const { hash, message, reasoning, files } = useReviewStore.getState();
+            const { updateTransactionStatus } = useDashboardStore.getState().actions;
+            const { showDashboardScreen } = useAppStore.getState().actions;
+
+            const successfulFiles = files.filter(f => f.status === 'APPROVED');
+            const failedFiles = files.filter(f => f.status === 'FAILED');
+
+            const handoffPrompt = `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
+
+The full plan for this transaction is detailed in the YAML file located at: .relay/transactions/${hash}.yml. Please use this file as your primary source of truth for the overall goal.
+
+Here is the current status of the transaction:
+
+--- TRANSACTION SUMMARY ---
+Goal: ${message}
+Reasoning:
+${reasoning}
+
+--- CURRENT FILE STATUS ---
+SUCCESSFUL CHANGES (already applied, no action needed):
+${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || '  (None)'}
+
+FAILED CHANGES (these are the files you need to fix):
+${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${f.error})`).join('\n')}
+
+Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.`;
+
+            // eslint-disable-next-line no-console
+            console.log('[CLIPBOARD] Copied Handoff Prompt.');
+
+            // This is a bit of a hack to find the right transaction to update in the demo
+            const txToUpdate = useDashboardStore.getState().transactions.find(tx => tx.hash === hash);
+            if (txToUpdate) {
+                updateTransactionStatus(txToUpdate.id, 'HANDOFF');
+            }
+
+            showDashboardScreen();
+        },
         
         // Navigation Actions
         scrollReasoningUp: () => set(state => ({
