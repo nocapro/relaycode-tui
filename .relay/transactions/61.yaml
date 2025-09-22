@@ -1,0 +1,1750 @@
+uuid: c251c6a2-671e-45e0-a9fe-371457497127
+projectId: relaycode-tui
+createdAt: '2025-09-22T08:09:50.457Z'
+gitCommitMsg: >-
+  refactor(review): Radically DRY up review screen state and actions
+
+  Consolidates state management for the review screen to eliminate redundancy
+  and improve maintainability.
+
+  - Replaces multiple view-toggling actions (`toggleDiffView`,
+  `toggleReasoningView`, etc.) with a single `toggleBodyView` and `setBodyView`
+  in `review.store`. - Replaces six distinct `copy...` actions with a single,
+  flexible `copyItem` action, driven by a new `COPYABLE_ITEMS` constant to
+  ensure type safety and consistency between the store and UI. - Simplifies the
+  `useReviewScreen` hook by removing ~15 lines of redundant logic and making it
+  call the new, consolidated store actions.
+promptSummary: >-
+  Radically refactor the codebase to eliminate redundancy and improve DRYness
+  across UI, hooks, and state management stores, without changing the UI
+  behavior.
+reasoning:
+  - >-
+    Here is the requested DRYness refactor. I've focused on radically
+    simplifying state management in the Review screen by eliminating redundant
+    actions for view toggling and clipboard operations. This makes the code
+    cleaner, more maintainable, and less error-prone, without altering the
+    user-facing UI.
+  - '### 1. Refactor View State Management in `review.store.ts`'
+  - >-
+    I've replaced multiple individual view-toggling actions (`toggleDiffView`,
+    `toggleReasoningView`, etc.) with two versatile actions:
+  - '*   `toggleBodyView`: Toggles a view on and off, perfect for hotkeys.'
+  - >-
+    *   `setBodyView`: Directly sets a view, useful for one-way transitions or
+    closing views.
+  - >-
+    This centralizes the view logic, making the store's API cleaner and the
+    `useInput` hook in `useReviewScreen.tsx` much simpler.
+  - '### 2. Refactor Clipboard "Copy" Actions'
+  - >-
+    I consolidated six repetitive `copy...` actions into a single, flexible
+    `copyItem` action. A shared constant, `COPYABLE_ITEMS`, now ensures
+    consistency between the store's logic and the UI component, eliminating
+    stringly-typed data and the potential for typos.
+  - '### 3. Update UI to Align with New Actions'
+  - >-
+    Finally, I updated `ReviewScreen.tsx` to use the new `COPYABLE_ITEMS`
+    constant, ensuring that the display labels in the UI are always in sync with
+    the logic in the store.
+operations:
+  - type: write
+    path: src/stores/review.store.ts
+    content: >
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ -8,6 +8,17 @@
+       export type { ReviewFileItem as FileItem, ReviewFileItem } from '../types/file.types';
+       export type { ScriptResult, ApplyStep } from '../types/review.types';
+       
+      +export const COPYABLE_ITEMS = {
+
+      +    UUID: 'UUID',
+
+      +    MESSAGE: 'Git Message',
+
+      +    PROMPT: 'Prompt',
+
+      +    REASONING: 'Reasoning',
+
+      +    FILE_DIFF: 'Diff for',
+
+      +    ALL_DIFFS: 'All Diffs',
+
+      +} as const;
+
+      +
+
+      +export type CopyableItem = typeof COPYABLE_ITEMS[keyof typeof
+      COPYABLE_ITEMS];
+
+      +
+       export const initialApplySteps: ApplyStep[] = [
+           { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+           { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+      @@ -43,10 +54,8 @@
+               moveSelectionDown: () => void;
+               toggleFileApproval: () => void;
+               rejectAllFiles: () => void;
+      -        toggleDiffView: () => void;
+
+      -        toggleReasoningView: () => void;
+
+      -        toggleScriptView: () => void;
+               expandDiff: () => void;
+      +        toggleBodyView: (view: Extract<ReviewBodyView, 'diff' |
+      'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>) =>
+      void;
+
+      +        setBodyView: (view: ReviewBodyView) => void;
+               approve: () => void;
+               simulateSuccessScenario: () => void;
+               startApplySimulation: (scenario: 'success' | 'failure') => void;
+      @@ -56,13 +65,8 @@
+               toggleCopyMode: () => void;
+               moveCopySelectionUp: () => void;
+               moveCopySelectionDown: () => void;
+      +        copyItem: (item: CopyableItem, context?: any) => void;
+               copySelectedItem: () => void;
+      -        copyUUID: () => void;
+
+      -        copyMessage: () => void;
+
+      -        copyPrompt: () => void;
+
+      -        copyReasoning: () => void;
+
+      -        copyFileDiff: () => void;
+
+      -        copyAllDiffs: () => void;
+       
+               // Repair Actions
+               tryRepairFile: () => void;
+      @@ -82,6 +86,15 @@
+       }
+       
+       // --- Store Implementation ---
+      +const copyOptions: { label: CopyableItem }[] = [
+
+      +    { label: COPYABLE_ITEMS.UUID },
+
+      +    { label: COPYABLE_ITEMS.MESSAGE },
+
+      +    { label: COPYABLE_ITEMS.PROMPT },
+
+      +    { label: COPYABLE_ITEMS.REASONING },
+
+      +    { label: COPYABLE_ITEMS.FILE_DIFF },
+
+      +    { label: COPYABLE_ITEMS.ALL_DIFFS },
+
+      +];
+
+      +
+       
+       export const useReviewStore = create<ReviewState>((set, get) => ({
+           // Transaction Info
+      @@ -139,26 +152,14 @@
+                   });
+                   return { files: newFiles };
+               }),
+      -        toggleDiffView: () => set(state => {
+
+      -            const { bodyView } = state;
+
+      -            if (state.selectedItemIndex >= state.files.length) return {};
+      // Can't show diff for scripts
+
+      +        toggleBodyView: (view) => set(state => {
+
+      +            if (view === 'diff' && state.selectedItemIndex >=
+      state.files.length) return {}; // Can't show diff for scripts
+                   return {
+      -                bodyView: bodyView === 'diff' ? 'none' : 'diff',
+
+      +                bodyView: state.bodyView === view ? 'none' : view,
+                       isDiffExpanded: false, // Always start collapsed
+                   };
+               }),
+      -        toggleReasoningView: () => set(state => {
+
+      -            const { bodyView } = state;
+
+      -            return {
+
+      -                bodyView: bodyView === 'reasoning' ? 'none' :
+      'reasoning',
+
+      -            };
+
+      -        }),
+
+      -        toggleScriptView: () => set(state => {
+
+      -            const { bodyView } = state;
+
+      -            return {
+
+      -                bodyView: bodyView === 'script_output' ? 'none' :
+      'script_output',
+
+      -            };
+
+      -        }),
+
+      +        setBodyView: (view) => set({ bodyView: view }),
+               expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+               approve: () => { /* NOP for now, would trigger commit and screen change */ },
+               startApplySimulation: async (scenario: 'success' | 'failure') => {
+      @@ -231,83 +232,48 @@
+               moveCopySelectionDown: () => set(state => ({
+                   copyModeSelectedIndex: moveIndex(state.copyModeSelectedIndex, 'down', 6), // 6 total options
+               })),
+      -        copySelectedItem: () => set(state => {
+
+      -            const { copyModeSelectedIndex, hash, message, prompt,
+      reasoning, files, selectedItemIndex } = state;
+
+      +        copyItem: (item, context) => {
+
+      +            const { hash, message, prompt, reasoning, files } = get();
+                   let content = '';
+                   let label = '';
+       
+      -            switch (copyModeSelectedIndex) {
+
+      -                case 0: // UUID
+
+      +            switch (item) {
+
+      +                case COPYABLE_ITEMS.UUID:
+                           content = `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+                           label = 'UUID';
+                           break;
+      -                case 1: // Git Message
+
+      +                case COPYABLE_ITEMS.MESSAGE:
+                           content = message;
+                           label = 'Git Message';
+                           break;
+      -                case 2: // Prompt
+
+      +                case COPYABLE_ITEMS.PROMPT:
+                           content = prompt;
+                           label = 'Prompt';
+                           break;
+      -                case 3: // Reasoning
+
+      +                case COPYABLE_ITEMS.REASONING:
+                           content = reasoning;
+                           label = 'Reasoning';
+                           break;
+      -                case 4: // Diff for current file
+
+      -                    if (selectedItemIndex < files.length) {
+
+      -                        const file = files[selectedItemIndex];
+
+      -                        if (file) {
+
+      -                            content = file.diff;
+
+      -                            label = `Diff for ${file.path}`;
+
+      -                        }
+
+      +                case COPYABLE_ITEMS.FILE_DIFF: {
+
+      +                    const file = context as ReviewFileItem;
+
+      +                    if (file) {
+
+      +                        content = file.diff;
+
+      +                        label = `Diff for ${file.path}`;
+                           }
+                           break;
+      -                case 5: // All Diffs
+
+      +                }
+
+      +                case COPYABLE_ITEMS.ALL_DIFFS:
+                           content = files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
+                           label = 'All Diffs';
+                           break;
+                   }
+       
+                   // Mock clipboard operation (TUI environment - no real clipboard)
+      -            // eslint-disable-next-line no-console
+
+      -            console.log(`[CLIPBOARD] Copied ${label}:
+      ${content.substring(0, 100)}...`);
+
+      -
+
+      -            return { copyModeLastCopied: label };
+
+      -        }),
+
+      -        copyUUID: () => set(state => {
+
+      -            const content = `${state.hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+
+      -            // eslint-disable-next-line no-console
+
+      -            console.log(`[CLIPBOARD] Copied UUID: ${content}`);
+
+      -            return { copyModeLastCopied: 'UUID' };
+
+      -        }),
+
+      -        copyMessage: () => set(state => {
+
+      -            // eslint-disable-next-line no-console
+
+      -            console.log(`[CLIPBOARD] Copied Git Message:
+      ${state.message}`);
+
+      -            return { copyModeLastCopied: 'Git Message' };
+
+      -        }),
+
+      -        copyPrompt: () => set(state => {
+
+      -            // eslint-disable-next-line no-console
+
+      -            console.log(`[CLIPBOARD] Copied Prompt:
+      ${state.prompt.substring(0, 100)}...`);
+
+      -            return { copyModeLastCopied: 'Prompt' };
+
+      -        }),
+
+      -        copyReasoning: () => set(state => {
+
+      -            // eslint-disable-next-line no-console
+
+      -            console.log(`[CLIPBOARD] Copied Reasoning:
+      ${state.reasoning.substring(0, 100)}...`);
+
+      -            return { copyModeLastCopied: 'Reasoning' };
+
+      -        }),
+
+      -        copyFileDiff: () => set(state => {
+
+      -            if (state.selectedItemIndex < state.files.length) {
+
+      -                const file = state.files[state.selectedItemIndex];
+
+      -                if (file) {
+
+      -                    // eslint-disable-next-line no-console
+
+      -                    console.log(`[CLIPBOARD] Copied diff for:
+      ${file.path}`);
+
+      -                    return { copyModeLastCopied: `Diff for ${file.path}`
+      };
+
+      -                }
+
+      -            }
+
+      -            return {};
+
+      -        }),
+
+      -        copyAllDiffs: () => set(state => {
+
+      -            // eslint-disable-next-line no-console
+
+      -            console.log(`[CLIPBOARD] Copied all diffs:
+      ${state.files.length} files`);
+
+      -            return { copyModeLastCopied: 'All Diffs' };
+
+      -        }),
+
+      +            if (content) {
+
+      +                // eslint-disable-next-line no-console
+
+      +                console.log(`[CLIPBOARD] Copied ${label}:
+      ${content.substring(0, 100)}...`);
+
+      +                set({ copyModeLastCopied: label });
+
+      +            }
+
+      +        },
+
+      +        copySelectedItem: () => {
+
+      +            const { copyModeSelectedIndex, files, selectedItemIndex } =
+      get();
+
+      +            const option = copyOptions[copyModeSelectedIndex];
+
+      +            if (option) {
+
+      +                const context = option.label === COPYABLE_ITEMS.FILE_DIFF
+      ? files[selectedItemIndex] : undefined;
+
+      +                get().actions.copyItem(option.label, context);
+
+      +            }
+
+      +        },
+       
+               // Repair Actions
+               tryRepairFile: () => {
+      @@ -320,9 +286,7 @@
+                       }
+                   }
+               },
+      -        showBulkRepair: () => set(() => ({
+
+      -            bodyView: 'bulk_repair' as const,
+
+      -        })),
+
+      +        showBulkRepair: () =>
+      get().actions.toggleBodyView('bulk_repair'),
+               executeBulkRepairOption: async (option: number) => {
+                   const { files } = get();
+       
+      @@ -341,7 +305,7 @@
+                       }
+       
+                       case 3: { // Handoff to Human
+      -                    set({ bodyView: 'confirm_handoff' as const });
+
+      +                    get().actions.setBodyView('confirm_handoff');
+                           break;
+                       }
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: >+
+      --- src/hooks/useReviewScreen.tsx
+
+      +++ src/hooks/useReviewScreen.tsx
+
+      @@ -10,12 +10,11 @@
+               selectedItemIndex, bodyView,
+           } = store;
+           const {
+      -        moveSelectionUp, moveSelectionDown, toggleFileApproval,
+
+      -        toggleDiffView, toggleReasoningView, toggleScriptView,
+      expandDiff,
+
+      +        moveSelectionUp, moveSelectionDown, toggleFileApproval,
+      expandDiff,
+
+      +        toggleBodyView, setBodyView,
+               startApplySimulation,
+               rejectAllFiles, approve,
+      -        toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown,
+      copySelectedItem,
+
+      -        copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff,
+      copyAllDiffs,
+
+      +        toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown,
+      copyItem, copySelectedItem,
+               tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
+               scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+           } = store.actions;
+      @@ -48,15 +47,11 @@
+               if (key.escape) {
+                   if (bodyView === 'copy_mode') {
+                       toggleCopyMode();
+      -            } else if (bodyView === 'confirm_handoff') {
+
+      -                // Pressing Esc on confirm handoff goes back to the main
+      view
+
+      -                toggleReasoningView(); // Toggles any view off
+
+      -            } else if (bodyView === 'bulk_repair') {
+
+      -                showBulkRepair(); // Close bulk repair modal
+
+      +            } else if (bodyView === 'bulk_repair' || bodyView ===
+      'confirm_handoff') {
+
+      +                toggleBodyView(bodyView); // Close modal
+                   } else if (bodyView !== 'none') {
+      -                if (bodyView === 'diff') toggleDiffView();
+
+      -                if (bodyView === 'reasoning') toggleReasoningView();
+
+      -                if (bodyView === 'script_output') toggleScriptView();
+
+      +                setBodyView('none');
+                   } else {
+                       showDashboardScreen();
+                   }
+      @@ -69,12 +64,12 @@
+                   if (key.return) copySelectedItem();
+                   
+                   // Hotkey shortcuts
+      -            if (input.toLowerCase() === 'u') copyUUID();
+
+      -            if (input.toLowerCase() === 'm') copyMessage();
+
+      -            if (input.toLowerCase() === 'p') copyPrompt();
+
+      -            if (input.toLowerCase() === 'r') copyReasoning();
+
+      -            if (input.toLowerCase() === 'f') copyFileDiff();
+
+      -            if (input.toLowerCase() === 'a') copyAllDiffs();
+
+      +            if (input.toLowerCase() === 'u') copyItem('UUID');
+
+      +            if (input.toLowerCase() === 'm') copyItem('Git Message');
+
+      +            if (input.toLowerCase() === 'p') copyItem('Prompt');
+
+      +            if (input.toLowerCase() === 'r') copyItem('Reasoning');
+
+      +            if (input.toLowerCase() === 'f') copyItem('Diff for',
+      files[selectedItemIndex]);
+
+      +            if (input.toLowerCase() === 'a') copyItem('All Diffs');
+                   if (input.toLowerCase() === 'c') toggleCopyMode();
+                   return;
+               }
+      @@ -96,14 +91,14 @@
+               if (bodyView === 'reasoning') {
+                   if (key.upArrow) scrollReasoningUp();
+                   if (key.downArrow) scrollReasoningDown();
+      -            if (input.toLowerCase() === 'r') toggleReasoningView();
+
+      +            if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+                   return;
+               }
+       
+               // Script Output Navigation
+               if (bodyView === 'script_output') {
+                   if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+      -            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+
+      -            if (key.return) toggleScriptView();
+
+      +            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+
+      +            if (key.return) toggleBodyView('script_output');
+                   if (input.toLowerCase() === 'c') {
+                       // Copy script output
+                       const scriptIndex = selectedItemIndex - numFiles;
+      @@ -118,7 +113,7 @@
+               // Diff View Navigation
+               if (bodyView === 'diff') {
+                   if (input.toLowerCase() === 'x') expandDiff();
+      -            if (input.toLowerCase() === 'd') toggleDiffView();
+
+      +            if (input.toLowerCase() === 'd') toggleBodyView('diff');
+                   return;
+               }
+       
+      @@ -133,7 +128,7 @@
+               if (key.upArrow) moveSelectionUp();
+               if (key.downArrow) moveSelectionDown();
+       
+      -        if (input.toLowerCase() === 'r') toggleReasoningView();
+
+      +        if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+       
+               if (input === ' ') {
+                   if (selectedItemIndex < numFiles) {
+      @@ -146,13 +141,13 @@
+       
+               if (input.toLowerCase() === 'd') {
+                   if (selectedItemIndex < numFiles) {
+      -                toggleDiffView();
+
+      +                toggleBodyView('diff');
+                   }
+               }
+       
+               if (key.return) { // Enter key
+                    if (selectedItemIndex >= numFiles) { // It's a script
+      -                toggleScriptView();
+
+      +                toggleBodyView('script_output');
+                   }
+               }
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: >+
+      --- src/components/ReviewScreen.tsx
+
+      +++ src/components/ReviewScreen.tsx
+
+      @@ -1,6 +1,6 @@
+       import React from 'react';
+       import { Box, Text } from 'ink';
+      -import { type FileItem, type ScriptResult } from
+      '../stores/review.store';
+
+      +import { type FileItem, type ScriptResult, COPYABLE_ITEMS } from
+      '../stores/review.store';
+       import Separator from './Separator';
+       import DiffScreen from './DiffScreen';
+       import ReasonScreen from './ReasonScreen';
+      @@ -216,13 +216,13 @@
+               if (bodyView === 'copy_mode') {
+                   const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                   const options = [
+      -                { key: 'U', label: 'UUID', value: `${hash ??
+      ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+
+      -                { key: 'M', label: 'Git Message', value: message },
+
+      -                { key: 'P', label: 'Prompt', value:
+      `${prompt.substring(0, 45)}...` },
+
+      -                { key: 'R', label: 'Reasoning', value:
+      `${(reasoning.split('\n')[0] ?? '').substring(0, 45)}...` },
+
+      +                { key: 'U', label: COPYABLE_ITEMS.UUID, value: `${hash ??
+      ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+
+      +                { key: 'M', label: COPYABLE_ITEMS.MESSAGE, value: message
+      },
+
+      +                { key: 'P', label: COPYABLE_ITEMS.PROMPT, value:
+      `${prompt.substring(0, 45)}...` },
+
+      +                { key: 'R', label: COPYABLE_ITEMS.REASONING, value:
+      `${(reasoning.split('\n')[0] ?? '').substring(0, 45)}...` },
+                   ];
+                   const fileOptions = [
+      -                { key: 'F', label: 'Diff for', value: selectedFile ?
+      selectedFile.path : 'N/A' },
+
+      -                { key: 'A', label: 'All Diffs', value: `${files.length}
+      files` },
+
+      +                { key: 'F', label: COPYABLE_ITEMS.FILE_DIFF, value:
+      selectedFile ? selectedFile.path : 'N/A' },
+
+      +                { key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, value:
+      `${files.length} files` },
+                   ];
+       
+                   return (
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { sleep } from '../utils';
+
+    import { useAppStore } from './app.store';
+
+    import { useDashboardStore } from './dashboard.store';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { mockReviewFiles, mockReviewScripts, mockReviewReasoning } from
+    '../data/mocks';
+
+    import { moveIndex } from './navigation.utils';
+
+    import type { ReviewFileItem } from '../types/file.types';
+
+    import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from
+    '../types/review.types';
+
+
+    export type { ReviewFileItem as FileItem, ReviewFileItem } from
+    '../types/file.types';
+
+    export type { ScriptResult, ApplyStep } from '../types/review.types';
+
+
+    export const COPYABLE_ITEMS = {
+        UUID: 'UUID',
+        MESSAGE: 'Git Message',
+        PROMPT: 'Prompt',
+        REASONING: 'Reasoning',
+        FILE_DIFF: 'Diff for',
+        ALL_DIFFS: 'All Diffs',
+    } as const;
+
+
+    export type CopyableItem = typeof COPYABLE_ITEMS[keyof typeof
+    COPYABLE_ITEMS];
+
+
+    export const initialApplySteps: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+
+    interface ReviewState {
+        // Transaction Info
+        hash: string;
+        message: string;
+        prompt: string;
+        reasoning: string;
+        linesAdded: number;
+        linesRemoved: number;
+        duration: number;
+        patchStatus: PatchStatus;
+
+        // File & Script Info
+        files: ReviewFileItem[];
+        scripts: ScriptResult[];
+
+        // UI State
+        applySteps: ApplyStep[];
+        selectedItemIndex: number; // Can be file or script
+        bodyView: ReviewBodyView;
+        isDiffExpanded: boolean;
+
+        // Copy Mode State
+        copyModeSelectedIndex: number;
+        copyModeLastCopied: string | null;
+
+        // Reasoning Scroll State
+        reasoningScrollIndex: number;
+
+        // Script Navigation State
+        scriptErrorIndex: number;
+
+        actions: {
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            toggleFileApproval: () => void;
+            rejectAllFiles: () => void;
+            expandDiff: () => void;
+            toggleBodyView: (view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            simulateSuccessScenario: () => void;
+            startApplySimulation: (scenario: 'success' | 'failure') => void;
+            simulateFailureScenario: () => void;
+
+            // Copy Mode Actions
+            toggleCopyMode: () => void;
+            moveCopySelectionUp: () => void;
+            moveCopySelectionDown: () => void;
+            copyItem: (item: CopyableItem, context?: any) => void;
+            copySelectedItem: () => void;
+
+            // Repair Actions
+            tryRepairFile: () => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+
+            // Navigation Actions
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void,
+
+            // "Private" actions for service layer
+            _updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+            _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+        };
+    }
+
+
+    // --- Store Implementation ---
+
+    const copyOptions: { label: CopyableItem }[] = [
+        { label: COPYABLE_ITEMS.UUID },
+        { label: COPYABLE_ITEMS.MESSAGE },
+        { label: COPYABLE_ITEMS.PROMPT },
+        { label: COPYABLE_ITEMS.REASONING },
+        { label: COPYABLE_ITEMS.FILE_DIFF },
+        { label: COPYABLE_ITEMS.ALL_DIFFS },
+    ];
+
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        // Transaction Info
+        hash: 'e4a7c112',
+        message: 'refactor: rename core utility function',
+        prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+        reasoning: mockReviewReasoning,
+        linesAdded: 18,
+        linesRemoved: 5,
+        duration: 0.6,
+        patchStatus: 'PARTIAL_FAILURE',
+
+        // File & Script Info
+        files: mockReviewFiles,
+        scripts: [], // Empty for partial failure scenario
+
+        // UI State
+        applySteps: initialApplySteps,
+        selectedItemIndex: 0, // Start with first file
+        bodyView: 'none' as const,
+        isDiffExpanded: false,
+
+        // Copy Mode State
+        copyModeSelectedIndex: 0,
+        copyModeLastCopied: null,
+
+        // Reasoning Scroll State
+        reasoningScrollIndex: 0,
+
+        // Script Navigation State
+        scriptErrorIndex: 0,
+
+        actions: {
+            moveSelectionUp: () => set(state => ({
+                selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', state.files.length + state.scripts.length),
+            })),
+            moveSelectionDown: () => set(state => ({
+                selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', state.files.length + state.scripts.length),
+            })),
+            toggleFileApproval: () => set(state => {
+                const { selectedItemIndex, files } = state;
+                if (selectedItemIndex >= files.length) return {}; // Not a file
+
+                const newFiles = [...files];
+                const file = newFiles[selectedItemIndex];
+                if (file) {
+                    if (file.status === 'APPROVED') {
+                        file.status = 'REJECTED';
+                    } else if (file.status === 'REJECTED') {
+                        file.status = 'APPROVED';
+                    }
+                }
+                return { files: newFiles };
+            }),
+            rejectAllFiles: () => set(state => {
+                const newFiles = state.files.map(file => {
+                    if (file.status === 'APPROVED') {
+                        return { ...file, status: 'REJECTED' as const };
+                    }
+                    return file;
+                });
+                return { files: newFiles };
+            }),
+            toggleBodyView: (view) => set(state => {
+                if (view === 'diff' && state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
+                return {
+                    bodyView: state.bodyView === view ? 'none' : view,
+                    isDiffExpanded: false, // Always start collapsed
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => { /* NOP for now, would trigger commit and screen change */ },
+            startApplySimulation: async (scenario: 'success' | 'failure') => {
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+
+                set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
+                showReviewProcessingScreen();
+
+                await ReviewService.runApplySimulation(scenario);
+
+                showReviewScreen();
+            },
+            simulateSuccessScenario: () => set(() => ({
+                hash: '4b9d8f03',
+                message: 'refactor: simplify clipboard logic',
+                prompt: 'Simplify the clipboard logic using an external library...',
+                linesAdded: 22,
+                linesRemoved: 11,
+                duration: 3.9,
+                patchStatus: 'SUCCESS' as const,
+                files: [
+                    {
+                        id: '1',
+                        path: 'src/core/clipboard.ts',
+                        status: 'APPROVED' as const,
+                        linesAdded: 15,
+                        linesRemoved: 8,
+                        diff: `--- a/src/core/clipboard.ts
+    +++ b/src/core/clipboard.ts
+
+    @@ -1,5 +1,6 @@
+     import { copy as copyToClipboard } from 'clipboardy';`,
+                        strategy: 'replace' as const,
+                    },
+                    {
+                        id: '2',
+                        path: 'src/utils/shell.ts',
+                        status: 'APPROVED' as const,
+                        linesAdded: 7,
+                        linesRemoved: 3,
+                        diff: `--- a/src/utils/shell.ts
+    +++ b/src/utils/shell.ts`,
+                        strategy: 'standard-diff' as const,
+                    },
+                ],
+                scripts: mockReviewScripts,
+                selectedItemIndex: 0,
+                bodyView: 'none' as const,
+            })),
+            simulateFailureScenario: () => set(() => ({
+                hash: 'e4a7c112',
+                message: 'refactor: rename core utility function',
+                prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+                linesAdded: 18,
+                linesRemoved: 5,
+                duration: 0.6,
+                patchStatus: 'PARTIAL_FAILURE' as const,
+                files: mockReviewFiles,
+                scripts: [],
+                // Reset UI state
+                bodyView: 'none',
+                isDiffExpanded: false,
+                reasoningScrollIndex: 0,
+                scriptErrorIndex: 0,
+                selectedItemIndex: 0,
+            })),
+
+            // Copy Mode Actions
+            toggleCopyMode: () => set(state => ({
+                bodyView: state.bodyView === 'copy_mode' ? 'none' as const : 'copy_mode' as const,
+                copyModeSelectedIndex: 0,
+                copyModeLastCopied: null,
+            })),
+            moveCopySelectionUp: () => set(state => ({
+                copyModeSelectedIndex: moveIndex(state.copyModeSelectedIndex, 'up', 6), // 6 total options
+            })),
+            moveCopySelectionDown: () => set(state => ({
+                copyModeSelectedIndex: moveIndex(state.copyModeSelectedIndex, 'down', 6), // 6 total options
+            })),
+            copyItem: (item, context) => {
+                const { hash, message, prompt, reasoning, files } = get();
+                let content = '';
+                let label = '';
+
+                switch (item) {
+                    case COPYABLE_ITEMS.UUID:
+                        content = `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
+                        label = 'UUID';
+                        break;
+                    case COPYABLE_ITEMS.MESSAGE:
+                        content = message;
+                        label = 'Git Message';
+                        break;
+                    case COPYABLE_ITEMS.PROMPT:
+                        content = prompt;
+                        label = 'Prompt';
+                        break;
+                    case COPYABLE_ITEMS.REASONING:
+                        content = reasoning;
+                        label = 'Reasoning';
+                        break;
+                    case COPYABLE_ITEMS.FILE_DIFF: {
+                        const file = context as ReviewFileItem;
+                        if (file) {
+                            content = file.diff;
+                            label = `Diff for ${file.path}`;
+                        }
+                        break;
+                    }
+                    case COPYABLE_ITEMS.ALL_DIFFS:
+                        content = files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
+                        label = 'All Diffs';
+                        break;
+                }
+
+                // Mock clipboard operation (TUI environment - no real clipboard)
+                if (content) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[CLIPBOARD] Copied ${label}: ${content.substring(0, 100)}...`);
+                    set({ copyModeLastCopied: label });
+                }
+            },
+            copySelectedItem: () => {
+                const { copyModeSelectedIndex, files, selectedItemIndex } = get();
+                const option = copyOptions[copyModeSelectedIndex];
+                if (option) {
+                    const context = option.label === COPYABLE_ITEMS.FILE_DIFF ? files[selectedItemIndex] : undefined;
+                    get().actions.copyItem(option.label, context);
+                }
+            },
+
+            // Repair Actions
+            tryRepairFile: () => {
+                const { selectedItemIndex, files } = get();
+                if (selectedItemIndex < files.length) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status === 'FAILED') {
+                        ReviewService.tryRepairFile(file, selectedItemIndex);
+                    }
+                }
+            },
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option: number) => {
+                const { files } = get();
+
+                switch (option) {
+                    case 1: { // Generate & Copy Bulk Repair Prompt
+                        const bulkPrompt = ReviewService.generateBulkRepairPrompt(files);
+                        const failedFiles = files.filter(f => f.status === 'FAILED');
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files.`);
+                        // In a real app, this would use clipboardy.writeSync(bulkPrompt),
+                        set({ bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied.' });
+                        break;
+                    }
+
+                    case 2: { // Attempt Bulk Re-apply
+                        set({ bodyView: 'none' as const });
+                        await ReviewService.runBulkReapply();
+                        break;
+                    }
+
+                    case 3: { // Handoff to Human
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    }
+
+                    case 4: { // Reject All Failed
+                        set(state => ({
+                            files: state.files.map(file =>
+                                file.status === 'FAILED'
+                                    ? { ...file, status: 'REJECTED' as const }
+                                    : file,
+                            ),
+                            bodyView: 'none' as const,
+                        }));
+                        break;
+                    }
+
+                    default: // Close modal
+                        set({ bodyView: 'none' as const });
+                }
+            },
+            confirmHandoff: () => {
+                const { hash, message, reasoning, files } = get();
+                const handoffPrompt = ReviewService.generateHandoffPrompt(hash, message, reasoning, files);
+
+                // eslint-disable-next-line no-console
+                console.log('[CLIPBOARD] Copied Handoff Prompt.'); // In real app: clipboardy.writeSync(handoffPrompt)
+                ReviewService.performHandoff(hash);
+            },
+
+            // Navigation Actions
+            scrollReasoningUp: () => set(state => ({
+                reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1),
+            })),
+            scrollReasoningDown: () => set(state => {
+                const maxLines = state.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({
+                scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1),
+            })),
+            navigateScriptErrorDown: () => set(state => {
+                const selectedScript = state.scripts[state.selectedItemIndex - state.files.length];
+                if (selectedScript && selectedScript.output) {
+                    const errorLines = selectedScript.output.split('\n').filter(line =>
+                        line.includes('Error') || line.includes('Warning'),
+                    );
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+
+            // "Private" actions for service layer
+            _updateApplyStep: (id, status, duration, details) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep = { ...s, status };
+                            if (duration !== undefined) newStep.duration = duration;
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            _addApplySubstep: (parentId, substep) => {
+                 set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+        },
+    }));
+  src/hooks/useReviewScreen.tsx: |-
+    import { useMemo } from 'react';
+    import { useInput, useApp } from 'ink';
+    import { useReviewStore } from '../stores/review.store';
+    import { useAppStore } from '../stores/app.store';
+
+    export const useReviewScreen = () => {
+        const { exit } = useApp();
+        const store = useReviewStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const {
+            hash, message, prompt, reasoning, files, scripts, patchStatus,
+            selectedItemIndex, bodyView,
+        } = store;
+        const {
+            moveSelectionUp, moveSelectionDown, toggleFileApproval, expandDiff,
+            toggleBodyView, setBodyView,
+            startApplySimulation,
+            rejectAllFiles, approve,
+            toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copyItem, copySelectedItem,
+            tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
+            scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+        } = store.actions;
+
+        const {
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useMemo(() => {
+            const approvedFiles = files.filter(f => f.status === 'APPROVED');
+            return {
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+                approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+                approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+            };
+        }, [files]);
+
+        useInput((input, key) => {
+            // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+            if (input === '1') {
+                startApplySimulation('success');
+                return;
+            }
+            if (input === '2') {
+                // The store's default is failure, but to re-trigger the processing screen
+                startApplySimulation('failure');
+                return;
+            }
+
+            if (input.toLowerCase() === 'q') exit();
+
+            // Handle Escape key - context-sensitive behavior
+            if (key.escape) {
+                if (bodyView === 'copy_mode') {
+                    toggleCopyMode();
+                } else if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
+                    toggleBodyView(bodyView); // Close modal
+                } else if (bodyView !== 'none') {
+                    setBodyView('none');
+                } else {
+                    showDashboardScreen();
+                }
+                return;
+            }
+
+            // Copy Mode Navigation
+            if (bodyView === 'copy_mode') {
+                if (key.upArrow) moveCopySelectionUp();
+                if (key.downArrow) moveCopySelectionDown();
+                if (key.return) copySelectedItem();
+                
+                // Hotkey shortcuts
+                if (input.toLowerCase() === 'u') copyItem('UUID');
+                if (input.toLowerCase() === 'm') copyItem('Git Message');
+                if (input.toLowerCase() === 'p') copyItem('Prompt');
+                if (input.toLowerCase() === 'r') copyItem('Reasoning');
+                if (input.toLowerCase() === 'f') copyItem('Diff for', files[selectedItemIndex]);
+                if (input.toLowerCase() === 'a') copyItem('All Diffs');
+                if (input.toLowerCase() === 'c') toggleCopyMode();
+                return;
+            }
+
+            // Handoff Confirmation
+            if (bodyView === 'confirm_handoff') {
+                if (key.return) {
+                    confirmHandoff();
+                }
+                return;
+            }
+
+            // Bulk Repair Navigation
+            if (bodyView === 'bulk_repair') {
+                if (input >= '1' && input <= '4') {
+                    executeBulkRepairOption(parseInt(input));
+                }
+                return;
+            }
+
+            // Reasoning Scroll Navigation
+            if (bodyView === 'reasoning') {
+                if (key.upArrow) scrollReasoningUp();
+                if (key.downArrow) scrollReasoningDown();
+                if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+                return;
+            }
+
+            // Script Output Navigation
+            if (bodyView === 'script_output') {
+                if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+                if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+                if (key.return) toggleBodyView('script_output');
+                if (input.toLowerCase() === 'c') {
+                    // Copy script output
+                    const scriptIndex = selectedItemIndex - numFiles;
+                    const selectedScript = scripts[scriptIndex];
+                    if (selectedScript) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                    }
+                }
+                return;
+            }
+
+            // Diff View Navigation
+            if (bodyView === 'diff') {
+                if (input.toLowerCase() === 'x') expandDiff();
+                if (input.toLowerCase() === 'd') toggleBodyView('diff');
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status !== 'FAILED') {
+                        toggleFileApproval();
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleBodyView('diff');
+                }
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleBodyView('script_output');
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                toggleCopyMode();
+            }
+
+            // Handle T for single repair and Shift+T for bulk repair
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = files.some(f => f.status === 'FAILED');
+                    if (hasFailedFiles) {
+                        showBulkRepair();
+                    }
+                } else {
+                    if (selectedItemIndex < numFiles) {
+                        const file = files[selectedItemIndex];
+                        if (file && file.status === 'FAILED') {
+                            tryRepairFile();
+                        }
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        return { ...store, numFiles, approvedFilesCount, approvedLinesAdded, approvedLinesRemoved };
+    };
+  src/components/ReviewScreen.tsx: >-
+    import React from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import { type FileItem, type ScriptResult, COPYABLE_ITEMS } from
+    '../stores/review.store';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import { useReviewScreen } from '../hooks/useReviewScreen';
+
+
+    // --- Sub-components ---
+
+
+    const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+    boolean }) => {
+        let icon;
+        let iconColor;
+        switch (file.status) {
+            case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
+            case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
+            case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+            case 'AWAITING': icon = '[●]'; iconColor = 'yellow'; break;
+            case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
+        }
+
+        const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+        const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+        const prefix = isSelected ? '> ' : '  ';
+
+        if (file.status === 'FAILED') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
+                        <Text color="red">    ({file.error})</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (file.status === 'AWAITING') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
+                        <Text color="yellow">    (Bulk re-apply prompt copied!)</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (file.status === 'RE_APPLYING') {
+            return (
+                 <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} RE-APPLYING... {file.path}</Text>
+                        <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> MOD {file.path} {diffStats} [{strategy}]
+                </Text>
+            </Box>
+        );
+    };
+
+
+    const ScriptItemRow = ({
+        script,
+        isSelected,
+        isExpanded,
+    }: {
+        script: ScriptResult;
+        isSelected: boolean;
+        isExpanded: boolean;
+    }) => {
+        const icon = script.success ? '✓' : '✗';
+        const iconColor = script.success ? 'green' : 'red';
+        const arrow = isExpanded ? '▾' : '▸';
+        const prefix = isSelected ? '> ' : '  ';
+        
+        // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+        const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                          script.command.includes('lint') ? 'Linter' : 
+                          'Script';
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                    {script.summary}
+                </Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const ReviewScreen = () => {
+        const {
+            hash, message, prompt, reasoning, files, scripts, patchStatus,
+            linesAdded, linesRemoved, duration,
+            selectedItemIndex, bodyView, isDiffExpanded,
+            copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useReviewScreen();
+
+        const renderBody = () => {
+            if (bodyView === 'none') return null;
+
+            if (bodyView === 'reasoning') {
+                const reasoningLinesCount = reasoning.split('\n').length;
+                const visibleLinesCount = 10;
+                return (
+                    <Box flexDirection="column">
+                        <ReasonScreen
+                            reasoning={reasoning}
+                            scrollIndex={reasoningScrollIndex}
+                            visibleLinesCount={visibleLinesCount}
+                        />
+                        {reasoningLinesCount > visibleLinesCount && (
+                            <Text color="gray">
+                                Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                                of {reasoningLinesCount}
+                            </Text>
+                        )}
+                    </Box>
+                );
+            }
+            
+            if (bodyView === 'diff') {
+                const selectedFile = files[selectedItemIndex];
+                if (!selectedFile) return null;
+                return (
+                    <DiffScreen
+                        filePath={selectedFile.path}
+                        diffContent={selectedFile.diff}
+                        isExpanded={isDiffExpanded}
+                    />
+                );
+            }
+
+            if (bodyView === 'script_output') {
+                 const scriptIndex = selectedItemIndex - numFiles;
+                 const selectedScript = scripts[scriptIndex];
+                 if (!selectedScript) return null;
+                 
+                 const outputLines = selectedScript.output.split('\n');
+                 const errorLines = outputLines.filter(line =>
+                    line.includes('Error') || line.includes('Warning'),
+                 );
+                 
+                 return (
+                    <Box flexDirection="column">
+                        <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                        <Box marginTop={1}>
+                            {outputLines.map((line, index) => {
+                                const isError = line.includes('Error');
+                                const isWarning = line.includes('Warning');
+                                const isHighlighted = errorLines[scriptErrorIndex] === line;
+                                
+                                return (
+                                    <Text 
+                                        key={index} 
+                                        color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                        bold={isHighlighted}
+                                        backgroundColor={isHighlighted ? 'blue' : undefined}
+                                    >
+                                        {line}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                        {errorLines.length > 0 && (
+                            <Text color="gray">
+                                Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                            </Text>
+                        )}
+                    </Box>
+                 );
+            }
+
+            if (bodyView === 'copy_mode') {
+                const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                const options = [
+                    { key: 'U', label: COPYABLE_ITEMS.UUID, value: `${hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                    { key: 'M', label: COPYABLE_ITEMS.MESSAGE, value: message },
+                    { key: 'P', label: COPYABLE_ITEMS.PROMPT, value: `${prompt.substring(0, 45)}...` },
+                    { key: 'R', label: COPYABLE_ITEMS.REASONING, value: `${(reasoning.split('\n')[0] ?? '').substring(0, 45)}...` },
+                ];
+                const fileOptions = [
+                    { key: 'F', label: COPYABLE_ITEMS.FILE_DIFF, value: selectedFile ? selectedFile.path : 'N/A' },
+                    { key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, value: `${files.length} files` },
+                ];
+
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>Select item to copy to clipboard:</Text>
+
+                        <Box flexDirection="column">
+                            {options.map((option, index) => (
+                                <Text key={option.key} bold={index === copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                    {index === copyModeSelectedIndex ? '> ' : '  '}
+                                    [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
+                                </Text>
+                            ))}
+                        </Box>
+
+                        <Separator/>
+
+                        <Box flexDirection="column">
+                            {fileOptions.map((option, index) => {
+                                const overallIndex = index + options.length;
+                                return (
+                                    <Text key={option.key} bold={overallIndex === copyModeSelectedIndex} color={overallIndex === copyModeSelectedIndex ? 'cyan' : undefined}>
+                                        {overallIndex === copyModeSelectedIndex ? '> ' : '  '}
+                                        [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+
+                        <Separator/>
+
+                        {copyModeLastCopied && (
+                            <Text color="green">✓ Copied {copyModeLastCopied} to clipboard.</Text>
+                        )}
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'confirm_handoff') {
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+                        <Box flexDirection="column">
+                            <Text>This action will:</Text>
+                            <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
+                            <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
+                            <Text>3. Assume that you and the external agent will complete the work.</Text>
+                        </Box>
+                        <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
+                        <Text bold color="yellow">Are you sure you want to proceed?</Text>
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'bulk_repair') {
+                const failedFiles = files.filter(f => f.status === 'FAILED');
+                const repairOptions = [
+                    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+                    '(2) Bulk Change Strategy & Re-apply',
+                    '(3) Handoff to External Agent',
+                    '(4) Bulk Abandon All Failed Files',
+                    '(Esc) Cancel',
+                ];
+
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>BULK REPAIR ACTION</Text>
+
+                        <Box flexDirection="column">
+                            <Text>The following {failedFiles.length} files failed to apply:</Text>
+                            {failedFiles.map(file => (
+                                <Text key={file.id}>- {file.path}</Text>
+                            ))}
+                        </Box>
+
+                        <Text>How would you like to proceed?</Text>
+
+                        <Box flexDirection="column">
+                            {repairOptions.map((opt, i) => (
+                                <Text key={i}>
+                                    {i === 0 ? '> ' : '  '}
+                                    {opt}
+                                </Text>
+                            ))}
+                        </Box>
+                    </Box>
+                );
+            }
+
+            return null;
+        };
+
+        const renderFooter = () => {
+            // Contextual footer for body views
+            if (bodyView === 'diff') {
+                return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
+            }
+            if (bodyView === 'reasoning') {
+                return <Text>(↑↓) Scroll Text · (R)Collapse View · (C)opy Mode</Text>;
+            }
+            if (bodyView === 'script_output') {
+                return (
+                    <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
+                );
+            }
+            if (bodyView === 'copy_mode') {
+                return <Text>(↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit</Text>;
+            }
+            if (bodyView === 'bulk_repair') {
+                return <Text>Choose an option [1-4, Esc]:</Text>;
+            }
+            if (bodyView === 'confirm_handoff') {
+                return <Text>(Enter) Confirm Handoff      (Esc) Cancel</Text>;
+            }
+
+            // Main footer
+            const actions = ['(↑↓) Nav'];
+
+            const isFileSelected = selectedItemIndex < numFiles;
+            const hasFailedFiles = files.some(f => f.status === 'FAILED');
+            
+            if (isFileSelected) {
+                const selectedFile = files[selectedItemIndex];
+                if (selectedFile && selectedFile.status !== 'FAILED') {
+                    actions.push('(Spc) Toggle');
+                }
+                actions.push('(D)iff');
+                
+                // Add repair options for failed files
+                if (selectedFile && selectedFile.status === 'FAILED') {
+                    actions.push('(T)ry Repair');
+                }
+            } else { // script selected
+                actions.push('(Ent) Expand Details');
+            }
+
+            actions.push('(R)easoning');
+            
+            // Add bulk repair if there are failed files
+            if (hasFailedFiles) {
+                actions.push('(Shift+T) Bulk Repair');
+            }
+            
+            actions.push('(C)opy');
+
+            if (approvedFilesCount > 0) {
+                actions.push('(A)pprove');
+            }
+
+            if (files.some(f => f.status === 'APPROVED' || f.status === 'FAILED')) {
+                actions.push('(Shift+R) Reject All');
+            }
+            actions.push('(Q)uit');
+
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text color="cyan">▲ relaycode review{bodyView === 'copy_mode' ? ' · copy mode' : ''}</Text>
+                <Separator />
+                
+                {/* Navigator Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Box flexDirection="column">
+                        <Text>{hash} · {message}</Text>
+                        <Text>
+                            (<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files · {duration}s
+                            {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+                            {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                        </Text>
+                    </Box>
+
+                    <Box flexDirection="column" marginTop={1}>
+                        <Text>
+                            (P)rompt ▸ {prompt.substring(0, 60)}...
+                        </Text>
+                        <Text>
+                            (R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                            {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
+                        </Text>
+                    </Box>
+                </Box>
+
+                <Separator/>
+
+                {/* Script Results (if any) */}
+                {scripts.length > 0 && (
+                    <>
+                        <Box flexDirection="column" marginY={1}>
+                            {scripts.map((script, index) => (
+                                <ScriptItemRow
+                                    key={script.command}
+                                    script={script}
+                                    isSelected={selectedItemIndex === numFiles + index}
+                                    isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                                />
+                            ))}
+                        </Box>
+                        <Separator/>
+                    </>
+                )}
+
+                {/* Files Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Text bold>FILES</Text>
+                    {files.map((file, index) => (
+                        <FileItemRow
+                            key={file.id}
+                            file={file}
+                            isSelected={selectedItemIndex === index}
+                        />
+                    ))}
+                </Box>
+                
+                <Separator/>
+                
+                {/* Body Viewport */}
+                {bodyView !== 'none' && (
+                    <>
+                        <Box marginY={1}>
+                            {renderBody()}
+                        </Box>
+                        <Separator />
+                    </>
+                )}
+
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default ReviewScreen;
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 61

@@ -17,8 +17,6 @@ interface TransactionHistoryState {
     expandedIds: Set<string>; // holds ids of expanded items
     filterQuery: string;
     selectedForAction: Set<string>; // set of transaction IDs
-    copyModeSelections: Set<string>;
-    lastCopiedMessage: string | null;
 
     actions: {
         load: (initialState?: Partial<HistoryStateData>) => void;
@@ -29,9 +27,7 @@ interface TransactionHistoryState {
         toggleSelection: () => void;
         setMode: (mode: HistoryViewMode) => void;
         setFilterQuery: (query: string) => void;
-        applyFilter: () => void;
-        toggleCopySelection: (field: string) => void;
-        executeCopy: () => void;
+        applyFilter: () => void; 
         prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
     }
 }
@@ -57,8 +53,6 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
     expandedIds: new Set(),
     filterQuery: '',
     selectedForAction: new Set(),
-    copyModeSelections: new Set(['Git Messages', 'Reasonings']),
-    lastCopiedMessage: null,
 
     actions: {
         load: (initialState) => {
@@ -70,8 +64,6 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
                 expandedIds: new Set(),
                 selectedForAction: new Set(),
                 filterQuery: '',
-                copyModeSelections: new Set(['Git Messages', 'Reasonings']),
-                lastCopiedMessage: null,
                 ...initialState,
             });
         },
@@ -134,30 +126,12 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
             }
             return { selectedForAction: newSelection };
         }),
-        setMode: (mode) => set({ mode, lastCopiedMessage: null }),
+        setMode: (mode) => set({ mode }),
         setFilterQuery: (query) => set({ filterQuery: query }),
         applyFilter: () => {
             // In a real app, this would filter `transactions`.
             // For the demo, we just go back to LIST mode.
             set({ mode: 'LIST' });
-        },
-        toggleCopySelection: (field) => set(state => {
-            const newSelections = new Set(state.copyModeSelections);
-            if (newSelections.has(field)) {
-                newSelections.delete(field);
-            } else {
-                newSelections.add(field);
-            }
-            return { copyModeSelections: newSelections };
-        }),
-        executeCopy: () => {
-             // Mock copy
-            const { selectedForAction, copyModeSelections } = get();
-            const message = `Copied ${Array.from(copyModeSelections).join(' & ')} from ${selectedForAction.size} transactions to clipboard.`;
-            // In real app: clipboardy.writeSync(...)
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD MOCK] ${message}`);
-            set({ lastCopiedMessage: message });
         },
         prepareDebugState: (stateName) => {
             switch (stateName) {
@@ -172,9 +146,7 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
                     break;
                 case 'copy':
                     get().actions.load({
-                        mode: 'COPY',
                         selectedForAction: new Set(['tx-0', 'tx-2']),
-                        copyModeSelections: new Set(['Git Messages', 'Diffs', 'UUIDs']),
                     });
                     break;
                 case 'bulk':

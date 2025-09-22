@@ -19,9 +19,6 @@ interface TransactionDetailState {
     expandedSection: NavigatorSection | null;
     selectedFileIndex: number;
     bodyView: DetailBodyView;
-    copyModeSelectionIndex: number;
-    copyModeSelections: Record<string, boolean>;
-    copyModeLastCopied: string | null;
 
     // Actions
     actions: {
@@ -30,20 +27,12 @@ interface TransactionDetailState {
         navigateDown: () => void;
         handleEnterOrRight: () => void;
         handleEscapeOrLeft: () => void;
-        toggleCopyMode: () => void;
         toggleRevertConfirm: () => void;
-        copyModeNavigateUp: () => void;
-        copyModeNavigateDown: () => void;
-        copyModeToggleSelection: () => void;
-        copyModeExecuteCopy: () => void;
         confirmRevert: () => void;
     }
 }
 
 const navigatorOrder: NavigatorSection[] = ['PROMPT', 'REASONING', 'FILES'];
-const copyOptionsList = [
-    'Git Message', 'Prompt', 'Reasoning', `All Diffs (${mockDetailedTransactionData.files.length} files)`, `Diff for: ${mockDetailedTransactionData.files[0]?.path}`, 'UUID', 'Full YAML representation',
-];
 
 export const useTransactionDetailStore = create<TransactionDetailState>((set, get) => ({
     transaction: null,
@@ -55,9 +44,6 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
     expandedSection: null,
     selectedFileIndex: 0,
     bodyView: 'NONE',
-    copyModeSelectionIndex: 0,
-    copyModeSelections: { 'Git Message': true, 'Reasoning': true }, // Default selections from readme
-    copyModeLastCopied: null,
 
     actions: {
         loadTransaction: (transactionId) => {
@@ -148,43 +134,9 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
                 return;
             }
         },
-        toggleCopyMode: () => set(state => {
-            if (state.bodyView === 'COPY_MODE') {
-                return { bodyView: 'NONE' };
-            }
-            return {
-                bodyView: 'COPY_MODE',
-                copyModeSelectionIndex: 0,
-                copyModeLastCopied: null,
-            };
-        }),
         toggleRevertConfirm: () => set(state => ({
             bodyView: state.bodyView === 'REVERT_CONFIRM' ? 'NONE' : 'REVERT_CONFIRM',
         })),
-        copyModeNavigateUp: () => set(state => ({
-            copyModeSelectionIndex: Math.max(0, state.copyModeSelectionIndex - 1),
-        })),
-        copyModeNavigateDown: () => set(state => ({
-            copyModeSelectionIndex: Math.min(copyOptionsList.length - 1, state.copyModeSelectionIndex + 1),
-        })),
-        copyModeToggleSelection: () => set(state => {
-            const currentOption = copyOptionsList[state.copyModeSelectionIndex];
-            if (!currentOption) return {};
-
-            const newSelections = { ...state.copyModeSelections };
-            newSelections[currentOption] = !newSelections[currentOption];
-            return { copyModeSelections: newSelections };
-        }),
-        copyModeExecuteCopy: () => {
-            // Mock copy to clipboard
-            const { copyModeSelections } = get();
-            const selectedItems = Object.keys(copyModeSelections).filter(key => copyModeSelections[key]);
-            const message = `Copied ${selectedItems.length} items to clipboard.`;
-            // In real app: clipboardy.writeSync(...)
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD] Mock copy: ${selectedItems.join(', ')}`);
-            set({ copyModeLastCopied: message });
-        },
         confirmRevert: () => {
             const { transaction } = get();
             if (!transaction) return;

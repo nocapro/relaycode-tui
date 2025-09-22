@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useInput } from 'ink';
 import { useTransactionHistoryStore, getVisibleItemPaths } from '../stores/transaction-history.store';
 import { useAppStore } from '../stores/app.store';
+import { useCopyStore, type CopyItem } from '../stores/copy.store';
+import { COPYABLE_ITEMS } from '../types/copy.types';
 import { useStdoutDimensions } from '../utils';
 
 export const useTransactionHistoryScreen = () => {
@@ -27,19 +29,29 @@ export const useTransactionHistoryScreen = () => {
             setViewOffset(selectedIndex - viewportHeight + 1);
         }
     }, [selectedIndex, viewOffset, viewportHeight]);
-    
+
+    const openCopyMode = () => {
+        const { transactions, selectedForAction } = store;
+        const selectedTxs = transactions.filter(tx => selectedForAction.has(tx.id));
+
+        if (selectedTxs.length === 0) return;
+
+        const items: CopyItem[] = [
+            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => selectedTxs.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => '...prompts data...', isDefaultSelected: false }, // Mocking, no prompt data here
+            { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => '...reasonings data...', isDefaultSelected: true }, // Mocking, no reasoning data
+            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => selectedTxs.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => selectedTxs.map(tx => tx.id).join('\n') },
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+        ];
+
+        useCopyStore.getState().actions.open(`Select data to copy from ${selectedTxs.length} transactions:`, items);
+    };
+
     useInput((input, key) => {
         if (store.mode === 'FILTER') {
             if (key.escape) store.actions.setMode('LIST');
             if (key.return) store.actions.applyFilter();
-            return;
-        }
-        if (store.mode === 'COPY') {
-            if (key.escape || input.toLowerCase() === 'c') store.actions.setMode('LIST');
-            if (key.return) store.actions.executeCopy();
-            if (input.toLowerCase() === 'm') store.actions.toggleCopySelection('Git Messages');
-            if (input.toLowerCase() === 'r') store.actions.toggleCopySelection('Reasonings');
-            // Add other toggles here if needed for other copyFields
             return;
         }
         if (store.mode === 'BULK_ACTIONS') {
@@ -56,7 +68,7 @@ export const useTransactionHistoryScreen = () => {
         if (input === ' ') store.actions.toggleSelection();
 
         if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
-        if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
+        if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) openCopyMode();
         if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
         
         if (key.escape || input.toLowerCase() === 'q') {
@@ -75,11 +87,6 @@ export const useTransactionHistoryScreen = () => {
     const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
     const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
     
-    const copyFields = [
-        { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
-        { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
-    ];
-
     return {
         store,
         viewOffset,
@@ -89,9 +96,5 @@ export const useTransactionHistoryScreen = () => {
         filterStatus,
         showingStatus,
         visibleItemPaths,
-        
-        // For CopyMode sub-component
-        selectedFields: store.copyModeSelections,
-        copyFields,
     };
 };

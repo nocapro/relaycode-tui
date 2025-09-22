@@ -1,6 +1,8 @@
 import { useInput } from 'ink';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useAppStore } from '../stores/app.store';
+import { useCopyStore, type CopyItem } from '../stores/copy.store';
+import { COPYABLE_ITEMS } from '../types/copy.types';
 
 export const useTransactionDetailScreen = () => {
     const { showDashboardScreen } = useAppStore(s => s.actions);
@@ -14,26 +16,30 @@ export const useTransactionDetailScreen = () => {
     const {
         // Main nav
         navigateUp, navigateDown, handleEnterOrRight, handleEscapeOrLeft,
-        toggleCopyMode, toggleRevertConfirm,
-        // Copy mode nav
-        copyModeNavigateUp,
-        copyModeNavigateDown,
-        copyModeToggleSelection,
-        copyModeExecuteCopy,
+        toggleRevertConfirm,
         // Revert modal nav
         confirmRevert,
     } = store.actions;
 
+    const openCopyMode = () => {
+        const { transaction, prompt, reasoning, files, selectedFileIndex } = store;
+        if (!transaction) return;
+        const selectedFile = files[selectedFileIndex];
+
+        const items: CopyItem[] = [
+            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message, isDefaultSelected: true },
+            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => prompt },
+            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => reasoning, isDefaultSelected: true },
+            { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${files.length} files)`, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+        ];
+
+        useCopyStore.getState().actions.open(`Select data to copy from transaction ${transaction.hash}:`, items);
+    };
+
     useInput((input, key) => {
-        if (bodyView === 'COPY_MODE') {
-            if (key.upArrow) copyModeNavigateUp();
-            if (key.downArrow) copyModeNavigateDown();
-            if (input === ' ') copyModeToggleSelection();
-            if (key.return) copyModeExecuteCopy();
-            if (key.escape || input.toLowerCase() === 'c') toggleCopyMode();
-            return;
-        }
-        
         if (bodyView === 'REVERT_CONFIRM') {
             if (key.escape) toggleRevertConfirm();
             if (key.return) confirmRevert();
@@ -45,7 +51,7 @@ export const useTransactionDetailScreen = () => {
             showDashboardScreen();
         }
         if (input.toLowerCase() === 'c') {
-            toggleCopyMode();
+            openCopyMode();
         }
         if (input.toLowerCase() === 'u') {
             toggleRevertConfirm();
@@ -57,19 +63,8 @@ export const useTransactionDetailScreen = () => {
         if (key.escape || key.leftArrow) handleEscapeOrLeft();
     });
 
-    const copyOptions = [
-        { key: 'M', label: 'Git Message' },
-        { key: 'P', label: 'Prompt' },
-        { key: 'R', label: 'Reasoning' },
-        { key: 'A', label: `All Diffs (${files.length} files)` },
-        { key: 'F', label: `Diff for: ${files[store.selectedFileIndex]?.path || 'No file selected'}` },
-        { key: 'U', label: 'UUID' },
-        { key: 'Y', label: 'Full YAML representation' },
-    ];
-
     return {
         ...store,
-        copyOptions,
         actions: {
             ...store.actions,
             showDashboardScreen,

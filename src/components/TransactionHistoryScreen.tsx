@@ -77,35 +77,6 @@ const TransactionRow = ({
     );
 };
 
-interface CopyModeProps {
-    selectedForActionCount: number;
-    lastCopiedMessage: string | null;
-    selectedFields: Set<string>;
-    fields: { key: string; name: string }[];
-}
-
-const CopyMode = ({
-    selectedForActionCount,
-    lastCopiedMessage,
-    selectedFields,
-    fields,
-}: CopyModeProps) => {
-
-    return (
-        <Box flexDirection="column" marginY={1}>
-            <Text>Select data to copy from {selectedForActionCount} transactions:</Text>
-            <Box marginY={1}>
-                {fields.map(f => (
-                    <Text key={f.key}>
-                        [{selectedFields.has(f.name) ? 'x' : ' '}] ({f.key}) {f.name.padEnd(15)}
-                    </Text>
-                ))}
-            </Box>
-            {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-        </Box>
-    );
-};
-
 const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: number }) => {
     return (
         <Box flexDirection="column" marginY={1}>
@@ -131,14 +102,10 @@ const TransactionHistoryScreen = () => {
         pathsInViewSet,
         filterStatus,
         showingStatus,
-        visibleItemPaths,
-        selectedFields,
-        copyFields,
     } = useTransactionHistoryScreen();
 
     const renderFooter = () => {
-        if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>;
-        if (store.mode === 'COPY') return <Text>(M,R,...) Toggle · (Enter) Copy · (C, Esc) Exit</Text>;
+        if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
         if (store.mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
         
         const actions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
@@ -164,12 +131,6 @@ const TransactionHistoryScreen = () => {
             </Box>
 
             <Box flexDirection="column" marginY={1}>
-                {store.mode === 'COPY' && <CopyMode
-                    selectedForActionCount={store.selectedForAction.size}
-                    lastCopiedMessage={store.lastCopiedMessage}
-                    selectedFields={selectedFields}
-                    fields={copyFields}
-                />}
                 {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
 
                 {store.mode === 'LIST' && transactionsInView.map(tx => {

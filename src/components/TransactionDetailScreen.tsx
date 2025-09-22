@@ -15,43 +15,6 @@ const getFileChangeTypeIcon = (type: FileChangeType) => {
     }
 };
 
-interface CopyModeProps {
-    transactionHash: string;
-    copyOptions: { key: string; label: string }[];
-    copyModeSelectionIndex: number;
-    copyModeSelections: Record<string, boolean>;
-    copyModeLastCopied: string | null;
-}
-
-const CopyMode = ({
-    transactionHash,
-    copyOptions,
-    copyModeSelectionIndex,
-    copyModeSelections,
-    copyModeLastCopied,
-}: CopyModeProps) => {
-    
-    return (
-        <Box flexDirection="column" width="100%">
-            <Text>Select data to copy from transaction {transactionHash} (use Space to toggle):</Text>
-            <Box flexDirection="column" marginY={1}>
-                {copyOptions.map((opt, index) => {
-                    const isSelected = index === copyModeSelectionIndex;
-                    const isChecked = copyModeSelections[opt.label] || false;
-                    return (
-                        <Text key={opt.label} color={isSelected ? 'cyan' : undefined}>
-                            {isSelected ? '> ' : '  '}
-                            [{isChecked ? 'x' : ' '}] ({opt.key}) {opt.label}
-                        </Text>
-                    );
-                })}
-            </Box>
-            <Separator />
-            {copyModeLastCopied && <Text color="green">✓ {copyModeLastCopied}</Text>}
-        </Box>
-    );
-};
-
 const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
     return (
         <Box 
@@ -74,8 +37,7 @@ const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
 const TransactionDetailScreen = () => {
     const {
         transaction, prompt, reasoning, files,
-        navigatorFocus, expandedSection, selectedFileIndex, bodyView,
-        copyOptions, copyModeSelectionIndex, copyModeSelections, copyModeLastCopied,
+        navigatorFocus, expandedSection, selectedFileIndex, bodyView
     } = useTransactionDetailScreen();
 
     if (!transaction) {
@@ -155,9 +117,6 @@ const TransactionDetailScreen = () => {
         if (bodyView === 'REVERT_CONFIRM') {
             return <Text>(Enter) Confirm Revert      (Esc) Cancel</Text>;
         }
-        if (bodyView === 'COPY_MODE') {
-             return <Text>(↑↓) Nav · (Spc) Toggle · (Enter) Copy Selected · (C)opy/Exit</Text>;
-        }
         
         if (navigatorFocus === 'FILES_LIST') {
             if (bodyView === 'DIFF_VIEW') {
@@ -180,7 +139,7 @@ const TransactionDetailScreen = () => {
     return (
         <Box flexDirection="column">
             {/* Header */}
-            <Text>▲ relaycode {bodyView === 'COPY_MODE' ? 'details · copy mode' : 'transaction details'}</Text>
+            <Text>▲ relaycode transaction details</Text>
             <Separator />
             
             {/* Modal takeover for Revert */}
@@ -203,14 +162,7 @@ const TransactionDetailScreen = () => {
                 
                 {/* Body */}
                 <Box marginY={1}>
-                    {bodyView === 'COPY_MODE' ? <CopyMode
-                        transactionHash={transaction.hash}
-                        copyOptions={copyOptions}
-                        copyModeSelectionIndex={copyModeSelectionIndex}
-                        copyModeSelections={copyModeSelections}
-                        copyModeLastCopied={copyModeLastCopied}
-                    />
-                    : renderBody()}
+                    {renderBody()}
                 </Box>
                 
                 <Separator />

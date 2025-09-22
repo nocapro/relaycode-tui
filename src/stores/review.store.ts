@@ -6,7 +6,7 @@ import { ReviewService } from '../services/review.service';
 import { mockReviewFiles, mockReviewScripts, mockReviewReasoning } from '../data/mocks';
 import { moveIndex } from './navigation.utils';
 import type { ReviewFileItem } from '../types/file.types';
-import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types';
+import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types'; 
 
 export type { ReviewFileItem as FileItem, ReviewFileItem } from '../types/file.types';
 export type { ScriptResult, ApplyStep } from '../types/review.types';
@@ -39,10 +39,6 @@ interface ReviewState {
     bodyView: ReviewBodyView;
     isDiffExpanded: boolean;
 
-    // Copy Mode State
-    copyModeSelectedIndex: number;
-    copyModeLastCopied: string | null;
-
     // Reasoning Scroll State
     reasoningScrollIndex: number;
 
@@ -54,26 +50,13 @@ interface ReviewState {
         moveSelectionDown: () => void;
         toggleFileApproval: () => void;
         rejectAllFiles: () => void;
-        toggleDiffView: () => void;
-        toggleReasoningView: () => void;
-        toggleScriptView: () => void;
         expandDiff: () => void;
+        toggleBodyView: (view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>) => void;
+        setBodyView: (view: ReviewBodyView) => void;
         approve: () => void;
         simulateSuccessScenario: () => void;
         startApplySimulation: (scenario: 'success' | 'failure') => void;
         simulateFailureScenario: () => void;
-
-        // Copy Mode Actions
-        toggleCopyMode: () => void;
-        moveCopySelectionUp: () => void;
-        moveCopySelectionDown: () => void;
-        copySelectedItem: () => void;
-        copyUUID: () => void;
-        copyMessage: () => void;
-        copyPrompt: () => void;
-        copyReasoning: () => void;
-        copyFileDiff: () => void;
-        copyAllDiffs: () => void;
 
         // Repair Actions
         tryRepairFile: () => void;
@@ -92,8 +75,6 @@ interface ReviewState {
         _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
     };
 }
-
-// --- Store Implementation ---
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
     // Transaction Info
@@ -115,10 +96,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     selectedItemIndex: 0, // Start with first file
     bodyView: 'none' as const,
     isDiffExpanded: false,
-
-    // Copy Mode State
-    copyModeSelectedIndex: 0,
-    copyModeLastCopied: null,
 
     // Reasoning Scroll State
     reasoningScrollIndex: 0,
@@ -157,26 +134,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             });
             return { files: newFiles };
         }),
-        toggleDiffView: () => set(state => {
-            const { bodyView } = state;
-            if (state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
+        toggleBodyView: (view) => set(state => {
+            if (view === 'diff' && state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
             return {
-                bodyView: bodyView === 'diff' ? 'none' : 'diff',
+                bodyView: state.bodyView === view ? 'none' : view,
                 isDiffExpanded: false, // Always start collapsed
             };
         }),
-        toggleReasoningView: () => set(state => {
-            const { bodyView } = state;
-            return {
-                bodyView: bodyView === 'reasoning' ? 'none' : 'reasoning',
-            };
-        }),
-        toggleScriptView: () => set(state => {
-            const { bodyView } = state;
-            return {
-                bodyView: bodyView === 'script_output' ? 'none' : 'script_output',
-            };
-        }),
+        setBodyView: (view) => set({ bodyView: view }),
         expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
         approve: () => { /* NOP for now, would trigger commit and screen change */ },
         startApplySimulation: async (scenario: 'success' | 'failure') => {
@@ -243,99 +208,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             selectedItemIndex: 0,
         })),
 
-        // Copy Mode Actions
-        toggleCopyMode: () => set(state => ({
-            bodyView: state.bodyView === 'copy_mode' ? 'none' as const : 'copy_mode' as const,
-            copyModeSelectedIndex: 0,
-            copyModeLastCopied: null,
-        })),
-        moveCopySelectionUp: () => set(state => ({
-            copyModeSelectedIndex: moveIndex(state.copyModeSelectedIndex, 'up', 6), // 6 total options
-        })),
-        moveCopySelectionDown: () => set(state => ({
-            copyModeSelectedIndex: moveIndex(state.copyModeSelectedIndex, 'down', 6), // 6 total options
-        })),
-        copySelectedItem: () => set(state => {
-            const { copyModeSelectedIndex, hash, message, prompt, reasoning, files, selectedItemIndex } = state;
-            let content = '';
-            let label = '';
-
-            switch (copyModeSelectedIndex) {
-                case 0: // UUID
-                    content = `${hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
-                    label = 'UUID';
-                    break;
-                case 1: // Git Message
-                    content = message;
-                    label = 'Git Message';
-                    break;
-                case 2: // Prompt
-                    content = prompt;
-                    label = 'Prompt';
-                    break;
-                case 3: // Reasoning
-                    content = reasoning;
-                    label = 'Reasoning';
-                    break;
-                case 4: // Diff for current file
-                    if (selectedItemIndex < files.length) {
-                        const file = files[selectedItemIndex];
-                        if (file) {
-                            content = file.diff;
-                            label = `Diff for ${file.path}`;
-                        }
-                    }
-                    break;
-                case 5: // All Diffs
-                    content = files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n');
-                    label = 'All Diffs';
-                    break;
-            }
-
-            // Mock clipboard operation (TUI environment - no real clipboard)
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD] Copied ${label}: ${content.substring(0, 100)}...`);
-
-            return { copyModeLastCopied: label };
-        }),
-        copyUUID: () => set(state => {
-            const content = `${state.hash}-a8b3-4f2c-9d1e-8a7c1b9d8f03`;
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD] Copied UUID: ${content}`);
-            return { copyModeLastCopied: 'UUID' };
-        }),
-        copyMessage: () => set(state => {
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD] Copied Git Message: ${state.message}`);
-            return { copyModeLastCopied: 'Git Message' };
-        }),
-        copyPrompt: () => set(state => {
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD] Copied Prompt: ${state.prompt.substring(0, 100)}...`);
-            return { copyModeLastCopied: 'Prompt' };
-        }),
-        copyReasoning: () => set(state => {
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD] Copied Reasoning: ${state.reasoning.substring(0, 100)}...`);
-            return { copyModeLastCopied: 'Reasoning' };
-        }),
-        copyFileDiff: () => set(state => {
-            if (state.selectedItemIndex < state.files.length) {
-                const file = state.files[state.selectedItemIndex];
-                if (file) {
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied diff for: ${file.path}`);
-                    return { copyModeLastCopied: `Diff for ${file.path}` };
-                }
-            }
-            return {};
-        }),
-        copyAllDiffs: () => set(state => {
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD] Copied all diffs: ${state.files.length} files`);
-            return { copyModeLastCopied: 'All Diffs' };
-        }),
-
         // Repair Actions
         tryRepairFile: () => {
             const { selectedItemIndex, files } = get();
@@ -346,9 +218,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 }
             }
         },
-        showBulkRepair: () => set(() => ({
-            bodyView: 'bulk_repair' as const,
-        })),
+        showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
         executeBulkRepairOption: async (option: number) => {
             const { files } = get();
 
@@ -359,7 +229,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                     // eslint-disable-next-line no-console
                     console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files.`);
                     // In a real app, this would use clipboardy.writeSync(bulkPrompt),
-                    set({ bodyView: 'none' as const, copyModeLastCopied: 'Bulk repair prompt copied.' });
+                    set({ bodyView: 'none' as const });
                     break;
                 }
 
@@ -370,7 +240,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 }
 
                 case 3: { // Handoff to Human
-                    set({ bodyView: 'confirm_handoff' as const });
+                    get().actions.setBodyView('confirm_handoff');
                     break;
                 }
 

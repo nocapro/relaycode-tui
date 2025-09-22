@@ -1,1 +1,1 @@
-export type HistoryViewMode = 'LIST' | 'FILTER' | 'COPY' | 'BULK_ACTIONS';
+export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';

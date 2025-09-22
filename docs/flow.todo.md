@@ -147,7 +147,17 @@ The refactor should focus on creating a single, unified `Transaction` entity.
 4.  **`src/components/*.tsx` & `src/hooks/*.tsx`**: The components (`DashboardScreen`, `TransactionHistoryScreen`, `TransactionDetailScreen`) and the corresponding hook for the most complex screen (`useTransactionHistoryScreen`) directly render and process these objects. They need to be modified to handle the new unified structure and status values (e.g., updating `getStatusIcon` or status maps from `'Committed'` to `'COMMITTED'`).
 
 
+------
 
+do DRYness refactor radically to eliminate redundancy.
+
+addressed accross UI, hook, State, store, data, type
+
+rules;
+1. do not think about backward compability, it cause code boat.
+2. do not cause UI shift
+
+dont forget final step yaml in fenced codeblock
 
 
 === DONE

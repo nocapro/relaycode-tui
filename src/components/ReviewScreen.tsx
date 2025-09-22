@@ -100,8 +100,7 @@ const ReviewScreen = () => {
     const {
         hash, message, prompt, reasoning, files, scripts, patchStatus,
         linesAdded, linesRemoved, duration,
-        selectedItemIndex, bodyView, isDiffExpanded,
-        copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
+        selectedItemIndex, bodyView, isDiffExpanded, reasoningScrollIndex, scriptErrorIndex,
         numFiles,
         approvedFilesCount,
         approvedLinesAdded,
@@ -183,55 +182,6 @@ const ReviewScreen = () => {
              );
         }
 
-        if (bodyView === 'copy_mode') {
-            const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
-            const options = [
-                { key: 'U', label: 'UUID', value: `${hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
-                { key: 'M', label: 'Git Message', value: message },
-                { key: 'P', label: 'Prompt', value: `${prompt.substring(0, 45)}...` },
-                { key: 'R', label: 'Reasoning', value: `${(reasoning.split('\n')[0] ?? '').substring(0, 45)}...` },
-            ];
-            const fileOptions = [
-                { key: 'F', label: 'Diff for', value: selectedFile ? selectedFile.path : 'N/A' },
-                { key: 'A', label: 'All Diffs', value: `${files.length} files` },
-            ];
-
-            return (
-                <Box flexDirection="column" gap={1}>
-                    <Text bold>Select item to copy to clipboard:</Text>
-
-                    <Box flexDirection="column">
-                        {options.map((option, index) => (
-                            <Text key={option.key} bold={index === copyModeSelectedIndex} color={index === copyModeSelectedIndex ? 'cyan' : undefined}>
-                                {index === copyModeSelectedIndex ? '> ' : '  '}
-                                [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
-                            </Text>
-                        ))}
-                    </Box>
-
-                    <Separator/>
-
-                    <Box flexDirection="column">
-                        {fileOptions.map((option, index) => {
-                            const overallIndex = index + options.length;
-                            return (
-                                <Text key={option.key} bold={overallIndex === copyModeSelectedIndex} color={overallIndex === copyModeSelectedIndex ? 'cyan' : undefined}>
-                                    {overallIndex === copyModeSelectedIndex ? '> ' : '  '}
-                                    [{option.key}] {option.label.padEnd(11, ' ')}: {option.value}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-
-                    <Separator/>
-
-                    {copyModeLastCopied && (
-                        <Text color="green">✓ Copied {copyModeLastCopied} to clipboard.</Text>
-                    )}
-                </Box>
-            );
-        }
-
         if (bodyView === 'confirm_handoff') {
             return (
                 <Box flexDirection="column" gap={1}>
@@ -299,9 +249,6 @@ const ReviewScreen = () => {
                 <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
             );
         }
-        if (bodyView === 'copy_mode') {
-            return <Text>(↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit</Text>;
-        }
         if (bodyView === 'bulk_repair') {
             return <Text>Choose an option [1-4, Esc]:</Text>;
         }
@@ -354,7 +301,7 @@ const ReviewScreen = () => {
     return (
         <Box flexDirection="column">
             {/* Header */}
-            <Text color="cyan">▲ relaycode review{bodyView === 'copy_mode' ? ' · copy mode' : ''}</Text>
+            <Text color="cyan">▲ relaycode review</Text>
             <Separator />
             
             {/* Navigator Section */}

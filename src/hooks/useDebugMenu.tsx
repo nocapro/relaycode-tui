@@ -6,6 +6,8 @@ import { useInitStore } from '../stores/init.store';
 import { useReviewStore } from '../stores/review.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
+import { useCopyStore } from '../stores/copy.store';
+import { COPYABLE_ITEMS } from '../types/copy.types';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import type { MenuItem } from '../types/debug.types';
 import { moveIndex } from '../stores/navigation.utils';
@@ -86,7 +88,7 @@ export const useDebugMenu = () => {
             title: 'Review: Diff View',
             action: () => {
                 reviewActions.simulateFailureScenario();
-                reviewActions.toggleDiffView();
+                reviewActions.toggleBodyView('diff');
                 appActions.showReviewScreen();
             },
         },
@@ -94,7 +96,7 @@ export const useDebugMenu = () => {
             title: 'Review: Reasoning View',
             action: () => {
                 reviewActions.simulateFailureScenario();
-                reviewActions.toggleReasoningView();
+                reviewActions.toggleBodyView('reasoning');
                 appActions.showReviewScreen();
             },
         },
@@ -102,15 +104,26 @@ export const useDebugMenu = () => {
             title: 'Review: Copy Mode',
             action: () => {
                 reviewActions.simulateFailureScenario();
-                reviewActions.toggleCopyMode();
+                // We can't show the screen and then open the modal in the same tick.
+                // We show the review screen, and then programmatically open the copy store.
                 appActions.showReviewScreen();
+                const { hash, message, prompt, reasoning, files } = useReviewStore.getState();
+                const items = [
+                    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => `${hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => message },
+                    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => prompt },
+                    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => reasoning },
+                    { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}`, getData: () => files[0]?.diff || '' },
+                    { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+                ];
+                useCopyStore.getState().actions.open('Select data to copy from review:', items);
             },
         },
         {
             title: 'Review: Script Output',
             action: () => {
                 reviewActions.simulateSuccessScenario();
-                reviewActions.toggleScriptView();
+                reviewActions.toggleBodyView('script_output');
                 appActions.showReviewScreen();
             },
         },
@@ -181,7 +194,14 @@ export const useDebugMenu = () => {
             title: 'History: Copy Mode',
             action: () => {
                 historyActions.prepareDebugState('copy');
+                const { transactions, selectedForAction } = useTransactionHistoryStore.getState();
+                const selectedTxs = transactions.filter(tx => selectedForAction.has(tx.id));
                 appActions.showTransactionHistoryScreen();
+                const items = [
+                     { id: 'messages', key: 'M', label: 'Git Messages', getData: () => selectedTxs.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+                     { id: 'uuids', key: 'U', label: 'UUIDs', getData: () => selectedTxs.map(tx => tx.id).join('\n') },
+                ];
+                useCopyStore.getState().actions.open(`Select data to copy from ${selectedTxs.length} transactions:`, items);
             },
         },
     ];

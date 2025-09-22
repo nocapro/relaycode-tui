@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useInput, useApp } from 'ink';
 import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
+import { useCopyStore, type CopyItem } from '../stores/copy.store';
+import { COPYABLE_ITEMS } from '../types/copy.types';
 
 export const useReviewScreen = () => {
     const { exit } = useApp();
@@ -12,12 +14,9 @@ export const useReviewScreen = () => {
         selectedItemIndex, bodyView,
     } = store;
     const {
-        moveSelectionUp, moveSelectionDown, toggleFileApproval,
-        toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
-        startApplySimulation,
-        rejectAllFiles, approve,
-        toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
-        copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
+        moveSelectionUp, moveSelectionDown, toggleFileApproval, expandDiff,
+        toggleBodyView, setBodyView,
+        startApplySimulation, rejectAllFiles, approve,
         tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
         scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
     } = store.actions;
@@ -37,6 +36,27 @@ export const useReviewScreen = () => {
         };
     }, [files]);
 
+    const openCopyMode = () => {
+        const { hash, message, prompt, reasoning, files, selectedItemIndex } = store;
+        const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+
+        const items: CopyItem[] = [
+            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => `${hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => message },
+            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => prompt },
+            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => reasoning },
+        ];
+
+        const fileItems: CopyItem[] = [
+             { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+            { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+        ];
+
+        useCopyStore.getState().actions.open('Select data to copy from review:', [...items, ...fileItems], () => {
+            // on close
+        });
+    };
+
     useInput((input, key) => {
         // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
         if (input === '1') {
@@ -53,37 +73,13 @@ export const useReviewScreen = () => {
 
         // Handle Escape key - context-sensitive behavior
         if (key.escape) {
-            if (bodyView === 'copy_mode') {
-                toggleCopyMode();
-            } else if (bodyView === 'confirm_handoff') {
-                // Pressing Esc on confirm handoff goes back to the main view
-                toggleReasoningView(); // Toggles any view off
-            } else if (bodyView === 'bulk_repair') {
-                showBulkRepair(); // Close bulk repair modal
+            if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
+                toggleBodyView(bodyView); // Close modal
             } else if (bodyView !== 'none') {
-                if (bodyView === 'diff') toggleDiffView();
-                if (bodyView === 'reasoning') toggleReasoningView();
-                if (bodyView === 'script_output') toggleScriptView();
+                setBodyView('none');
             } else {
                 showDashboardScreen();
             }
-            return;
-        }
-
-        // Copy Mode Navigation
-        if (bodyView === 'copy_mode') {
-            if (key.upArrow) moveCopySelectionUp();
-            if (key.downArrow) moveCopySelectionDown();
-            if (key.return) copySelectedItem();
-            
-            // Hotkey shortcuts
-            if (input.toLowerCase() === 'u') copyUUID();
-            if (input.toLowerCase() === 'm') copyMessage();
-            if (input.toLowerCase() === 'p') copyPrompt();
-            if (input.toLowerCase() === 'r') copyReasoning();
-            if (input.toLowerCase() === 'f') copyFileDiff();
-            if (input.toLowerCase() === 'a') copyAllDiffs();
-            if (input.toLowerCase() === 'c') toggleCopyMode();
             return;
         }
 
@@ -107,7 +103,7 @@ export const useReviewScreen = () => {
         if (bodyView === 'reasoning') {
             if (key.upArrow) scrollReasoningUp();
             if (key.downArrow) scrollReasoningDown();
-            if (input.toLowerCase() === 'r') toggleReasoningView();
+            if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
             return;
         }
 
@@ -115,7 +111,7 @@ export const useReviewScreen = () => {
         if (bodyView === 'script_output') {
             if (input.toLowerCase() === 'j') navigateScriptErrorDown();
             if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-            if (key.return) toggleScriptView();
+            if (key.return) toggleBodyView('script_output');
             if (input.toLowerCase() === 'c') {
                 // Copy script output
                 const scriptIndex = selectedItemIndex - numFiles;
@@ -131,7 +127,7 @@ export const useReviewScreen = () => {
         // Diff View Navigation
         if (bodyView === 'diff') {
             if (input.toLowerCase() === 'x') expandDiff();
-            if (input.toLowerCase() === 'd') toggleDiffView();
+            if (input.toLowerCase() === 'd') toggleBodyView('diff');
             return;
         }
 
@@ -147,7 +143,7 @@ export const useReviewScreen = () => {
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
 
-        if (input.toLowerCase() === 'r') toggleReasoningView();
+        if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
 
         if (input === ' ') {
             if (selectedItemIndex < numFiles) {
@@ -160,13 +156,13 @@ export const useReviewScreen = () => {
 
         if (input.toLowerCase() === 'd') {
             if (selectedItemIndex < numFiles) {
-                toggleDiffView();
+                toggleBodyView('diff');
             }
         }
 
         if (key.return) { // Enter key
              if (selectedItemIndex >= numFiles) { // It's a script
-                toggleScriptView();
+                toggleBodyView('script_output');
             }
         }
 
@@ -178,7 +174,7 @@ export const useReviewScreen = () => {
         }
 
         if (input.toLowerCase() === 'c') {
-            toggleCopyMode();
+            openCopyMode();
         }
 
         // Handle T for single repair and Shift+T for bulk repair
