@@ -3,6 +3,7 @@
 src/
   components/
     DashboardScreen.tsx
+    DebugMenu.tsx
     DiffScreen.tsx
     GlobalHelpScreen.tsx
     InitializationScreen.tsx
@@ -25,6 +26,242 @@ tsconfig.json
 ```
 
 # Files
+
+## File: src/components/DebugMenu.tsx
+```typescript
+import React, { useState } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useDashboardStore } from '../stores/dashboard.store';
+import { useInitStore } from '../stores/init.store';
+import { useReviewStore } from '../stores/review.store';
+import Separator from './Separator';
+
+interface MenuItem {
+    title: string;
+    action: () => void;
+}
+
+const DebugMenu = () => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const appActions = useAppStore(s => s.actions);
+    const dashboardActions = useDashboardStore(s => s.actions);
+    const initActions = useInitStore(s => s.actions);
+    const reviewActions = useReviewStore(s => s.actions);
+
+    const menuItems: MenuItem[] = [
+        {
+            title: 'Splash Screen',
+            action: () => appActions.showSplashScreen(),
+        },
+        {
+            title: 'Init: Analyze Phase',
+            action: () => {
+                initActions.setPhase('ANALYZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Interactive Phase',
+            action: () => {
+                initActions.setPhase('INTERACTIVE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Finalize Phase',
+            action: () => {
+                initActions.setPhase('FINALIZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Listening',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Confirm Approve',
+            action: () => {
+                dashboardActions.setStatus('CONFIRM_APPROVE');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Approving',
+            action: () => {
+                dashboardActions.setStatus('APPROVING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Review: Partial Failure (Default)',
+            action: () => {
+                reviewActions.simulateFailureScenario();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Success',
+            action: () => {
+                reviewActions.simulateSuccessScenario();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Diff View',
+            action: () => {
+                reviewActions.simulateFailureScenario();
+                reviewActions.toggleDiffView();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Reasoning View',
+            action: () => {
+                reviewActions.simulateFailureScenario();
+                reviewActions.toggleReasoningView();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Copy Mode',
+            action: () => {
+                reviewActions.simulateFailureScenario();
+                reviewActions.toggleCopyMode();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review Processing',
+            action: () => appActions.showReviewProcessingScreen(),
+        },
+    ];
+
+    useInput((input, key) => {
+        if (key.upArrow) {
+            setSelectedIndex(i => Math.max(0, i - 1));
+        }
+        if (key.downArrow) {
+            setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1));
+        }
+        if (key.return) {
+            const item = menuItems[selectedIndex];
+            if (item) {
+                item.action();
+                appActions.toggleDebugMenu();
+            }
+        }
+        if (key.escape || (key.ctrl && input === 's')) {
+            appActions.toggleDebugMenu();
+        }
+    });
+
+    return (
+        <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor="yellow"
+            width="100%"
+            paddingX={2}
+        >
+            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+            <Separator />
+            <Box flexDirection="column" marginY={1}>
+                {menuItems.map((item, index) => (
+                    <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                        {selectedIndex === index ? '> ' : '  '}
+                        {item.title}
+                    </Text>
+                ))}
+            </Box>
+            <Separator />
+            <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+S) Close</Text>
+        </Box>
+    );
+};
+
+export default DebugMenu;
+```
+
+## File: src/components/DiffScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+interface DiffScreenProps {
+    filePath: string;
+    diffContent: string;
+    isExpanded: boolean;
+}
+
+const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
+    const lines = diffContent.split('\n');
+    const COLLAPSE_THRESHOLD = 20;
+    const COLLAPSE_SHOW_LINES = 8;
+
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
+        }
+        return lines.map((line, i) => renderLine(line, i));
+    };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (line.startsWith('+')) color = 'green';
+        if (line.startsWith('-')) color = 'red';
+        if (line.startsWith('@@')) color = 'cyan';
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>DIFF: {filePath}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DiffScreen;
+```
+
+## File: src/components/ReasonScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+interface ReasonScreenProps {
+    reasoning: string;
+}
+
+const ReasonScreen = ({ reasoning }: ReasonScreenProps) => {
+    return (
+        <Box flexDirection="column">
+            <Text>REASONING</Text>
+            <Box flexDirection="column" marginTop={1}>
+                <Text>{reasoning}</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default ReasonScreen;
+```
 
 ## File: src/components/ReviewProcessingScreen.tsx
 ```typescript
@@ -104,83 +341,6 @@ const ReviewProcessingScreen = () => {
 };
 
 export default ReviewProcessingScreen;
-```
-
-## File: src/components/DiffScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-
-interface DiffScreenProps {
-    filePath: string;
-    diffContent: string;
-    isExpanded: boolean;
-}
-
-const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
-    const lines = diffContent.split('\n');
-    const COLLAPSE_THRESHOLD = 20;
-    const COLLAPSE_SHOW_LINES = 8;
-
-    const renderContent = () => {
-        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
-            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
-            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
-            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
-
-            return (
-                <>
-                    {topLines.map((line, i) => renderLine(line, i))}
-                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
-                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
-                </>
-            );
-        }
-        return lines.map((line, i) => renderLine(line, i));
-    };
-
-    const renderLine = (line: string, key: number) => {
-        let color = 'white';
-        if (line.startsWith('+')) color = 'green';
-        if (line.startsWith('-')) color = 'red';
-        if (line.startsWith('@@')) color = 'cyan';
-        return <Text key={key} color={color}>{line}</Text>;
-    };
-
-    return (
-        <Box flexDirection="column">
-            <Text>DIFF: {filePath}</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {renderContent()}
-            </Box>
-        </Box>
-    );
-};
-
-export default DiffScreen;
-```
-
-## File: src/components/ReasonScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-
-interface ReasonScreenProps {
-    reasoning: string;
-}
-
-const ReasonScreen = ({ reasoning }: ReasonScreenProps) => {
-    return (
-        <Box flexDirection="column">
-            <Text>REASONING</Text>
-            <Box flexDirection="column" marginTop={1}>
-                <Text>{reasoning}</Text>
-            </Box>
-        </Box>
-    );
-};
-
-export default ReasonScreen;
 ```
 
 ## File: src/utils.ts
@@ -434,172 +594,6 @@ const Separator = () => {
 export default Separator;
 ```
 
-## File: src/stores/app.store.ts
-```typescript
-import { create } from 'zustand';
-
-export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' | 'review-processing';
-
-interface AppState {
-    currentScreen: AppScreen;
-    actions: {
-        showInitScreen: () => void;
-        showReviewProcessingScreen: () => void;
-        showDashboardScreen: () => void;
-        showReviewScreen: () => void;
-    };
-}
-
-export const useAppStore = create<AppState>((set) => ({
-    currentScreen: 'splash',
-    actions: {
-        showInitScreen: () => set({ currentScreen: 'init' }),
-        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
-        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
-        showReviewScreen: () => set({ currentScreen: 'review' }),
-    },
-}));
-```
-
-## File: src/stores/dashboard.store.ts
-```typescript
-import { create } from 'zustand';
-import { sleep } from '../utils';
-
-// --- Types ---
-export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS';
-
-export interface Transaction {
-    id: string;
-    timestamp: number;
-    status: TransactionStatus;
-    hash: string;
-    message: string;
-    error?: string;
-}
-
-export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'CONFIRM_COMMIT' | 'APPROVING' | 'COMMITTING';
-
-// --- Initial State (for simulation) ---
-const createInitialTransactions = (): Transaction[] => [
-    { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
-    { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
-    { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
-    { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
-    { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
-    { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
-];
-
-// --- Store Interface ---
-interface DashboardState {
-    status: DashboardStatus;
-    previousStatus: DashboardStatus; // To handle cancel from confirmation
-    transactions: Transaction[];
-    selectedTransactionIndex: number;
-    showHelp: boolean;
-    actions: {
-        togglePause: () => void;
-        moveSelectionUp: () => void;
-        moveSelectionDown: () => void;
-        startApproveAll: () => void;
-        startCommitAll: () => void;
-        confirmAction: () => Promise<void>;
-        cancelAction: () => void;
-        toggleHelp: () => void;
-    };
-}
-
-// --- Store Implementation ---
-export const useDashboardStore = create<DashboardState>((set, get) => ({
-    status: 'LISTENING',
-    previousStatus: 'LISTENING',
-    transactions: createInitialTransactions(),
-    selectedTransactionIndex: 0,
-    showHelp: false,
-    actions: {
-        togglePause: () => set(state => ({
-            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
-        })),
-        moveSelectionUp: () => set(state => ({
-            selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1),
-        })),
-        moveSelectionDown: () => set(state => ({
-            selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1),
-        })),
-        startApproveAll: () => set(state => ({
-            status: 'CONFIRM_APPROVE',
-            previousStatus: state.status,
-        })),
-        startCommitAll: () => set(state => ({
-            status: 'CONFIRM_COMMIT',
-            previousStatus: state.status,
-        })),
-        cancelAction: () => set(state => ({ status: state.previousStatus })),
-        toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
-
-        confirmAction: async () => {
-            const { status, previousStatus } = get();
-            if (status === 'CONFIRM_APPROVE') {
-                set({ status: 'APPROVING' });
-
-                // Find pending transactions and mark them as in-progress
-                const pendingTxIds: string[] = [];
-                set(state => {
-                    const newTxs = state.transactions.map(tx => {
-                        if (tx.status === 'PENDING') {
-                            pendingTxIds.push(tx.id);
-                            return { ...tx, status: 'IN-PROGRESS' as const };
-                        }
-                        return tx;
-                    });
-                    return { transactions: newTxs };
-                });
-
-                await sleep(2000); // Simulate approval process
-
-                // Mark them as applied
-                set(state => {
-                    const newTxs = state.transactions.map(tx => {
-                        if (pendingTxIds.includes(tx.id)) {
-                            return { ...tx, status: 'APPLIED' as const };
-                        }
-                        return tx;
-                    });
-                    return { transactions: newTxs, status: previousStatus };
-                });
-            } else if (status === 'CONFIRM_COMMIT') {
-                set({ status: 'COMMITTING' });
-                 // Find applied transactions and mark them as in-progress
-                 const appliedTxIds: string[] = [];
-                 set(state => {
-                     const newTxs = state.transactions.map(tx => {
-                         if (tx.status === 'APPLIED') {
-                            appliedTxIds.push(tx.id);
-                             return { ...tx, status: 'IN-PROGRESS' as const };
-                         }
-                         return tx;
-                     });
-                     return { transactions: newTxs };
-                 });
- 
-                 await sleep(2000); // Simulate commit process
- 
-                 // Mark them as committed
-                 set(state => {
-                     const newTxs = state.transactions.map(tx => {
-                         if (appliedTxIds.includes(tx.id)) {
-                             return { ...tx, status: 'COMMITTED' as const };
-                         }
-                         return tx;
-                     });
-                     return { transactions: newTxs, status: previousStatus };
-                 });
-            }
-        },
-    },
-}));
-```
-
 ## File: src/stores/init.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -677,6 +671,706 @@ export const useInitStore = create<InitState>((set) => ({
         }),
     },
 }));
+```
+
+## File: src/components/SplashScreen.tsx
+```typescript
+import React, { useState, useEffect } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import Separator from './Separator';
+
+const SplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState(5);
+
+    const handleSkip = () => {
+        showInitScreen();
+    };
+
+    useInput(() => {
+        handleSkip();
+    });
+
+    useEffect(() => {
+        if (countdown === 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
+
+    const logo = `
+         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+`;
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode</Text>
+            <Separator />
+            <Text color="cyan">{logo}</Text>
+            <Box flexDirection="column" alignItems="center">
+                <Text italic>A zero-friction, AI-native patch engine.</Text>
+                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+            </Box>
+            
+            <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                <Box flexDirection="column" width="45%">
+                    <Text>Version 1.1.5</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>relaycode</Text>
+                    <Text>relaycode-core</Text>
+                    <Text>apply-multi-diff</Text>
+                    <Text>konro</Text>
+                </Box>
+                 <Box flexDirection="column" width="45%">
+                    <Text>Build Timestamps</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>2025-09-20 13:58:05</Text>
+                    <Text>2025-09-20 10:59:05</Text>
+                    <Text>(versioned)</Text>
+                    <Text>(versioned)</Text>
+                </Box>
+            </Box>
+            
+            <Box marginTop={1}><Separator /></Box>
+            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+            <Text>web app with repo-wide visual context, history, and rollback.</Text>
+            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+            <Separator />
+            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+            <Separator />
+            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
+        </Box>
+    );
+};
+
+export default SplashScreen;
+```
+
+## File: src/stores/app.store.ts
+```typescript
+import { create } from 'zustand';
+
+export type AppScreen = 'splash' | 'init' | 'dashboard' | 'review' | 'review-processing';
+
+interface AppState {
+    isDebugMenuOpen: boolean;
+    currentScreen: AppScreen;
+    actions: {
+        showInitScreen: () => void;
+        showReviewProcessingScreen: () => void;
+        showDashboardScreen: () => void;
+        showReviewScreen: () => void;
+        showSplashScreen: () => void;
+        toggleDebugMenu: () => void;
+    };
+}
+
+export const useAppStore = create<AppState>((set) => ({
+    isDebugMenuOpen: false,
+    currentScreen: 'splash',
+    actions: {
+        showInitScreen: () => set({ currentScreen: 'init' }),
+        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+        showReviewScreen: () => set({ currentScreen: 'review' }),
+        showSplashScreen: () => set({ currentScreen: 'splash' }),
+        toggleDebugMenu: () => set(state => ({ isDebugMenuOpen: !state.isDebugMenuOpen })),
+    },
+}));
+```
+
+## File: src/stores/dashboard.store.ts
+```typescript
+import { create } from 'zustand';
+import { sleep } from '../utils';
+
+// --- Types ---
+export type TransactionStatus = 'PENDING' | 'APPLIED' | 'COMMITTED' | 'FAILED' | 'REVERTED' | 'IN-PROGRESS';
+
+export interface Transaction {
+    id: string;
+    timestamp: number;
+    status: TransactionStatus;
+    hash: string;
+    message: string;
+    error?: string;
+}
+
+export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'CONFIRM_COMMIT' | 'APPROVING' | 'COMMITTING';
+
+// --- Initial State (for simulation) ---
+const createInitialTransactions = (): Transaction[] => [
+    { id: '1', timestamp: Date.now() - 15 * 1000, status: 'PENDING', hash: 'e4a7c112', message: 'fix: add missing error handling' },
+    { id: '2', timestamp: Date.now() - 2 * 60 * 1000, status: 'APPLIED', hash: '4b9d8f03', message: 'refactor: simplify clipboard logic' },
+    { id: '3', timestamp: Date.now() - 5 * 60 * 1000, status: 'COMMITTED', hash: '8a3f21b8', message: 'feat: implement new dashboard UI' },
+    { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+    { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+    { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+];
+
+// --- Store Interface ---
+interface DashboardState {
+    status: DashboardStatus;
+    previousStatus: DashboardStatus; // To handle cancel from confirmation
+    transactions: Transaction[];
+    selectedTransactionIndex: number;
+    showHelp: boolean;
+    actions: {
+        togglePause: () => void;
+        moveSelectionUp: () => void;
+        moveSelectionDown: () => void;
+        startApproveAll: () => void;
+        startCommitAll: () => void;
+        confirmAction: () => Promise<void>;
+        cancelAction: () => void;
+        toggleHelp: () => void;
+        setStatus: (status: DashboardStatus) => void; // For debug menu
+    };
+}
+
+// --- Store Implementation ---
+export const useDashboardStore = create<DashboardState>((set, get) => ({
+    status: 'LISTENING',
+    previousStatus: 'LISTENING',
+    transactions: createInitialTransactions(),
+    selectedTransactionIndex: 0,
+    showHelp: false,
+    actions: {
+        togglePause: () => set(state => ({
+            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+        })),
+        moveSelectionUp: () => set(state => ({
+            selectedTransactionIndex: Math.max(0, state.selectedTransactionIndex - 1),
+        })),
+        moveSelectionDown: () => set(state => ({
+            selectedTransactionIndex: Math.min(state.transactions.length - 1, state.selectedTransactionIndex + 1),
+        })),
+        startApproveAll: () => set(state => ({
+            status: 'CONFIRM_APPROVE',
+            previousStatus: state.status,
+        })),
+        startCommitAll: () => set(state => ({
+            status: 'CONFIRM_COMMIT',
+            previousStatus: state.status,
+        })),
+        cancelAction: () => set(state => ({ status: state.previousStatus })),
+        toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+        setStatus: (status) => set({ status }),
+
+        confirmAction: async () => {
+            const { status, previousStatus } = get();
+            if (status === 'CONFIRM_APPROVE') {
+                set({ status: 'APPROVING' });
+
+                // Find pending transactions and mark them as in-progress
+                const pendingTxIds: string[] = [];
+                set(state => {
+                    const newTxs = state.transactions.map(tx => {
+                        if (tx.status === 'PENDING') {
+                            pendingTxIds.push(tx.id);
+                            return { ...tx, status: 'IN-PROGRESS' as const };
+                        }
+                        return tx;
+                    });
+                    return { transactions: newTxs };
+                });
+
+                await sleep(2000); // Simulate approval process
+
+                // Mark them as applied
+                set(state => {
+                    const newTxs = state.transactions.map(tx => {
+                        if (pendingTxIds.includes(tx.id)) {
+                            return { ...tx, status: 'APPLIED' as const };
+                        }
+                        return tx;
+                    });
+                    return { transactions: newTxs, status: previousStatus };
+                });
+            } else if (status === 'CONFIRM_COMMIT') {
+                set({ status: 'COMMITTING' });
+                 // Find applied transactions and mark them as in-progress
+                 const appliedTxIds: string[] = [];
+                 set(state => {
+                     const newTxs = state.transactions.map(tx => {
+                         if (tx.status === 'APPLIED') {
+                            appliedTxIds.push(tx.id);
+                             return { ...tx, status: 'IN-PROGRESS' as const };
+                         }
+                         return tx;
+                     });
+                     return { transactions: newTxs };
+                 });
+ 
+                 await sleep(2000); // Simulate commit process
+ 
+                 // Mark them as committed
+                 set(state => {
+                     const newTxs = state.transactions.map(tx => {
+                         if (appliedTxIds.includes(tx.id)) {
+                             return { ...tx, status: 'COMMITTED' as const };
+                         }
+                         return tx;
+                     });
+                     return { transactions: newTxs, status: previousStatus };
+                 });
+            }
+        },
+    },
+}));
+```
+
+## File: index.tsx
+```typescript
+import React from 'react';
+import { render } from 'ink';
+import App from './src/App';
+
+// Check if we're running in an interactive terminal
+if (process.stdin.isTTY && process.stdout.isTTY) {
+    render(<App />);
+} else {
+    process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+    process.exit(1);
+}
+```
+
+## File: src/components/DashboardScreen.tsx
+```typescript
+import React, { useMemo } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
+import Spinner from 'ink-spinner';
+import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
+import { useAppStore } from '../stores/app.store';
+import Separator from './Separator';
+import GlobalHelpScreen from './GlobalHelpScreen';
+
+// --- Sub-components & Helpers ---
+
+const getStatusIcon = (status: TransactionStatus) => {
+    switch (status) {
+        case 'PENDING': return <Text color="yellow">?</Text>;
+        case 'APPLIED': return <Text color="green">✓</Text>;
+        case 'COMMITTED': return <Text color="blue">→</Text>;
+        case 'FAILED': return <Text color="red">✗</Text>;
+        case 'REVERTED': return <Text color="gray">↩</Text>;
+        case 'IN-PROGRESS': return <Spinner type="dots" />;
+        default: return <Text> </Text>;
+    }
+};
+
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `-${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `-${minutes}m`;
+};
+
+const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {
+    const icon = getStatusIcon(transaction.status);
+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+    const statusText = transaction.status.padEnd(11, ' ');
+    
+    const messageNode = transaction.status === 'IN-PROGRESS'
+        ? <Text color="cyan">{transaction.message}</Text>
+        : transaction.message;
+    
+    const content = (
+        <Text>
+            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
+        </Text>
+    );
+
+    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+};
+
+const ConfirmationContent = ({
+    status,
+    transactionsToConfirm,
+}: {
+    status: DashboardStatus;
+    transactionsToConfirm: Transaction[];
+}) => {
+    const isApprove = status === 'CONFIRM_APPROVE';
+    const actionText = isApprove ? 'APPROVE' : 'COMMIT';
+    
+    return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text>
+                The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:
+            </Text>
+            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                {transactionsToConfirm.map(tx => (
+                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                ))}
+            </Box>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const DashboardScreen = () => {
+    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+    const {
+        togglePause,
+        moveSelectionUp,
+        moveSelectionDown,
+        startApproveAll,
+        startCommitAll,
+        confirmAction,
+        cancelAction,
+        toggleHelp,
+    } = useDashboardStore(s => s.actions);
+    const { exit } = useApp();
+    const showReviewScreen = useAppStore(s => s.actions.showReviewScreen);
+
+    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
+    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
+    
+    useInput((input, key) => {
+        if (input === '?') {
+            toggleHelp();
+            return;
+        }
+
+        if (showHelp) {
+            if (key.escape || input === '?') toggleHelp();
+            return;
+        }
+
+        if (isModal) {
+            if (key.return) confirmAction();
+            if (key.escape) cancelAction();
+            return;
+        }
+
+        if (isProcessing) return; // No input while processing
+        
+        if (input.toLowerCase() === 'q') exit();
+
+        if (key.upArrow) moveSelectionUp();
+        if (key.downArrow) moveSelectionDown();
+        
+        if (key.return) {
+            showReviewScreen();
+        }
+        
+        if (input.toLowerCase() === 'p') togglePause();
+        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
+    });
+
+    const renderStatusBar = () => {
+        let statusText: string;
+        let statusIcon: React.ReactNode;
+        switch (status) {
+            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
+        }
+
+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
+        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
+
+        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'COMMITTING') commitStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'CONFIRM_APPROVE') {
+            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        }
+        if (status === 'CONFIRM_COMMIT') {
+            commitStr = <Text bold color="yellow">┌ {commitStr} ┐</Text>;
+        }
+        
+        return (
+            <Text>
+                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+            </Text>
+        );
+    };
+
+    const renderFooter = () => {
+        if (isModal) return (
+            <Text>
+                (<Text color="cyan" bold>Enter</Text>) Confirm      (<Text color="cyan" bold>Esc</Text>) Cancel
+            </Text>
+        );
+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+        const pauseAction = status === 'PAUSED'
+			? <Text>(<Text color="cyan" bold>R</Text>)esume</Text>
+			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
+		return (
+            <Text color="gray">
+                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
+            </Text>
+        );
+    };
+    
+    const transactionsToConfirm = useMemo(() => {
+        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
+        return [];
+    }, [status, transactions]);
+
+    return (
+        <Box flexDirection="column" height="100%">
+            {showHelp && <GlobalHelpScreen />}
+
+            <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
+                <Text color="cyan">▲ relaycode dashboard</Text>
+                <Separator />
+                <Box marginY={1}>
+                    {renderStatusBar()}
+                </Box>
+                
+                {isModal && (
+                    <>
+                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
+                        <Separator />
+                    </>
+                )}
+                
+                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+                <Box flexDirection="column" marginTop={1}>
+                    {transactions.map((tx, index) => (
+                        <EventStreamItem 
+                            key={tx.id} 
+                            transaction={tx} 
+                            isSelected={!isModal && index === selectedTransactionIndex}
+                        />
+                    ))}
+                </Box>
+
+                <Box marginTop={1}><Separator /></Box>
+                {renderFooter()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DashboardScreen;
+```
+
+## File: src/components/InitializationScreen.tsx
+```typescript
+import React, { useEffect } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
+import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
+import Separator from './Separator';
+import { useAppStore } from '../stores/app.store';
+import { sleep } from '../utils';
+
+const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	let symbol: React.ReactNode;
+	switch (task.status) {
+		case 'pending': symbol = '( )'; break;
+		case 'active': symbol = <Text color="cyan">(●)</Text>; break;
+		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
+	}
+
+	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
+
+	return (
+		<Box flexDirection="column">
+			<Text>
+				{symbol} {title}
+			</Text>
+			{task.subtext && task.status !== 'done' && (
+				<Text italic color="gray">
+					{'     └─ '}{task.subtext}
+				</Text>
+			)}
+		</Box>
+	);
+};
+
+const InitializationScreen = () => {
+    const phase = useInitStore(s => s.phase);
+    const analyzeTasks = useInitStore(s => s.analyzeTasks);
+    const configureTasks = useInitStore(s => s.configureTasks);
+    const interactiveChoice = useInitStore(s => s.interactiveChoice);
+    const projectId = useInitStore(s => s.projectId);
+    const actions = useInitStore(s => s.actions);
+    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+    const { exit } = useApp();
+
+    useInput((input, key) => {
+        if (phase === 'INTERACTIVE') {
+            if (key.return) {
+                actions.setInteractiveChoice('ignore');
+            } else if (input.toLowerCase() === 's') {
+                actions.setInteractiveChoice('share');
+            }
+        }
+        if (phase === 'FINALIZE') {
+            if (input.toLowerCase() === 'q') {
+                exit();
+            } else if (input.toLowerCase() === 'w') {
+                showDashboardScreen();
+            }
+        }
+    });
+
+    useEffect(() => {
+        actions.resetInit();
+        const runSimulation = async () => {
+            actions.setPhase('ANALYZE');
+            for (const task of initialAnalyzeTasks) {
+                actions.updateAnalyzeTask(task.id, 'active');
+                await sleep(800);
+                actions.updateAnalyzeTask(task.id, 'done');
+            }
+            actions.setAnalysisResults('relaycode (from package.json)', true);
+            await sleep(500);
+
+            actions.setPhase('CONFIGURE');
+            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+            for (const task of configTasksUntilInteractive) {
+                actions.updateConfigureTask(task.id, 'active');
+                await sleep(800);
+                actions.updateConfigureTask(task.id, 'done');
+            }
+            await sleep(500);
+
+            actions.setPhase('INTERACTIVE');
+        };
+
+        runSimulation();
+    }, [actions]);
+
+    useEffect(() => {
+        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+            const resumeSimulation = async () => {
+                actions.setPhase('CONFIGURE');
+                const lastTask = initialConfigureTasks[2];
+                if (lastTask) {
+                    actions.updateConfigureTask(lastTask.id, 'active');
+                    await sleep(800);
+                    actions.updateConfigureTask(lastTask.id, 'done');
+                    await sleep(500);
+
+                    actions.setPhase('FINALIZE');
+                }
+            };
+            resumeSimulation();
+        }
+    }, [interactiveChoice, phase, actions]);
+
+    const renderAnalyze = () => (
+        <Box flexDirection="column">
+            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
+            </Box>
+        </Box>
+    );
+
+    const renderContext = () => (
+        <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">CONTEXT</Text>
+            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
+            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
+        </Box>
+    );
+
+    const renderConfigure = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+            </Box>
+        </Box>
+    );
+
+    const renderInteractive = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+                <Box flexDirection="column" marginTop={1}>
+                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
+                    <Text>  Do you want to share its state with your team by committing it?</Text>
+                </Box>
+            </Box>
+        </Box>
+    );
+
+    const renderFinalize = () => {
+        const stateText = interactiveChoice === 'share'
+            ? '.relay/ directory initialized. It will be committed to git.'
+            : '.relay/ directory initialized and added to .gitignore.';
+        const stateSubText = interactiveChoice === 'share'
+            ? undefined
+            : 'Local transaction history will be stored here.';
+        
+        return (
+            <Box flexDirection="column">
+                <Text bold color="green"> SYSTEM READY</Text>
+                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> Config:   relay.config.json created.</Text>
+                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> State:    {stateText}</Text>
+                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
+                        <Text color="gray" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
+                    </Box>
+                </Box>
+            </Box>
+        );
+    };
+
+    const renderPhase = () => {
+        switch (phase) {
+            case 'ANALYZE': return renderAnalyze();
+            case 'CONFIGURE': return renderConfigure();
+            case 'INTERACTIVE': return renderInteractive();
+            case 'FINALIZE': return renderFinalize();
+        }
+    };
+    
+    let footerText;
+    switch (phase) {
+        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+    }
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
+            <Separator />
+            <Box marginY={1}>{renderPhase()}</Box>
+            <Separator />
+            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
+        </Box>
+    );
+};
+
+export default InitializationScreen;
 ```
 
 ## File: src/components/ReviewScreen.tsx
@@ -1203,88 +1897,6 @@ const ReviewScreen = () => {
 };
 
 export default ReviewScreen;
-```
-
-## File: src/components/SplashScreen.tsx
-```typescript
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import Separator from './Separator';
-
-const SplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState(5);
-
-    const handleSkip = () => {
-        showInitScreen();
-    };
-
-    useInput(() => {
-        handleSkip();
-    });
-
-    useEffect(() => {
-        if (countdown === 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
-
-    const logo = `
-         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
-         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
-         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
-`;
-
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode</Text>
-            <Separator />
-            <Text color="cyan">{logo}</Text>
-            <Box flexDirection="column" alignItems="center">
-                <Text italic>A zero-friction, AI-native patch engine.</Text>
-                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
-            </Box>
-            
-            <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
-                <Box flexDirection="column" width="45%">
-                    <Text>Version 1.1.5</Text>
-                    <Text>─────────────────────────</Text>
-                    <Text>relaycode</Text>
-                    <Text>relaycode-core</Text>
-                    <Text>apply-multi-diff</Text>
-                    <Text>konro</Text>
-                </Box>
-                 <Box flexDirection="column" width="45%">
-                    <Text>Build Timestamps</Text>
-                    <Text>─────────────────────────</Text>
-                    <Text>2025-09-20 13:58:05</Text>
-                    <Text>2025-09-20 10:59:05</Text>
-                    <Text>(versioned)</Text>
-                    <Text>(versioned)</Text>
-                </Box>
-            </Box>
-            
-            <Box marginTop={1}><Separator /></Box>
-            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
-            <Text>web app with repo-wide visual context, history, and rollback.</Text>
-            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
-            <Separator />
-            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
-            <Separator />
-            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
-        </Box>
-    );
-};
-
-export default SplashScreen;
 ```
 
 ## File: src/stores/review.store.ts
@@ -1912,496 +2524,6 @@ Please resolve these issues and provide updated patches.`;
 }));
 ```
 
-## File: index.tsx
-```typescript
-import React from 'react';
-import { render } from 'ink';
-import App from './src/App';
-
-// Check if we're running in an interactive terminal
-if (process.stdin.isTTY && process.stdout.isTTY) {
-    render(<App />);
-} else {
-    process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
-    process.exit(1);
-}
-```
-
-## File: src/components/DashboardScreen.tsx
-```typescript
-import React, { useMemo } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
-import Spinner from 'ink-spinner';
-import { useDashboardStore, type Transaction, type DashboardStatus, type TransactionStatus } from '../stores/dashboard.store';
-import { useAppStore } from '../stores/app.store';
-import Separator from './Separator';
-import GlobalHelpScreen from './GlobalHelpScreen';
-
-// --- Sub-components & Helpers ---
-
-const getStatusIcon = (status: TransactionStatus) => {
-    switch (status) {
-        case 'PENDING': return <Text color="yellow">?</Text>;
-        case 'APPLIED': return <Text color="green">✓</Text>;
-        case 'COMMITTED': return <Text color="blue">→</Text>;
-        case 'FAILED': return <Text color="red">✗</Text>;
-        case 'REVERTED': return <Text color="gray">↩</Text>;
-        case 'IN-PROGRESS': return <Spinner type="dots" />;
-        default: return <Text> </Text>;
-    }
-};
-
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `-${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `-${minutes}m`;
-};
-
-const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {
-    const icon = getStatusIcon(transaction.status);
-    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
-    const statusText = transaction.status.padEnd(11, ' ');
-    
-    const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color="cyan">{transaction.message}</Text>
-        : transaction.message;
-    
-    const content = (
-        <Text>
-            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
-        </Text>
-    );
-
-    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
-};
-
-const ConfirmationContent = ({
-    status,
-    transactionsToConfirm,
-}: {
-    status: DashboardStatus;
-    transactionsToConfirm: Transaction[];
-}) => {
-    const isApprove = status === 'CONFIRM_APPROVE';
-    const actionText = isApprove ? 'APPROVE' : 'COMMIT';
-    
-    return (
-        <Box flexDirection="column" marginY={1} paddingLeft={2}>
-            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
-            <Text>
-                The following {transactionsToConfirm.length} transaction(s) will be {isApprove ? 'approved' : 'committed'}:
-            </Text>
-            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-                {transactionsToConfirm.map(tx => (
-                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-                ))}
-            </Box>
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const DashboardScreen = () => {
-    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
-    const {
-        togglePause,
-        moveSelectionUp,
-        moveSelectionDown,
-        startApproveAll,
-        startCommitAll,
-        confirmAction,
-        cancelAction,
-        toggleHelp,
-    } = useDashboardStore(s => s.actions);
-    const { exit } = useApp();
-    const showReviewScreen = useAppStore(s => s.actions.showReviewScreen);
-
-    const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
-    const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
-
-    const isModal = status === 'CONFIRM_APPROVE' || status === 'CONFIRM_COMMIT';
-    const isProcessing = status === 'APPROVING' || status === 'COMMITTING';
-    
-    useInput((input, key) => {
-        if (input === '?') {
-            toggleHelp();
-            return;
-        }
-
-        if (showHelp) {
-            if (key.escape || input === '?') toggleHelp();
-            return;
-        }
-
-        if (isModal) {
-            if (key.return) confirmAction();
-            if (key.escape) cancelAction();
-            return;
-        }
-
-        if (isProcessing) return; // No input while processing
-        
-        if (input.toLowerCase() === 'q') exit();
-
-        if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
-        
-        if (key.return) {
-            showReviewScreen();
-        }
-        
-        if (input.toLowerCase() === 'p') togglePause();
-        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
-        if (input.toLowerCase() === 'c' && pendingCommits > 0) startCommitAll();
-    });
-
-    const renderStatusBar = () => {
-        let statusText: string;
-        let statusIcon: React.ReactNode;
-        switch (status) {
-            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
-            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
-            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            case 'COMMITTING': statusText = 'COMMITTING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
-        }
-
-        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
-        let commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
-
-        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === 'COMMITTING') commitStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === 'CONFIRM_APPROVE') {
-            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
-        }
-        if (status === 'CONFIRM_COMMIT') {
-            commitStr = <Text bold color="yellow">┌ {commitStr} ┐</Text>;
-        }
-        
-        return (
-            <Text>
-                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
-            </Text>
-        );
-    };
-
-    const renderFooter = () => {
-        if (isModal) return (
-            <Text>
-                (<Text color="cyan" bold>Enter</Text>) Confirm      (<Text color="cyan" bold>Esc</Text>) Cancel
-            </Text>
-        );
-        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
-
-        const pauseAction = status === 'PAUSED'
-			? <Text>(<Text color="cyan" bold>R</Text>)esume</Text>
-			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
-		return (
-            <Text color="gray">
-                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
-            </Text>
-        );
-    };
-    
-    const transactionsToConfirm = useMemo(() => {
-        if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
-        if (status === 'CONFIRM_COMMIT') return transactions.filter(t => t.status === 'APPLIED');
-        return [];
-    }, [status, transactions]);
-
-    return (
-        <Box flexDirection="column" height="100%">
-            {showHelp && <GlobalHelpScreen />}
-
-            <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
-                <Text color="cyan">▲ relaycode dashboard</Text>
-                <Separator />
-                <Box marginY={1}>
-                    {renderStatusBar()}
-                </Box>
-                
-                {isModal && (
-                    <>
-                        <ConfirmationContent status={status} transactionsToConfirm={transactionsToConfirm} />
-                        <Separator />
-                    </>
-                )}
-                
-                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
-                <Box flexDirection="column" marginTop={1}>
-                    {transactions.map((tx, index) => (
-                        <EventStreamItem 
-                            key={tx.id} 
-                            transaction={tx} 
-                            isSelected={!isModal && index === selectedTransactionIndex}
-                        />
-                    ))}
-                </Box>
-
-                <Box marginTop={1}><Separator /></Box>
-                {renderFooter()}
-            </Box>
-        </Box>
-    );
-};
-
-export default DashboardScreen;
-```
-
-## File: src/components/InitializationScreen.tsx
-```typescript
-import React, { useEffect } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
-import { useInitStore, type Task, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
-import Separator from './Separator';
-import { useAppStore } from '../stores/app.store';
-import { sleep } from '../utils';
-
-const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
-	let symbol: React.ReactNode;
-	switch (task.status) {
-		case 'pending': symbol = '( )'; break;
-		case 'active': symbol = <Text color="cyan">(●)</Text>; break;
-		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
-	}
-
-	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
-
-	return (
-		<Box flexDirection="column">
-			<Text>
-				{symbol} {title}
-			</Text>
-			{task.subtext && task.status !== 'done' && (
-				<Text italic color="gray">
-					{'     └─ '}{task.subtext}
-				</Text>
-			)}
-		</Box>
-	);
-};
-
-const InitializationScreen = () => {
-    const phase = useInitStore(s => s.phase);
-    const analyzeTasks = useInitStore(s => s.analyzeTasks);
-    const configureTasks = useInitStore(s => s.configureTasks);
-    const interactiveChoice = useInitStore(s => s.interactiveChoice);
-    const projectId = useInitStore(s => s.projectId);
-    const actions = useInitStore(s => s.actions);
-    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
-    const { exit } = useApp();
-
-    useInput((input, key) => {
-        if (phase === 'INTERACTIVE') {
-            if (key.return) {
-                actions.setInteractiveChoice('ignore');
-            } else if (input.toLowerCase() === 's') {
-                actions.setInteractiveChoice('share');
-            }
-        }
-        if (phase === 'FINALIZE') {
-            if (input.toLowerCase() === 'q') {
-                exit();
-            } else if (input.toLowerCase() === 'w') {
-                showDashboardScreen();
-            }
-        }
-    });
-
-    useEffect(() => {
-        actions.resetInit();
-        const runSimulation = async () => {
-            actions.setPhase('ANALYZE');
-            for (const task of initialAnalyzeTasks) {
-                actions.updateAnalyzeTask(task.id, 'active');
-                await sleep(800);
-                actions.updateAnalyzeTask(task.id, 'done');
-            }
-            actions.setAnalysisResults('relaycode (from package.json)', true);
-            await sleep(500);
-
-            actions.setPhase('CONFIGURE');
-            const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
-            for (const task of configTasksUntilInteractive) {
-                actions.updateConfigureTask(task.id, 'active');
-                await sleep(800);
-                actions.updateConfigureTask(task.id, 'done');
-            }
-            await sleep(500);
-
-            actions.setPhase('INTERACTIVE');
-        };
-
-        runSimulation();
-    }, [actions]);
-
-    useEffect(() => {
-        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
-            const resumeSimulation = async () => {
-                actions.setPhase('CONFIGURE');
-                const lastTask = initialConfigureTasks[2];
-                if (lastTask) {
-                    actions.updateConfigureTask(lastTask.id, 'active');
-                    await sleep(800);
-                    actions.updateConfigureTask(lastTask.id, 'done');
-                    await sleep(500);
-
-                    actions.setPhase('FINALIZE');
-                }
-            };
-            resumeSimulation();
-        }
-    }, [interactiveChoice, phase, actions]);
-
-    const renderAnalyze = () => (
-        <Box flexDirection="column">
-            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
-            <Box flexDirection="column" marginTop={1} gap={1}>
-                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
-            </Box>
-        </Box>
-    );
-
-    const renderContext = () => (
-        <Box flexDirection="column" marginBottom={1}>
-            <Text bold color="cyan">CONTEXT</Text>
-            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
-            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
-        </Box>
-    );
-
-    const renderConfigure = () => (
-        <Box flexDirection="column">
-            {renderContext()}
-            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
-            <Box flexDirection="column" marginTop={1} gap={1}>
-                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
-            </Box>
-        </Box>
-    );
-
-    const renderInteractive = () => (
-        <Box flexDirection="column">
-            {renderContext()}
-            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
-                <Box flexDirection="column" marginTop={1}>
-                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
-                    <Text>  Do you want to share its state with your team by committing it?</Text>
-                </Box>
-            </Box>
-        </Box>
-    );
-
-    const renderFinalize = () => {
-        const stateText = interactiveChoice === 'share'
-            ? '.relay/ directory initialized. It will be committed to git.'
-            : '.relay/ directory initialized and added to .gitignore.';
-        const stateSubText = interactiveChoice === 'share'
-            ? undefined
-            : 'Local transaction history will be stored here.';
-        
-        return (
-            <Box flexDirection="column">
-                <Text bold color="green"> SYSTEM READY</Text>
-                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
-                    <Box flexDirection="column">
-                        <Text><Text color="green">✓</Text> Config:   relay.config.json created.</Text>
-                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text><Text color="green">✓</Text> State:    {stateText}</Text>
-                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text><Text color="green">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
-                        <Text color="gray" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
-                    </Box>
-                </Box>
-            </Box>
-        );
-    };
-
-    const renderPhase = () => {
-        switch (phase) {
-            case 'ANALYZE': return renderAnalyze();
-            case 'CONFIGURE': return renderConfigure();
-            case 'INTERACTIVE': return renderInteractive();
-            case 'FINALIZE': return renderFinalize();
-        }
-    };
-    
-    let footerText;
-    switch (phase) {
-        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
-        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
-        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
-        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
-    }
-
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
-            <Separator />
-            <Box marginY={1}>{renderPhase()}</Box>
-            <Separator />
-            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
-        </Box>
-    );
-};
-
-export default InitializationScreen;
-```
-
-## File: src/App.tsx
-```typescript
-import React, { useEffect } from 'react';
-import { useAppStore } from './stores/app.store';
-import SplashScreen from './components/SplashScreen';
-import InitializationScreen from './components/InitializationScreen';
-import DashboardScreen from './components/DashboardScreen';
-import ReviewScreen from './components/ReviewScreen';
-import ReviewProcessingScreen from './components/ReviewProcessingScreen';
-
-const App = () => {
-    const currentScreen = useAppStore(state => state.currentScreen);
-
-    useEffect(() => {
-        // Clear the terminal when the screen changes to ensure a clean view.
-        // This is especially important when transitioning from the splash screen.
-        // eslint-disable-next-line no-console
-        console.clear();
-    }, [currentScreen]);
-    
-    if (currentScreen === 'splash') {
-        return <SplashScreen />;
-    }
-
-    if (currentScreen === 'init') {
-        return <InitializationScreen />;
-    }
-
-    if (currentScreen === 'dashboard') {
-        return <DashboardScreen />;
-    }
-
-    if (currentScreen === 'review') {
-        return <ReviewScreen />;
-    }
-
-    if (currentScreen === 'review-processing') {
-        return <ReviewProcessingScreen />;
-    }
-
-    return null;
-};
-
-export default App;
-```
-
 ## File: package.json
 ```json
 {
@@ -2436,4 +2558,66 @@ export default App;
     "typescript": "^5"
   }
 }
+```
+
+## File: src/App.tsx
+```typescript
+import React, { useEffect } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from './stores/app.store';
+import SplashScreen from './components/SplashScreen';
+import InitializationScreen from './components/InitializationScreen';
+import DashboardScreen from './components/DashboardScreen';
+import ReviewScreen from './components/ReviewScreen';
+import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+import DebugMenu from './components/DebugMenu';
+
+const App = () => {
+    const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state => ({
+        currentScreen: state.currentScreen,
+        isDebugMenuOpen: state.isDebugMenuOpen,
+        actions: state.actions,
+    }));
+
+    useInput((input, key) => {
+        if (key.ctrl && input === 's') {
+            actions.toggleDebugMenu();
+        }
+    });
+
+    useEffect(() => {
+        // Clear the terminal when the screen changes to ensure a clean view.
+        // This is especially important when transitioning from the splash screen.
+        // eslint-disable-next-line no-console
+        console.clear();
+    }, [currentScreen, isDebugMenuOpen]);
+
+    if (isDebugMenuOpen) {
+        return <DebugMenu />;
+    }
+    
+    if (currentScreen === 'splash') {
+        return <SplashScreen />;
+    }
+
+    if (currentScreen === 'init') {
+        return <InitializationScreen />;
+    }
+
+    if (currentScreen === 'dashboard') {
+        return <DashboardScreen />;
+    }
+
+    if (currentScreen === 'review') {
+        return <ReviewScreen />;
+    }
+
+    if (currentScreen === 'review-processing') {
+        return <ReviewProcessingScreen />;
+    }
+
+    return null;
+};
+
+export default App;
 ```

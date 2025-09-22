@@ -123,7 +123,7 @@ const DebugMenu = () => {
                 appActions.toggleDebugMenu();
             }
         }
-        if (key.escape || (key.ctrl && input === 's')) {
+        if (key.escape || (key.ctrl && input === 'b')) {
             appActions.toggleDebugMenu();
         }
     });
@@ -147,7 +147,7 @@ const DebugMenu = () => {
                 ))}
             </Box>
             <Separator />
-            <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+S) Close</Text>
+            <Text>(↑↓) Navigate · (Enter) Select · (Esc / Ctrl+B) Close</Text>
         </Box>
     );
 };

@@ -16,7 +16,7 @@ const App = () => {
     }));
 
     useInput((input, key) => {
-        if (key.ctrl && input === 's') {
+        if (key.ctrl && input === 'b') {
             actions.toggleDebugMenu();
         }
     });
