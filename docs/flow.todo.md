@@ -1,3 +1,15 @@
+transaction detail screen and review screen
+
+the reasoning view should one column, so vertically spread text with scrollable nav
+
+===
+
+dashboard screen
+
+show keystroke for user to view/edit system prompt, config file... so now we need
+
+file-editor-screen
+
 ===
 
 beside debug menu of ctrl+b we want more screen named debug log so user can know the system debug log of what system activities behind is happening, so user has knowledge like why certain clipboard not detected etc
@@ -9,6 +21,14 @@ should dim another layout area when screen is asking for user action like what t
 ===
 
 on terminal widht height size changes, UI should be responsive. so not appear broken
+
+===
+
+add copy context feature to advanced copy of below screen
+
+transaction history screen, transaction detail screen, review screen .
+
+so context feature is useful for user to get latest files content as parsable markdown format the same file as the transaction point
 
 ===
 
@@ -38,6 +58,8 @@ dashboard screen:
 ===
 
 update review screen
+
+- we need more colors
 
 - beside click D, click enter also show the diff
 
