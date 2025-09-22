@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
-import { useReviewStore, type FileItem, type ScriptResult } from '../stores/review.store';
-import { useAppStore } from '../stores/app.store';
+import React from 'react';
+import { Box, Text } from 'ink';
+import { type FileItem, type ScriptResult } from '../stores/review.store';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
+import { useReviewScreen } from './ReviewScreen.hook';
 
 // --- Sub-components ---
 
@@ -97,206 +97,16 @@ const ScriptItemRow = ({
 // --- Main Component ---
 
 const ReviewScreen = () => {
-    const { exit } = useApp();
-    const store = useReviewStore();
-    const { showDashboardScreen } = useAppStore(s => s.actions);
     const {
         hash, message, prompt, reasoning, files, scripts, patchStatus,
         linesAdded, linesRemoved, duration,
         selectedItemIndex, bodyView, isDiffExpanded,
         copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
-    } = store;
-    const {
-        moveSelectionUp, moveSelectionDown, toggleFileApproval,
-        toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
-        startApplySimulation,
-        rejectAllFiles, approve,
-        toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
-        copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
-        tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
-        scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
-    } = store.actions;
-
-    const {
         numFiles,
         approvedFilesCount,
         approvedLinesAdded,
         approvedLinesRemoved,
-    } = useMemo(() => {
-        const approvedFiles = files.filter(f => f.status === 'APPROVED');
-        return {
-            numFiles: files.length,
-            approvedFilesCount: approvedFiles.length,
-            approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
-            approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
-        };
-    }, [files]);
-
-    useInput((input, key) => {
-        // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
-        if (input === '1') {
-            startApplySimulation('success');
-            return;
-        }
-        if (input === '2') {
-            // The store's default is failure, but to re-trigger the processing screen
-            startApplySimulation('failure');
-            return;
-        }
-
-        if (input.toLowerCase() === 'q') exit();
-
-        // Handle Escape key - context-sensitive behavior
-        if (key.escape) {
-            if (bodyView === 'copy_mode') {
-                toggleCopyMode();
-            } else if (bodyView === 'confirm_handoff') {
-                // Pressing Esc on confirm handoff goes back to the main view
-                toggleReasoningView(); // Toggles any view off
-            } else if (bodyView === 'bulk_repair') {
-                showBulkRepair(); // Close bulk repair modal
-            } else if (bodyView !== 'none') {
-                if (bodyView === 'diff') toggleDiffView();
-                if (bodyView === 'reasoning') toggleReasoningView();
-                if (bodyView === 'script_output') toggleScriptView();
-            } else {
-                showDashboardScreen();
-            }
-            return;
-        }
-
-        // Copy Mode Navigation
-        if (bodyView === 'copy_mode') {
-            if (key.upArrow) moveCopySelectionUp();
-            if (key.downArrow) moveCopySelectionDown();
-            if (key.return) copySelectedItem();
-            
-            // Hotkey shortcuts
-            if (input.toLowerCase() === 'u') copyUUID();
-            if (input.toLowerCase() === 'm') copyMessage();
-            if (input.toLowerCase() === 'p') copyPrompt();
-            if (input.toLowerCase() === 'r') copyReasoning();
-            if (input.toLowerCase() === 'f') copyFileDiff();
-            if (input.toLowerCase() === 'a') copyAllDiffs();
-            if (input.toLowerCase() === 'c') toggleCopyMode();
-            return;
-        }
-
-        // Handoff Confirmation
-        if (bodyView === 'confirm_handoff') {
-            if (key.return) {
-                confirmHandoff();
-            }
-            return;
-        }
-
-        // Bulk Repair Navigation
-        if (bodyView === 'bulk_repair') {
-            if (input >= '1' && input <= '4') {
-                executeBulkRepairOption(parseInt(input));
-            }
-            return;
-        }
-
-        // Reasoning Scroll Navigation
-        if (bodyView === 'reasoning') {
-            if (key.upArrow) scrollReasoningUp();
-            if (key.downArrow) scrollReasoningDown();
-            if (input.toLowerCase() === 'r') toggleReasoningView();
-            return;
-        }
-
-        // Script Output Navigation
-        if (bodyView === 'script_output') {
-            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
-            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-            if (key.return) toggleScriptView();
-            if (input.toLowerCase() === 'c') {
-                // Copy script output
-                const scriptIndex = selectedItemIndex - numFiles;
-                const selectedScript = scripts[scriptIndex];
-                if (selectedScript) {
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
-                }
-            }
-            return;
-        }
-
-        // Diff View Navigation
-        if (bodyView === 'diff') {
-            if (input.toLowerCase() === 'x') expandDiff();
-            if (input.toLowerCase() === 'd') toggleDiffView();
-            return;
-        }
-
-        // Handle Shift+R for reject all
-        if (key.shift && input.toLowerCase() === 'r') {
-            if (approvedFilesCount > 0) {
-                rejectAllFiles();
-            }
-            return;
-        }
-
-        // Main View Navigation
-        if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
-
-        if (input.toLowerCase() === 'r') toggleReasoningView();
-
-        if (input === ' ') {
-            if (selectedItemIndex < numFiles) {
-                const file = files[selectedItemIndex];
-                if (file && file.status !== 'FAILED') {
-                    toggleFileApproval();
-                }
-            }
-        }
-
-        if (input.toLowerCase() === 'd') {
-            if (selectedItemIndex < numFiles) {
-                toggleDiffView();
-            }
-        }
-
-        if (key.return) { // Enter key
-             if (selectedItemIndex >= numFiles) { // It's a script
-                toggleScriptView();
-            }
-        }
-
-        if (input.toLowerCase() === 'a') {
-            if (approvedFilesCount > 0) {
-                approve();
-                showDashboardScreen();
-            }
-        }
-
-        if (input.toLowerCase() === 'c') {
-            toggleCopyMode();
-        }
-
-        // Handle T for single repair and Shift+T for bulk repair
-        if (input.toLowerCase() === 't') {
-            if (key.shift) {
-                const hasFailedFiles = files.some(f => f.status === 'FAILED');
-                if (hasFailedFiles) {
-                    showBulkRepair();
-                }
-            } else {
-                if (selectedItemIndex < numFiles) {
-                    const file = files[selectedItemIndex];
-                    if (file && file.status === 'FAILED') {
-                        tryRepairFile();
-                    }
-                }
-            }
-        }
-
-        if (input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-    });
+    } = useReviewScreen();
 
     const renderBody = () => {
         if (bodyView === 'none') return null;

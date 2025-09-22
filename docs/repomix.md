@@ -14,11 +14,14 @@ src/
     InitializationScreen.tsx
     ReasonScreen.tsx
     ReviewProcessingScreen.tsx
+    ReviewScreen.hook.tsx
     ReviewScreen.tsx
     Separator.tsx
     SplashScreen.hook.tsx
     SplashScreen.tsx
+    TransactionDetailScreen.hook.tsx
     TransactionDetailScreen.tsx
+    TransactionHistoryScreen.hook.tsx
     TransactionHistoryScreen.tsx
   stores/
     app.store.ts
@@ -37,6 +40,413 @@ tsconfig.json
 ```
 
 # Files
+
+## File: src/components/ReviewScreen.hook.tsx
+```typescript
+import { useMemo } from 'react';
+import { useInput, useApp } from 'ink';
+import { useReviewStore } from '../stores/review.store';
+import { useAppStore } from '../stores/app.store';
+
+export const useReviewScreen = () => {
+    const { exit } = useApp();
+    const store = useReviewStore();
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const {
+        hash, message, prompt, reasoning, files, scripts, patchStatus,
+        selectedItemIndex, bodyView,
+    } = store;
+    const {
+        moveSelectionUp, moveSelectionDown, toggleFileApproval,
+        toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
+        startApplySimulation,
+        rejectAllFiles, approve,
+        toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
+        copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
+        tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
+        scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+    } = store.actions;
+
+    const {
+        numFiles,
+        approvedFilesCount,
+        approvedLinesAdded,
+        approvedLinesRemoved,
+    } = useMemo(() => {
+        const approvedFiles = files.filter(f => f.status === 'APPROVED');
+        return {
+            numFiles: files.length,
+            approvedFilesCount: approvedFiles.length,
+            approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+            approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+        };
+    }, [files]);
+
+    useInput((input, key) => {
+        // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+        if (input === '1') {
+            startApplySimulation('success');
+            return;
+        }
+        if (input === '2') {
+            // The store's default is failure, but to re-trigger the processing screen
+            startApplySimulation('failure');
+            return;
+        }
+
+        if (input.toLowerCase() === 'q') exit();
+
+        // Handle Escape key - context-sensitive behavior
+        if (key.escape) {
+            if (bodyView === 'copy_mode') {
+                toggleCopyMode();
+            } else if (bodyView === 'confirm_handoff') {
+                // Pressing Esc on confirm handoff goes back to the main view
+                toggleReasoningView(); // Toggles any view off
+            } else if (bodyView === 'bulk_repair') {
+                showBulkRepair(); // Close bulk repair modal
+            } else if (bodyView !== 'none') {
+                if (bodyView === 'diff') toggleDiffView();
+                if (bodyView === 'reasoning') toggleReasoningView();
+                if (bodyView === 'script_output') toggleScriptView();
+            } else {
+                showDashboardScreen();
+            }
+            return;
+        }
+
+        // Copy Mode Navigation
+        if (bodyView === 'copy_mode') {
+            if (key.upArrow) moveCopySelectionUp();
+            if (key.downArrow) moveCopySelectionDown();
+            if (key.return) copySelectedItem();
+            
+            // Hotkey shortcuts
+            if (input.toLowerCase() === 'u') copyUUID();
+            if (input.toLowerCase() === 'm') copyMessage();
+            if (input.toLowerCase() === 'p') copyPrompt();
+            if (input.toLowerCase() === 'r') copyReasoning();
+            if (input.toLowerCase() === 'f') copyFileDiff();
+            if (input.toLowerCase() === 'a') copyAllDiffs();
+            if (input.toLowerCase() === 'c') toggleCopyMode();
+            return;
+        }
+
+        // Handoff Confirmation
+        if (bodyView === 'confirm_handoff') {
+            if (key.return) {
+                confirmHandoff();
+            }
+            return;
+        }
+
+        // Bulk Repair Navigation
+        if (bodyView === 'bulk_repair') {
+            if (input >= '1' && input <= '4') {
+                executeBulkRepairOption(parseInt(input));
+            }
+            return;
+        }
+
+        // Reasoning Scroll Navigation
+        if (bodyView === 'reasoning') {
+            if (key.upArrow) scrollReasoningUp();
+            if (key.downArrow) scrollReasoningDown();
+            if (input.toLowerCase() === 'r') toggleReasoningView();
+            return;
+        }
+
+        // Script Output Navigation
+        if (bodyView === 'script_output') {
+            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+            if (key.return) toggleScriptView();
+            if (input.toLowerCase() === 'c') {
+                // Copy script output
+                const scriptIndex = selectedItemIndex - numFiles;
+                const selectedScript = scripts[scriptIndex];
+                if (selectedScript) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                }
+            }
+            return;
+        }
+
+        // Diff View Navigation
+        if (bodyView === 'diff') {
+            if (input.toLowerCase() === 'x') expandDiff();
+            if (input.toLowerCase() === 'd') toggleDiffView();
+            return;
+        }
+
+        // Handle Shift+R for reject all
+        if (key.shift && input.toLowerCase() === 'r') {
+            if (approvedFilesCount > 0) {
+                rejectAllFiles();
+            }
+            return;
+        }
+
+        // Main View Navigation
+        if (key.upArrow) moveSelectionUp();
+        if (key.downArrow) moveSelectionDown();
+
+        if (input.toLowerCase() === 'r') toggleReasoningView();
+
+        if (input === ' ') {
+            if (selectedItemIndex < numFiles) {
+                const file = files[selectedItemIndex];
+                if (file && file.status !== 'FAILED') {
+                    toggleFileApproval();
+                }
+            }
+        }
+
+        if (input.toLowerCase() === 'd') {
+            if (selectedItemIndex < numFiles) {
+                toggleDiffView();
+            }
+        }
+
+        if (key.return) { // Enter key
+             if (selectedItemIndex >= numFiles) { // It's a script
+                toggleScriptView();
+            }
+        }
+
+        if (input.toLowerCase() === 'a') {
+            if (approvedFilesCount > 0) {
+                approve();
+                showDashboardScreen();
+            }
+        }
+
+        if (input.toLowerCase() === 'c') {
+            toggleCopyMode();
+        }
+
+        // Handle T for single repair and Shift+T for bulk repair
+        if (input.toLowerCase() === 't') {
+            if (key.shift) {
+                const hasFailedFiles = files.some(f => f.status === 'FAILED');
+                if (hasFailedFiles) {
+                    showBulkRepair();
+                }
+            } else {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status === 'FAILED') {
+                        tryRepairFile();
+                    }
+                }
+            }
+        }
+
+        if (input.toLowerCase() === 'q') {
+            showDashboardScreen();
+        }
+    });
+
+    return { ...store, numFiles, approvedFilesCount, approvedLinesAdded, approvedLinesRemoved };
+};
+```
+
+## File: src/components/TransactionDetailScreen.hook.tsx
+```typescript
+import { useInput } from 'ink';
+import { useTransactionDetailStore } from '../stores/transaction-detail.store';
+import { useAppStore } from '../stores/app.store';
+
+export const useTransactionDetailScreen = () => {
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const store = useTransactionDetailStore();
+    const {
+        transaction,
+        files,
+        bodyView,
+    } = store;
+
+    const {
+        // Main nav
+        navigateUp, navigateDown, handleEnterOrRight, handleEscapeOrLeft,
+        toggleCopyMode, toggleRevertConfirm,
+        // Copy mode nav
+        copyModeNavigateUp,
+        copyModeNavigateDown,
+        copyModeToggleSelection,
+        copyModeExecuteCopy,
+        // Revert modal nav
+        confirmRevert,
+    } = store.actions;
+
+    useInput((input, key) => {
+        if (bodyView === 'COPY_MODE') {
+            if (key.upArrow) copyModeNavigateUp();
+            if (key.downArrow) copyModeNavigateDown();
+            if (input === ' ') copyModeToggleSelection();
+            if (key.return) copyModeExecuteCopy();
+            if (key.escape || input.toLowerCase() === 'c') toggleCopyMode();
+            return;
+        }
+        
+        if (bodyView === 'REVERT_CONFIRM') {
+            if (key.escape) toggleRevertConfirm();
+            if (key.return) confirmRevert();
+            return;
+        }
+
+        // Main view input
+        if (input.toLowerCase() === 'q') {
+            showDashboardScreen();
+        }
+        if (input.toLowerCase() === 'c') {
+            toggleCopyMode();
+        }
+        if (input.toLowerCase() === 'u') {
+            toggleRevertConfirm();
+        }
+
+        if (key.upArrow) navigateUp();
+        if (key.downArrow) navigateDown();
+        if (key.return || key.rightArrow) handleEnterOrRight();
+        if (key.escape || key.leftArrow) handleEscapeOrLeft();
+    });
+
+    const copyOptions = [
+        { key: 'M', label: 'Git Message' },
+        { key: 'P', label: 'Prompt' },
+        { key: 'R', label: 'Reasoning' },
+        { key: 'A', label: `All Diffs (${files.length} files)` },
+        { key: 'F', label: `Diff for: ${files[store.selectedFileIndex]?.path || 'No file selected'}` },
+        { key: 'U', label: 'UUID' },
+        { key: 'Y', label: 'Full YAML representation' },
+    ];
+
+    return {
+        ...store,
+        copyOptions,
+        actions: {
+            ...store.actions,
+            showDashboardScreen,
+        },
+    };
+};
+```
+
+## File: src/components/TransactionHistoryScreen.hook.tsx
+```typescript
+import { useState, useMemo, useEffect } from 'react';
+import { useInput } from 'ink';
+import { useTransactionHistoryStore, getVisibleItemPaths } from '../stores/transaction-history.store';
+import { useAppStore } from '../stores/app.store';
+import { useStdoutDimensions } from '../utils';
+
+export const useTransactionHistoryScreen = () => {
+    const [, rows] = useStdoutDimensions();
+    const store = useTransactionHistoryStore();
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const [viewOffset, setViewOffset] = useState(0);
+    
+    // State for CopyMode sub-component, managed by the hook
+    const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
+
+    const toggleField = (field: string) => {
+        const newFields = new Set(selectedFields);
+        if (newFields.has(field)) {
+            newFields.delete(field);
+        } else {
+            newFields.add(field);
+        }
+        setSelectedFields(newFields);
+    };
+
+    const visibleItemPaths = useMemo(
+        () => getVisibleItemPaths(store.transactions, store.expandedIds),
+        [store.transactions, store.expandedIds],
+    );
+    const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
+
+    const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+    const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
+
+    useEffect(() => {
+        if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+            setViewOffset(selectedIndex);
+        } else if (selectedIndex >= viewOffset + viewportHeight) {
+            setViewOffset(selectedIndex - viewportHeight + 1);
+        }
+    }, [selectedIndex, viewOffset, viewportHeight]);
+    
+    useInput((input, key) => {
+        if (store.mode === 'FILTER') {
+            if (key.escape) store.actions.setMode('LIST');
+            if (key.return) store.actions.applyFilter();
+            return;
+        }
+        if (store.mode === 'COPY') {
+            if (key.escape || input.toLowerCase() === 'c') store.actions.setMode('LIST');
+            if (key.return) store.actions.executeCopy(Array.from(selectedFields));
+            if (input.toLowerCase() === 'm') toggleField('Git Messages');
+            if (input.toLowerCase() === 'r') toggleField('Reasonings');
+            // Add other toggles...
+            return;
+        }
+        if (store.mode === 'BULK_ACTIONS') {
+            if (key.escape) store.actions.setMode('LIST');
+            // Add number handlers...
+            return;
+        }
+
+        // LIST mode inputs
+        if (key.upArrow) store.actions.navigateUp();
+        if (key.downArrow) store.actions.navigateDown();
+        if (key.rightArrow) store.actions.expandOrDrillDown();
+        if (key.leftArrow) store.actions.collapseOrBubbleUp();
+        if (input === ' ') store.actions.toggleSelection();
+
+        if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
+        if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
+        if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
+        
+        if (key.escape || input.toLowerCase() === 'q') {
+            showDashboardScreen();
+        }
+    });
+
+    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+    const transactionsInView = useMemo(
+        () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
+        [store.transactions, txIdsInView],
+    );
+    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+    const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
+    const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
+    
+    const copyFields = [
+        { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
+        { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
+    ];
+
+    return {
+        store,
+        viewOffset,
+        itemsInView,
+        transactionsInView,
+        pathsInViewSet,
+        filterStatus,
+        showingStatus,
+        visibleItemPaths,
+        
+        // For CopyMode sub-component
+        selectedFields,
+        copyFields,
+    };
+};
+```
 
 ## File: src/components/DashboardScreen.hook.tsx
 ```typescript
@@ -389,6 +799,60 @@ export const useDebugMenu = () => {
 };
 ```
 
+## File: src/components/DiffScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+interface DiffScreenProps {
+    filePath: string;
+    diffContent: string;
+    isExpanded: boolean;
+}
+
+const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
+    const lines = diffContent.split('\n');
+    const COLLAPSE_THRESHOLD = 20;
+    const COLLAPSE_SHOW_LINES = 8;
+
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
+        }
+        return lines.map((line, i) => renderLine(line, i));
+    };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (line.startsWith('+')) color = 'green';
+        if (line.startsWith('-')) color = 'red';
+        if (line.startsWith('@@')) color = 'cyan';
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>DIFF: {filePath}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DiffScreen;
+```
+
 ## File: src/components/GitCommitScreen.hook.tsx
 ```typescript
 import { useInput } from 'ink';
@@ -519,145 +983,6 @@ export const useInitializationScreen = () => {
 };
 ```
 
-## File: src/components/SplashScreen.hook.tsx
-```typescript
-import { useState, useEffect } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-
-export const useSplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState(5);
-
-    const handleSkip = () => {
-        showInitScreen();
-    };
-
-    useInput(() => {
-        handleSkip();
-    });
-
-    useEffect(() => {
-        if (countdown === 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
-
-    return { countdown };
-};
-```
-
-## File: src/components/DiffScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-
-interface DiffScreenProps {
-    filePath: string;
-    diffContent: string;
-    isExpanded: boolean;
-}
-
-const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
-    const lines = diffContent.split('\n');
-    const COLLAPSE_THRESHOLD = 20;
-    const COLLAPSE_SHOW_LINES = 8;
-
-    const renderContent = () => {
-        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
-            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
-            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
-            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
-
-            return (
-                <>
-                    {topLines.map((line, i) => renderLine(line, i))}
-                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
-                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
-                </>
-            );
-        }
-        return lines.map((line, i) => renderLine(line, i));
-    };
-
-    const renderLine = (line: string, key: number) => {
-        let color = 'white';
-        if (line.startsWith('+')) color = 'green';
-        if (line.startsWith('-')) color = 'red';
-        if (line.startsWith('@@')) color = 'cyan';
-        return <Text key={key} color={color}>{line}</Text>;
-    };
-
-    return (
-        <Box flexDirection="column">
-            <Text>DIFF: {filePath}</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {renderContent()}
-            </Box>
-        </Box>
-    );
-};
-
-export default DiffScreen;
-```
-
-## File: src/components/GitCommitScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import { useGitCommitScreen } from './GitCommitScreen.hook';
-
-const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
-
-    const transactionLines = transactionsToCommit.map(tx => (
-        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-    ));
-
-    const footer = isCommitting
-        ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-        : <Text>(Enter) Confirm & Commit      (Esc) Cancel</Text>;
-
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode git commit</Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold>TRANSACTIONS INCLUDED</Text>
-                    {transactionLines}
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text bold>FINAL COMMIT MESSAGE</Text>
-                <Box marginTop={1}>
-                    <Text>{finalCommitMessage}</Text>
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} paddingX={2}>
-                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
-            </Box>
-            <Separator />
-            {footer}
-        </Box>
-    );
-};
-
-export default GitCommitScreen;
-```
-
 ## File: src/components/ReviewProcessingScreen.tsx
 ```typescript
 import React from 'react';
@@ -736,6 +1061,41 @@ const ReviewProcessingScreen = () => {
 };
 
 export default ReviewProcessingScreen;
+```
+
+## File: src/components/SplashScreen.hook.tsx
+```typescript
+import { useState, useEffect } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState(5);
+
+    const handleSkip = () => {
+        showInitScreen();
+    };
+
+    useInput(() => {
+        handleSkip();
+    });
+
+    useEffect(() => {
+        if (countdown === 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
+
+    return { countdown };
+};
 ```
 
 ## File: src/stores/commit.store.ts
@@ -964,6 +1324,56 @@ export default [
 }
 ```
 
+## File: src/components/GitCommitScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import { useGitCommitScreen } from './GitCommitScreen.hook';
+
+const GitCommitScreen = () => {
+    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+    const transactionLines = transactionsToCommit.map(tx => (
+        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+    ));
+
+    const footer = isCommitting
+        ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+        : <Text>(Enter) Confirm & Commit      (Esc) Cancel</Text>;
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode git commit</Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text bold>TRANSACTIONS INCLUDED</Text>
+                    {transactionLines}
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text bold>FINAL COMMIT MESSAGE</Text>
+                <Box marginTop={1}>
+                    <Text>{finalCommitMessage}</Text>
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} paddingX={2}>
+                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+            </Box>
+            <Separator />
+            {footer}
+        </Box>
+    );
+};
+
+export default GitCommitScreen;
+```
+
 ## File: src/components/GlobalHelpScreen.tsx
 ```typescript
 import React from 'react';
@@ -1052,10 +1462,10 @@ export default ReasonScreen;
 ## File: src/components/TransactionDetailScreen.tsx
 ```typescript
 import React from 'react';
-import { Box, Text, useInput } from 'ink';
-import { useTransactionDetailStore, type FileChangeType } from '../stores/transaction-detail.store';
+import { Box, Text } from 'ink';
+import { type FileChangeType } from '../stores/transaction-detail.store';
 import Separator from './Separator';
-import { useAppStore } from '../stores/app.store';
+import { useTransactionDetailScreen } from './TransactionDetailScreen.hook';
 
 const getFileChangeTypeIcon = (type: FileChangeType) => {
     switch (type) {
@@ -1066,44 +1476,25 @@ const getFileChangeTypeIcon = (type: FileChangeType) => {
     }
 };
 
-const CopyMode = () => {
-    const {
-        transaction,
-        files,
-        selectedFileIndex,
-        copyModeSelectionIndex,
-        copyModeSelections,
-        copyModeLastCopied,
-    } = useTransactionDetailStore();
-    const {
-        copyModeNavigateUp,
-        copyModeNavigateDown,
-        copyModeToggleSelection,
-        copyModeExecuteCopy,
-        toggleCopyMode,
-    } = useTransactionDetailStore(s => s.actions);
+interface CopyModeProps {
+    transactionHash: string;
+    copyOptions: { key: string; label: string }[];
+    copyModeSelectionIndex: number;
+    copyModeSelections: Record<string, boolean>;
+    copyModeLastCopied: string | null;
+}
 
-    useInput((input, key) => {
-        if (key.upArrow) copyModeNavigateUp();
-        if (key.downArrow) copyModeNavigateDown();
-        if (input === ' ') copyModeToggleSelection();
-        if (key.return) copyModeExecuteCopy();
-        if (key.escape || input.toLowerCase() === 'c') toggleCopyMode();
-    });
-
-    const copyOptions = [
-        { key: 'M', label: 'Git Message' },
-        { key: 'P', label: 'Prompt' },
-        { key: 'R', label: 'Reasoning' },
-        { key: 'A', label: `All Diffs (${files.length} files)` },
-        { key: 'F', label: `Diff for: ${files[selectedFileIndex]?.path || 'No file selected'}` },
-        { key: 'U', label: 'UUID' },
-        { key: 'Y', label: 'Full YAML representation' },
-    ];
+const CopyMode = ({
+    transactionHash,
+    copyOptions,
+    copyModeSelectionIndex,
+    copyModeSelections,
+    copyModeLastCopied,
+}: CopyModeProps) => {
     
     return (
         <Box flexDirection="column" width="100%">
-            <Text>Select data to copy from transaction {transaction?.hash} (use Space to toggle):</Text>
+            <Text>Select data to copy from transaction {transactionHash} (use Space to toggle):</Text>
             <Box flexDirection="column" marginY={1}>
                 {copyOptions.map((opt, index) => {
                     const isSelected = index === copyModeSelectionIndex;
@@ -1122,17 +1513,7 @@ const CopyMode = () => {
     );
 };
 
-const RevertModal = () => {
-    const { transaction } = useTransactionDetailStore();
-    const { toggleRevertConfirm, confirmRevert } = useTransactionDetailStore(s => s.actions);
-    
-    useInput((input, key) => {
-        if (key.escape) toggleRevertConfirm();
-        if (key.return) {
-            confirmRevert();
-        }
-    });
-
+const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
     return (
         <Box 
             borderStyle="round"
@@ -1144,7 +1525,7 @@ const RevertModal = () => {
         >
             <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
             <Box height={1} />
-            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transaction?.hash}. The original transaction record will be preserved.</Text>
+            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
             <Box height={1} />
             <Text wrap="wrap">Are you sure?</Text>
         </Box>
@@ -1152,37 +1533,11 @@ const RevertModal = () => {
 };
 
 const TransactionDetailScreen = () => {
-    const { showDashboardScreen } = useAppStore(s => s.actions);
     const {
         transaction, prompt, reasoning, files,
         navigatorFocus, expandedSection, selectedFileIndex, bodyView,
-    } = useTransactionDetailStore();
-    const { 
-        navigateUp, navigateDown, handleEnterOrRight, handleEscapeOrLeft,
-        toggleCopyMode, toggleRevertConfirm,
-    } = useTransactionDetailStore(s => s.actions);
-
-    useInput((input, key) => {
-        // Modal views have their own input handlers
-        if (bodyView === 'COPY_MODE' || bodyView === 'REVERT_CONFIRM') {
-            return;
-        }
-
-        if (input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-        if (input.toLowerCase() === 'c') {
-            toggleCopyMode();
-        }
-        if (input.toLowerCase() === 'u') {
-            toggleRevertConfirm();
-        }
-
-        if (key.upArrow) navigateUp();
-        if (key.downArrow) navigateDown();
-        if (key.return || key.rightArrow) handleEnterOrRight();
-        if (key.escape || key.leftArrow) handleEscapeOrLeft();
-    });
+        copyOptions, copyModeSelectionIndex, copyModeSelections, copyModeLastCopied,
+    } = useTransactionDetailScreen();
 
     if (!transaction) {
         return <Text>Loading transaction...</Text>;
@@ -1308,7 +1663,7 @@ const TransactionDetailScreen = () => {
             <Separator />
             
             {/* Modal takeover for Revert */}
-            {bodyView === 'REVERT_CONFIRM' && <RevertModal />}
+            {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
             
             {/* Main view */}
             <Box flexDirection="column" display={bodyView === 'REVERT_CONFIRM' ? 'none' : 'flex'}>
@@ -1327,7 +1682,14 @@ const TransactionDetailScreen = () => {
                 
                 {/* Body */}
                 <Box marginY={1}>
-                    {bodyView === 'COPY_MODE' ? <CopyMode /> : renderBody()}
+                    {bodyView === 'COPY_MODE' ? <CopyMode
+                        transactionHash={transaction.hash}
+                        copyOptions={copyOptions}
+                        copyModeSelectionIndex={copyModeSelectionIndex}
+                        copyModeSelections={copyModeSelections}
+                        copyModeLastCopied={copyModeLastCopied}
+                    />
+                    : renderBody()}
                 </Box>
                 
                 <Separator />
@@ -1346,13 +1708,12 @@ export default TransactionDetailScreen;
 
 ## File: src/components/TransactionHistoryScreen.tsx
 ```typescript
-import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React from 'react';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
-import { useTransactionHistoryStore, getVisibleItemPaths, type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
+import { type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
 import Separator from './Separator';
-import { useAppStore } from '../stores/app.store';
-import { useStdoutDimensions } from '../utils';
+import { useTransactionHistoryScreen } from './TransactionHistoryScreen.hook';
 
 // --- Sub-components ---
 
@@ -1426,41 +1787,23 @@ const TransactionRow = ({
     );
 };
 
-const CopyMode = () => {
-    const { selectedForAction, lastCopiedMessage } = useTransactionHistoryStore();
-    const { setMode, executeCopy } = useTransactionHistoryStore(s => s.actions);
-    const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
+interface CopyModeProps {
+    selectedForActionCount: number;
+    lastCopiedMessage: string | null;
+    selectedFields: Set<string>;
+    fields: { key: string; name: string }[];
+}
 
-    const toggleField = (field: string) => {
-        const newFields = new Set(selectedFields);
-        if (newFields.has(field)) {
-            newFields.delete(field);
-        } else {
-            newFields.add(field);
-        }
-        setSelectedFields(newFields);
-    };
-    
-    useInput((input, key) => {
-        if (key.escape || input.toLowerCase() === 'c') {
-            setMode('LIST');
-        }
-        if (key.return) {
-            executeCopy(Array.from(selectedFields));
-        }
-        // Basic navigation for demo
-        if (input.toLowerCase() === 'm') toggleField('Git Messages');
-        if (input.toLowerCase() === 'r') toggleField('Reasonings');
-    });
-
-    const fields = [
-        { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
-        { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
-    ];
+const CopyMode = ({
+    selectedForActionCount,
+    lastCopiedMessage,
+    selectedFields,
+    fields,
+}: CopyModeProps) => {
 
     return (
         <Box flexDirection="column" marginY={1}>
-            <Text>Select data to copy from {selectedForAction.size} transactions:</Text>
+            <Text>Select data to copy from {selectedForActionCount} transactions:</Text>
             <Box marginY={1}>
                 {fields.map(f => (
                     <Text key={f.key}>
@@ -1473,17 +1816,10 @@ const CopyMode = () => {
     );
 };
 
-const BulkActionsMode = () => {
-    const { selectedForAction } = useTransactionHistoryStore();
-    const { setMode } = useTransactionHistoryStore(s => s.actions);
-    
-    useInput((input, key) => {
-        if (key.escape) setMode('LIST');
-    });
-
+const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: number }) => {
     return (
         <Box flexDirection="column" marginY={1}>
-            <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForAction.size} SELECTED ITEMS</Text>
+            <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
             <Box marginY={1}>
                 <Text>This action is often irreversible. Are you sure?</Text>
             </Box>
@@ -1498,52 +1834,17 @@ const BulkActionsMode = () => {
 // --- Main Component ---
 
 const TransactionHistoryScreen = () => {
-    const [, rows] = useStdoutDimensions();
-    const store = useTransactionHistoryStore();
-    const { showDashboardScreen } = useAppStore(s => s.actions);
-
-    const [viewOffset, setViewOffset] = useState(0);
-
-    const visibleItemPaths = useMemo(
-        () => getVisibleItemPaths(store.transactions, store.expandedIds),
-        [store.transactions, store.expandedIds],
-    );
-    const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
-
-    const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
-    const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
-
-    useEffect(() => {
-        if (selectedIndex >= 0 && selectedIndex < viewOffset) {
-            setViewOffset(selectedIndex);
-        } else if (selectedIndex >= viewOffset + viewportHeight) {
-            setViewOffset(selectedIndex - viewportHeight + 1);
-        }
-    }, [selectedIndex, viewOffset, viewportHeight]);
-    
-    useInput((input, key) => {
-        if (store.mode === 'FILTER') {
-            if (key.escape) store.actions.setMode('LIST');
-            if (key.return) store.actions.applyFilter();
-            return;
-        }
-        if (store.mode === 'COPY' || store.mode === 'BULK_ACTIONS') return;
-
-        // LIST mode inputs
-        if (key.upArrow) store.actions.navigateUp();
-        if (key.downArrow) store.actions.navigateDown();
-        if (key.rightArrow) store.actions.expandOrDrillDown();
-        if (key.leftArrow) store.actions.collapseOrBubbleUp();
-        if (input === ' ') store.actions.toggleSelection();
-
-        if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
-        if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
-        if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
-        
-        if (key.escape || input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-    });
+    const {
+        store,
+        itemsInView,
+        transactionsInView,
+        pathsInViewSet,
+        filterStatus,
+        showingStatus,
+        visibleItemPaths,
+        selectedFields,
+        copyFields,
+    } = useTransactionHistoryScreen();
 
     const renderFooter = () => {
         if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>;
@@ -1556,17 +1857,6 @@ const TransactionHistoryScreen = () => {
         }
         return <Text>{actions.join(' · ')}</Text>;
     };
-
-    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
-    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
-    const transactionsInView = useMemo(
-        () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
-        [store.transactions, txIdsInView],
-    );
-    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
-
-    const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
-    const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
 
     return (
         <Box flexDirection="column">
@@ -1584,8 +1874,13 @@ const TransactionHistoryScreen = () => {
             </Box>
 
             <Box flexDirection="column" marginY={1}>
-                {store.mode === 'COPY' && <CopyMode />}
-                {store.mode === 'BULK_ACTIONS' && <BulkActionsMode />}
+                {store.mode === 'COPY' && <CopyMode
+                    selectedForActionCount={store.selectedForAction.size}
+                    lastCopiedMessage={store.lastCopiedMessage}
+                    selectedFields={selectedFields}
+                    fields={copyFields}
+                />}
+                {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
 
                 {store.mode === 'LIST' && transactionsInView.map(tx => {
                     const isTxSelected = store.selectedItemPath.startsWith(tx.id);
@@ -2413,13 +2708,13 @@ export default InitializationScreen;
 
 ## File: src/components/ReviewScreen.tsx
 ```typescript
-import React, { useMemo } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
-import { useReviewStore, type FileItem, type ScriptResult } from '../stores/review.store';
-import { useAppStore } from '../stores/app.store';
+import React from 'react';
+import { Box, Text } from 'ink';
+import { type FileItem, type ScriptResult } from '../stores/review.store';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
+import { useReviewScreen } from './ReviewScreen.hook';
 
 // --- Sub-components ---
 
@@ -2512,206 +2807,16 @@ const ScriptItemRow = ({
 // --- Main Component ---
 
 const ReviewScreen = () => {
-    const { exit } = useApp();
-    const store = useReviewStore();
-    const { showDashboardScreen } = useAppStore(s => s.actions);
     const {
         hash, message, prompt, reasoning, files, scripts, patchStatus,
         linesAdded, linesRemoved, duration,
         selectedItemIndex, bodyView, isDiffExpanded,
         copyModeSelectedIndex, copyModeLastCopied, reasoningScrollIndex, scriptErrorIndex,
-    } = store;
-    const {
-        moveSelectionUp, moveSelectionDown, toggleFileApproval,
-        toggleDiffView, toggleReasoningView, toggleScriptView, expandDiff,
-        startApplySimulation,
-        rejectAllFiles, approve,
-        toggleCopyMode, moveCopySelectionUp, moveCopySelectionDown, copySelectedItem,
-        copyUUID, copyMessage, copyPrompt, copyReasoning, copyFileDiff, copyAllDiffs,
-        tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
-        scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
-    } = store.actions;
-
-    const {
         numFiles,
         approvedFilesCount,
         approvedLinesAdded,
         approvedLinesRemoved,
-    } = useMemo(() => {
-        const approvedFiles = files.filter(f => f.status === 'APPROVED');
-        return {
-            numFiles: files.length,
-            approvedFilesCount: approvedFiles.length,
-            approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
-            approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
-        };
-    }, [files]);
-
-    useInput((input, key) => {
-        // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
-        if (input === '1') {
-            startApplySimulation('success');
-            return;
-        }
-        if (input === '2') {
-            // The store's default is failure, but to re-trigger the processing screen
-            startApplySimulation('failure');
-            return;
-        }
-
-        if (input.toLowerCase() === 'q') exit();
-
-        // Handle Escape key - context-sensitive behavior
-        if (key.escape) {
-            if (bodyView === 'copy_mode') {
-                toggleCopyMode();
-            } else if (bodyView === 'confirm_handoff') {
-                // Pressing Esc on confirm handoff goes back to the main view
-                toggleReasoningView(); // Toggles any view off
-            } else if (bodyView === 'bulk_repair') {
-                showBulkRepair(); // Close bulk repair modal
-            } else if (bodyView !== 'none') {
-                if (bodyView === 'diff') toggleDiffView();
-                if (bodyView === 'reasoning') toggleReasoningView();
-                if (bodyView === 'script_output') toggleScriptView();
-            } else {
-                showDashboardScreen();
-            }
-            return;
-        }
-
-        // Copy Mode Navigation
-        if (bodyView === 'copy_mode') {
-            if (key.upArrow) moveCopySelectionUp();
-            if (key.downArrow) moveCopySelectionDown();
-            if (key.return) copySelectedItem();
-            
-            // Hotkey shortcuts
-            if (input.toLowerCase() === 'u') copyUUID();
-            if (input.toLowerCase() === 'm') copyMessage();
-            if (input.toLowerCase() === 'p') copyPrompt();
-            if (input.toLowerCase() === 'r') copyReasoning();
-            if (input.toLowerCase() === 'f') copyFileDiff();
-            if (input.toLowerCase() === 'a') copyAllDiffs();
-            if (input.toLowerCase() === 'c') toggleCopyMode();
-            return;
-        }
-
-        // Handoff Confirmation
-        if (bodyView === 'confirm_handoff') {
-            if (key.return) {
-                confirmHandoff();
-            }
-            return;
-        }
-
-        // Bulk Repair Navigation
-        if (bodyView === 'bulk_repair') {
-            if (input >= '1' && input <= '4') {
-                executeBulkRepairOption(parseInt(input));
-            }
-            return;
-        }
-
-        // Reasoning Scroll Navigation
-        if (bodyView === 'reasoning') {
-            if (key.upArrow) scrollReasoningUp();
-            if (key.downArrow) scrollReasoningDown();
-            if (input.toLowerCase() === 'r') toggleReasoningView();
-            return;
-        }
-
-        // Script Output Navigation
-        if (bodyView === 'script_output') {
-            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
-            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-            if (key.return) toggleScriptView();
-            if (input.toLowerCase() === 'c') {
-                // Copy script output
-                const scriptIndex = selectedItemIndex - numFiles;
-                const selectedScript = scripts[scriptIndex];
-                if (selectedScript) {
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
-                }
-            }
-            return;
-        }
-
-        // Diff View Navigation
-        if (bodyView === 'diff') {
-            if (input.toLowerCase() === 'x') expandDiff();
-            if (input.toLowerCase() === 'd') toggleDiffView();
-            return;
-        }
-
-        // Handle Shift+R for reject all
-        if (key.shift && input.toLowerCase() === 'r') {
-            if (approvedFilesCount > 0) {
-                rejectAllFiles();
-            }
-            return;
-        }
-
-        // Main View Navigation
-        if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
-
-        if (input.toLowerCase() === 'r') toggleReasoningView();
-
-        if (input === ' ') {
-            if (selectedItemIndex < numFiles) {
-                const file = files[selectedItemIndex];
-                if (file && file.status !== 'FAILED') {
-                    toggleFileApproval();
-                }
-            }
-        }
-
-        if (input.toLowerCase() === 'd') {
-            if (selectedItemIndex < numFiles) {
-                toggleDiffView();
-            }
-        }
-
-        if (key.return) { // Enter key
-             if (selectedItemIndex >= numFiles) { // It's a script
-                toggleScriptView();
-            }
-        }
-
-        if (input.toLowerCase() === 'a') {
-            if (approvedFilesCount > 0) {
-                approve();
-                showDashboardScreen();
-            }
-        }
-
-        if (input.toLowerCase() === 'c') {
-            toggleCopyMode();
-        }
-
-        // Handle T for single repair and Shift+T for bulk repair
-        if (input.toLowerCase() === 't') {
-            if (key.shift) {
-                const hasFailedFiles = files.some(f => f.status === 'FAILED');
-                if (hasFailedFiles) {
-                    showBulkRepair();
-                }
-            } else {
-                if (selectedItemIndex < numFiles) {
-                    const file = files[selectedItemIndex];
-                    if (file && file.status === 'FAILED') {
-                        tryRepairFile();
-                    }
-                }
-            }
-        }
-
-        if (input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-    });
+    } = useReviewScreen();
 
     const renderBody = () => {
         if (bodyView === 'none') return null;
@@ -3911,50 +4016,6 @@ const main = () => {
 main();
 ```
 
-## File: src/components/DebugMenu.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useDebugMenu, type MenuItem } from './DebugMenu.hook';
-
-const getKeyForIndex = (index: number): string => {
-    if (index < 9) {
-        return (index + 1).toString();
-    }
-    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
-};
-
-const DebugMenu = () => {
-    const { selectedIndex, menuItems } = useDebugMenu();
-
-    return (
-        <Box
-            flexDirection="column"
-            borderStyle="round"
-            borderColor="yellow"
-            width="100%"
-            paddingX={2}
-        >
-            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
-            <Separator />
-            <Box flexDirection="column" marginY={1}>
-                {menuItems.map((item, index) => (
-                    <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
-                        {selectedIndex === index ? '> ' : '  '}
-                        ({getKeyForIndex(index)}) {item.title}
-                    </Text>
-                ))}
-            </Box>
-            <Separator />
-            <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc / Ctrl+B) Close</Text>
-        </Box>
-    );
-};
-
-export default DebugMenu;
-```
-
 ## File: src/stores/app.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -4029,6 +4090,127 @@ export const useAppStore = create<AppState>((set) => ({
     "typescript": "^5.9.2"
   }
 }
+```
+
+## File: src/components/DebugMenu.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useDebugMenu, type MenuItem } from './DebugMenu.hook';
+
+const getKeyForIndex = (index: number): string => {
+    if (index < 9) {
+        return (index + 1).toString();
+    }
+    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+};
+
+const DebugMenu = () => {
+    const { selectedIndex, menuItems } = useDebugMenu();
+
+    return (
+        <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor="yellow"
+            width="100%"
+            paddingX={2}
+        >
+            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+            <Separator />
+            <Box flexDirection="column" marginY={1}>
+                {menuItems.map((item, index) => (
+                    <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                        {selectedIndex === index ? '> ' : '  '}
+                        ({getKeyForIndex(index)}) {item.title}
+                    </Text>
+                ))}
+            </Box>
+            <Separator />
+            <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc / Ctrl+B) Close</Text>
+        </Box>
+    );
+};
+
+export default DebugMenu;
+```
+
+## File: src/App.tsx
+```typescript
+import React, { useEffect } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from './stores/app.store';
+import SplashScreen from './components/SplashScreen';
+import InitializationScreen from './components/InitializationScreen';
+import DashboardScreen from './components/DashboardScreen';
+import ReviewScreen from './components/ReviewScreen';
+import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+import GitCommitScreen from './components/GitCommitScreen';
+import TransactionDetailScreen from './components/TransactionDetailScreen';
+import TransactionHistoryScreen from './components/TransactionHistoryScreen';
+import DebugMenu from './components/DebugMenu';
+
+const App = () => {
+    const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state => ({
+        currentScreen: state.currentScreen,
+        isDebugMenuOpen: state.isDebugMenuOpen,
+        actions: state.actions,
+    }));
+
+    useInput((input, key) => {
+        if (key.ctrl && input === 'b') {
+            actions.toggleDebugMenu();
+        }
+    });
+
+    useEffect(() => {
+        // Clear the terminal when the screen changes to ensure a clean view.
+        // This is especially important when transitioning from the splash screen.
+        // eslint-disable-next-line no-console
+        console.clear();
+    }, [currentScreen, isDebugMenuOpen]);
+
+    if (isDebugMenuOpen) {
+        return <DebugMenu />;
+    }
+    
+    if (currentScreen === 'splash') {
+        return <SplashScreen />;
+    }
+
+    if (currentScreen === 'init') {
+        return <InitializationScreen />;
+    }
+
+    if (currentScreen === 'dashboard') {
+        return <DashboardScreen />;
+    }
+
+    if (currentScreen === 'review') {
+        return <ReviewScreen />;
+    }
+
+    if (currentScreen === 'review-processing') {
+        return <ReviewProcessingScreen />;
+    }
+
+    if (currentScreen === 'git-commit') {
+        return <GitCommitScreen />;
+    }
+
+    if (currentScreen === 'transaction-detail') {
+        return <TransactionDetailScreen />;
+    }
+
+    if (currentScreen === 'transaction-history') {
+        return <TransactionHistoryScreen />;
+    }
+
+    return null;
+};
+
+export default App;
 ```
 
 ## File: src/components/DashboardScreen.tsx
@@ -4203,81 +4385,4 @@ const DashboardScreen = () => {
 };
 
 export default DashboardScreen;
-```
-
-## File: src/App.tsx
-```typescript
-import React, { useEffect } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from './stores/app.store';
-import SplashScreen from './components/SplashScreen';
-import InitializationScreen from './components/InitializationScreen';
-import DashboardScreen from './components/DashboardScreen';
-import ReviewScreen from './components/ReviewScreen';
-import ReviewProcessingScreen from './components/ReviewProcessingScreen';
-import GitCommitScreen from './components/GitCommitScreen';
-import TransactionDetailScreen from './components/TransactionDetailScreen';
-import TransactionHistoryScreen from './components/TransactionHistoryScreen';
-import DebugMenu from './components/DebugMenu';
-
-const App = () => {
-    const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state => ({
-        currentScreen: state.currentScreen,
-        isDebugMenuOpen: state.isDebugMenuOpen,
-        actions: state.actions,
-    }));
-
-    useInput((input, key) => {
-        if (key.ctrl && input === 'b') {
-            actions.toggleDebugMenu();
-        }
-    });
-
-    useEffect(() => {
-        // Clear the terminal when the screen changes to ensure a clean view.
-        // This is especially important when transitioning from the splash screen.
-        // eslint-disable-next-line no-console
-        console.clear();
-    }, [currentScreen, isDebugMenuOpen]);
-
-    if (isDebugMenuOpen) {
-        return <DebugMenu />;
-    }
-    
-    if (currentScreen === 'splash') {
-        return <SplashScreen />;
-    }
-
-    if (currentScreen === 'init') {
-        return <InitializationScreen />;
-    }
-
-    if (currentScreen === 'dashboard') {
-        return <DashboardScreen />;
-    }
-
-    if (currentScreen === 'review') {
-        return <ReviewScreen />;
-    }
-
-    if (currentScreen === 'review-processing') {
-        return <ReviewProcessingScreen />;
-    }
-
-    if (currentScreen === 'git-commit') {
-        return <GitCommitScreen />;
-    }
-
-    if (currentScreen === 'transaction-detail') {
-        return <TransactionDetailScreen />;
-    }
-
-    if (currentScreen === 'transaction-history') {
-        return <TransactionHistoryScreen />;
-    }
-
-    return null;
-};
-
-export default App;
 ```

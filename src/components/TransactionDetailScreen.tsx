@@ -1,8 +1,8 @@
 import React from 'react';
-import { Box, Text, useInput } from 'ink';
-import { useTransactionDetailStore, type FileChangeType } from '../stores/transaction-detail.store';
+import { Box, Text } from 'ink';
+import { type FileChangeType } from '../stores/transaction-detail.store';
 import Separator from './Separator';
-import { useAppStore } from '../stores/app.store';
+import { useTransactionDetailScreen } from './TransactionDetailScreen.hook';
 
 const getFileChangeTypeIcon = (type: FileChangeType) => {
     switch (type) {
@@ -13,44 +13,25 @@ const getFileChangeTypeIcon = (type: FileChangeType) => {
     }
 };
 
-const CopyMode = () => {
-    const {
-        transaction,
-        files,
-        selectedFileIndex,
-        copyModeSelectionIndex,
-        copyModeSelections,
-        copyModeLastCopied,
-    } = useTransactionDetailStore();
-    const {
-        copyModeNavigateUp,
-        copyModeNavigateDown,
-        copyModeToggleSelection,
-        copyModeExecuteCopy,
-        toggleCopyMode,
-    } = useTransactionDetailStore(s => s.actions);
+interface CopyModeProps {
+    transactionHash: string;
+    copyOptions: { key: string; label: string }[];
+    copyModeSelectionIndex: number;
+    copyModeSelections: Record<string, boolean>;
+    copyModeLastCopied: string | null;
+}
 
-    useInput((input, key) => {
-        if (key.upArrow) copyModeNavigateUp();
-        if (key.downArrow) copyModeNavigateDown();
-        if (input === ' ') copyModeToggleSelection();
-        if (key.return) copyModeExecuteCopy();
-        if (key.escape || input.toLowerCase() === 'c') toggleCopyMode();
-    });
-
-    const copyOptions = [
-        { key: 'M', label: 'Git Message' },
-        { key: 'P', label: 'Prompt' },
-        { key: 'R', label: 'Reasoning' },
-        { key: 'A', label: `All Diffs (${files.length} files)` },
-        { key: 'F', label: `Diff for: ${files[selectedFileIndex]?.path || 'No file selected'}` },
-        { key: 'U', label: 'UUID' },
-        { key: 'Y', label: 'Full YAML representation' },
-    ];
+const CopyMode = ({
+    transactionHash,
+    copyOptions,
+    copyModeSelectionIndex,
+    copyModeSelections,
+    copyModeLastCopied,
+}: CopyModeProps) => {
     
     return (
         <Box flexDirection="column" width="100%">
-            <Text>Select data to copy from transaction {transaction?.hash} (use Space to toggle):</Text>
+            <Text>Select data to copy from transaction {transactionHash} (use Space to toggle):</Text>
             <Box flexDirection="column" marginY={1}>
                 {copyOptions.map((opt, index) => {
                     const isSelected = index === copyModeSelectionIndex;
@@ -69,17 +50,7 @@ const CopyMode = () => {
     );
 };
 
-const RevertModal = () => {
-    const { transaction } = useTransactionDetailStore();
-    const { toggleRevertConfirm, confirmRevert } = useTransactionDetailStore(s => s.actions);
-    
-    useInput((input, key) => {
-        if (key.escape) toggleRevertConfirm();
-        if (key.return) {
-            confirmRevert();
-        }
-    });
-
+const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
     return (
         <Box 
             borderStyle="round"
@@ -91,7 +62,7 @@ const RevertModal = () => {
         >
             <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
             <Box height={1} />
-            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transaction?.hash}. The original transaction record will be preserved.</Text>
+            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
             <Box height={1} />
             <Text wrap="wrap">Are you sure?</Text>
         </Box>
@@ -99,37 +70,11 @@ const RevertModal = () => {
 };
 
 const TransactionDetailScreen = () => {
-    const { showDashboardScreen } = useAppStore(s => s.actions);
     const {
         transaction, prompt, reasoning, files,
         navigatorFocus, expandedSection, selectedFileIndex, bodyView,
-    } = useTransactionDetailStore();
-    const { 
-        navigateUp, navigateDown, handleEnterOrRight, handleEscapeOrLeft,
-        toggleCopyMode, toggleRevertConfirm,
-    } = useTransactionDetailStore(s => s.actions);
-
-    useInput((input, key) => {
-        // Modal views have their own input handlers
-        if (bodyView === 'COPY_MODE' || bodyView === 'REVERT_CONFIRM') {
-            return;
-        }
-
-        if (input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-        if (input.toLowerCase() === 'c') {
-            toggleCopyMode();
-        }
-        if (input.toLowerCase() === 'u') {
-            toggleRevertConfirm();
-        }
-
-        if (key.upArrow) navigateUp();
-        if (key.downArrow) navigateDown();
-        if (key.return || key.rightArrow) handleEnterOrRight();
-        if (key.escape || key.leftArrow) handleEscapeOrLeft();
-    });
+        copyOptions, copyModeSelectionIndex, copyModeSelections, copyModeLastCopied,
+    } = useTransactionDetailScreen();
 
     if (!transaction) {
         return <Text>Loading transaction...</Text>;
@@ -255,7 +200,7 @@ const TransactionDetailScreen = () => {
             <Separator />
             
             {/* Modal takeover for Revert */}
-            {bodyView === 'REVERT_CONFIRM' && <RevertModal />}
+            {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
             
             {/* Main view */}
             <Box flexDirection="column" display={bodyView === 'REVERT_CONFIRM' ? 'none' : 'flex'}>
@@ -274,7 +219,14 @@ const TransactionDetailScreen = () => {
                 
                 {/* Body */}
                 <Box marginY={1}>
-                    {bodyView === 'COPY_MODE' ? <CopyMode /> : renderBody()}
+                    {bodyView === 'COPY_MODE' ? <CopyMode
+                        transactionHash={transaction.hash}
+                        copyOptions={copyOptions}
+                        copyModeSelectionIndex={copyModeSelectionIndex}
+                        copyModeSelections={copyModeSelections}
+                        copyModeLastCopied={copyModeLastCopied}
+                    />
+                    : renderBody()}
                 </Box>
                 
                 <Separator />

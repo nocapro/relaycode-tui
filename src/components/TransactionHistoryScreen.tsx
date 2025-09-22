@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React from 'react';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
-import { useTransactionHistoryStore, getVisibleItemPaths, type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
+import { type HistoryTransaction, type FileChange } from '../stores/transaction-history.store';
 import Separator from './Separator';
-import { useAppStore } from '../stores/app.store';
-import { useStdoutDimensions } from '../utils';
+import { useTransactionHistoryScreen } from './TransactionHistoryScreen.hook';
 
 // --- Sub-components ---
 
@@ -78,41 +77,23 @@ const TransactionRow = ({
     );
 };
 
-const CopyMode = () => {
-    const { selectedForAction, lastCopiedMessage } = useTransactionHistoryStore();
-    const { setMode, executeCopy } = useTransactionHistoryStore(s => s.actions);
-    const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(['Git Messages', 'Reasonings']));
+interface CopyModeProps {
+    selectedForActionCount: number;
+    lastCopiedMessage: string | null;
+    selectedFields: Set<string>;
+    fields: { key: string; name: string }[];
+}
 
-    const toggleField = (field: string) => {
-        const newFields = new Set(selectedFields);
-        if (newFields.has(field)) {
-            newFields.delete(field);
-        } else {
-            newFields.add(field);
-        }
-        setSelectedFields(newFields);
-    };
-    
-    useInput((input, key) => {
-        if (key.escape || input.toLowerCase() === 'c') {
-            setMode('LIST');
-        }
-        if (key.return) {
-            executeCopy(Array.from(selectedFields));
-        }
-        // Basic navigation for demo
-        if (input.toLowerCase() === 'm') toggleField('Git Messages');
-        if (input.toLowerCase() === 'r') toggleField('Reasonings');
-    });
-
-    const fields = [
-        { key: 'M', name: 'Git Messages' }, { key: 'P', name: 'Prompts' }, { key: 'R', name: 'Reasonings' },
-        { key: 'D', name: 'Diffs' }, { key: 'U', name: 'UUIDs' }, { key: 'Y', name: 'Full YAML' },
-    ];
+const CopyMode = ({
+    selectedForActionCount,
+    lastCopiedMessage,
+    selectedFields,
+    fields,
+}: CopyModeProps) => {
 
     return (
         <Box flexDirection="column" marginY={1}>
-            <Text>Select data to copy from {selectedForAction.size} transactions:</Text>
+            <Text>Select data to copy from {selectedForActionCount} transactions:</Text>
             <Box marginY={1}>
                 {fields.map(f => (
                     <Text key={f.key}>
@@ -125,17 +106,10 @@ const CopyMode = () => {
     );
 };
 
-const BulkActionsMode = () => {
-    const { selectedForAction } = useTransactionHistoryStore();
-    const { setMode } = useTransactionHistoryStore(s => s.actions);
-    
-    useInput((input, key) => {
-        if (key.escape) setMode('LIST');
-    });
-
+const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: number }) => {
     return (
         <Box flexDirection="column" marginY={1}>
-            <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForAction.size} SELECTED ITEMS</Text>
+            <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
             <Box marginY={1}>
                 <Text>This action is often irreversible. Are you sure?</Text>
             </Box>
@@ -150,52 +124,17 @@ const BulkActionsMode = () => {
 // --- Main Component ---
 
 const TransactionHistoryScreen = () => {
-    const [, rows] = useStdoutDimensions();
-    const store = useTransactionHistoryStore();
-    const { showDashboardScreen } = useAppStore(s => s.actions);
-
-    const [viewOffset, setViewOffset] = useState(0);
-
-    const visibleItemPaths = useMemo(
-        () => getVisibleItemPaths(store.transactions, store.expandedIds),
-        [store.transactions, store.expandedIds],
-    );
-    const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
-
-    const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
-    const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
-
-    useEffect(() => {
-        if (selectedIndex >= 0 && selectedIndex < viewOffset) {
-            setViewOffset(selectedIndex);
-        } else if (selectedIndex >= viewOffset + viewportHeight) {
-            setViewOffset(selectedIndex - viewportHeight + 1);
-        }
-    }, [selectedIndex, viewOffset, viewportHeight]);
-    
-    useInput((input, key) => {
-        if (store.mode === 'FILTER') {
-            if (key.escape) store.actions.setMode('LIST');
-            if (key.return) store.actions.applyFilter();
-            return;
-        }
-        if (store.mode === 'COPY' || store.mode === 'BULK_ACTIONS') return;
-
-        // LIST mode inputs
-        if (key.upArrow) store.actions.navigateUp();
-        if (key.downArrow) store.actions.navigateDown();
-        if (key.rightArrow) store.actions.expandOrDrillDown();
-        if (key.leftArrow) store.actions.collapseOrBubbleUp();
-        if (input === ' ') store.actions.toggleSelection();
-
-        if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
-        if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) store.actions.setMode('COPY');
-        if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
-        
-        if (key.escape || input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-    });
+    const {
+        store,
+        itemsInView,
+        transactionsInView,
+        pathsInViewSet,
+        filterStatus,
+        showingStatus,
+        visibleItemPaths,
+        selectedFields,
+        copyFields,
+    } = useTransactionHistoryScreen();
 
     const renderFooter = () => {
         if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>;
@@ -208,17 +147,6 @@ const TransactionHistoryScreen = () => {
         }
         return <Text>{actions.join(' · ')}</Text>;
     };
-
-    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
-    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
-    const transactionsInView = useMemo(
-        () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
-        [store.transactions, txIdsInView],
-    );
-    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
-
-    const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
-    const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
 
     return (
         <Box flexDirection="column">
@@ -236,8 +164,13 @@ const TransactionHistoryScreen = () => {
             </Box>
 
             <Box flexDirection="column" marginY={1}>
-                {store.mode === 'COPY' && <CopyMode />}
-                {store.mode === 'BULK_ACTIONS' && <BulkActionsMode />}
+                {store.mode === 'COPY' && <CopyMode
+                    selectedForActionCount={store.selectedForAction.size}
+                    lastCopiedMessage={store.lastCopiedMessage}
+                    selectedFields={selectedFields}
+                    fields={copyFields}
+                />}
+                {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
 
                 {store.mode === 'LIST' && transactionsInView.map(tx => {
                     const isTxSelected = store.selectedItemPath.startsWith(tx.id);
