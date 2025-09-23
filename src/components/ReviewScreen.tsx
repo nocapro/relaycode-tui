@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { type FileItem, type ScriptResult } from '../stores/review.store';
+import { type ReviewFileItem, type ScriptResult } from '../stores/review.store';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
@@ -8,7 +8,7 @@ import { useReviewScreen } from '../hooks/useReviewScreen';
 
 // --- Sub-components ---
 
-const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean }) => {
+const FileItemRow = ({ file, isSelected }: { file: ReviewFileItem, isSelected: boolean }) => {
     let icon;
     let iconColor;
     switch (file.status) {

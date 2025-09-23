@@ -1,4 +1,5 @@
 import type { FileChange } from './file.types';
+import type { ScriptResult } from './review.types';
 
 export type TransactionStatus =
     | 'PENDING'
@@ -20,6 +21,7 @@ export interface Transaction {
     error?: string;
     // Fields for history/detail view
     files?: FileChange[];
+    scripts?: ScriptResult[];
     stats?: {
         files: number;
         linesAdded: number;

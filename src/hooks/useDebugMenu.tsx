@@ -3,12 +3,14 @@ import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useInitStore } from '../stores/init.store';
-import { useReviewStore } from '../stores/review.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import { COPYABLE_ITEMS } from '../types/copy.types';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
+import { ReviewService } from '../services/review.service';
+import { CopyService } from '../services/copy.service';
+import { useReviewStore } from '../stores/review.store';
 import type { MenuItem } from '../types/debug.types';
 import { moveIndex } from '../stores/navigation.utils';
 export type { MenuItem } from '../types/debug.types';
@@ -18,7 +20,6 @@ export const useDebugMenu = () => {
     const appActions = useAppStore(s => s.actions);
     const dashboardActions = useDashboardStore(s => s.actions);
     const initActions = useInitStore(s => s.actions);
-    const reviewActions = useReviewStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
     const detailActions = useTransactionDetailStore(s => s.actions);
     const historyActions = useTransactionHistoryStore(s => s.actions);
@@ -73,74 +74,77 @@ export const useDebugMenu = () => {
         {
             title: 'Review: Partial Failure (Default)',
             action: () => {
-                reviewActions.simulateFailureScenario();
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review: Success',
             action: () => {
-                reviewActions.simulateSuccessScenario();
+                ReviewService.loadTransactionForReview('2');
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review: Diff View',
             action: () => {
-                reviewActions.simulateFailureScenario();
-                reviewActions.toggleBodyView('diff');
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
+                setTimeout(() => {
+                    useReviewStore.getState().actions.toggleBodyView('diff');
+                }, 100);
             },
         },
         {
             title: 'Review: Reasoning View',
             action: () => {
-                reviewActions.simulateFailureScenario();
-                reviewActions.toggleBodyView('reasoning');
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
+                setTimeout(() => {
+                    useReviewStore.getState().actions.toggleBodyView('reasoning');
+                }, 100);
             },
         },
         {
             title: 'Review: Copy Mode',
             action: () => {
-                reviewActions.simulateFailureScenario();
-                // We can't show the screen and then open the modal in the same tick.
-                // We show the review screen, and then programmatically open the copy store.
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
-                const { hash, message, prompt, reasoning, files } = useReviewStore.getState();
-                const items = [
-                    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => `${hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
-                    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => message },
-                    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => prompt },
-                    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => reasoning },
-                    { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}`, getData: () => files[0]?.diff || '' },
-                    { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
-                ];
-                useCopyStore.getState().actions.open('Select data to copy from review:', items);
+                setTimeout(() => {
+                    const { hash, message, prompt, reasoning, files, selectedItemIndex } = useReviewStore.getState();
+                    const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                    CopyService.open('DEBUG_REVIEW', { txInfo: { hash, message, prompt, reasoning }, files, selectedFile });
+                }, 100);
             },
         },
         {
             title: 'Review: Script Output',
             action: () => {
-                reviewActions.simulateSuccessScenario();
-                reviewActions.toggleBodyView('script_output');
+                ReviewService.loadTransactionForReview('2');
                 appActions.showReviewScreen();
+                setTimeout(() => {
+                    useReviewStore.getState().actions.toggleBodyView('script_output');
+                }, 100);
             },
         },
         {
             title: 'Review: Bulk Repair',
             action: () => {
-                reviewActions.simulateFailureScenario();
-                reviewActions.showBulkRepair();
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
+                setTimeout(() => {
+                    useReviewStore.getState().actions.showBulkRepair();
+                }, 100);
             },
         },
         {
             title: 'Review: Handoff Confirm',
             action: () => {
-                reviewActions.simulateFailureScenario();
-                reviewActions.executeBulkRepairOption(3); // Option 3 is Handoff
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
+                setTimeout(() => {
+                    useReviewStore.getState().actions.executeBulkRepairOption(3); // Option 3 is Handoff
+                }, 100);
             },
         },
         {
@@ -197,11 +201,7 @@ export const useDebugMenu = () => {
                 const { transactions, selectedForAction } = useTransactionHistoryStore.getState();
                 const selectedTxs = transactions.filter(tx => selectedForAction.has(tx.id));
                 appActions.showTransactionHistoryScreen();
-                const items = [
-                     { id: 'messages', key: 'M', label: 'Git Messages', getData: () => selectedTxs.map(tx => tx.message).join('\n'), isDefaultSelected: true },
-                     { id: 'uuids', key: 'U', label: 'UUIDs', getData: () => selectedTxs.map(tx => tx.id).join('\n') },
-                ];
-                useCopyStore.getState().actions.open(`Select data to copy from ${selectedTxs.length} transactions:`, items);
+                CopyService.open('DEBUG_HISTORY', { transactions: selectedTxs });
             },
         },
     ];

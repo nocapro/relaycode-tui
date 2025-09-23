@@ -3,16 +3,19 @@ import { useApp, useInput } from 'ink';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
 import { useCommitStore } from '../stores/commit.store';
+import { useTransactionStore } from '../stores/transaction.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import { useStdoutDimensions } from '../utils';
+import { ReviewService } from '../services/review.service';
 
 export const useDashboardScreen = () => {
     const [, rows] = useStdoutDimensions();
     const [viewOffset, setViewOffset] = useState(0);
     const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
     const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
-    const { status, transactions, selectedTransactionIndex, showHelp } = useDashboardStore();
+    const { status, selectedTransactionIndex, showHelp } = useDashboardStore();
+    const transactions = useTransactionStore(s => s.transactions);
     const {
         togglePause,
         moveSelectionUp,
@@ -70,6 +73,7 @@ export const useDashboardScreen = () => {
             const selectedTx = transactions[selectedTransactionIndex];
             if (selectedTx?.status === 'PENDING') {
                 // For PENDING transactions, we still go to the review screen.
+                ReviewService.loadTransactionForReview(selectedTx.id);
                 appActions.showReviewScreen();
             } else if (selectedTx) {
                 detailActions.loadTransaction(selectedTx.id);

@@ -11,6 +11,7 @@ export interface BaseFileItem {
 export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
 export interface FileChange extends BaseFileItem {
     type: FileChangeType;
+    strategy?: 'replace' | 'standard-diff';
 }
 
 // From review.store.ts

@@ -1,15 +1,13 @@
 import { create } from 'zustand';
-import { useDashboardStore } from './dashboard.store';
 import { TransactionService } from '../services/transaction.service';
-import type { Transaction } from '../types/transaction.types';
+import { useTransactionStore } from './transaction.store';
 import type { FileChange as FileDetail } from '../types/file.types';
 export type { FileChangeType } from '../types/file.types';
 import type { NavigatorSection, DetailBodyView } from '../types/transaction-detail.types';
 
 interface TransactionDetailState {
     // Data
-    transaction: Transaction | null;
-    files: FileDetail[];
+    transactionId: string | null;
 
     // UI State
     navigatorFocus: NavigatorSection | 'FILES_LIST';
@@ -32,8 +30,7 @@ interface TransactionDetailState {
 const navigatorOrder: NavigatorSection[] = ['PROMPT', 'REASONING', 'FILES'];
 
 export const useTransactionDetailStore = create<TransactionDetailState>((set, get) => ({
-    transaction: null,
-    files: [],
+    transactionId: null,
 
     navigatorFocus: 'PROMPT',
     expandedSection: null,
@@ -41,21 +38,14 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
     bodyView: 'NONE',
 
     actions: {
-        loadTransaction: (transactionId) => {
-            const { transactions } = useDashboardStore.getState();
-            const transaction = transactions.find(tx => tx.id === transactionId);
-            if (transaction) {
-                set({
-                    transaction,
-                    files: transaction.files || [],
-                    // Reset UI state
-                    navigatorFocus: 'PROMPT',
-                    expandedSection: null,
-                    selectedFileIndex: 0,
-                    bodyView: 'NONE',
-                });
-            }
-        },
+        loadTransaction: (transactionId) => set({
+            transactionId,
+            // Reset UI state
+            navigatorFocus: 'PROMPT',
+            expandedSection: null,
+            selectedFileIndex: 0,
+            bodyView: 'NONE',
+        }),
         navigateUp: () => {
             const { navigatorFocus, selectedFileIndex } = get();
             if (navigatorFocus === 'FILES_LIST') {
@@ -68,13 +58,16 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
             }
         },
         navigateDown: () => {
-            const { navigatorFocus, selectedFileIndex, files } = get();
+            const { navigatorFocus, selectedFileIndex } = get();
+            const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === get().transactionId);
+            const files = transaction?.files || [];
+
             if (navigatorFocus === 'FILES_LIST') {
                 set({ selectedFileIndex: Math.min(files.length - 1, selectedFileIndex + 1) });
             } else {
                 const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
                 if (currentIndex < navigatorOrder.length - 1) {
-                    set({ navigatorFocus: navigatorOrder[currentIndex + 1] });
+                    set({ navigatorFocus: navigatorOrder[currentIndex + 1]! });
                 }
             }
         },
@@ -133,10 +126,10 @@ export const useTransactionDetailStore = create<TransactionDetailState>((set, ge
             bodyView: state.bodyView === 'REVERT_CONFIRM' ? 'NONE' : 'REVERT_CONFIRM',
         })),
         confirmRevert: () => {
-            const { transaction } = get();
-            if (!transaction) return;
-            TransactionService.revertTransaction(transaction.id);
-            useDashboardStore.getState().actions.updateTransactionStatus(transaction.id, 'REVERTED');
+            const { transactionId } = get();
+            if (!transactionId) return;
+            TransactionService.revertTransaction(transactionId);
+            useTransactionStore.getState().actions.updateTransactionStatus(transactionId, 'REVERTED');
             set({ bodyView: 'NONE' });
         },
     },

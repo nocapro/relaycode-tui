@@ -1,14 +1,13 @@
 import { create } from 'zustand';
 import { sleep } from '../utils';
 import { useAppStore } from './app.store';
-import { useDashboardStore } from './dashboard.store';
 import { ReviewService } from '../services/review.service';
-import { mockReviewFiles, mockReviewScripts, allMockTransactions } from '../data/mocks';
+import { useTransactionStore, type Transaction } from './transaction.store';
 import { moveIndex } from './navigation.utils';
 import type { ReviewFileItem } from '../types/file.types';
-import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types'; 
+import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types';
 
-export type { ReviewFileItem as FileItem, ReviewFileItem } from '../types/file.types';
+export type { ReviewFileItem } from '../types/file.types';
 export type { ScriptResult, ApplyStep } from '../types/review.types';
 
 export const initialApplySteps: ApplyStep[] = [
@@ -20,6 +19,7 @@ export const initialApplySteps: ApplyStep[] = [
 
 interface ReviewState {
     // Transaction Info
+    transactionId: string | null;
     hash: string;
     message: string;
     prompt: string;
@@ -54,9 +54,7 @@ interface ReviewState {
         toggleBodyView: (view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>) => void;
         setBodyView: (view: ReviewBodyView) => void;
         approve: () => void;
-        simulateSuccessScenario: () => void;
         startApplySimulation: (scenario: 'success' | 'failure') => void;
-        simulateFailureScenario: () => void;
 
         // Repair Actions
         tryRepairFile: () => void;
@@ -71,31 +69,31 @@ interface ReviewState {
         navigateScriptErrorDown: () => void,
 
         // "Private" actions for service layer
+        load: (transaction: Transaction, files: ReviewFileItem[], patchStatus: PatchStatus) => void;
         _updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
         _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
     };
 }
 
-const initialFailureTx = allMockTransactions[0]!;
-
 export const useReviewStore = create<ReviewState>((set, get) => ({
     // Transaction Info
-    hash: initialFailureTx.hash,
-    message: initialFailureTx.message,
-    prompt: initialFailureTx.prompt!,
-    reasoning: initialFailureTx.reasoning!,
-    linesAdded: 18,
-    linesRemoved: 5,
-    duration: 0.6,
-    patchStatus: 'PARTIAL_FAILURE',
+    transactionId: null,
+    hash: '',
+    message: '',
+    prompt: '',
+    reasoning: '',
+    linesAdded: 0,
+    linesRemoved: 0,
+    duration: 0,
+    patchStatus: 'SUCCESS',
 
     // File & Script Info
-    files: mockReviewFiles,
-    scripts: [], // Empty for partial failure scenario
+    files: [],
+    scripts: [],
 
     // UI State
     applySteps: initialApplySteps,
-    selectedItemIndex: 0, // Start with first file
+    selectedItemIndex: 0,
     bodyView: 'none' as const,
     isDiffExpanded: false,
 
@@ -145,7 +143,15 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         }),
         setBodyView: (view) => set({ bodyView: view }),
         expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
-        approve: () => { /* NOP for now, would trigger commit and screen change */ },
+        approve: () => {
+            const { transactionId } = get();
+            if (transactionId) {
+                // Update transaction status to COMMITTED
+                useTransactionStore.getState().actions.updateTransactionStatus(transactionId, 'COMMITTED');
+                // Navigate back to dashboard
+                useAppStore.getState().actions.showDashboardScreen();
+            }
+        },
         startApplySimulation: async (scenario: 'success' | 'failure') => {
             const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
 
@@ -156,67 +162,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
             showReviewScreen();
         },
-        simulateSuccessScenario: () => {
-            const tx = allMockTransactions[1]!;
-            set(() => ({
-            hash: tx.hash,
-            message: tx.message,
-            prompt: tx.prompt!,
-            reasoning: tx.reasoning!,
-            linesAdded: 22,
-            linesRemoved: 11,
-            duration: 3.9,
-            patchStatus: 'SUCCESS' as const,
-            files: [
-                {
-                    id: '1',
-                    path: 'src/core/clipboard.ts',
-                    status: 'APPROVED' as const,
-                    linesAdded: 15,
-                    linesRemoved: 8,
-                    diff: `--- a/src/core/clipboard.ts
-+++ b/src/core/clipboard.ts
-@@ -1,5 +1,6 @@
- import { copy as copyToClipboard } from 'clipboardy';`,
-                    strategy: 'replace' as const,
-                },
-                {
-                    id: '2',
-                    path: 'src/utils/shell.ts',
-                    status: 'APPROVED' as const,
-                    linesAdded: 7,
-                    linesRemoved: 3,
-                    diff: `--- a/src/utils/shell.ts
-+++ b/src/utils/shell.ts`,
-                    strategy: 'standard-diff' as const,
-                },
-            ],
-            scripts: mockReviewScripts,
-            selectedItemIndex: 0,
-            bodyView: 'none' as const,
-        }));
-    },
-        simulateFailureScenario: () => {
-            const tx = allMockTransactions[0]!;
-            set(() => ({
-            hash: tx.hash,
-            message: tx.message,
-            prompt: tx.prompt!,
-            reasoning: tx.reasoning!,
-            linesAdded: 18,
-            linesRemoved: 5,
-            duration: 0.6,
-            patchStatus: 'PARTIAL_FAILURE' as const,
-            files: mockReviewFiles,
-            scripts: [],
-            // Reset UI state
-            bodyView: 'none',
-            isDiffExpanded: false,
-            reasoningScrollIndex: 0,
-            scriptErrorIndex: 0,
-            selectedItemIndex: 0,
-        }));
-    },
 
         // Repair Actions
         tryRepairFile: () => {
@@ -302,6 +247,30 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         }),
 
         // "Private" actions for service layer
+        load: (transaction, files, patchStatus) => {
+            const totalLinesAdded = files.reduce((sum, file) => sum + (file.linesAdded || 0), 0);
+            const totalLinesRemoved = files.reduce((sum, file) => sum + (file.linesRemoved || 0), 0);
+
+            set({
+                transactionId: transaction.id,
+                hash: transaction.hash,
+                message: transaction.message,
+                prompt: transaction.prompt || '',
+                reasoning: transaction.reasoning || '',
+                linesAdded: totalLinesAdded,
+                linesRemoved: totalLinesRemoved,
+                duration: 0, // Will be updated during apply process
+                patchStatus,
+                files,
+                scripts: [], // Scripts will be populated during apply process
+                selectedItemIndex: 0,
+                bodyView: 'none' as const,
+                isDiffExpanded: false,
+                reasoningScrollIndex: 0,
+                scriptErrorIndex: 0,
+                applySteps: JSON.parse(JSON.stringify(initialApplySteps)), // Reset apply steps
+            });
+        },
         _updateApplyStep: (id, status, duration, details) => {
             set(state => ({
                 applySteps: state.applySteps.map(s => {

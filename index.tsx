@@ -4,6 +4,7 @@ import App from './src/App';
 import { useAppStore } from './src/stores/app.store';
 import { useCommitStore } from './src/stores/commit.store';
 import { useReviewStore } from './src/stores/review.store';
+import { ReviewService } from './src/services/review.service';
 import { useTransactionDetailStore } from './src/stores/transaction-detail.store';
 import { useTransactionHistoryStore } from './src/stores/transaction-history.store';
 
@@ -23,11 +24,11 @@ const main = () => {
                 appActions.showGitCommitScreen();
                 break;
             case 'ReviewProcessingScreen':
-                useReviewStore.getState().actions.simulateFailureScenario();
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewProcessingScreen();
                 break;
             case 'ReviewScreen':
-                useReviewStore.getState().actions.simulateFailureScenario();
+                ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
                 break;
             case 'TransactionDetailScreen':

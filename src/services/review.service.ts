@@ -1,9 +1,8 @@
-import { useReviewStore } from '../stores/review.store';
-import { useDashboardStore } from '../stores/dashboard.store';
+import { useReviewStore, type ReviewFileItem } from '../stores/review.store';
+import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
 import type { ApplyStep } from '../types/review.types';
-import type { ReviewFileItem } from '../types/file.types';
 
 const generateBulkRepairPrompt = (files: ReviewFileItem[]): string => {
     const failedFiles = files.filter(f => f.status === 'FAILED');
@@ -61,9 +60,9 @@ Your job is to now work with me to fix the FAILED files and achieve the original
 
 const performHandoff = (hash: string) => {
     // This is a bit of a hack to find the right transaction to update in the demo
-    const txToUpdate = useDashboardStore.getState().transactions.find(tx => tx.hash === hash);
+    const txToUpdate = useTransactionStore.getState().transactions.find(tx => tx.hash === hash);
     if (txToUpdate) {
-        useDashboardStore.getState().actions.updateTransactionStatus(txToUpdate.id, 'HANDOFF');
+        useTransactionStore.getState().actions.updateTransactionStatus(txToUpdate.id, 'HANDOFF');
     }
 
     useAppStore.getState().actions.showDashboardScreen();
@@ -71,11 +70,9 @@ const performHandoff = (hash: string) => {
 
 const runApplySimulation = async (scenario: 'success' | 'failure') => {
     const { actions } = useReviewStore.getState();
-    const { _updateApplyStep, _addApplySubstep, simulateSuccessScenario, simulateFailureScenario } = actions;
+    const { _updateApplyStep, _addApplySubstep } = actions;
 
     if (scenario === 'success') {
-        simulateSuccessScenario();
-        
         _updateApplyStep('snapshot', 'active'); await sleep(100);
         _updateApplyStep('snapshot', 'done', 0.1);
 
@@ -96,8 +93,6 @@ const runApplySimulation = async (scenario: 'success' | 'failure') => {
         await sleep(500);
 
     } else { // failure scenario
-        simulateFailureScenario();
-        
         _updateApplyStep('snapshot', 'active'); await sleep(100);
         _updateApplyStep('snapshot', 'done', 0.1);
 
@@ -113,9 +108,32 @@ const runApplySimulation = async (scenario: 'success' | 'failure') => {
         _updateApplyStep('post-command', 'skipped', undefined, 'Skipped due to patch application failure');
         await sleep(100);
         _updateApplyStep('linter', 'skipped', undefined, 'Skipped due to patch application failure');
-        
+
         await sleep(500);
     }
+};
+
+const loadTransactionForReview = (transactionId: string) => {
+    const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+    if (!tx) return;
+
+    // This simulates the backend determining which files failed or succeeded.
+    // For this demo, tx '1' is the failure case, any other is success.
+    const isFailureCase = tx.id === '1';
+
+    const reviewFiles: ReviewFileItem[] = (tx.files || []).map((file, index) => {
+        if (isFailureCase) {
+            return {
+                ...file,
+                status: index === 0 ? 'APPROVED' : 'FAILED',
+                error: index > 0 ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined,
+                strategy: file.strategy || 'standard-diff',
+            };
+        }
+        return { ...file, status: 'APPROVED', strategy: file.strategy || 'standard-diff' };
+    });
+
+    useReviewStore.getState().actions.load(tx, reviewFiles, isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS');
 };
 
 const generateSingleFileRepairPrompt = (file: ReviewFileItem): string => {
@@ -185,6 +203,7 @@ const runBulkReapply = async (): Promise<void> => {
 };
 
 export const ReviewService = {
+    loadTransactionForReview,
     generateBulkRepairPrompt,
     generateHandoffPrompt,
     performHandoff,

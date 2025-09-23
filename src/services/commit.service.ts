@@ -1,6 +1,6 @@
-import { useDashboardStore } from '../stores/dashboard.store';
 import type { Transaction } from '../types/transaction.types';
 import { sleep } from '../utils';
+import { useTransactionStore } from '../stores/transaction.store';
 
 const generateCommitMessage = (transactions: Transaction[]): string => {
     if (transactions.length === 0) {
@@ -22,11 +22,11 @@ const generateCommitMessage = (transactions: Transaction[]): string => {
 
 const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
     // In a real app, this would run git commands.
-    // For simulation, we'll just update the dashboard store.
-    const { updateTransactionStatus } = useDashboardStore.getState().actions;
+    // For simulation, we'll just update the transaction store.
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
 
     const txIds = transactionsToCommit.map(tx => tx.id);
-    
+
     // A bit of simulation
     await sleep(500);
 

@@ -2,15 +2,16 @@ import { useInput } from 'ink';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useAppStore } from '../stores/app.store';
 import { CopyService } from '../services/copy.service';
+import { useTransactionStore } from '../stores/transaction.store';
+import { useMemo } from 'react';
 
 export const useTransactionDetailScreen = () => {
     const { showDashboardScreen } = useAppStore(s => s.actions);
     const store = useTransactionDetailStore();
-    const {
-        transaction,
-        files,
-        bodyView,
-    } = store;
+    const { bodyView } = store;
+
+    const transaction = useTransactionStore(s => s.transactions.find(tx => tx.id === store.transactionId));
+    const files = useMemo(() => transaction?.files || [], [transaction]);
 
     const {
         // Main nav
@@ -21,10 +22,10 @@ export const useTransactionDetailScreen = () => {
     } = store.actions;
 
     const openCopyMode = () => {
-        const { transaction, files, selectedFileIndex } = store;
+        const { selectedFileIndex } = store;
         if (!transaction) return;
         const selectedFile = files[selectedFileIndex];
-        CopyService.openCopyForTransactionDetail(transaction, selectedFile);
+        CopyService.open('TRANSACTION_DETAIL', { transaction, selectedFile });
     };
 
     useInput((input, key) => {
@@ -52,6 +53,8 @@ export const useTransactionDetailScreen = () => {
     });
 
     return {
+        transaction,
+        files,
         ...store,
         actions: {
             ...store.actions,

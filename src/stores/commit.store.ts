@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { useDashboardStore } from './dashboard.store';
 import type { Transaction } from '../types/transaction.types';
 import { CommitService } from '../services/commit.service';
+import { useTransactionStore } from './transaction.store';
 
 interface CommitState {
     transactionsToCommit: Transaction[];
@@ -19,9 +19,9 @@ export const useCommitStore = create<CommitState>((set, get) => ({
     isCommitting: false,
     actions: {
         prepareCommitScreen: () => {
-            const { transactions } = useDashboardStore.getState();
+            const { transactions } = useTransactionStore.getState();
             const appliedTransactions = transactions.filter(tx => tx.status === 'APPLIED');
-            
+
             const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
 
             set({

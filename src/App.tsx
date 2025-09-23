@@ -45,7 +45,7 @@ const App = () => {
         if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
         if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
         return null;
-    }
+    };
 
     return (
         <>

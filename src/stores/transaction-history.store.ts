@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { TransactionService } from '../services/transaction.service';
 import type { Transaction } from '../types/transaction.types';
 import type { FileChange } from '../types/file.types';
 import type { HistoryViewMode } from '../types/transaction-history.types';
+import { useTransactionStore } from './transaction.store';
 
 export type { Transaction as HistoryTransaction } from '../types/transaction.types';
 export type { FileChange } from '../types/file.types';
@@ -11,12 +11,12 @@ export type { FileChange } from '../types/file.types';
 type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
 
 interface TransactionHistoryState {
-    transactions: Transaction[];
     mode: HistoryViewMode;
     selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
     expandedIds: Set<string>; // holds ids of expanded items
     filterQuery: string;
     selectedForAction: Set<string>; // set of transaction IDs
+    transactions: Transaction[];
 
     actions: {
         load: (initialState?: Partial<HistoryStateData>) => void;
@@ -27,7 +27,7 @@ interface TransactionHistoryState {
         toggleSelection: () => void;
         setMode: (mode: HistoryViewMode) => void;
         setFilterQuery: (query: string) => void;
-        applyFilter: () => void; 
+        applyFilter: () => void;
         prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
     }
 }
@@ -47,40 +47,40 @@ export const getVisibleItemPaths = (transactions: Transaction[], expandedIds: Se
 
 // --- Store ---
 export const useTransactionHistoryStore = create<TransactionHistoryState>((set, get) => ({
-    transactions: [],
     mode: 'LIST',
-    selectedItemPath: 'tx-0',
+    selectedItemPath: '',
     expandedIds: new Set(),
     filterQuery: '',
     selectedForAction: new Set(),
+    transactions: [],
 
     actions: {
         load: (initialState) => {
-            const transactions = TransactionService.getAllTransactions();
+            const { transactions } = useTransactionStore.getState();
             set({
-                transactions,
                 selectedItemPath: transactions[0]?.id || '',
                 mode: 'LIST',
                 expandedIds: new Set(),
                 selectedForAction: new Set(),
                 filterQuery: '',
+                transactions,
                 ...initialState,
             });
         },
         navigateUp: () => {
-            const { transactions, expandedIds, selectedItemPath } = get();
+            const { expandedIds, selectedItemPath, transactions } = get();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
             const currentIndex = visibleItems.indexOf(selectedItemPath);
             if (currentIndex > 0) {
-                set({ selectedItemPath: visibleItems[currentIndex - 1] });
+                set({ selectedItemPath: visibleItems[currentIndex - 1]! });
             }
         },
         navigateDown: () => {
-            const { transactions, expandedIds, selectedItemPath } = get();
+            const { expandedIds, selectedItemPath, transactions } = get();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
             const currentIndex = visibleItems.indexOf(selectedItemPath);
             if (currentIndex < visibleItems.length - 1) {
-                set({ selectedItemPath: visibleItems[currentIndex + 1] });
+                set({ selectedItemPath: visibleItems[currentIndex + 1]! });
             }
         },
         expandOrDrillDown: () => set(state => {
@@ -136,21 +136,21 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
         prepareDebugState: (stateName) => {
             switch (stateName) {
                 case 'l1-drill':
-                    get().actions.load({ expandedIds: new Set(['tx-0']), selectedItemPath: 'tx-0' });
+                    get().actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
                     break;
                 case 'l2-drill':
-                    get().actions.load({ expandedIds: new Set(['tx-0', 'tx-0/0-1']), selectedItemPath: 'tx-0/0-1' });
+                    get().actions.load({ expandedIds: new Set(['3', '3-1']), selectedItemPath: '3-1' });
                     break;
                 case 'filter':
                     get().actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:committed' });
                     break;
                 case 'copy':
                     get().actions.load({
-                        selectedForAction: new Set(['tx-0', 'tx-2']),
+                        selectedForAction: new Set(['3', '6']),
                     });
                     break;
                 case 'bulk':
-                    get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['tx-0', 'tx-2']) });
+                    get().actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['3', '6']) });
                     break;
             }
         },

@@ -133,7 +133,7 @@ const TransactionHistoryScreen = () => {
             <Box flexDirection="column" marginY={1}>
                 {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
 
-                {store.mode === 'LIST' && transactionsInView.map(tx => {
+                {store.mode === 'LIST' && store.transactions.map(tx => {
                     const isTxSelected = store.selectedItemPath.startsWith(tx.id);
                     const isTxExpanded = store.expandedIds.has(tx.id);
                     const isSelectedForAction = store.selectedForAction.has(tx.id);

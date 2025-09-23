@@ -4,14 +4,16 @@ import { useTransactionHistoryStore, getVisibleItemPaths } from '../stores/trans
 import { useAppStore } from '../stores/app.store';
 import { useStdoutDimensions } from '../utils';
 import { CopyService } from '../services/copy.service';
+import { useTransactionStore } from '../stores/transaction.store';
 
 export const useTransactionHistoryScreen = () => {
     const [, rows] = useStdoutDimensions();
     const store = useTransactionHistoryStore();
     const { showDashboardScreen } = useAppStore(s => s.actions);
+    const transactions = useTransactionStore(s => s.transactions);
 
     const [viewOffset, setViewOffset] = useState(0);
-    
+
     const visibleItemPaths = useMemo(
         () => getVisibleItemPaths(store.transactions, store.expandedIds),
         [store.transactions, store.expandedIds],
@@ -30,11 +32,11 @@ export const useTransactionHistoryScreen = () => {
     }, [selectedIndex, viewOffset, viewportHeight]);
 
     const openCopyMode = () => {
-        const { transactions, selectedForAction } = store;
-        const selectedTxs = transactions.filter(tx => selectedForAction.has(tx.id));
+        const { selectedForAction } = store;
+        const selectedTxs = store.transactions.filter(tx => selectedForAction.has(tx.id));
 
         if (selectedTxs.length === 0) return;
-        CopyService.openCopyForTransactionHistory(selectedTxs);
+        CopyService.open('TRANSACTION_HISTORY', { transactions: selectedTxs });
     };
 
     useInput((input, key) => {

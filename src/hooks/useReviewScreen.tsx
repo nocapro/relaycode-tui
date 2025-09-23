@@ -38,9 +38,7 @@ export const useReviewScreen = () => {
     const openCopyMode = () => {
         const { hash, message, prompt, reasoning, files, selectedItemIndex } = store;
         const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
-        CopyService.openCopyForReview({
-            hash, message, prompt, reasoning,
-        }, files, selectedFile);
+        CopyService.open('REVIEW', { txInfo: { hash, message, prompt, reasoning }, files, selectedFile });
     };
 
     useInput((input, key) => {

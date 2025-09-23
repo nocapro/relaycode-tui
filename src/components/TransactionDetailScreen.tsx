@@ -37,7 +37,7 @@ const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
 const TransactionDetailScreen = () => {
     const {
         transaction, files,
-        navigatorFocus, expandedSection, selectedFileIndex, bodyView
+        navigatorFocus, expandedSection, selectedFileIndex, bodyView,
     } = useTransactionDetailScreen();
 
     if (!transaction) {
