@@ -1,0 +1,1237 @@
+uuid: c292a0e2-069a-41f3-8f08-b125746b149b
+projectId: relaycode-tui
+createdAt: '2025-09-23T13:26:59.503Z'
+gitCommitMsg: >-
+  refactor(ui): centralize global hotkeys and help screen logic
+
+  Elevated the management of global UI state and interactions to the application
+  root to improve separation of concerns and reduce redundancy.
+
+  - Moved help screen visibility state (`isHelpOpen`) from `dashboard.store` to
+  the global `app.store`. - Created a new `useGlobalHotkeys` hook to manage
+  application-wide shortcuts (`?` for help, `Q` for quit, `Ctrl+B` for debug) in
+  a single location. - Refactored `App.tsx` to render `GlobalHelpScreen` as a
+  top-level overlay, controlled by the global state. - Removed localized hotkey
+  handling for help, quit, and debug toggling from `useDashboardScreen`,
+  `useInitializationScreen`, and `useDebugMenu` hooks, delegating responsibility
+  to the new global hook.
+promptSummary: >-
+  The user asked me to execute Part 3 of a larger refactoring plan. This part
+  focuses on centralizing global UI interactions, specifically the help screen
+  and global hotkeys, which were previously scattered across multiple components
+  and stores.
+reasoning:
+  - >-
+    Executing Part 3 of the refactoring plan: Centralizing Global UI
+    Interactions.
+  - >-
+    My approach is to elevate the management of global UI states (like the help
+    screen) and global hotkeys (`?` for help, `Q` for quit, `Ctrl+B` for debug)
+    into a single, dedicated hook and the main app store. This removes scattered
+    and redundant logic from individual screen components and their hooks,
+    making the system more predictable and easier to maintain.
+  - '### Step 1: Centralize Help Screen State'
+  - >-
+    First, I'll move the state for showing/hiding the help screen from the
+    dashboard-specific store (`dashboard.store.ts`) to the global application
+    store (`app.store.ts`).
+  - '### Step 2: Create a Central Hotkey Handler'
+  - >-
+    I'll create a new hook, `useGlobalHotkeys`, to manage all application-wide
+    keyboard shortcuts. This hook will handle toggling the help and debug
+    screens, and quitting the application from main screens.
+  - '### Step 3: Refactor Screens and Hooks to Use Central Logic'
+  - >-
+    Now I'll update the components and hooks that previously handled this logic
+    themselves. They will be simplified, deferring to the new global systems.
+  - First, I'll remove the redundant `Ctrl+B` handler from `useDebugMenu`.
+  - >-
+    Next, I'll remove the now-centralized `'q'` (quit) logic from
+    `useInitializationScreen`.
+  - >-
+    Then, I will refactor `useDashboardScreen` to remove its local handling of
+    help and quit hotkeys.
+  - And update `DashboardScreen` to no longer render the help screen.
+  - '### Step 4: Update the Root Component (`App.tsx`)'
+  - >-
+    Finally, I'll update the main `App.tsx` file. It will now use the
+    `useGlobalHotkeys` hook and manage the rendering of the `GlobalHelpScreen`
+    as a top-level overlay, ensuring it appears above any active screen without
+    being part of its component tree.
+  - >-
+    This completes the centralization of global UI interactions. The
+    `GlobalHelpScreen` is now a true global overlay, and all primary hotkeys are
+    managed from a single, consistent location, improving code clarity and
+    robustness.
+operations:
+  - type: write
+    path: src/stores/app.store.ts
+    content: >
+      --- src/stores/app.store.ts
+
+      +++ src/stores/app.store.ts
+
+      @@ -2,6 +2,7 @@
+       import type { AppScreen } from '../types/app.types';
+       
+       interface AppState {
+      +    isHelpOpen: boolean;
+           isDebugMenuOpen: boolean;
+           currentScreen: AppScreen;
+           actions: {
+      @@ -14,10 +15,12 @@
+               showTransactionHistoryScreen: () => void;
+               showTransactionDetailScreen: () => void;
+               toggleDebugMenu: () => void;
+      +        toggleHelp: () => void;
+           };
+       }
+       
+       export const useAppStore = create<AppState>((set) => ({
+      +    isHelpOpen: false,
+           isDebugMenuOpen: false,
+           currentScreen: 'splash',
+           actions: {
+      @@ -30,5 +33,6 @@
+               showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+               showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+               toggleDebugMenu: () => set(state => ({ isDebugMenuOpen: !state.isDebugMenuOpen })),
+      +        toggleHelp: () => set(state => ({ isHelpOpen: !state.isHelpOpen
+      })),
+           },
+       }));
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: |+
+      --- src/stores/dashboard.store.ts
+      +++ src/stores/dashboard.store.ts
+      @@ -10,14 +10,12 @@
+           status: DashboardStatus;
+           previousStatus: DashboardStatus; // To handle cancel from confirmation
+           selectedTransactionIndex: number;
+      -    showHelp: boolean;
+           actions: {
+               togglePause: () => void;
+               moveSelectionUp: () => void;
+               moveSelectionDown: () => void;
+               startApproveAll: () => void;
+               confirmAction: () => Promise<void>;
+               cancelAction: () => void;
+      -        toggleHelp: () => void;
+               setStatus: (status: DashboardStatus) => void; // For debug menu
+           };
+       }
+      @@ -27,7 +25,6 @@
+           status: 'LISTENING',
+           previousStatus: 'LISTENING',
+           selectedTransactionIndex: 0,
+      -    showHelp: false,
+           actions: {
+               togglePause: () => set(state => ({
+                   status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+      @@ -43,7 +40,6 @@
+                   previousStatus: state.status,
+               })),
+               cancelAction: () => set(state => ({ status: state.previousStatus })),
+      -        toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+               setStatus: (status) => set({ status }),
+       
+               confirmAction: async () => {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: |-
+      import { useApp, useInput } from 'ink';
+      import { useAppStore } from '../stores/app.store';
+
+      const MAIN_SCREENS_FOR_QUIT: string[] = ['dashboard', 'init'];
+
+      export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+          const { exit } = useApp();
+          const { isHelpOpen, currentScreen, isDebugMenuOpen, actions } = useAppStore(s => ({
+              isHelpOpen: s.isHelpOpen,
+              currentScreen: s.currentScreen,
+              isDebugMenuOpen: s.isDebugMenuOpen,
+              actions: s.actions,
+          }));
+
+          useInput((input, key) => {
+              // Debug Menu toggle is the highest priority global key
+              if (key.ctrl && input === 'b') {
+                  actions.toggleDebugMenu();
+                  return;
+              }
+
+              // If debug menu is open, it has its own input handler, so we stop here.
+              if (isDebugMenuOpen) {
+                  return;
+              }
+
+              // Help screen takes precedence over other keys
+              if (isHelpOpen) {
+                  if (key.escape || input === '?') {
+                      actions.toggleHelp();
+                  }
+                  return;
+              }
+
+              // --- Global hotkeys when no modal/overlay is open ---
+              
+              // Open Help
+              if (input === '?') {
+                  actions.toggleHelp();
+                  return;
+              }
+              
+              // Quit from main screens
+              if (input.toLowerCase() === 'q' && MAIN_SCREENS_FOR_QUIT.includes(currentScreen)) {
+                  exit();
+              }
+          }, { isActive });
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -237,7 +237,7 @@
+                   }
+                   return;
+               }
+      -        if (key.escape || (key.ctrl && input === 'b')) {
+      +        if (key.escape) {
+                   appActions.toggleDebugMenu();
+                   return;
+               }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useInitializationScreen.tsx
+    content: |+
+      --- src/hooks/useInitializationScreen.tsx
+      +++ src/hooks/useInitializationScreen.tsx
+      @@ -14,9 +14,7 @@
+                   }
+               }
+               if (phase === 'FINALIZE') {
+      -            if (input.toLowerCase() === 'q') {
+      -                exit();
+      -            } else if (input.toLowerCase() === 'w') {
+      +            if (input.toLowerCase() === 'w') {
+                       showDashboardScreen();
+                   }
+               }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDashboardScreen.tsx
+    content: >+
+      --- src/hooks/useDashboardScreen.tsx
+
+      +++ src/hooks/useDashboardScreen.tsx
+
+      @@ -1,5 +1,5 @@
+       import { useMemo, useState, useEffect } from 'react';
+      -import { useApp, useInput } from 'ink';
+
+      +import { useInput } from 'ink';
+       import { useDashboardStore } from '../stores/dashboard.store';
+       import { useAppStore } from '../stores/app.store';
+       import { useCommitStore } from '../stores/commit.store';
+      @@ -14,7 +14,7 @@
+           const [viewOffset, setViewOffset] = useState(0);
+           const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
+           const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
+      -    const { status, selectedTransactionIndex, showHelp } =
+      useDashboardStore();
+
+      +    const { status, selectedTransactionIndex } = useDashboardStore();
+           const transactions = useTransactionStore(s => s.transactions);
+           const {
+               togglePause,
+      @@ -23,9 +23,7 @@
+               startApproveAll,
+               confirmAction,
+               cancelAction,
+      -        toggleHelp,
+           } = useDashboardStore(s => s.actions);
+      -    const { exit } = useApp();
+           const appActions = useAppStore(s => s.actions);
+           const commitActions = useCommitStore(s => s.actions);
+           const detailActions = useTransactionDetailStore(s => s.actions);
+      @@ -46,17 +44,6 @@
+           }, [selectedTransactionIndex, viewOffset, viewportHeight]);
+       
+           useInput((input, key) => {
+      -        if (input === '?') {
+
+      -            toggleHelp();
+
+      -            return;
+
+      -        }
+
+      -
+
+      -        if (showHelp) {
+
+      -            if (key.escape || input === '?') toggleHelp();
+
+      -            return;
+
+      -        }
+
+      -
+               if (isModal) {
+                   if (key.return) confirmAction();
+                   if (key.escape) cancelAction();
+      @@ -64,8 +51,6 @@
+               }
+       
+               if (isProcessing) return; // No input while processing
+      -        
+
+      -        if (input.toLowerCase() === 'q') exit();
+       
+               if (key.upArrow) moveSelectionUp();
+               if (key.downArrow) moveSelectionDown();
+      @@ -99,7 +84,6 @@
+               status,
+               transactions,
+               selectedTransactionIndex,
+      -        showHelp,
+               pendingApprovals,
+               pendingCommits,
+               isModal,
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: >+
+      --- src/components/DashboardScreen.tsx
+
+      +++ src/components/DashboardScreen.tsx
+
+      @@ -4,7 +4,6 @@
+       import { type Transaction, type DashboardStatus } from '../stores/dashboard.store';
+       import type { TransactionStatus } from '../types/transaction.types';
+       import Separator from './Separator';
+      -import GlobalHelpScreen from './GlobalHelpScreen';
+       import { useDashboardScreen } from '../hooks/useDashboardScreen';
+       
+       // --- Sub-components & Helpers ---
+      @@ -79,7 +78,6 @@
+               status,
+               transactions,
+               selectedTransactionIndex,
+      -        showHelp,
+               pendingApprovals,
+               pendingCommits,
+               isModal,
+      @@ -141,41 +139,37 @@
+           
+           return (
+               <Box flexDirection="column" height="100%">
+      -            {showHelp && <GlobalHelpScreen />}
+
+      -
+
+      -            <Box flexDirection="column" display={showHelp ? 'none' :
+      'flex'}>
+
+      -                <Text color="cyan">▲ relaycode dashboard</Text>
+
+      -                <Separator />
+
+      -                <Box marginY={1}>
+
+      -                    {renderStatusBar()}
+
+      -                </Box>
+
+      -                
+
+      -                {isModal && (
+
+      -                    <>
+
+      -                        <ConfirmationContent
+      transactionsToConfirm={transactionsToConfirm} />
+
+      -                        <Separator />
+
+      -                    </>
+
+      -                )}
+
+      -                
+
+      -                <Text bold underline> EVENT STREAM (Last 15
+      minutes)</Text>
+
+      -                <Box flexDirection="column" marginTop={1}>
+
+      -                    {transactions.slice(viewOffset, viewOffset +
+      viewportHeight).map((tx, index) => {
+
+      -                        const actualIndex = viewOffset + index;
+
+      -                        return (
+
+      -                            <EventStreamItem
+
+      -                                key={tx.id}
+
+      -                                transaction={tx}
+
+      -                                isSelected={!isModal && actualIndex ===
+      selectedTransactionIndex}
+
+      -                            />
+
+      -                        );
+
+      -                    })}
+
+      -                </Box>
+
+      -
+
+      -                <Box marginTop={1}><Separator /></Box>
+
+      -                {renderFooter()}
+
+      +            <Text color="cyan">▲ relaycode dashboard</Text>
+
+      +            <Separator />
+
+      +            <Box marginY={1}>
+
+      +                {renderStatusBar()}
+                   </Box>
+      +            
+
+      +            {isModal && (
+
+      +                <>
+
+      +                    <ConfirmationContent
+      transactionsToConfirm={transactionsToConfirm} />
+
+      +                    <Separator />
+
+      +                </>
+
+      +            )}
+
+      +            
+
+      +            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+
+      +            <Box flexDirection="column" marginTop={1}>
+
+      +                {transactions.slice(viewOffset, viewOffset +
+      viewportHeight).map((tx, index) => {
+
+      +                    const actualIndex = viewOffset + index;
+
+      +                    return (
+
+      +                        <EventStreamItem
+
+      +                            key={tx.id}
+
+      +                            transaction={tx}
+
+      +                            isSelected={!isModal && actualIndex ===
+      selectedTransactionIndex}
+
+      +                        />
+
+      +                    );
+
+      +                })}
+
+      +            </Box>
+
+      +
+
+      +            <Box marginTop={1}><Separator /></Box>
+
+      +            {renderFooter()}
+               </Box>
+           );
+       };
+       
+       export default DashboardScreen;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/App.tsx
+    content: >+
+      --- src/App.tsx
+
+      +++ src/App.tsx
+
+      @@ -9,27 +9,30 @@
+       import TransactionDetailScreen from './components/TransactionDetailScreen';
+       import TransactionHistoryScreen from './components/TransactionHistoryScreen';
+       import DebugMenu from './components/DebugMenu'; 
+      +import GlobalHelpScreen from './components/GlobalHelpScreen';
+       import CopyScreen from './components/CopyScreen';
+       import { useCopyStore } from './stores/copy.store';
+      +import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+       
+       const App = () => {
+      -    const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state
+      => ({
+
+      +    const { currentScreen, isDebugMenuOpen, isHelpOpen } =
+      useAppStore(state => ({
+               currentScreen: state.currentScreen,
+               isDebugMenuOpen: state.isDebugMenuOpen,
+      -        actions: state.actions,
+
+      +        isHelpOpen: state.isHelpOpen,
+           }));
+           const isCopyModeOpen = useCopyStore(s => s.isOpen);
+       
+      -    useInput((input, key) => {
+
+      -        if (key.ctrl && input === 'b') {
+
+      -            actions.toggleDebugMenu();
+
+      -        }
+
+      -    }, { isActive: !isCopyModeOpen });
+
+      +    // Global hotkeys are active if no modal-like component is open
+
+      +    const areGlobalHotkeysActive = !isCopyModeOpen;
+
+      +    useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+       
+           useEffect(() => {
+               // Clear the terminal when the screen changes to ensure a clean view.
+               // This is especially important when transitioning from the splash screen.
+               // eslint-disable-next-line no-console
+               console.clear();
+      -    }, [currentScreen, isDebugMenuOpen, isCopyModeOpen]);
+
+      +    }, [currentScreen, isDebugMenuOpen, isCopyModeOpen, isHelpOpen]);
+       
+           const renderMainScreen = () => {
+               if (isDebugMenuOpen) return <DebugMenu />;
+      @@ -44,16 +47,20 @@
+               return null;
+           };
+       
+      +    const isOverlayOpen = isCopyModeOpen || isHelpOpen;
+
+      +
+           return (
+               <>
+                   <Box
+                       width="100%"
+                       height="100%"
+                       flexDirection="column"
+      -                display={isCopyModeOpen ? 'none' : 'flex'}
+
+      +                display={isOverlayOpen ? 'none' : 'flex'}
+                   >
+                       {renderMainScreen()}
+                   </Box>
+      +            {isHelpOpen && <GlobalHelpScreen />}
+                   <CopyScreen />
+               </>
+           );
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useGlobalHotkeys.tsx: null
+  src/stores/app.store.ts: |-
+    import { create } from 'zustand';
+    import type { AppScreen } from '../types/app.types';
+
+    interface AppState {
+        isDebugMenuOpen: boolean;
+        currentScreen: AppScreen;
+        actions: {
+            showInitScreen: () => void;
+            showReviewProcessingScreen: () => void;
+            showDashboardScreen: () => void;
+            showReviewScreen: () => void;
+            showGitCommitScreen: () => void;
+            showSplashScreen: () => void;
+            showTransactionHistoryScreen: () => void;
+            showTransactionDetailScreen: () => void;
+            toggleDebugMenu: () => void;
+        };
+    }
+
+    export const useAppStore = create<AppState>((set) => ({
+        isDebugMenuOpen: false,
+        currentScreen: 'splash',
+        actions: {
+            showInitScreen: () => set({ currentScreen: 'init' }),
+            showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+            showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+            showReviewScreen: () => set({ currentScreen: 'review' }),
+            showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+            showSplashScreen: () => set({ currentScreen: 'splash' }),
+            showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+            showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+            toggleDebugMenu: () => set(state => ({ isDebugMenuOpen: !state.isDebugMenuOpen })),
+        },
+    }));
+  src/stores/dashboard.store.ts: |-
+    import { create } from 'zustand';
+    import { DashboardService } from '../services/dashboard.service';
+    import { useTransactionStore, type Transaction } from './transaction.store';
+    import type { DashboardStatus } from '../types/dashboard.types';
+    import { moveIndex } from './navigation.utils';
+
+    export type { Transaction } from '../types/transaction.types';
+    export type { DashboardStatus } from '../types/dashboard.types';
+
+    // --- Store Interface ---
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus; // To handle cancel from confirmation
+        selectedTransactionIndex: number;
+        showHelp: boolean;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            toggleHelp: () => void;
+            setStatus: (status: DashboardStatus) => void; // For debug menu
+        };
+    }
+
+    // --- Store Implementation ---
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        selectedTransactionIndex: 0,
+        showHelp: false,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length) };
+            }),
+            moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length) };
+            }),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            toggleHelp: () => set(state => ({ showHelp: !state.showHelp })),
+            setStatus: (status) => set({ status }),
+
+            confirmAction: async () => {
+                const { status, previousStatus } = get();
+                if (status === 'CONFIRM_APPROVE') {
+                    set({ status: 'APPROVING' });
+
+                    await DashboardService.approveAll();
+
+                    set({ status: previousStatus });
+                }
+            },
+        },
+    }));
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { COPYABLE_ITEMS } from '../types/copy.types';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import type { MenuItem } from '../types/debug.types';
+
+    import { moveIndex } from '../stores/navigation.utils';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    export type { MenuItem } from '../types/debug.types';
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('diff');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('reasoning');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        const { transactionId, files, selectedItemIndex } = useReviewStore.getState();
+                        const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                        if (!transaction) return;
+
+                        const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+
+                        const title = 'Select data to copy from review:';
+                        const items = [
+                            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+                            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+                            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+                            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+                            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+                            { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+                        ];
+                        useCopyStore.getState().actions.open(title, items);
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('script_output');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.showBulkRepair();
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.executeBulkRepairOption(3); // Option 3 is Handoff
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    setTimeout(() => {
+                        const { transactions: allTxs, selectedForAction } = useTransactionHistoryStore.getState();
+                        const transactions = allTxs.filter(tx => selectedForAction.has(tx.id));
+                        const title = `Select data to copy from ${transactions.length} transactions:`;
+                        const items = [
+                            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+                            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+                            { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+                            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+                            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+                            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+                        ];
+                        useCopyStore.getState().actions.open(title, items);
+                    }, 100);
+                },
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+                return;
+            }
+            if (key.escape || (key.ctrl && input === 'b')) {
+                appActions.toggleDebugMenu();
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+  src/hooks/useInitializationScreen.tsx: >-
+    import React, { useEffect } from 'react';
+
+    import { Text, useApp, useInput } from 'ink';
+
+    import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+    '../stores/init.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { InitService } from '../services/init.service';
+
+
+    export const useInitializationScreen = () => {
+        const phase = useInitStore(s => s.phase);
+        const interactiveChoice = useInitStore(s => s.interactiveChoice);
+        const actions = useInitStore(s => s.actions);
+        const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+        const { exit } = useApp();
+
+        useInput((input, key) => {
+            if (phase === 'INTERACTIVE') {
+                if (key.return) {
+                    actions.setInteractiveChoice('ignore');
+                } else if (input.toLowerCase() === 's') {
+                    actions.setInteractiveChoice('share');
+                }
+            }
+            if (phase === 'FINALIZE') {
+                if (input.toLowerCase() === 'q') {
+                    exit();
+                } else if (input.toLowerCase() === 'w') {
+                    showDashboardScreen();
+                }
+            }
+        });
+
+        useEffect(() => {
+            InitService.runInitializationProcess();
+        }, []);
+
+        useEffect(() => {
+            if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+                InitService.resumeInitializationProcess();
+            }
+        }, [interactiveChoice, phase]);
+
+        const {
+            analyzeTasks,
+            configureTasks,
+            projectId,
+        } = useInitStore();
+
+        let footerText;
+        switch (phase) {
+            case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+            case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+            case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+            case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+        }
+
+        return {
+            phase,
+            analyzeTasks,
+            configureTasks,
+            interactiveChoice,
+            projectId,
+            footerText,
+        };
+    };
+  src/hooks/useDashboardScreen.tsx: >-
+    import { useMemo, useState, useEffect } from 'react';
+
+    import { useApp, useInput } from 'ink';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+    import { useStdoutDimensions } from '../utils';
+
+    import { ReviewService } from '../services/review.service';
+
+
+    export const useDashboardScreen = () => {
+        const [, rows] = useStdoutDimensions();
+        const [viewOffset, setViewOffset] = useState(0);
+        const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
+        const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
+        const { status, selectedTransactionIndex, showHelp } = useDashboardStore();
+        const transactions = useTransactionStore(s => s.transactions);
+        const {
+            togglePause,
+            moveSelectionUp,
+            moveSelectionDown,
+            startApproveAll,
+            confirmAction,
+            cancelAction,
+            toggleHelp,
+        } = useDashboardStore(s => s.actions);
+        const { exit } = useApp();
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+        const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+        const isModal = status === 'CONFIRM_APPROVE';
+        const isProcessing = status === 'APPROVING';
+
+        useEffect(() => {
+            if (selectedTransactionIndex < viewOffset) {
+                setViewOffset(selectedTransactionIndex);
+            } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {
+                setViewOffset(selectedTransactionIndex - viewportHeight + 1);
+            }
+        }, [selectedTransactionIndex, viewOffset, viewportHeight]);
+
+        useInput((input, key) => {
+            if (input === '?') {
+                toggleHelp();
+                return;
+            }
+
+            if (showHelp) {
+                if (key.escape || input === '?') toggleHelp();
+                return;
+            }
+
+            if (isModal) {
+                if (key.return) confirmAction();
+                if (key.escape) cancelAction();
+                return;
+            }
+
+            if (isProcessing) return; // No input while processing
+            
+            if (input.toLowerCase() === 'q') exit();
+
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+            
+            if (key.return) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (selectedTx?.status === 'PENDING') {
+                    // For PENDING transactions, we still go to the review screen.
+                    ReviewService.loadTransactionForReview(selectedTx.id);
+                    appActions.showReviewScreen();
+                } else if (selectedTx) {
+                    detailActions.loadTransaction(selectedTx.id);
+                    appActions.showTransactionDetailScreen();
+                }
+            }
+            
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                historyActions.load();
+                appActions.showTransactionHistoryScreen();
+            }
+        });
+        
+        const transactionsToConfirm = useMemo(() => {
+            if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+            return [];
+        }, [status, transactions]);
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            showHelp,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/components/DashboardScreen.tsx: "import React from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport { type Transaction, type DashboardStatus } from '../stores/dashboard.store';\nimport type { TransactionStatus } from '../types/transaction.types';\nimport Separator from './Separator';\nimport GlobalHelpScreen from './GlobalHelpScreen';\nimport { useDashboardScreen } from '../hooks/useDashboardScreen';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'HANDOFF': return <Text color=\"magenta\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `-${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `-${minutes}m`;\n};\n\nconst EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    \n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        showHelp,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n    } = useDashboardScreen();\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <Text>\n                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n            </Text>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const pauseAction = status === 'PAUSED'\n\t\t\t? <Text>(<Text color=\"cyan\" bold>R</Text>)esume</Text>\n\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n\t\treturn (\n            <Text color=\"gray\">\n                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>Enter</Text>) Review · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n            </Text>\n        );\n    };\n    \n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            {showHelp && <GlobalHelpScreen />}\n\n            <Box flexDirection=\"column\" display={showHelp ? 'none' : 'flex'}>\n                <Text color=\"cyan\">▲ relaycode dashboard</Text>\n                <Separator />\n                <Box marginY={1}>\n                    {renderStatusBar()}\n                </Box>\n                \n                {isModal && (\n                    <>\n                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                        <Separator />\n                    </>\n                )}\n                \n                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n                <Box flexDirection=\"column\" marginTop={1}>\n                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                        const actualIndex = viewOffset + index;\n                        return (\n                            <EventStreamItem\n                                key={tx.id}\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                            />\n                        );\n                    })}\n                </Box>\n\n                <Box marginTop={1}><Separator /></Box>\n                {renderFooter()}\n            </Box>\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/App.tsx: >-
+    import React, { useEffect } from 'react';
+
+    import { Box, useInput } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import CopyScreen from './components/CopyScreen';
+
+    import { useCopyStore } from './stores/copy.store';
+
+
+    const App = () => {
+        const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state => ({
+            currentScreen: state.currentScreen,
+            isDebugMenuOpen: state.isDebugMenuOpen,
+            actions: state.actions,
+        }));
+        const isCopyModeOpen = useCopyStore(s => s.isOpen);
+
+        useInput((input, key) => {
+            if (key.ctrl && input === 'b') {
+                actions.toggleDebugMenu();
+            }
+        }, { isActive: !isCopyModeOpen });
+
+        useEffect(() => {
+            // Clear the terminal when the screen changes to ensure a clean view.
+            // This is especially important when transitioning from the splash screen.
+            // eslint-disable-next-line no-console
+            console.clear();
+        }, [currentScreen, isDebugMenuOpen, isCopyModeOpen]);
+
+        const renderMainScreen = () => {
+            if (isDebugMenuOpen) return <DebugMenu />;
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isCopyModeOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                <CopyScreen />
+            </>
+        );
+    };
+
+
+    export default App;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 70

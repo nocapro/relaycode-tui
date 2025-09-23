@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AppScreen } from '../types/app.types';
 
 interface AppState {
+    isHelpOpen: boolean;
     isDebugMenuOpen: boolean;
     currentScreen: AppScreen;
     actions: {
@@ -14,10 +15,12 @@ interface AppState {
         showTransactionHistoryScreen: () => void;
         showTransactionDetailScreen: () => void;
         toggleDebugMenu: () => void;
+        toggleHelp: () => void;
     };
 }
 
 export const useAppStore = create<AppState>((set) => ({
+    isHelpOpen: false,
     isDebugMenuOpen: false,
     currentScreen: 'splash',
     actions: {
@@ -30,5 +33,6 @@ export const useAppStore = create<AppState>((set) => ({
         showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
         showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
         toggleDebugMenu: () => set(state => ({ isDebugMenuOpen: !state.isDebugMenuOpen })),
+        toggleHelp: () => set(state => ({ isHelpOpen: !state.isHelpOpen })),
     },
 }));

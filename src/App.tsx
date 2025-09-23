@@ -10,29 +10,29 @@ import GitCommitScreen from './components/GitCommitScreen';
 import TransactionDetailScreen from './components/TransactionDetailScreen';
 import TransactionHistoryScreen from './components/TransactionHistoryScreen';
 import DebugMenu from './components/DebugMenu'; 
+import GlobalHelpScreen from './components/GlobalHelpScreen';
 import CopyScreen from './components/CopyScreen';
 import { useCopyStore } from './stores/copy.store';
+import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
 
 const App = () => {
-    const { currentScreen, isDebugMenuOpen, actions } = useAppStore(state => ({
+    const { currentScreen, isDebugMenuOpen, isHelpOpen } = useAppStore(state => ({
         currentScreen: state.currentScreen,
         isDebugMenuOpen: state.isDebugMenuOpen,
-        actions: state.actions,
+        isHelpOpen: state.isHelpOpen,
     }));
     const isCopyModeOpen = useCopyStore(s => s.isOpen);
 
-    useInput((input, key) => {
-        if (key.ctrl && input === 'b') {
-            actions.toggleDebugMenu();
-        }
-    }, { isActive: !isCopyModeOpen });
+    // Global hotkeys are active if no modal-like component is open
+    const areGlobalHotkeysActive = !isCopyModeOpen;
+    useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
 
     useEffect(() => {
         // Clear the terminal when the screen changes to ensure a clean view.
         // This is especially important when transitioning from the splash screen.
         // eslint-disable-next-line no-console
         console.clear();
-    }, [currentScreen, isDebugMenuOpen, isCopyModeOpen]);
+    }, [currentScreen, isDebugMenuOpen, isCopyModeOpen, isHelpOpen]);
 
     const renderMainScreen = () => {
         if (isDebugMenuOpen) return <DebugMenu />;
@@ -47,16 +47,19 @@ const App = () => {
         return null;
     };
 
+    const isOverlayOpen = isCopyModeOpen || isHelpOpen;
+
     return (
         <>
             <Box
                 width="100%"
                 height="100%"
                 flexDirection="column"
-                display={isCopyModeOpen ? 'none' : 'flex'}
+                display={isOverlayOpen ? 'none' : 'flex'}
             >
                 {renderMainScreen()}
             </Box>
+            {isHelpOpen && <GlobalHelpScreen />}
             <CopyScreen />
         </>
     );

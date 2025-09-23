@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useApp, useInput } from 'ink';
+import { useInput } from 'ink';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
 import { useCommitStore } from '../stores/commit.store';
@@ -14,7 +14,7 @@ export const useDashboardScreen = () => {
     const [viewOffset, setViewOffset] = useState(0);
     const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
     const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
-    const { status, selectedTransactionIndex, showHelp } = useDashboardStore();
+    const { status, selectedTransactionIndex } = useDashboardStore();
     const transactions = useTransactionStore(s => s.transactions);
     const {
         togglePause,
@@ -23,9 +23,7 @@ export const useDashboardScreen = () => {
         startApproveAll,
         confirmAction,
         cancelAction,
-        toggleHelp,
     } = useDashboardStore(s => s.actions);
-    const { exit } = useApp();
     const appActions = useAppStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
     const detailActions = useTransactionDetailStore(s => s.actions);
@@ -46,16 +44,6 @@ export const useDashboardScreen = () => {
     }, [selectedTransactionIndex, viewOffset, viewportHeight]);
 
     useInput((input, key) => {
-        if (input === '?') {
-            toggleHelp();
-            return;
-        }
-
-        if (showHelp) {
-            if (key.escape || input === '?') toggleHelp();
-            return;
-        }
-
         if (isModal) {
             if (key.return) confirmAction();
             if (key.escape) cancelAction();
@@ -63,8 +51,6 @@ export const useDashboardScreen = () => {
         }
 
         if (isProcessing) return; // No input while processing
-        
-        if (input.toLowerCase() === 'q') exit();
 
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
@@ -102,7 +88,6 @@ export const useDashboardScreen = () => {
         status,
         transactions,
         selectedTransactionIndex,
-        showHelp,
         pendingApprovals,
         pendingCommits,
         isModal,

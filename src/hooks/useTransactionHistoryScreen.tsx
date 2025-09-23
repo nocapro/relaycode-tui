@@ -3,8 +3,9 @@ import { useInput } from 'ink';
 import { useTransactionHistoryStore, getVisibleItemPaths } from '../stores/transaction-history.store';
 import { useAppStore } from '../stores/app.store';
 import { useStdoutDimensions } from '../utils';
-import { CopyService } from '../services/copy.service';
 import { useTransactionStore } from '../stores/transaction.store';
+import { useCopyStore, type CopyItem } from '../stores/copy.store';
+import { COPYABLE_ITEMS } from '../types/copy.types';
 
 export const useTransactionHistoryScreen = () => {
     const [, rows] = useStdoutDimensions();
@@ -33,10 +34,21 @@ export const useTransactionHistoryScreen = () => {
 
     const openCopyMode = () => {
         const { selectedForAction } = store;
-        const selectedTxs = store.transactions.filter(tx => selectedForAction.has(tx.id));
+        const transactionsToCopy = store.transactions.filter(tx => selectedForAction.has(tx.id));
 
-        if (selectedTxs.length === 0) return;
-        CopyService.open('TRANSACTION_HISTORY', { transactions: selectedTxs });
+        if (transactionsToCopy.length === 0) return;
+        
+        const title = `Select data to copy from ${transactionsToCopy.length} transactions:`;
+        const items: CopyItem[] = [
+            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactionsToCopy.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactionsToCopy.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+            { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactionsToCopy.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactionsToCopy.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactionsToCopy.map(tx => tx.id).join('\n') },
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+        ];
+
+        useCopyStore.getState().actions.open(title, items);
     };
 
     useInput((input, key) => {

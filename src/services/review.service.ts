@@ -114,26 +114,7 @@ const runApplySimulation = async (scenario: 'success' | 'failure') => {
 };
 
 const loadTransactionForReview = (transactionId: string) => {
-    const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-    if (!tx) return;
-
-    // This simulates the backend determining which files failed or succeeded.
-    // For this demo, tx '1' is the failure case, any other is success.
-    const isFailureCase = tx.id === '1';
-
-    const reviewFiles: ReviewFileItem[] = (tx.files || []).map((file, index) => {
-        if (isFailureCase) {
-            return {
-                ...file,
-                status: index === 0 ? 'APPROVED' : 'FAILED',
-                error: index > 0 ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined,
-                strategy: file.strategy || 'standard-diff',
-            };
-        }
-        return { ...file, status: 'APPROVED', strategy: file.strategy || 'standard-diff' };
-    });
-
-    useReviewStore.getState().actions.load(tx, reviewFiles, isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS');
+    useReviewStore.getState().actions.load(transactionId);
 };
 
 const generateSingleFileRepairPrompt = (file: ReviewFileItem): string => {

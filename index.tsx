@@ -2,6 +2,7 @@ import React from 'react';
 import { render } from 'ink';
 import App from './src/App';
 import { useAppStore } from './src/stores/app.store';
+import { useTransactionStore } from './src/stores/transaction.store';
 import { useCommitStore } from './src/stores/commit.store';
 import { useReviewStore } from './src/stores/review.store';
 import { ReviewService } from './src/services/review.service';
@@ -9,6 +10,8 @@ import { useTransactionDetailStore } from './src/stores/transaction-detail.store
 import { useTransactionHistoryStore } from './src/stores/transaction-history.store';
 
 const main = () => {
+    // Initialize stores
+    useTransactionStore.getState().actions.loadTransactions();
     const args = process.argv.slice(2);
 
     if (args[0] === 'debug-screen' && args[1]) {

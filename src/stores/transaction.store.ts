@@ -28,6 +28,3 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         },
     },
 }));
-
-// Initialize the store with data on load.
-useTransactionStore.getState().actions.loadTransactions();

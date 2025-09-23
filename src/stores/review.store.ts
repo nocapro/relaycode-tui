@@ -20,13 +20,6 @@ export const initialApplySteps: ApplyStep[] = [
 interface ReviewState {
     // Transaction Info
     transactionId: string | null;
-    hash: string;
-    message: string;
-    prompt: string;
-    reasoning: string;
-    linesAdded: number;
-    linesRemoved: number;
-    duration: number;
     patchStatus: PatchStatus;
 
     // File & Script Info
@@ -69,7 +62,7 @@ interface ReviewState {
         navigateScriptErrorDown: () => void,
 
         // "Private" actions for service layer
-        load: (transaction: Transaction, files: ReviewFileItem[], patchStatus: PatchStatus) => void;
+        load: (transactionId: string) => void;
         _updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
         _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
     };
@@ -78,14 +71,7 @@ interface ReviewState {
 export const useReviewStore = create<ReviewState>((set, get) => ({
     // Transaction Info
     transactionId: null,
-    hash: '',
-    message: '',
-    prompt: '',
-    reasoning: '',
-    linesAdded: 0,
-    linesRemoved: 0,
-    duration: 0,
-    patchStatus: 'SUCCESS',
+    patchStatus: 'SUCCESS', // This will be set on load
 
     // File & Script Info
     files: [],
@@ -216,12 +202,15 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             }
         },
         confirmHandoff: () => {
-            const { hash, message, reasoning, files } = get();
-            const handoffPrompt = ReviewService.generateHandoffPrompt(hash, message, reasoning, files);
+            const { transactionId, files } = get();
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction) return;
+
+            const handoffPrompt = ReviewService.generateHandoffPrompt(transaction.hash, transaction.message, transaction.reasoning || '', files);
 
             // eslint-disable-next-line no-console
             console.log('[CLIPBOARD] Copied Handoff Prompt.'); // In real app: clipboardy.writeSync(handoffPrompt)
-            ReviewService.performHandoff(hash);
+            ReviewService.performHandoff(transaction.hash);
         },
 
         // Navigation Actions
@@ -229,7 +218,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1),
         })),
         scrollReasoningDown: () => set(state => {
-            const maxLines = state.reasoning.split('\n').length;
+            const { transactionId } = state;
+            if (!transactionId) return {};
+
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction?.reasoning) return {};
+
+            const maxLines = transaction.reasoning.split('\n').length;
             return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
         }),
         navigateScriptErrorUp: () => set(state => ({
@@ -247,22 +242,32 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         }),
 
         // "Private" actions for service layer
-        load: (transaction, files, patchStatus) => {
-            const totalLinesAdded = files.reduce((sum, file) => sum + (file.linesAdded || 0), 0);
-            const totalLinesRemoved = files.reduce((sum, file) => sum + (file.linesRemoved || 0), 0);
+        load: (transactionId) => {
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction) return;
+
+            // This simulates the backend determining which files failed or succeeded.
+            // For this demo, tx '1' is the failure case, any other is success.
+            const isFailureCase = transaction.id === '1';
+            const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+
+            const reviewFiles: ReviewFileItem[] = (transaction.files || []).map((file, index) => {
+                if (isFailureCase) {
+                    return {
+                        ...file,
+                        status: index === 0 ? 'APPROVED' : 'FAILED',
+                        error: index > 0 ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined,
+                        strategy: file.strategy || 'standard-diff',
+                    };
+                }
+                return { ...file, status: 'APPROVED', strategy: file.strategy || 'standard-diff' };
+            });
 
             set({
                 transactionId: transaction.id,
-                hash: transaction.hash,
-                message: transaction.message,
-                prompt: transaction.prompt || '',
-                reasoning: transaction.reasoning || '',
-                linesAdded: totalLinesAdded,
-                linesRemoved: totalLinesRemoved,
-                duration: 0, // Will be updated during apply process
                 patchStatus,
-                files,
-                scripts: [], // Scripts will be populated during apply process
+                files: reviewFiles,
+                scripts: transaction.scripts || [],
                 selectedItemIndex: 0,
                 bodyView: 'none' as const,
                 isDiffExpanded: false,

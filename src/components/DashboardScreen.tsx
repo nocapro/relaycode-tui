@@ -4,7 +4,6 @@ import Spinner from 'ink-spinner';
 import { type Transaction, type DashboardStatus } from '../stores/dashboard.store';
 import type { TransactionStatus } from '../types/transaction.types';
 import Separator from './Separator';
-import GlobalHelpScreen from './GlobalHelpScreen';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 
 // --- Sub-components & Helpers ---
@@ -76,7 +75,6 @@ const DashboardScreen = () => {
         status,
         transactions,
         selectedTransactionIndex,
-        showHelp,
         pendingApprovals,
         pendingCommits,
         isModal,
@@ -131,39 +129,35 @@ const DashboardScreen = () => {
     
     return (
         <Box flexDirection="column" height="100%">
-            {showHelp && <GlobalHelpScreen />}
-
-            <Box flexDirection="column" display={showHelp ? 'none' : 'flex'}>
-                <Text color="cyan">▲ relaycode dashboard</Text>
-                <Separator />
-                <Box marginY={1}>
-                    {renderStatusBar()}
-                </Box>
-                
-                {isModal && (
-                    <>
-                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                        <Separator />
-                    </>
-                )}
-                
-                <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
-                <Box flexDirection="column" marginTop={1}>
-                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
-                        const actualIndex = viewOffset + index;
-                        return (
-                            <EventStreamItem
-                                key={tx.id}
-                                transaction={tx}
-                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                            />
-                        );
-                    })}
-                </Box>
-
-                <Box marginTop={1}><Separator /></Box>
-                {renderFooter()}
+            <Text color="cyan">▲ relaycode dashboard</Text>
+            <Separator />
+            <Box marginY={1}>
+                {renderStatusBar()}
             </Box>
+            
+            {isModal && (
+                <>
+                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
+                    <Separator />
+                </>
+            )}
+            
+            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                    const actualIndex = viewOffset + index;
+                    return (
+                        <EventStreamItem
+                            key={tx.id}
+                            transaction={tx}
+                            isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                        />
+                    );
+                })}
+            </Box>
+
+            <Box marginTop={1}><Separator /></Box>
+            {renderFooter()}
         </Box>
     );
 };

@@ -9,10 +9,10 @@ import { useCopyStore } from '../stores/copy.store';
 import { COPYABLE_ITEMS } from '../types/copy.types';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import { ReviewService } from '../services/review.service';
-import { CopyService } from '../services/copy.service';
 import { useReviewStore } from '../stores/review.store';
 import type { MenuItem } from '../types/debug.types';
 import { moveIndex } from '../stores/navigation.utils';
+import { useTransactionStore } from '../stores/transaction.store';
 export type { MenuItem } from '../types/debug.types';
 
 export const useDebugMenu = () => {
@@ -111,9 +111,22 @@ export const useDebugMenu = () => {
                 ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
                 setTimeout(() => {
-                    const { hash, message, prompt, reasoning, files, selectedItemIndex } = useReviewStore.getState();
+                    const { transactionId, files, selectedItemIndex } = useReviewStore.getState();
+                    const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                    if (!transaction) return;
+
                     const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
-                    CopyService.open('DEBUG_REVIEW', { txInfo: { hash, message, prompt, reasoning }, files, selectedFile });
+
+                    const title = 'Select data to copy from review:';
+                    const items = [
+                        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+                        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+                        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+                        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+                        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+                        { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+                    ];
+                    useCopyStore.getState().actions.open(title, items);
                 }, 100);
             },
         },
@@ -198,10 +211,21 @@ export const useDebugMenu = () => {
             title: 'History: Copy Mode',
             action: () => {
                 historyActions.prepareDebugState('copy');
-                const { transactions, selectedForAction } = useTransactionHistoryStore.getState();
-                const selectedTxs = transactions.filter(tx => selectedForAction.has(tx.id));
                 appActions.showTransactionHistoryScreen();
-                CopyService.open('DEBUG_HISTORY', { transactions: selectedTxs });
+                setTimeout(() => {
+                    const { transactions: allTxs, selectedForAction } = useTransactionHistoryStore.getState();
+                    const transactions = allTxs.filter(tx => selectedForAction.has(tx.id));
+                    const title = `Select data to copy from ${transactions.length} transactions:`;
+                    const items = [
+                        { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+                        { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+                        { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+                        { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+                        { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+                        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+                    ];
+                    useCopyStore.getState().actions.open(title, items);
+                }, 100);
             },
         },
     ];
@@ -223,7 +247,7 @@ export const useDebugMenu = () => {
             }
             return;
         }
-        if (key.escape || (key.ctrl && input === 'b')) {
+        if (key.escape) {
             appActions.toggleDebugMenu();
             return;
         }

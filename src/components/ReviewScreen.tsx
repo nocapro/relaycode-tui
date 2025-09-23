@@ -98,8 +98,10 @@ const ScriptItemRow = ({
 
 const ReviewScreen = () => {
     const {
-        hash, message, prompt, reasoning, files, scripts, patchStatus,
-        linesAdded, linesRemoved, duration,
+        transaction,
+        files,
+        scripts,
+        patchStatus,
         selectedItemIndex, bodyView, isDiffExpanded, reasoningScrollIndex, scriptErrorIndex,
         numFiles,
         approvedFilesCount,
@@ -107,11 +109,16 @@ const ReviewScreen = () => {
         approvedLinesRemoved,
     } = useReviewScreen();
 
+    if (!transaction) {
+        return <Text>Loading review...</Text>;
+    }
+    const { hash, message, prompt = '', reasoning = '' } = transaction;
+
     const renderBody = () => {
         if (bodyView === 'none') return null;
 
         if (bodyView === 'reasoning') {
-            const reasoningLinesCount = reasoning.split('\n').length;
+            const reasoningLinesCount = (reasoning || '').split('\n').length;
             const visibleLinesCount = 10;
             return (
                 <Box flexDirection="column">
@@ -309,7 +316,7 @@ const ReviewScreen = () => {
                 <Box flexDirection="column">
                     <Text>{hash} · {message}</Text>
                     <Text>
-                        (<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files · {duration}s
+                        (<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files
                         {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
                         {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
                     </Text>
@@ -317,11 +324,11 @@ const ReviewScreen = () => {
 
                 <Box flexDirection="column" marginTop={1}>
                     <Text>
-                        (P)rompt ▸ {prompt.substring(0, 60)}...
+                        (P)rompt ▸ {(prompt || '').substring(0, 60)}...
                     </Text>
                     <Text>
-                        (R)easoning ({reasoning.split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
-                        {(reasoning.split('\n')[0] ?? '').substring(0, 50)}...
+                        (R)easoning ({(reasoning || '').split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                        {((reasoning || '').split('\n')[0] ?? '').substring(0, 50)}...
                     </Text>
                 </Box>
             </Box>

@@ -1,0 +1,1243 @@
+uuid: c292728f-7440-41dd-933e-10509a27c1a7
+projectId: relaycode-tui
+createdAt: '2025-09-23T13:21:47.000Z'
+gitCommitMsg: >-
+  refactor(copy): Decouple copy feature by removing copy.service
+
+  Executed Part 2 of the master refactoring plan.
+
+  - Deleted the monolithic `copy.service.ts`, which was a source of tight
+    coupling across the application.
+
+  - Simplified `copy.types.ts` by removing context-specific types that were
+    only used by the old service.
+
+  - Relocated the responsibility for preparing copyable data from the service
+    into the hooks of the respective screens (`useReviewScreen`,
+    `useTransactionDetailScreen`, `useTransactionHistoryScreen`, and
+    `useDebugMenu`).
+
+  This change inverts control, making the `CopyScreen` and its store generic UI
+  components. Each feature now prepares its own data for copying, improving
+  modularity and making the system easier to maintain and extend.
+promptSummary: Execute Part 2 of the refactoring plan to decouple the copy feature.
+reasoning:
+  - >-
+    This change executes Part 2 of the master refactoring plan, focusing on
+    decoupling the application's copy/paste functionality.
+  - >-
+    The core problem was that `copy.service.ts` was a monolithic, context-aware
+    service that knew about every part of the application. This created tight
+    coupling and made the system difficult to maintain.
+  - >-
+    The solution was to invert control by deleting the service and moving the
+    responsibility for preparing copyable data into the hooks of the screens
+    that initiate the copy action (`useReviewScreen`,
+    `useTransactionDetailScreen`, etc.). These hooks now construct a generic
+    `CopyItem[]` array based on their local state and pass it to the now-generic
+    `useCopyStore`. This eliminates the central service bottleneck, decouples
+    the features, and adheres to the Open/Closed Principle more effectively.
+  - '### 1. Delete the Tightly-Coupled Copy Service'
+  - >-
+    The `copy.service.ts` file was the root of the coupling issue. Its logic has
+    been decentralized, so the file is no longer needed.
+  - '### 2. Simplify Copy-Related Types'
+  - >-
+    With the removal of the service, the complex, context-specific types are no
+    longer necessary. We only need the core `CopyItem` interface.
+  - '### 3. Relocate Copy Logic to `useReviewScreen`'
+  - >-
+    The logic for preparing review screen data for copying is now self-contained
+    within the `useReviewScreen` hook.
+  - '### 4. Relocate Copy Logic to `useTransactionDetailScreen`'
+  - >-
+    The logic for copying transaction details is now located within the
+    corresponding `useTransactionDetailScreen` hook.
+  - '### 5. Relocate Copy Logic to `useTransactionHistoryScreen`'
+  - >-
+    The logic for bulk-copying data from the transaction history screen now
+    resides within its own hook.
+  - '### 6. Relocate Copy Logic to `useDebugMenu`'
+  - >-
+    Finally, the logic for the debug menu's copy actions is now embedded
+    directly in the menu item definitions, ensuring it is also decoupled and
+    self-contained.
+operations:
+  - type: delete
+    path: src/services/copy.service.ts
+  - type: write
+    path: src/types/copy.types.ts
+    content: >+
+      --- src/types/copy.types.ts
+
+      +++ src/types/copy.types.ts
+
+      @@ -1,5 +1,3 @@
+
+      -import type { Transaction } from './transaction.types';
+
+      -import type { ReviewFileItem, FileChange } from './file.types';
+
+      -
+       export interface CopyItem {
+           id: string;
+           key: string;
+      @@ -8,19 +6,6 @@
+           isDefaultSelected?: boolean;
+       }
+       
+      -export type CopyContext = 'REVIEW' | 'TRANSACTION_DETAIL' |
+      'TRANSACTION_HISTORY' | 'DEBUG_REVIEW' | 'DEBUG_HISTORY';
+
+      -
+
+      -export type ReviewTransactionInfo = Pick<Transaction, 'hash' | 'message'
+      | 'prompt' | 'reasoning'>;
+
+      -
+
+      -export type CopyContextData =
+
+      -    | { context: 'REVIEW'; txInfo: ReviewTransactionInfo; files:
+      ReviewFileItem[]; selectedFile?: ReviewFileItem }
+
+      -    | { context: 'TRANSACTION_DETAIL'; transaction: Transaction;
+      selectedFile?: FileChange }
+
+      -    | { context: 'TRANSACTION_HISTORY'; transactions: Transaction[] }
+
+      -    | { context: 'DEBUG_REVIEW'; txInfo: ReviewTransactionInfo; files:
+      ReviewFileItem[]; selectedFile?: ReviewFileItem }
+
+      -    | { context: 'DEBUG_HISTORY'; transactions: Transaction[] };
+
+      -
+       export const COPYABLE_ITEMS = {
+           UUID: 'UUID',
+           MESSAGE: 'Git Message',
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: >+
+      --- src/hooks/useReviewScreen.tsx
+
+      +++ src/hooks/useReviewScreen.tsx
+
+      @@ -2,8 +2,8 @@
+       import { useInput, useApp } from 'ink';
+       import { useReviewStore } from '../stores/review.store';
+       import { useAppStore } from '../stores/app.store';
+       import { useTransactionStore } from '../stores/transaction.store';
+      -import { CopyService } from '../services/copy.service';
+
+      +import { useCopyStore, type CopyItem } from '../stores/copy.store';
+
+      +import { COPYABLE_ITEMS } from '../types/copy.types';
+       
+       export const useReviewScreen = () => {
+           const { exit } = useApp();
+      @@ -34,11 +34,22 @@
+       
+           const openCopyMode = () => {
+               if (!transaction) return;
+      -        const { hash, message, prompt, reasoning } = transaction;
+
+      -        const { files, selectedItemIndex } = store;
+
+      -        const selectedFile = selectedItemIndex < files.length ?
+      files[selectedItemIndex] : undefined;
+
+      -        CopyService.open('REVIEW', { txInfo: { hash, message, prompt,
+      reasoning }, files, selectedFile });
+
+      +        const { files: reviewFiles, selectedItemIndex } = store;
+
+      +        const selectedFile = selectedItemIndex < reviewFiles.length ?
+      reviewFiles[selectedItemIndex] : undefined;
+
+      +
+
+      +        const title = 'Select data to copy from review:';
+
+      +        const items: CopyItem[] = [
+
+      +            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData:
+      () => transaction.id },
+
+      +            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE,
+      getData: () => transaction.message },
+
+      +            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT,
+      getData: () => transaction.prompt || '' },
+
+      +            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING,
+      getData: () => transaction.reasoning || '' },
+
+      +            { id: 'file_diff', key: 'F', label:
+      `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` :
+      ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+
+      +            { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS,
+      getData: () => reviewFiles.map(f => `--- FILE: ${f.path}
+      ---\n${f.diff}`).join('\n\n') },
+
+      +        ];
+
+      +
+
+      +        useCopyStore.getState().actions.open(title, items);
+           };
+       
+           useInput((input, key) => {
+               // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionDetailScreen.tsx
+    content: >+
+      --- src/hooks/useTransactionDetailScreen.tsx
+
+      +++ src/hooks/useTransactionDetailScreen.tsx
+
+      @@ -1,9 +1,10 @@
+       import { useInput } from 'ink';
+       import { useTransactionDetailStore } from '../stores/transaction-detail.store';
+       import { useAppStore } from '../stores/app.store';
+      -import { CopyService } from '../services/copy.service';
+       import { useTransactionStore } from '../stores/transaction.store';
+       import { useMemo } from 'react';
+      +import { useCopyStore, type CopyItem } from '../stores/copy.store';
+
+      +import { COPYABLE_ITEMS } from '../types/copy.types';
+       
+       export const useTransactionDetailScreen = () => {
+           const { showDashboardScreen } = useAppStore(s => s.actions);
+      @@ -19,10 +20,23 @@
+           } = store.actions;
+       
+           const openCopyMode = () => {
+      -        const { selectedFileIndex } = store;
+               if (!transaction) return;
+      +        const { selectedFileIndex } = store;
+               const selectedFile = files[selectedFileIndex];
+      -        CopyService.open('TRANSACTION_DETAIL', { transaction,
+      selectedFile });
+
+      +
+
+      +        const title = `Select data to copy from transaction
+      ${transaction.hash}:`;
+
+      +        const items: CopyItem[] = [
+
+      +            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE,
+      getData: () => transaction.message, isDefaultSelected: true },
+
+      +            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT,
+      getData: () => transaction.prompt || '' },
+
+      +            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING,
+      getData: () => transaction.reasoning || '', isDefaultSelected: true },
+
+      +            { id: 'all_diffs', key: 'A', label:
+      `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`,
+      getData: () => transaction.files?.map(f => `--- FILE: ${f.path}
+      ---\n${f.diff}`).join('\n\n') || '' },
+
+      +            { id: 'file_diff', key: 'F', label:
+      `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file
+      selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+
+      +            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData:
+      () => transaction.id },
+
+      +            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML,
+      getData: () => '... YAML representation ...' }, // Mocking this
+
+      +        ];
+
+      +
+
+      +        useCopyStore.getState().actions.open(title, items);
+           };
+       
+           useInput((input, key) => {
+               if (bodyView === 'REVERT_CONFIRM') {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionHistoryScreen.tsx
+    content: >+
+      --- src/hooks/useTransactionHistoryScreen.tsx
+
+      +++ src/hooks/useTransactionHistoryScreen.tsx
+
+      @@ -2,9 +2,9 @@
+       import { useInput } from 'ink';
+       import { useTransactionHistoryStore, getVisibleItemPaths } from '../stores/transaction-history.store';
+       import { useAppStore } from '../stores/app.store';
+       import { useStdoutDimensions } from '../utils';
+      -import { CopyService } from '../services/copy.service';
+       import { useTransactionStore } from '../stores/transaction.store';
+      +import { useCopyStore, type CopyItem } from '../stores/copy.store';
+
+      +import { COPYABLE_ITEMS } from '../types/copy.types';
+       
+       export const useTransactionHistoryScreen = () => {
+           const [, rows] = useStdoutDimensions();
+      @@ -28,11 +28,24 @@
+       
+           const openCopyMode = () => {
+               const { selectedForAction } = store;
+      -        const selectedTxs = store.transactions.filter(tx =>
+      selectedForAction.has(tx.id));
+
+      +        const transactionsToCopy = store.transactions.filter(tx =>
+      selectedForAction.has(tx.id));
+       
+      -        if (selectedTxs.length === 0) return;
+
+      -        CopyService.open('TRANSACTION_HISTORY', { transactions:
+      selectedTxs });
+
+      +        if (transactionsToCopy.length === 0) return;
+
+      +        
+
+      +        const title = `Select data to copy from
+      ${transactionsToCopy.length} transactions:`;
+
+      +        const items: CopyItem[] = [
+
+      +            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES,
+      getData: () => transactionsToCopy.map(tx => tx.message).join('\n'),
+      isDefaultSelected: true },
+
+      +            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS,
+      getData: () => transactionsToCopy.map(tx => tx.prompt ||
+      '').join('\n\n---\n\n'), isDefaultSelected: false },
+
+      +            { id: 'reasonings', key: 'R', label:
+      COPYABLE_ITEMS.REASONINGS, getData: () => transactionsToCopy.map(tx =>
+      tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+
+      +            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS,
+      getData: () => transactionsToCopy.flatMap(tx => tx.files?.map(f => `---
+      TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+
+      +            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS,
+      getData: () => transactionsToCopy.map(tx => tx.id).join('\n') },
+
+      +            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML,
+      getData: () => '... YAML representation ...' },
+
+      +        ];
+
+      +
+
+      +        useCopyStore.getState().actions.open(title, items);
+           };
+       
+           useInput((input, key) => {
+               if (store.mode === 'FILTER') {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >+
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -6,11 +6,10 @@
+       import { useCopyStore } from '../stores/copy.store';
+       import { COPYABLE_ITEMS } from '../types/copy.types';
+       import { useTransactionHistoryStore } from '../stores/transaction-history.store';
+       import { ReviewService } from '../services/review.service';
+      -import { CopyService } from '../services/copy.service';
+       import { useReviewStore } from '../stores/review.store';
+       import type { MenuItem } from '../types/debug.types';
+       import { moveIndex } from '../stores/navigation.utils';
+      +import { useTransactionStore } from '../stores/transaction.store';
+       export type { MenuItem } from '../types/debug.types';
+       
+       export const useDebugMenu = () => {
+      @@ -101,11 +100,24 @@
+                       ReviewService.loadTransactionForReview('1');
+                       appActions.showReviewScreen();
+                       setTimeout(() => {
+      -                    const { hash, message, prompt, reasoning, files,
+      selectedItemIndex } = useReviewStore.getState();
+
+      +                    const { transactionId, files, selectedItemIndex } =
+      useReviewStore.getState();
+
+      +                    const transaction =
+      useTransactionStore.getState().transactions.find(t => t.id ===
+      transactionId);
+
+      +                    if (!transaction) return;
+
+      +
+                           const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+      -                    CopyService.open('DEBUG_REVIEW', { txInfo: { hash,
+      message, prompt, reasoning }, files, selectedFile });
+
+      +
+
+      +                    const title = 'Select data to copy from review:';
+
+      +                    const items = [
+
+      +                        { id: 'uuid', key: 'U', label:
+      COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+
+      +                        { id: 'message', key: 'M', label:
+      COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+
+      +                        { id: 'prompt', key: 'P', label:
+      COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+
+      +                        { id: 'reasoning', key: 'R', label:
+      COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+
+      +                        { id: 'file_diff', key: 'F', label:
+      `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` :
+      ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+
+      +                        { id: 'all_diffs', key: 'A', label:
+      COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE:
+      ${f.path} ---\n${f.diff}`).join('\n\n') },
+
+      +                    ];
+
+      +                    useCopyStore.getState().actions.open(title, items);
+                       }, 100);
+                   },
+               },
+      @@ -170,11 +182,21 @@
+                   title: 'History: Copy Mode',
+                   action: () => {
+                       historyActions.prepareDebugState('copy');
+      -                const { transactions, selectedForAction } =
+      useTransactionHistoryStore.getState();
+
+      -                const selectedTxs = transactions.filter(tx =>
+      selectedForAction.has(tx.id));
+                       appActions.showTransactionHistoryScreen();
+      -                CopyService.open('DEBUG_HISTORY', { transactions:
+      selectedTxs });
+
+      +                setTimeout(() => {
+
+      +                    const { transactions: allTxs, selectedForAction } =
+      useTransactionHistoryStore.getState();
+
+      +                    const transactions = allTxs.filter(tx =>
+      selectedForAction.has(tx.id));
+
+      +                    const title = `Select data to copy from
+      ${transactions.length} transactions:`;
+
+      +                    const items = [
+
+      +                        { id: 'messages', key: 'M', label:
+      COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx =>
+      tx.message).join('\n'), isDefaultSelected: true },
+
+      +                        { id: 'prompts', key: 'P', label:
+      COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt ||
+      '').join('\n\n---\n\n'), isDefaultSelected: false },
+
+      +                        { id: 'reasonings', key: 'R', label:
+      COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx =>
+      tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+
+      +                        { id: 'diffs', key: 'D', label:
+      COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx =>
+      tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path}
+      ---\n${f.diff}`)).join('\n\n') },
+
+      +                        { id: 'uuids', key: 'U', label:
+      COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx =>
+      tx.id).join('\n') },
+
+      +                        { id: 'yaml', key: 'Y', label:
+      COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+
+      +                    ];
+
+      +                    useCopyStore.getState().actions.open(title, items);
+
+      +                }, 100);
+                   },
+               },
+           ];
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/copy.service.ts: >-
+    // @ts-nocheck
+
+    import { useCopyStore, type CopyItem } from '../stores/copy.store';
+
+    import { COPYABLE_ITEMS, type CopyContextData, type CopyContext } from
+    '../types/copy.types';
+
+
+    type CopyArgs =
+      | { context: 'REVIEW'; txInfo: any; files: any; selectedFile?: any }
+      | { context: 'TRANSACTION_DETAIL'; transaction: any; selectedFile?: any }
+      | { context: 'TRANSACTION_HISTORY'; transactions: any }
+      | { context: 'DEBUG_REVIEW'; txInfo: any; files: any; selectedFile?: any }
+      | { context: 'DEBUG_HISTORY'; transactions: any };
+
+    const open = (context: CopyContext, data: CopyArgs) => {
+        let title = 'Select data to copy:';
+        let items: CopyItem[] = [];
+
+        switch(data.context) {
+            case 'REVIEW':
+            case 'DEBUG_REVIEW': {
+                const { txInfo, files, selectedFile } = data;
+                title = 'Select data to copy from review:';
+                items = [
+                    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => `${txInfo.hash ?? ''}-a8b3-4f2c-9d1e-8a7c1b9d8f03` },
+                    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => txInfo.message },
+                    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => txInfo.prompt || '' },
+                    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => txInfo.reasoning || '' },
+                    { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+                    { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+                ];
+                break;
+            }
+            case 'TRANSACTION_DETAIL': {
+                const { transaction, selectedFile } = data;
+                title = `Select data to copy from transaction ${transaction.hash}:`;
+                items = [
+                    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message, isDefaultSelected: true },
+                    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+                    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '', isDefaultSelected: true },
+                    { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+                    { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+                    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+                    { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+                ];
+                break;
+            }
+            case 'TRANSACTION_HISTORY':
+            case 'DEBUG_HISTORY': {
+                const { transactions } = data;
+                title = `Select data to copy from ${transactions.length} transactions:`;
+                items = [
+                    { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+                    { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+                    { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+                    { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+                    { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+                    { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+                ];
+                break;
+            }
+        }
+
+        useCopyStore.getState().actions.open(title, items);
+    };
+
+
+    export const CopyService = { open: open as any };
+  src/types/copy.types.ts: >-
+    import type { Transaction } from './transaction.types';
+
+    import type { ReviewFileItem, FileChange } from './file.types';
+
+
+    export interface CopyItem {
+        id: string;
+        key: string;
+        label: string;
+        getData: () => string;
+        isDefaultSelected?: boolean;
+    }
+
+
+    export type CopyContext = 'REVIEW' | 'TRANSACTION_DETAIL' |
+    'TRANSACTION_HISTORY' | 'DEBUG_REVIEW' | 'DEBUG_HISTORY';
+
+
+    export type ReviewTransactionInfo = Pick<Transaction, 'hash' | 'message' |
+    'prompt' | 'reasoning'>;
+
+
+    export type CopyContextData =
+        | { context: 'REVIEW'; txInfo: ReviewTransactionInfo; files: ReviewFileItem[]; selectedFile?: ReviewFileItem }
+        | { context: 'TRANSACTION_DETAIL'; transaction: Transaction; selectedFile?: FileChange }
+        | { context: 'TRANSACTION_HISTORY'; transactions: Transaction[] }
+        | { context: 'DEBUG_REVIEW'; txInfo: ReviewTransactionInfo; files: ReviewFileItem[]; selectedFile?: ReviewFileItem }
+        | { context: 'DEBUG_HISTORY'; transactions: Transaction[] };
+
+    export const COPYABLE_ITEMS = {
+        UUID: 'UUID',
+        MESSAGE: 'Git Message',
+        PROMPT: 'Prompt',
+        REASONING: 'Reasoning',
+        FILE_DIFF: 'Diff for',
+        ALL_DIFFS: 'All Diffs',
+        FULL_YAML: 'Full YAML representation',
+        // For multi-selection contexts
+        MESSAGES: 'Git Messages',
+        PROMPTS: 'Prompts',
+        REASONINGS: 'Reasonings',
+        DIFFS: 'Diffs',
+        UUIDS: 'UUIDs',
+    } as const;
+  src/hooks/useReviewScreen.tsx: |-
+    import { useMemo } from 'react';
+    import { useInput, useApp } from 'ink';
+    import { useReviewStore } from '../stores/review.store';
+    import { useAppStore } from '../stores/app.store';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { CopyService } from '../services/copy.service';
+
+    export const useReviewScreen = () => {
+        const { exit } = useApp();
+        const store = useReviewStore();
+        const { transactionId } = store;
+        const transaction = useTransactionStore(s => s.transactions.find(t => t.id === transactionId));
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const {
+            files, scripts, patchStatus,
+            selectedItemIndex, bodyView,
+        } = store;
+        const {
+            moveSelectionUp, moveSelectionDown, toggleFileApproval, expandDiff,
+            toggleBodyView, setBodyView,
+            startApplySimulation, rejectAllFiles, approve,
+            tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
+            scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+        } = store.actions;
+
+        const {
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useMemo(() => {
+            const approvedFiles = files.filter(f => f.status === 'APPROVED');
+            return {
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+                approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+                approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+            };
+        }, [files]);
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const { hash, message, prompt, reasoning } = transaction;
+            const { files, selectedItemIndex } = store;
+            const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+            CopyService.open('REVIEW', { txInfo: { hash, message, prompt, reasoning }, files, selectedFile });
+        };
+
+        useInput((input, key) => {
+            // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+            if (input === '1') {
+                startApplySimulation('success');
+                return;
+            }
+            if (input === '2') {
+                // The store's default is failure, but to re-trigger the processing screen
+                startApplySimulation('failure');
+                return;
+            }
+
+            if (input.toLowerCase() === 'q') exit();
+
+            // Handle Escape key - context-sensitive behavior
+            if (key.escape) {
+                if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
+                    toggleBodyView(bodyView); // Close modal
+                } else if (bodyView !== 'none') {
+                    setBodyView('none');
+                } else {
+                    showDashboardScreen();
+                }
+                return;
+            }
+
+            // Handoff Confirmation
+            if (bodyView === 'confirm_handoff') {
+                if (key.return) {
+                    confirmHandoff();
+                }
+                return;
+            }
+
+            // Bulk Repair Navigation
+            if (bodyView === 'bulk_repair') {
+                if (input >= '1' && input <= '4') {
+                    executeBulkRepairOption(parseInt(input));
+                }
+                return;
+            }
+
+            // Reasoning Scroll Navigation
+            if (bodyView === 'reasoning') {
+                if (key.upArrow) scrollReasoningUp();
+                if (key.downArrow) scrollReasoningDown();
+                if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+                return;
+            }
+
+            // Script Output Navigation
+            if (bodyView === 'script_output') {
+                if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+                if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+                if (key.return) toggleBodyView('script_output');
+                if (input.toLowerCase() === 'c') {
+                    // Copy script output
+                    const scriptIndex = selectedItemIndex - numFiles;
+                    const selectedScript = scripts[scriptIndex];
+                    if (selectedScript) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                    }
+                }
+                return;
+            }
+
+            // Diff View Navigation
+            if (bodyView === 'diff') {
+                if (input.toLowerCase() === 'x') expandDiff();
+                if (input.toLowerCase() === 'd') toggleBodyView('diff');
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status !== 'FAILED') {
+                        toggleFileApproval();
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleBodyView('diff');
+                }
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleBodyView('script_output');
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+
+            // Handle T for single repair and Shift+T for bulk repair
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = files.some(f => f.status === 'FAILED');
+                    if (hasFailedFiles) {
+                        showBulkRepair();
+                    }
+                } else {
+                    if (selectedItemIndex < numFiles) {
+                        const file = files[selectedItemIndex];
+                        if (file && file.status === 'FAILED') {
+                            tryRepairFile();
+                        }
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        return {
+            ...store,
+            transaction,
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        };
+    };
+  src/hooks/useTransactionDetailScreen.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { CopyService } from '../services/copy.service';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useMemo } from 'react';
+
+
+    export const useTransactionDetailScreen = () => {
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const store = useTransactionDetailStore();
+        const { bodyView } = store;
+
+        const transaction = useTransactionStore(s => s.transactions.find(tx => tx.id === store.transactionId));
+        const files = useMemo(() => transaction?.files || [], [transaction]);
+
+        const {
+            // Main nav
+            navigateUp, navigateDown, handleEnterOrRight, handleEscapeOrLeft,
+            toggleRevertConfirm,
+            // Revert modal nav
+            confirmRevert,
+        } = store.actions;
+
+        const openCopyMode = () => {
+            const { selectedFileIndex } = store;
+            if (!transaction) return;
+            const selectedFile = files[selectedFileIndex];
+            CopyService.open('TRANSACTION_DETAIL', { transaction, selectedFile });
+        };
+
+        useInput((input, key) => {
+            if (bodyView === 'REVERT_CONFIRM') {
+                if (key.escape) toggleRevertConfirm();
+                if (key.return) confirmRevert();
+                return;
+            }
+
+            // Main view input
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+            if (input.toLowerCase() === 'u') {
+                toggleRevertConfirm();
+            }
+
+            if (key.upArrow) navigateUp();
+            if (key.downArrow) navigateDown();
+            if (key.return || key.rightArrow) handleEnterOrRight();
+            if (key.escape || key.leftArrow) handleEscapeOrLeft();
+        });
+
+        return {
+            transaction,
+            files,
+            ...store,
+            actions: {
+                ...store.actions,
+                showDashboardScreen,
+            },
+        };
+    };
+  src/hooks/useTransactionHistoryScreen.tsx: >-
+    import { useState, useMemo, useEffect } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useTransactionHistoryStore, getVisibleItemPaths } from
+    '../stores/transaction-history.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useStdoutDimensions } from '../utils';
+
+    import { CopyService } from '../services/copy.service';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+
+    export const useTransactionHistoryScreen = () => {
+        const [, rows] = useStdoutDimensions();
+        const store = useTransactionHistoryStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const transactions = useTransactionStore(s => s.transactions);
+
+        const [viewOffset, setViewOffset] = useState(0);
+
+        const visibleItemPaths = useMemo(
+            () => getVisibleItemPaths(store.transactions, store.expandedIds),
+            [store.transactions, store.expandedIds],
+        );
+        const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
+
+        const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+        const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
+
+        useEffect(() => {
+            if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+                setViewOffset(selectedIndex);
+            } else if (selectedIndex >= viewOffset + viewportHeight) {
+                setViewOffset(selectedIndex - viewportHeight + 1);
+            }
+        }, [selectedIndex, viewOffset, viewportHeight]);
+
+        const openCopyMode = () => {
+            const { selectedForAction } = store;
+            const selectedTxs = store.transactions.filter(tx => selectedForAction.has(tx.id));
+
+            if (selectedTxs.length === 0) return;
+            CopyService.open('TRANSACTION_HISTORY', { transactions: selectedTxs });
+        };
+
+        useInput((input, key) => {
+            if (store.mode === 'FILTER') {
+                if (key.escape) store.actions.setMode('LIST');
+                if (key.return) store.actions.applyFilter();
+                return;
+            }
+            if (store.mode === 'BULK_ACTIONS') {
+                if (key.escape) store.actions.setMode('LIST');
+                // Add number handlers...
+                return;
+            }
+
+            // LIST mode inputs
+            if (key.upArrow) store.actions.navigateUp();
+            if (key.downArrow) store.actions.navigateDown();
+            if (key.rightArrow) store.actions.expandOrDrillDown();
+            if (key.leftArrow) store.actions.collapseOrBubbleUp();
+            if (input === ' ') store.actions.toggleSelection();
+
+            if (input.toLowerCase() === 'f') store.actions.setMode('FILTER');
+            if (input.toLowerCase() === 'c' && store.selectedForAction.size > 0) openCopyMode();
+            if (input.toLowerCase() === 'b' && store.selectedForAction.size > 0) store.actions.setMode('BULK_ACTIONS');
+            
+            if (key.escape || input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+        const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+        const transactionsInView = useMemo(
+            () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
+            [store.transactions, txIdsInView],
+        );
+        const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+        const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
+        const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
+        
+        return {
+            store,
+            viewOffset,
+            itemsInView,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus,
+            showingStatus,
+            visibleItemPaths,
+        };
+    };
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { COPYABLE_ITEMS } from '../types/copy.types';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { CopyService } from '../services/copy.service';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import type { MenuItem } from '../types/debug.types';
+
+    import { moveIndex } from '../stores/navigation.utils';
+
+    export type { MenuItem } from '../types/debug.types';
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('diff');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('reasoning');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        const { hash, message, prompt, reasoning, files, selectedItemIndex } = useReviewStore.getState();
+                        const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                        CopyService.open('DEBUG_REVIEW', { txInfo: { hash, message, prompt, reasoning }, files, selectedFile });
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('script_output');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.showBulkRepair();
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.executeBulkRepairOption(3); // Option 3 is Handoff
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    const { transactions, selectedForAction } = useTransactionHistoryStore.getState();
+                    const selectedTxs = transactions.filter(tx => selectedForAction.has(tx.id));
+                    appActions.showTransactionHistoryScreen();
+                    CopyService.open('DEBUG_HISTORY', { transactions: selectedTxs });
+                },
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+                return;
+            }
+            if (key.escape || (key.ctrl && input === 'b')) {
+                appActions.toggleDebugMenu();
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 69

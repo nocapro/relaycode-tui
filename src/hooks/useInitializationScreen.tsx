@@ -20,9 +20,7 @@ export const useInitializationScreen = () => {
             }
         }
         if (phase === 'FINALIZE') {
-            if (input.toLowerCase() === 'q') {
-                exit();
-            } else if (input.toLowerCase() === 'w') {
+            if (input.toLowerCase() === 'w') {
                 showDashboardScreen();
             }
         }
