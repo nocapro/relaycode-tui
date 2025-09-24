@@ -2,7 +2,7 @@ import { useReviewStore, type ReviewFileItem } from '../stores/review.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
-import type { ApplyStep } from '../types/review.types';
+import type { ApplyStep, ApplyUpdate, ReviewBodyView } from '../types/review.types';
 
 const generateBulkRepairPrompt = (files: ReviewFileItem[]): string => {
     const failedFiles = files.filter(f => f.status === 'FAILED');
@@ -68,53 +68,50 @@ const performHandoff = (hash: string) => {
     useAppStore.getState().actions.showDashboardScreen();
 };
 
-const runApplySimulation = async (scenario: 'success' | 'failure') => {
-    const { actions } = useReviewStore.getState();
-    const { _updateApplyStep, _addApplySubstep } = actions;
-
+async function* runApplySimulation(scenario: 'success' | 'failure'): AsyncGenerator<ApplyUpdate> {
     if (scenario === 'success') {
-        _updateApplyStep('snapshot', 'active'); await sleep(100);
-        _updateApplyStep('snapshot', 'done', 0.1);
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done', duration: 0.1 } };
 
-        _updateApplyStep('memory', 'active'); await sleep(100);
-        _addApplySubstep('memory', { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' });
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' } } };
         await sleep(100);
-        _addApplySubstep('memory', { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' });
-        _updateApplyStep('memory', 'done', 0.3);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' } } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done', duration: 0.3 } };
 
-        _updateApplyStep('post-command', 'active'); await sleep(1300);
-        _addApplySubstep('post-command', { id: 's3', title: '`bun run test` ... Passed', status: 'done' });
-        _updateApplyStep('post-command', 'done', 2.3);
+        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'active' } }; await sleep(1300);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command', substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' } } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'done', duration: 2.3 } };
 
-        _updateApplyStep('linter', 'active'); await sleep(1200);
-        _addApplySubstep('linter', { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' });
-        _updateApplyStep('linter', 'done', 1.2);
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'active' } }; await sleep(1200);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'linter', substep: { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' } } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'done', duration: 1.2 } };
 
         await sleep(500);
 
     } else { // failure scenario
-        _updateApplyStep('snapshot', 'active'); await sleep(100);
-        _updateApplyStep('snapshot', 'done', 0.1);
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done', duration: 0.1 } };
 
-        _updateApplyStep('memory', 'active'); await sleep(100);
-        _addApplySubstep('memory', { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' });
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' } } };
         await sleep(100);
-        _addApplySubstep('memory', { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' });
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' } } };
         await sleep(100);
-        _addApplySubstep('memory', { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' });
-        _updateApplyStep('memory', 'done', 0.5);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' } } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done', duration: 0.5 } };
 
         await sleep(100);
-        _updateApplyStep('post-command', 'skipped', undefined, 'Skipped due to patch application failure');
+        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped due to patch application failure' } };
         await sleep(100);
-        _updateApplyStep('linter', 'skipped', undefined, 'Skipped due to patch application failure');
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to patch application failure' } };
 
         await sleep(500);
     }
-};
+}
 
-const loadTransactionForReview = (transactionId: string) => {
-    useReviewStore.getState().actions.load(transactionId);
+const loadTransactionForReview = (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => {
+    useReviewStore.getState().actions.load(transactionId, initialState);
 };
 
 const generateSingleFileRepairPrompt = (file: ReviewFileItem): string => {
@@ -136,51 +133,37 @@ ${file.diff || '// ... failed diff would be here ...'}
 Please provide a corrected patch that addresses the error.`;
 };
 
-const tryRepairFile = (file: ReviewFileItem, selectedIndex: number): void => {
+const tryRepairFile = (file: ReviewFileItem): ReviewFileItem => {
     const repairPrompt = generateSingleFileRepairPrompt(file);
     // In a real app: clipboardy.writeSync(repairPrompt)
     // eslint-disable-next-line no-console
     console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
 
-    // Mock: Update file status to show it's being repaired
-    useReviewStore.setState(state => {
-        const newFiles = [...state.files];
-        newFiles[selectedIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
-        return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
-    });
+    // Mock: return the updated file
+    return { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
 };
 
-const runBulkReapply = async (): Promise<void> => {
-    const { files } = useReviewStore.getState();
+const runBulkReapply = async (files: ReviewFileItem[]): Promise<ReviewFileItem[]> => {
     const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
     if (failedFileIds.size === 0) {
-        return;
+        return files;
     }
-
-    useReviewStore.setState(state => ({
-        files: state.files.map(file =>
-            failedFileIds.has(file.id)
-                ? { ...file, status: 'RE_APPLYING' as const }
-                : file,
-        ),
-    }));
 
     await sleep(1500); // Simulate re-apply
 
     // Mock a mixed result
     let first = true;
-    useReviewStore.setState(state => ({
-        files: state.files.map(file => {
-            if (failedFileIds.has(file.id)) {
-                if (first) {
-                    first = false;
-                    return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
-                }
-                return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
+    return files.map(file => {
+        if (failedFileIds.has(file.id)) {
+            if (first) {
+                first = false;
+                // The file coming in already has the 'RE_APPLYING' status from the store action
+                return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
             }
-            return file;
-        }),
-    }));
+            return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
+        }
+        return file;
+    });
 };
 
 export const ReviewService = {

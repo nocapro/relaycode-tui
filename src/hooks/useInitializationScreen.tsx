@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Text, useApp, useInput } from 'ink';
-import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from '../stores/init.store';
+import { useInitStore } from '../stores/init.store';
 import { useAppStore } from '../stores/app.store';
 import { InitService } from '../services/init.service';
 

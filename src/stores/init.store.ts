@@ -2,19 +2,6 @@ import { create } from 'zustand';
 import type { Task, TaskStatus, InitPhase, GitignoreChoice } from '../types/init.types';
 export type { Task } from '../types/init.types';
 
-// Initial State definitions from README
-export const initialAnalyzeTasks: Task[] = [
-    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
-    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
-    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
-];
-
-export const initialConfigureTasks: Task[] = [
-    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
-    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
-    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
-];
-
 // Store Interface
 interface InitState {
     phase: InitPhase;
@@ -26,6 +13,7 @@ interface InitState {
 
     actions: {
         setPhase: (_phase: InitPhase) => void;
+        setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
         updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
         setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
         updateConfigureTask: (_id: string, _status: TaskStatus) => void;
@@ -37,14 +25,18 @@ interface InitState {
 // Create the store
 export const useInitStore = create<InitState>((set) => ({
     phase: 'ANALYZE',
-    analyzeTasks: initialAnalyzeTasks,
+    analyzeTasks: [],
     projectId: null,
     gitignoreFound: null,
-    configureTasks: initialConfigureTasks,
+    configureTasks: [],
     interactiveChoice: null,
 
     actions: {
         setPhase: (phase) => set({ phase }),
+        setTasks: (analyzeTasks, configureTasks) => set({
+            analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
+            configureTasks: JSON.parse(JSON.stringify(configureTasks)),
+        }),
         updateAnalyzeTask: (id, status) => set(state => ({
             analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
         })),
@@ -55,10 +47,10 @@ export const useInitStore = create<InitState>((set) => ({
         setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
         resetInit: () => set({
             phase: 'ANALYZE',
-            analyzeTasks: JSON.parse(JSON.stringify(initialAnalyzeTasks)),
+            analyzeTasks: [],
             projectId: null,
             gitignoreFound: null,
-            configureTasks: JSON.parse(JSON.stringify(initialConfigureTasks)),
+            configureTasks: [],
             interactiveChoice: null,
         }),
     },

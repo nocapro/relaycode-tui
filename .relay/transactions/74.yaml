@@ -1,0 +1,354 @@
+uuid: 44ec783a-4ddc-4a34-be57-2e1144f85e49
+projectId: relaycode-tui
+createdAt: '2025-09-23T13:44:52.602Z'
+gitCommitMsg: >-
+  fix(debug): restore missing MenuItem type import
+
+  Restores the `MenuItem` type import in `useDebugMenu.tsx` that was erroneously
+  removed in a previous refactoring. This resolves a TypeScript compilation
+  error.
+
+  Additionally, removes a now-incorrect comment about type inference for the
+  `menuItems` constant.
+promptSummary: >-
+  The user provided a TypeScript compilation error indicating a missing type,
+  which I will now fix.
+reasoning:
+  - >-
+    Of course. It appears my previous refactoring was a bit too aggressive and
+    removed a necessary type import, leading to the TypeScript error. I will now
+    correct this oversight.
+  - '### **Reasoning for Correction**'
+  - >-
+    1.  **Restoring the Type Import:** I am re-introducing the line `import type
+    { MenuItem } from '../types/debug.types';` into
+    `src/hooks/useDebugMenu.tsx`. This import is required because the
+    `menuItems` constant is explicitly typed as `MenuItem[]`, and without the
+    import, the `MenuItem` type is not defined in the module's scope.
+  - >-
+    2.  **Removing Incorrect Comment:** I am also removing the erroneous comment
+    `// Note: The menuItems are defined with a type annotation, but TS infers
+    it.`. This comment was incorrect because the type was, in fact, being
+    explicitly annotated, not inferred. Removing it prevents future confusion.
+  - >-
+    This small patch will resolve the compilation error and restore the hook to
+    a correct state.
+  - '### **Code Implementation**'
+operations:
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >+
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -11,7 +11,7 @@
+       import { useTransactionHistoryStore } from '../stores/transaction-history.store';
+       import { ReviewService } from '../services/review.service';
+       import { useReviewStore } from '../stores/review.store';
+      -import { moveIndex } from '../stores/navigation.utils';
+
+      +import type { MenuItem } from '../types/debug.types';
+       import { useTransactionStore } from '../stores/transaction.store';
+       export type { MenuItem } from '../types/debug.types';
+       
+      @@ -24,8 +24,7 @@
+           const detailActions = useTransactionDetailStore(s => s.actions);
+           const historyActions = useTransactionHistoryStore(s => s.actions);
+       
+      -    // Note: The menuItems are defined with a type annotation, but TS
+      infers it.
+
+      -    const menuItems: MenuItem[] = [
+
+      +    const menuItems: MenuItem[] = [
+               {
+                   title: 'Splash Screen',
+                   action: () => appActions.showSplashScreen(),
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionDetailStore } from
+    '../stores/transaction-detail.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { COPYABLE_ITEMS } from '../types/copy.types';
+
+    import { CopyService } from '../services/copy.service';
+
+    import { useTransactionHistoryStore } from
+    '../stores/transaction-history.store';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { moveIndex } from '../stores/navigation.utils';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    export type { MenuItem } from '../types/debug.types';
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const appActions = useAppStore(s => s.actions);
+        const dashboardActions = useDashboardStore(s => s.actions);
+        const initActions = useInitStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const detailActions = useTransactionDetailStore(s => s.actions);
+        const historyActions = useTransactionHistoryStore(s => s.actions);
+
+        // Note: The menuItems are defined with a type annotation, but TS infers it.
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('diff');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('reasoning');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        const { transactionId, files, selectedItemIndex } = useReviewStore.getState();
+                        const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                        if (!tx) return;
+                        const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                        const items = CopyService.getCopyItemsForReview(tx, files, selectedFile);
+                        useCopyStore.getState().actions.open('Select data to copy from review:', items);
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.toggleBodyView('script_output');
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.showBulkRepair();
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    setTimeout(() => {
+                        useReviewStore.getState().actions.executeBulkRepairOption(3); // Option 3 is Handoff
+                    }, 100);
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    setTimeout(() => {
+                        const { transactions: allTxs, selectedForAction } = useTransactionHistoryStore.getState();
+                        const txsToCopy = allTxs.filter(tx => selectedForAction.has(tx.id));
+                        const items = CopyService.getCopyItemsForHistory(txsToCopy);
+                        useCopyStore.getState().actions.open(`Select data to copy from ${txsToCopy.length} transactions:`, items);
+                    }, 100);
+                },
+            },
+        ];
+
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+                return;
+            }
+            if (key.escape) {
+                appActions.toggleDebugMenu();
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 74

@@ -4,7 +4,6 @@ import type { FileChange } from '../types/file.types';
 import type { HistoryViewMode } from '../types/transaction-history.types';
 import { useTransactionStore } from './transaction.store';
 
-export type { Transaction as HistoryTransaction } from '../types/transaction.types';
 export type { FileChange } from '../types/file.types';
 
 // Omit 'actions' from state type for partial updates

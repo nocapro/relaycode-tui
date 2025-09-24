@@ -5,7 +5,7 @@ import { ReviewService } from '../services/review.service';
 import { useTransactionStore, type Transaction } from './transaction.store';
 import { moveIndex } from './navigation.utils';
 import type { ReviewFileItem } from '../types/file.types';
-import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from '../types/review.types';
+import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus, ApplyUpdate } from '../types/review.types';
 
 export type { ReviewFileItem } from '../types/file.types';
 export type { ScriptResult, ApplyStep } from '../types/review.types';
@@ -59,10 +59,10 @@ interface ReviewState {
         scrollReasoningUp: () => void;
         scrollReasoningDown: () => void;
         navigateScriptErrorUp: () => void;
-        navigateScriptErrorDown: () => void,
+        navigateScriptErrorDown: () => void;
 
         // "Private" actions for service layer
-        load: (transactionId: string) => void;
+        load: (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => void;
         _updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
         _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
     };
@@ -140,24 +140,41 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         },
         startApplySimulation: async (scenario: 'success' | 'failure') => {
             const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            const { _updateApplyStep, _addApplySubstep } = get().actions;
 
             set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
             showReviewProcessingScreen();
 
-            await ReviewService.runApplySimulation(scenario);
+            const simulationGenerator = ReviewService.runApplySimulation(scenario);
+            for await (const update of simulationGenerator) {
+                switch (update.type) {
+                    case 'UPDATE_STEP':
+                        _updateApplyStep(update.payload.id, update.payload.status, update.payload.duration, update.payload.details);
+                        break;
+                    case 'ADD_SUBSTEP':
+                        _addApplySubstep(update.payload.parentId, update.payload.substep);
+                        break;
+                }
+            }
 
             showReviewScreen();
         },
 
         // Repair Actions
         tryRepairFile: () => {
-            const { selectedItemIndex, files } = get();
-            if (selectedItemIndex < files.length) {
+            set(state => {
+                const { selectedItemIndex, files } = state;
+                if (selectedItemIndex >= files.length) return {};
+
                 const file = files[selectedItemIndex];
-                if (file && file.status === 'FAILED') {
-                    ReviewService.tryRepairFile(file, selectedItemIndex);
+                if (file?.status === 'FAILED') {
+                    const updatedFile = ReviewService.tryRepairFile(file);
+                    const newFiles = [...files];
+                    newFiles[selectedItemIndex] = updatedFile;
+                    return { files: newFiles };
                 }
-            }
+                return {};
+            });
         },
         showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
         executeBulkRepairOption: async (option: number) => {
@@ -167,8 +184,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 case 1: { // Generate & Copy Bulk Repair Prompt
                     const bulkPrompt = ReviewService.generateBulkRepairPrompt(files);
                     const failedFiles = files.filter(f => f.status === 'FAILED');
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files.`);
+                    console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} file(s).`); // eslint-disable-line no-console
                     // In a real app, this would use clipboardy.writeSync(bulkPrompt),
                     set({ bodyView: 'none' as const });
                     break;
@@ -176,7 +192,23 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
                 case 2: { // Attempt Bulk Re-apply
                     set({ bodyView: 'none' as const });
-                    await ReviewService.runBulkReapply();
+
+                    const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
+                    if (failedFileIds.size === 0) {
+                        break;
+                    }
+
+                    // Set intermediate state
+                    set(state => ({
+                        files: state.files.map(file =>
+                            failedFileIds.has(file.id)
+                                ? { ...file, status: 'RE_APPLYING' as const }
+                                : file
+                        ),
+                    }));
+
+                    const finalFiles = await ReviewService.runBulkReapply(get().files);
+                    set({ files: finalFiles });
                     break;
                 }
 
@@ -242,7 +274,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         }),
 
         // "Private" actions for service layer
-        load: (transactionId) => {
+        load: (transactionId, initialState) => {
             const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
             if (!transaction) return;
 
@@ -269,7 +301,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 files: reviewFiles,
                 scripts: transaction.scripts || [],
                 selectedItemIndex: 0,
-                bodyView: 'none' as const,
+                bodyView: initialState?.bodyView ?? 'none',
                 isDiffExpanded: false,
                 reasoningScrollIndex: 0,
                 scriptErrorIndex: 0,

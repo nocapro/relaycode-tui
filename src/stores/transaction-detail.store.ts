@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import { TransactionService } from '../services/transaction.service';
 import { useTransactionStore } from './transaction.store';
-import type { FileChange as FileDetail } from '../types/file.types';
-export type { FileChangeType } from '../types/file.types';
+import type { FileChangeType } from '../types/file.types';
 import type { NavigatorSection, DetailBodyView } from '../types/transaction-detail.types';
 
 interface TransactionDetailState {

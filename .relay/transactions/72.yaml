@@ -1,0 +1,1229 @@
+uuid: c2571252-9721-4f11-9a70-8e7c10b4279b
+projectId: relaycode-tui
+createdAt: '2025-09-23T13:37:11.461Z'
+gitCommitMsg: >-
+  refactor(services): Decouple services from direct store state mutation
+
+  This commit executes Part 4 of the master refactor plan, focusing on improving
+  the separation of concerns between the service layer and the state management
+  layer.
+
+  Key changes: - Moved static task definitions (`initialAnalyzeTasks`,
+  `initialConfigureTasks`) from `init.store.ts` to `init.service.ts`. The
+  service now owns the definition of the process it orchestrates. - Refactored
+  `ReviewService` methods (`tryRepairFile`, `runBulkReapply`) to be pure
+  business logic functions that return data instead of directly calling
+  `useReviewStore.setState`. - Updated actions in `review.store.ts` to call the
+  refactored service methods, receive the results, and then perform the state
+  mutations. This reinforces the store as the single source of truth for state
+  changes.
+promptSummary: >-
+  Execute part 4 of the master refactor plan to improve separation of concerns
+  between services and stores.
+reasoning:
+  - >-
+    This is part four of the master plan, focusing on refining the boundaries
+    between services and stores for better separation of concerns and data
+    ownership.
+  - '### Part 4.1: Refactor `init.store` and `init.service`'
+  - >-
+    First, I'll move the static task definitions for the initialization process
+    from `init.store.ts` to `init.service.ts`. The service orchestrates the
+    process, so it should own the definition of its steps. The store will be
+    updated to receive these tasks from the service.
+  - >-
+    I'll also remove the unused imports from `useInitializationScreen.tsx` that
+    this change introduced.
+  - '### Part 4.2: Refactor `review.service` and `review.store`'
+  - >-
+    Next, I'll decouple state management from the `ReviewService`. Service
+    methods like `tryRepairFile` and `runBulkReapply` will now return data
+    instead of directly calling `setState`. The corresponding store actions in
+    `review.store.ts` will be updated to call these service methods and then
+    perform the state mutation, ensuring all state changes happen within the
+    store.
+  - >-
+    This completes Part 4 of the refactoring. The service layer is now cleaner,
+    and the stores have strengthened their role as the sole mutators of state,
+    improving predictability and maintainability.
+  - '---'
+operations:
+  - type: write
+    path: src/stores/init.store.ts
+    content: >
+      --- src/stores/init.store.ts
+
+      +++ src/stores/init.store.ts
+
+      @@ -2,19 +2,6 @@
+       import type { Task, TaskStatus, InitPhase, GitignoreChoice } from '../types/init.types';
+       export type { Task } from '../types/init.types';
+       
+      -// Initial State definitions from README
+
+      -export const initialAnalyzeTasks: Task[] = [
+
+      -    { id: 'scan', title: 'Scanning project structure...', subtext:
+      'Finding package.json', status: 'pending' },
+
+      -    { id: 'project-id', title: 'Determining Project ID', status:
+      'pending' },
+
+      -    { id: 'gitignore', title: 'Checking for existing .gitignore', status:
+      'pending' },
+
+      -];
+
+      -
+
+      -export const initialConfigureTasks: Task[] = [
+
+      -    { id: 'config', title: 'Creating relay.config.json', subtext:
+      'Writing default configuration with Project ID', status: 'pending' },
+
+      -    { id: 'state-dir', title: 'Initializing .relay state directory',
+      status: 'pending' },
+
+      -    { id: 'prompt', title: 'Generating system prompt template', status:
+      'pending' },
+
+      -];
+
+      -
+       // Store Interface
+       interface InitState {
+           phase: InitPhase;
+      @@ -26,6 +13,7 @@
+       
+           actions: {
+               setPhase: (_phase: InitPhase) => void;
+      +        setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+               updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
+               setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
+               updateConfigureTask: (_id: string, _status: TaskStatus) => void;
+      @@ -36,25 +24,29 @@
+       
+       // Create the store
+       export const useInitStore = create<InitState>((set) => ({
+           phase: 'ANALYZE',
+      -    analyzeTasks: initialAnalyzeTasks,
+
+      +    analyzeTasks: [],
+           projectId: null,
+           gitignoreFound: null,
+      -    configureTasks: initialConfigureTasks,
+
+      +    configureTasks: [],
+           interactiveChoice: null,
+       
+           actions: {
+               setPhase: (phase) => set({ phase }),
+      +        setTasks: (analyzeTasks, configureTasks) => set({
+
+      +            analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
+
+      +            configureTasks: JSON.parse(JSON.stringify(configureTasks)),
+
+      +        }),
+               updateAnalyzeTask: (id, status) => set(state => ({
+                   analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+               })),
+               setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+               updateConfigureTask: (id, status) => set(state => ({
+                   configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+               })),
+               setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+               resetInit: () => set({
+                   phase: 'ANALYZE',
+      -            analyzeTasks:
+      JSON.parse(JSON.stringify(initialAnalyzeTasks)),
+
+      +            analyzeTasks: [],
+                   projectId: null,
+                   gitignoreFound: null,
+      -            configureTasks:
+      JSON.parse(JSON.stringify(initialConfigureTasks)),
+
+      +            configureTasks: [],
+                   interactiveChoice: null,
+               }),
+           },
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/init.service.ts
+    content: >+
+      --- src/services/init.service.ts
+
+      +++ src/services/init.service.ts
+
+      @@ -1,10 +1,24 @@
+
+      -import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+      '../stores/init.store';
+
+      +import { useInitStore } from '../stores/init.store';
+
+      +import type { Task } from '../types/init.types';
+       import { sleep } from '../utils';
+       
+      +const initialAnalyzeTasks: Task[] = [
+
+      +    { id: 'scan', title: 'Scanning project structure...', subtext:
+      'Finding package.json', status: 'pending' },
+
+      +    { id: 'project-id', title: 'Determining Project ID', status:
+      'pending' },
+
+      +    { id: 'gitignore', title: 'Checking for existing .gitignore', status:
+      'pending' },
+
+      +];
+
+      +
+
+      +const initialConfigureTasks: Task[] = [
+
+      +    { id: 'config', title: 'Creating relay.config.json', subtext:
+      'Writing default configuration with Project ID', status: 'pending' },
+
+      +    { id: 'state-dir', title: 'Initializing .relay state directory',
+      status: 'pending' },
+
+      +    { id: 'prompt', title: 'Generating system prompt template', status:
+      'pending' },
+
+      +];
+
+      +
+       const runInitializationProcess = async () => {
+           const { actions } = useInitStore.getState();
+           actions.resetInit();
+      +    actions.setTasks(initialAnalyzeTasks, initialConfigureTasks);
+       
+           actions.setPhase('ANALYZE');
+           for (const task of initialAnalyzeTasks) {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useInitializationScreen.tsx
+    content: >+
+      --- src/hooks/useInitializationScreen.tsx
+
+      +++ src/hooks/useInitializationScreen.tsx
+
+      @@ -1,6 +1,6 @@
+       import React, { useEffect } from 'react';
+       import { Text, useApp, useInput } from 'ink';
+      -import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+      '../stores/init.store';
+
+      +import { useInitStore } from '../stores/init.store';
+       import { useAppStore } from '../stores/app.store';
+       import { InitService } from '../services/init.service';
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/review.service.ts
+    content: >+
+      --- src/services/review.service.ts
+
+      +++ src/services/review.service.ts
+
+      @@ -107,49 +107,38 @@
+       Please provide a corrected patch that addresses the error.`;
+       };
+       
+      -const tryRepairFile = (file: ReviewFileItem, selectedIndex: number): void
+      => {
+
+      +const tryRepairFile = (file: ReviewFileItem): ReviewFileItem => {
+           const repairPrompt = generateSingleFileRepairPrompt(file);
+           // In a real app: clipboardy.writeSync(repairPrompt)
+           // eslint-disable-next-line no-console
+           console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+       
+      -    // Mock: Update file status to show it's being repaired
+
+      -    useReviewStore.setState(state => {
+
+      -        const newFiles = [...state.files];
+
+      -        newFiles[selectedIndex] = { ...file, status: 'APPROVED' as const,
+      error: undefined, linesAdded: 5, linesRemoved: 2 };
+
+      -        return { files: newFiles, copyModeLastCopied: 'Repair prompt
+      copied to clipboard' };
+
+      -    });
+
+      +    // Mock: return the updated file
+
+      +    return { ...file, status: 'APPROVED' as const, error: undefined,
+      linesAdded: 5, linesRemoved: 2 };
+       };
+       
+      -const runBulkReapply = async (): Promise<void> => {
+
+      -    const { files } = useReviewStore.getState();
+
+      +const runBulkReapply = async (files: ReviewFileItem[]):
+      Promise<ReviewFileItem[]> => {
+           const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
+           if (failedFileIds.size === 0) {
+      -        return;
+
+      +        return files;
+           }
+      -
+
+      -    useReviewStore.setState(state => ({
+
+      -        files: state.files.map(file =>
+
+      -            failedFileIds.has(file.id)
+
+      -                ? { ...file, status: 'RE_APPLYING' as const }
+
+      -                : file,
+
+      -        ),
+
+      -    }));
+       
+           await sleep(1500); // Simulate re-apply
+       
+           // Mock a mixed result
+           let first = true;
+      -    useReviewStore.setState(state => ({
+
+      -        files: state.files.map(file => {
+
+      -            if (failedFileIds.has(file.id)) {
+
+      -                if (first) {
+
+      -                    first = false;
+
+      -                    return { ...file, status: 'APPROVED' as const,
+      strategy: 'replace' as const, error: undefined, linesAdded: 9,
+      linesRemoved: 2 };
+
+      -                }
+
+      -                return { ...file, status: 'FAILED' as const, error:
+      "'replace' failed: markers not found" };
+
+      +    return files.map(file => {
+
+      +        if (failedFileIds.has(file.id)) {
+
+      +            if (first) {
+
+      +                first = false;
+
+      +                // The file coming in already has the 'RE_APPLYING'
+      status from the store action
+
+      +                return { ...file, status: 'APPROVED' as const, strategy:
+      'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
+                   }
+      -            return file;
+
+      -        }),
+
+      -    }));
+
+      +            return { ...file, status: 'FAILED' as const, error:
+      "'replace' failed: markers not found" };
+
+      +        }
+
+      +        return file;
+
+      +    });
+       };
+       
+       export const ReviewService = {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/review.store.ts
+    content: >+
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ -121,14 +121,18 @@
+       
+               // Repair Actions
+               tryRepairFile: () => {
+      -            const { selectedItemIndex, files } = get();
+
+      -            if (selectedItemIndex < files.length) {
+
+      -                const file = files[selectedItemIndex];
+
+      -                if (file && file.status === 'FAILED') {
+
+      -                    ReviewService.tryRepairFile(file, selectedItemIndex);
+
+      -                }
+
+      -            }
+
+      +            set(state => {
+
+      +                const { selectedItemIndex, files } = state;
+
+      +                if (selectedItemIndex >= files.length) return {};
+
+      +
+
+      +                const file = files[selectedItemIndex];
+
+      +                if (file?.status === 'FAILED') {
+
+      +                    const updatedFile =
+      ReviewService.tryRepairFile(file);
+
+      +                    const newFiles = [...files];
+
+      +                    newFiles[selectedItemIndex] = updatedFile;
+
+      +                    return { files: newFiles };
+
+      +                }
+
+      +                return {};
+
+      +            });
+               },
+               showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+               executeBulkRepairOption: async (option: number) => {
+      @@ -147,8 +151,25 @@
+       
+                       case 2: { // Attempt Bulk Re-apply
+                           set({ bodyView: 'none' as const });
+      -                    await ReviewService.runBulkReapply();
+
+      +
+
+      +                    const failedFileIds = new Set(files.filter(f =>
+      f.status === 'FAILED').map(f => f.id));
+
+      +                    if (failedFileIds.size === 0) {
+
+      +                        break;
+
+      +                    }
+
+      +
+
+      +                    // Set intermediate state
+
+      +                    set(state => ({
+
+      +                        files: state.files.map(file =>
+
+      +                            failedFileIds.has(file.id)
+
+      +                                ? { ...file, status: 'RE_APPLYING' as
+      const }
+
+      +                                : file
+
+      +                        ),
+
+      +                    }));
+
+      +
+
+      +                    const finalFiles = await
+      ReviewService.runBulkReapply(get().files);
+
+      +                    set({ files: finalFiles });
+                           break;
+                       }
+       
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/init.store.ts: >-
+    import { create } from 'zustand';
+
+    import type { Task, TaskStatus, InitPhase, GitignoreChoice } from
+    '../types/init.types';
+
+    export type { Task } from '../types/init.types';
+
+
+    // Initial State definitions from README
+
+    export const initialAnalyzeTasks: Task[] = [
+        { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
+        { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
+        { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
+    ];
+
+
+    export const initialConfigureTasks: Task[] = [
+        { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
+        { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
+        { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
+    ];
+
+
+    // Store Interface
+
+    interface InitState {
+        phase: InitPhase;
+        analyzeTasks: Task[];
+        projectId: string | null;
+        gitignoreFound: boolean | null;
+        configureTasks: Task[];
+        interactiveChoice: GitignoreChoice | null;
+
+        actions: {
+            setPhase: (_phase: InitPhase) => void;
+            updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
+            setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
+            updateConfigureTask: (_id: string, _status: TaskStatus) => void;
+            setInteractiveChoice: (_choice: GitignoreChoice) => void;
+            resetInit: () => void;
+        };
+    }
+
+
+    // Create the store
+
+    export const useInitStore = create<InitState>((set) => ({
+        phase: 'ANALYZE',
+        analyzeTasks: initialAnalyzeTasks,
+        projectId: null,
+        gitignoreFound: null,
+        configureTasks: initialConfigureTasks,
+        interactiveChoice: null,
+
+        actions: {
+            setPhase: (phase) => set({ phase }),
+            updateAnalyzeTask: (id, status) => set(state => ({
+                analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+            updateConfigureTask: (id, status) => set(state => ({
+                configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+            resetInit: () => set({
+                phase: 'ANALYZE',
+                analyzeTasks: JSON.parse(JSON.stringify(initialAnalyzeTasks)),
+                projectId: null,
+                gitignoreFound: null,
+                configureTasks: JSON.parse(JSON.stringify(initialConfigureTasks)),
+                interactiveChoice: null,
+            }),
+        },
+    }));
+  src/services/init.service.ts: >-
+    import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+    '../stores/init.store';
+
+    import { sleep } from '../utils';
+
+
+    const runInitializationProcess = async () => {
+        const { actions } = useInitStore.getState();
+        actions.resetInit();
+
+        actions.setPhase('ANALYZE');
+        for (const task of initialAnalyzeTasks) {
+            actions.updateAnalyzeTask(task.id, 'active');
+            await sleep(800);
+            actions.updateAnalyzeTask(task.id, 'done');
+        }
+        actions.setAnalysisResults('relaycode (from package.json)', true);
+        await sleep(500);
+
+        actions.setPhase('CONFIGURE');
+        const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+        for (const task of configTasksUntilInteractive) {
+            actions.updateConfigureTask(task.id, 'active');
+            await sleep(800);
+            actions.updateConfigureTask(task.id, 'done');
+        }
+        await sleep(500);
+
+        actions.setPhase('INTERACTIVE');
+    };
+
+
+    const resumeInitializationProcess = async () => {
+        const { actions } = useInitStore.getState();
+        
+        actions.setPhase('CONFIGURE');
+        const lastTask = initialConfigureTasks[2];
+        if (lastTask) {
+            actions.updateConfigureTask(lastTask.id, 'active');
+            await sleep(800);
+            actions.updateConfigureTask(lastTask.id, 'done');
+            await sleep(500);
+
+            actions.setPhase('FINALIZE');
+        }
+    };
+
+
+    export const InitService = {
+        runInitializationProcess,
+        resumeInitializationProcess,
+    };
+  src/hooks/useInitializationScreen.tsx: >-
+    import React, { useEffect } from 'react';
+
+    import { Text, useApp, useInput } from 'ink';
+
+    import { useInitStore, initialAnalyzeTasks, initialConfigureTasks } from
+    '../stores/init.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { InitService } from '../services/init.service';
+
+
+    export const useInitializationScreen = () => {
+        const phase = useInitStore(s => s.phase);
+        const interactiveChoice = useInitStore(s => s.interactiveChoice);
+        const actions = useInitStore(s => s.actions);
+        const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+        const { exit } = useApp();
+
+        useInput((input, key) => {
+            if (phase === 'INTERACTIVE') {
+                if (key.return) {
+                    actions.setInteractiveChoice('ignore');
+                } else if (input.toLowerCase() === 's') {
+                    actions.setInteractiveChoice('share');
+                }
+            }
+            if (phase === 'FINALIZE') {
+                if (input.toLowerCase() === 'w') {
+                    showDashboardScreen();
+                }
+            }
+        });
+
+        useEffect(() => {
+            InitService.runInitializationProcess();
+        }, []);
+
+        useEffect(() => {
+            if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+                InitService.resumeInitializationProcess();
+            }
+        }, [interactiveChoice, phase]);
+
+        const {
+            analyzeTasks,
+            configureTasks,
+            projectId,
+        } = useInitStore();
+
+        let footerText;
+        switch (phase) {
+            case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+            case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+            case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+            case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+        }
+
+        return {
+            phase,
+            analyzeTasks,
+            configureTasks,
+            interactiveChoice,
+            projectId,
+            footerText,
+        };
+    };
+  src/services/review.service.ts: >-
+    import { useReviewStore, type ReviewFileItem } from
+    '../stores/review.store';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { sleep } from '../utils';
+
+    import type { ApplyStep } from '../types/review.types';
+
+
+    const generateBulkRepairPrompt = (files: ReviewFileItem[]): string => {
+        const failedFiles = files.filter(f => f.status === 'FAILED');
+        return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+
+    IMPORTANT: The response MUST contain a complete code block for EACH file
+    that needs to be fixed.
+
+
+    ${failedFiles.map(file => `--- FILE: ${file.path} ---
+
+    Strategy: ${file.strategy}
+
+    Error: ${file.error}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original content of ${file.path} ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff ...'}
+
+    ---
+
+    `).join('\n')}
+
+
+    Please analyze all failed files and provide a complete, corrected
+    response.`;
+
+    };
+
+
+    const generateHandoffPrompt = (
+        hash: string,
+        message: string,
+        reasoning: string,
+        files: ReviewFileItem[],
+    ): string => {
+        const successfulFiles = files.filter(f => f.status === 'APPROVED');
+        const failedFiles = files.filter(f => f.status === 'FAILED');
+
+        return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
+
+    The full plan for this transaction is detailed in the YAML file located at:
+    .relay/transactions/${hash}.yml. Please use this file as your primary source
+    of truth for the overall goal.
+
+
+    Here is the current status of the transaction:
+
+
+    --- TRANSACTION SUMMARY ---
+
+    Goal: ${message}
+
+    Reasoning:
+
+    ${reasoning}
+
+
+    --- CURRENT FILE STATUS ---
+
+    SUCCESSFUL CHANGES (already applied, no action needed):
+
+    ${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || ' 
+    (None)'}
+
+
+    FAILED CHANGES (these are the files you need to fix):
+
+    ${failedFiles.map(f => `- FAILED: ${f.path} (Error:
+    ${f.error})`).join('\n')}
+
+
+    Your job is to now work with me to fix the FAILED files and achieve the
+    original goal of the transaction. Please start by asking me which file you
+    should work on first.`;
+
+    };
+
+
+    const performHandoff = (hash: string) => {
+        // This is a bit of a hack to find the right transaction to update in the demo
+        const txToUpdate = useTransactionStore.getState().transactions.find(tx => tx.hash === hash);
+        if (txToUpdate) {
+            useTransactionStore.getState().actions.updateTransactionStatus(txToUpdate.id, 'HANDOFF');
+        }
+
+        useAppStore.getState().actions.showDashboardScreen();
+    };
+
+
+    const runApplySimulation = async (scenario: 'success' | 'failure') => {
+        const { actions } = useReviewStore.getState();
+        const { _updateApplyStep, _addApplySubstep } = actions;
+
+        if (scenario === 'success') {
+            _updateApplyStep('snapshot', 'active'); await sleep(100);
+            _updateApplyStep('snapshot', 'done', 0.1);
+
+            _updateApplyStep('memory', 'active'); await sleep(100);
+            _addApplySubstep('memory', { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' });
+            await sleep(100);
+            _addApplySubstep('memory', { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' });
+            _updateApplyStep('memory', 'done', 0.3);
+
+            _updateApplyStep('post-command', 'active'); await sleep(1300);
+            _addApplySubstep('post-command', { id: 's3', title: '`bun run test` ... Passed', status: 'done' });
+            _updateApplyStep('post-command', 'done', 2.3);
+
+            _updateApplyStep('linter', 'active'); await sleep(1200);
+            _addApplySubstep('linter', { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' });
+            _updateApplyStep('linter', 'done', 1.2);
+
+            await sleep(500);
+
+        } else { // failure scenario
+            _updateApplyStep('snapshot', 'active'); await sleep(100);
+            _updateApplyStep('snapshot', 'done', 0.1);
+
+            _updateApplyStep('memory', 'active'); await sleep(100);
+            _addApplySubstep('memory', { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' });
+            await sleep(100);
+            _addApplySubstep('memory', { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' });
+            await sleep(100);
+            _addApplySubstep('memory', { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' });
+            _updateApplyStep('memory', 'done', 0.5);
+
+            await sleep(100);
+            _updateApplyStep('post-command', 'skipped', undefined, 'Skipped due to patch application failure');
+            await sleep(100);
+            _updateApplyStep('linter', 'skipped', undefined, 'Skipped due to patch application failure');
+
+            await sleep(500);
+        }
+    };
+
+
+    const loadTransactionForReview = (transactionId: string) => {
+        useReviewStore.getState().actions.load(transactionId);
+    };
+
+
+    const generateSingleFileRepairPrompt = (file: ReviewFileItem): string => {
+        return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+
+    Error: ${file.error}
+
+    Strategy: ${file.strategy}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original file content would be here ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff would be here ...'}
+
+    ---
+
+
+    Please provide a corrected patch that addresses the error.`;
+
+    };
+
+
+    const tryRepairFile = (file: ReviewFileItem, selectedIndex: number): void =>
+    {
+        const repairPrompt = generateSingleFileRepairPrompt(file);
+        // In a real app: clipboardy.writeSync(repairPrompt)
+        // eslint-disable-next-line no-console
+        console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+
+        // Mock: Update file status to show it's being repaired
+        useReviewStore.setState(state => {
+            const newFiles = [...state.files];
+            newFiles[selectedIndex] = { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
+            return { files: newFiles, copyModeLastCopied: 'Repair prompt copied to clipboard' };
+        });
+    };
+
+
+    const runBulkReapply = async (): Promise<void> => {
+        const { files } = useReviewStore.getState();
+        const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
+        if (failedFileIds.size === 0) {
+            return;
+        }
+
+        useReviewStore.setState(state => ({
+            files: state.files.map(file =>
+                failedFileIds.has(file.id)
+                    ? { ...file, status: 'RE_APPLYING' as const }
+                    : file,
+            ),
+        }));
+
+        await sleep(1500); // Simulate re-apply
+
+        // Mock a mixed result
+        let first = true;
+        useReviewStore.setState(state => ({
+            files: state.files.map(file => {
+                if (failedFileIds.has(file.id)) {
+                    if (first) {
+                        first = false;
+                        return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
+                    }
+                    return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
+                }
+                return file;
+            }),
+        }));
+    };
+
+
+    export const ReviewService = {
+        loadTransactionForReview,
+        generateBulkRepairPrompt,
+        generateHandoffPrompt,
+        performHandoff,
+        runApplySimulation,
+        generateSingleFileRepairPrompt,
+        tryRepairFile,
+        runBulkReapply,
+    };
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { sleep } from '../utils';
+
+    import { useAppStore } from './app.store';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { useTransactionStore, type Transaction } from './transaction.store';
+
+    import { moveIndex } from './navigation.utils';
+
+    import type { ReviewFileItem } from '../types/file.types';
+
+    import type { ScriptResult, ApplyStep, ReviewBodyView, PatchStatus } from
+    '../types/review.types';
+
+
+    export type { ReviewFileItem } from '../types/file.types';
+
+    export type { ScriptResult, ApplyStep } from '../types/review.types';
+
+
+    export const initialApplySteps: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+
+    interface ReviewState {
+        // Transaction Info
+        transactionId: string | null;
+        patchStatus: PatchStatus;
+
+        // File & Script Info
+        files: ReviewFileItem[];
+        scripts: ScriptResult[];
+
+        // UI State
+        applySteps: ApplyStep[];
+        selectedItemIndex: number; // Can be file or script
+        bodyView: ReviewBodyView;
+        isDiffExpanded: boolean;
+
+        // Reasoning Scroll State
+        reasoningScrollIndex: number;
+
+        // Script Navigation State
+        scriptErrorIndex: number;
+
+        actions: {
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            toggleFileApproval: () => void;
+            rejectAllFiles: () => void;
+            expandDiff: () => void;
+            toggleBodyView: (view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            startApplySimulation: (scenario: 'success' | 'failure') => void;
+
+            // Repair Actions
+            tryRepairFile: () => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+
+            // Navigation Actions
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void,
+
+            // "Private" actions for service layer
+            load: (transactionId: string) => void;
+            _updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+            _addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+        };
+    }
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        // Transaction Info
+        transactionId: null,
+        patchStatus: 'SUCCESS', // This will be set on load
+
+        // File & Script Info
+        files: [],
+        scripts: [],
+
+        // UI State
+        applySteps: initialApplySteps,
+        selectedItemIndex: 0,
+        bodyView: 'none' as const,
+        isDiffExpanded: false,
+
+        // Reasoning Scroll State
+        reasoningScrollIndex: 0,
+
+        // Script Navigation State
+        scriptErrorIndex: 0,
+
+        actions: {
+            moveSelectionUp: () => set(state => ({
+                selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', state.files.length + state.scripts.length),
+            })),
+            moveSelectionDown: () => set(state => ({
+                selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', state.files.length + state.scripts.length),
+            })),
+            toggleFileApproval: () => set(state => {
+                const { selectedItemIndex, files } = state;
+                if (selectedItemIndex >= files.length) return {}; // Not a file
+
+                const newFiles = [...files];
+                const file = newFiles[selectedItemIndex];
+                if (file) {
+                    if (file.status === 'APPROVED') {
+                        file.status = 'REJECTED';
+                    } else if (file.status === 'REJECTED') {
+                        file.status = 'APPROVED';
+                    }
+                }
+                return { files: newFiles };
+            }),
+            rejectAllFiles: () => set(state => {
+                const newFiles = state.files.map(file => {
+                    if (file.status === 'APPROVED') {
+                        return { ...file, status: 'REJECTED' as const };
+                    }
+                    return file;
+                });
+                return { files: newFiles };
+            }),
+            toggleBodyView: (view) => set(state => {
+                if (view === 'diff' && state.selectedItemIndex >= state.files.length) return {}; // Can't show diff for scripts
+                return {
+                    bodyView: state.bodyView === view ? 'none' : view,
+                    isDiffExpanded: false, // Always start collapsed
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => {
+                const { transactionId } = get();
+                if (transactionId) {
+                    // Update transaction status to COMMITTED
+                    useTransactionStore.getState().actions.updateTransactionStatus(transactionId, 'COMMITTED');
+                    // Navigate back to dashboard
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            startApplySimulation: async (scenario: 'success' | 'failure') => {
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+
+                set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
+                showReviewProcessingScreen();
+
+                await ReviewService.runApplySimulation(scenario);
+
+                showReviewScreen();
+            },
+
+            // Repair Actions
+            tryRepairFile: () => {
+                const { selectedItemIndex, files } = get();
+                if (selectedItemIndex < files.length) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.status === 'FAILED') {
+                        ReviewService.tryRepairFile(file, selectedItemIndex);
+                    }
+                }
+            },
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option: number) => {
+                const { files } = get();
+
+                switch (option) {
+                    case 1: { // Generate & Copy Bulk Repair Prompt
+                        const bulkPrompt = ReviewService.generateBulkRepairPrompt(files);
+                        const failedFiles = files.filter(f => f.status === 'FAILED');
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied bulk repair prompt for ${failedFiles.length} files.`);
+                        // In a real app, this would use clipboardy.writeSync(bulkPrompt),
+                        set({ bodyView: 'none' as const });
+                        break;
+                    }
+
+                    case 2: { // Attempt Bulk Re-apply
+                        set({ bodyView: 'none' as const });
+                        await ReviewService.runBulkReapply();
+                        break;
+                    }
+
+                    case 3: { // Handoff to Human
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    }
+
+                    case 4: { // Reject All Failed
+                        set(state => ({
+                            files: state.files.map(file =>
+                                file.status === 'FAILED'
+                                    ? { ...file, status: 'REJECTED' as const }
+                                    : file,
+                            ),
+                            bodyView: 'none' as const,
+                        }));
+                        break;
+                    }
+
+                    default: // Close modal
+                        set({ bodyView: 'none' as const });
+                }
+            },
+            confirmHandoff: () => {
+                const { transactionId, files } = get();
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+
+                const handoffPrompt = ReviewService.generateHandoffPrompt(transaction.hash, transaction.message, transaction.reasoning || '', files);
+
+                // eslint-disable-next-line no-console
+                console.log('[CLIPBOARD] Copied Handoff Prompt.'); // In real app: clipboardy.writeSync(handoffPrompt)
+                ReviewService.performHandoff(transaction.hash);
+            },
+
+            // Navigation Actions
+            scrollReasoningUp: () => set(state => ({
+                reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1),
+            })),
+            scrollReasoningDown: () => set(state => {
+                const { transactionId } = state;
+                if (!transactionId) return {};
+
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction?.reasoning) return {};
+
+                const maxLines = transaction.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({
+                scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1),
+            })),
+            navigateScriptErrorDown: () => set(state => {
+                const selectedScript = state.scripts[state.selectedItemIndex - state.files.length];
+                if (selectedScript && selectedScript.output) {
+                    const errorLines = selectedScript.output.split('\n').filter(line =>
+                        line.includes('Error') || line.includes('Warning'),
+                    );
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+
+            // "Private" actions for service layer
+            load: (transactionId) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+
+                // This simulates the backend determining which files failed or succeeded.
+                // For this demo, tx '1' is the failure case, any other is success.
+                const isFailureCase = transaction.id === '1';
+                const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+
+                const reviewFiles: ReviewFileItem[] = (transaction.files || []).map((file, index) => {
+                    if (isFailureCase) {
+                        return {
+                            ...file,
+                            status: index === 0 ? 'APPROVED' : 'FAILED',
+                            error: index > 0 ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined,
+                            strategy: file.strategy || 'standard-diff',
+                        };
+                    }
+                    return { ...file, status: 'APPROVED', strategy: file.strategy || 'standard-diff' };
+                });
+
+                set({
+                    transactionId: transaction.id,
+                    patchStatus,
+                    files: reviewFiles,
+                    scripts: transaction.scripts || [],
+                    selectedItemIndex: 0,
+                    bodyView: 'none' as const,
+                    isDiffExpanded: false,
+                    reasoningScrollIndex: 0,
+                    scriptErrorIndex: 0,
+                    applySteps: JSON.parse(JSON.stringify(initialApplySteps)), // Reset apply steps
+                });
+            },
+            _updateApplyStep: (id, status, duration, details) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep = { ...s, status };
+                            if (duration !== undefined) newStep.duration = duration;
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            _addApplySubstep: (parentId, substep) => {
+                 set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 72

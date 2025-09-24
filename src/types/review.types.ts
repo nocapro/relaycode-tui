@@ -17,3 +17,7 @@ export interface ApplyStep {
 
 export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff' | 'none';
 export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+
+export type ApplyUpdate =
+    | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+    | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };

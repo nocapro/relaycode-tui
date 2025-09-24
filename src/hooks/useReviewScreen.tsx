@@ -4,7 +4,7 @@ import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useCopyStore, type CopyItem } from '../stores/copy.store';
-import { COPYABLE_ITEMS } from '../types/copy.types';
+import { CopyService } from '../services/copy.service';
 
 export const useReviewScreen = () => {
     const { exit } = useApp();
@@ -41,19 +41,9 @@ export const useReviewScreen = () => {
 
     const openCopyMode = () => {
         if (!transaction) return;
-        const { files: reviewFiles, selectedItemIndex } = store;
-        const selectedFile = selectedItemIndex < reviewFiles.length ? reviewFiles[selectedItemIndex] : undefined;
-
         const title = 'Select data to copy from review:';
-        const items: CopyItem[] = [
-            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
-            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
-            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
-            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
-            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
-            { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => reviewFiles.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
-        ];
-
+        const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+        const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
         useCopyStore.getState().actions.open(title, items);
     };
 

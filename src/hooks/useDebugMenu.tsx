@@ -7,12 +7,13 @@ import { useCommitStore } from '../stores/commit.store';
 import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import { COPYABLE_ITEMS } from '../types/copy.types';
+import { CopyService } from '../services/copy.service';
 import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import { ReviewService } from '../services/review.service';
 import { useReviewStore } from '../stores/review.store';
 import type { MenuItem } from '../types/debug.types';
-import { moveIndex } from '../stores/navigation.utils';
 import { useTransactionStore } from '../stores/transaction.store';
+import { moveIndex } from '../stores/navigation.utils';
 export type { MenuItem } from '../types/debug.types';
 
 export const useDebugMenu = () => {
@@ -89,20 +90,15 @@ export const useDebugMenu = () => {
             title: 'Review: Diff View',
             action: () => {
                 ReviewService.loadTransactionForReview('1');
+                useReviewStore.getState().actions.setBodyView('diff');
                 appActions.showReviewScreen();
-                setTimeout(() => {
-                    useReviewStore.getState().actions.toggleBodyView('diff');
-                }, 100);
             },
         },
         {
             title: 'Review: Reasoning View',
             action: () => {
-                ReviewService.loadTransactionForReview('1');
+                ReviewService.loadTransactionForReview('1', { bodyView: 'reasoning' });
                 appActions.showReviewScreen();
-                setTimeout(() => {
-                    useReviewStore.getState().actions.toggleBodyView('reasoning');
-                }, 100);
             },
         },
         {
@@ -110,24 +106,12 @@ export const useDebugMenu = () => {
             action: () => {
                 ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
-                setTimeout(() => {
-                    const { transactionId, files, selectedItemIndex } = useReviewStore.getState();
-                    const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-                    if (!transaction) return;
-
-                    const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
-
-                    const title = 'Select data to copy from review:';
-                    const items = [
-                        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
-                        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
-                        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
-                        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
-                        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
-                        { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
-                    ];
-                    useCopyStore.getState().actions.open(title, items);
-                }, 100);
+                const { transactionId, files, selectedItemIndex } = useReviewStore.getState();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx) return;
+                const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+                const items = CopyService.getCopyItemsForReview(tx, files, selectedFile);
+                useCopyStore.getState().actions.open('Select data to copy from review:', items);
             },
         },
         {
@@ -135,29 +119,21 @@ export const useDebugMenu = () => {
             action: () => {
                 ReviewService.loadTransactionForReview('2');
                 appActions.showReviewScreen();
-                setTimeout(() => {
-                    useReviewStore.getState().actions.toggleBodyView('script_output');
-                }, 100);
+                useReviewStore.getState().actions.setBodyView('script_output');
             },
         },
         {
             title: 'Review: Bulk Repair',
             action: () => {
-                ReviewService.loadTransactionForReview('1');
+                ReviewService.loadTransactionForReview('1', { bodyView: 'bulk_repair' });
                 appActions.showReviewScreen();
-                setTimeout(() => {
-                    useReviewStore.getState().actions.showBulkRepair();
-                }, 100);
             },
         },
         {
             title: 'Review: Handoff Confirm',
             action: () => {
-                ReviewService.loadTransactionForReview('1');
+                ReviewService.loadTransactionForReview('1', { bodyView: 'confirm_handoff' });
                 appActions.showReviewScreen();
-                setTimeout(() => {
-                    useReviewStore.getState().actions.executeBulkRepairOption(3); // Option 3 is Handoff
-                }, 100);
             },
         },
         {
@@ -212,20 +188,10 @@ export const useDebugMenu = () => {
             action: () => {
                 historyActions.prepareDebugState('copy');
                 appActions.showTransactionHistoryScreen();
-                setTimeout(() => {
-                    const { transactions: allTxs, selectedForAction } = useTransactionHistoryStore.getState();
-                    const transactions = allTxs.filter(tx => selectedForAction.has(tx.id));
-                    const title = `Select data to copy from ${transactions.length} transactions:`;
-                    const items = [
-                        { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
-                        { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
-                        { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
-                        { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
-                        { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
-                        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
-                    ];
-                    useCopyStore.getState().actions.open(title, items);
-                }, 100);
+                const { transactions: allTxs, selectedForAction } = useTransactionHistoryStore.getState();
+                const txsToCopy = allTxs.filter(tx => selectedForAction.has(tx.id));
+                const items = CopyService.getCopyItemsForHistory(txsToCopy);
+                useCopyStore.getState().actions.open(`Select data to copy from ${txsToCopy.length} transactions:`, items);
             },
         },
     ];

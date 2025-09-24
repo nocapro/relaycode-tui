@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
-import { type HistoryTransaction as Transaction, type FileChange } from '../stores/transaction-history.store';
+import { type FileChange } from '../stores/transaction-history.store';
+import type { Transaction } from '../types/transaction.types';
 import Separator from './Separator';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
 
@@ -69,7 +70,7 @@ const TransactionRow = ({
             </Text>
             {isExpanded && (
                 <Box flexDirection="column" paddingLeft={8}>
-                    {tx.stats && <Text color="gray">Stats: {tx.stats.files} Files · +{tx.stats.linesAdded} lines, -{tx.stats.linesRemoved} lines</Text>}
+                    {tx.stats && <Text color="gray">Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}</Text>}
                     <Text>Files:</Text>
                 </Box>
             )}
