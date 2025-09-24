@@ -1,10 +1,7 @@
 import { create } from 'zustand';
-import type { Transaction } from '../types/transaction.types';
-import type { FileChange } from '../types/file.types';
-import type { HistoryViewMode } from '../types/transaction-history.types';
+import type { Transaction, FileItem } from '../types/domain.types';
+import type { HistoryViewMode } from '../types/view.types';
 import { useTransactionStore } from './transaction.store';
-
-export type { FileChange } from '../types/file.types';
 
 // Omit 'actions' from state type for partial updates
 type HistoryStateData = Omit<TransactionHistoryState, 'actions'>;
@@ -15,7 +12,6 @@ interface TransactionHistoryState {
     expandedIds: Set<string>; // holds ids of expanded items
     filterQuery: string;
     selectedForAction: Set<string>; // set of transaction IDs
-    transactions: Transaction[];
 
     actions: {
         load: (initialState?: Partial<HistoryStateData>) => void;
@@ -51,7 +47,6 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
     expandedIds: new Set(),
     filterQuery: '',
     selectedForAction: new Set(),
-    transactions: [],
 
     actions: {
         load: (initialState) => {
@@ -62,12 +57,12 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
                 expandedIds: new Set(),
                 selectedForAction: new Set(),
                 filterQuery: '',
-                transactions,
                 ...initialState,
             });
         },
         navigateUp: () => {
-            const { expandedIds, selectedItemPath, transactions } = get();
+            const { expandedIds, selectedItemPath } = get();
+            const { transactions } = useTransactionStore.getState();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
             const currentIndex = visibleItems.indexOf(selectedItemPath);
             if (currentIndex > 0) {
@@ -75,7 +70,8 @@ export const useTransactionHistoryStore = create<TransactionHistoryState>((set, 
             }
         },
         navigateDown: () => {
-            const { expandedIds, selectedItemPath, transactions } = get();
+            const { expandedIds, selectedItemPath } = get();
+            const { transactions } = useTransactionStore.getState();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
             const currentIndex = visibleItems.indexOf(selectedItemPath);
             if (currentIndex < visibleItems.length - 1) {

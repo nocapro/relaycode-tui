@@ -1,5 +1,5 @@
 import { createMockTransactions } from '../data/mocks';
-import type { Transaction } from '../types/transaction.types';
+import type { Transaction } from '../types/domain.types';
 
 const revertTransaction = (transactionId: string) => {
     // In a real app, this would perform the revert operation (e.g., API call).

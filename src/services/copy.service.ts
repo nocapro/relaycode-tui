@@ -1,19 +1,21 @@
-import type { Transaction } from '../types/transaction.types';
-import type { ReviewFileItem } from '../stores/review.store';
-import type { FileChange } from '../types/file.types';
+import type { Transaction, FileItem } from '../types/domain.types';
 import type { CopyItem } from '../types/copy.types';
 import { COPYABLE_ITEMS } from '../types/copy.types';
 
+const createBaseTransactionCopyItems = (transaction: Transaction): CopyItem[] => [
+    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+];
+
 const getCopyItemsForReview = (
     transaction: Transaction,
-    files: ReviewFileItem[],
-    selectedFile?: ReviewFileItem,
+    files: FileItem[],
+    selectedFile?: FileItem,
 ): CopyItem[] => {
     return [
-        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
-        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
-        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
-        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+        ...createBaseTransactionCopyItems(transaction),
         { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
         { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
     ];
@@ -21,15 +23,21 @@ const getCopyItemsForReview = (
 
 const getCopyItemsForDetail = (
     transaction: Transaction,
-    selectedFile?: FileChange,
+    selectedFile?: FileItem,
 ): CopyItem[] => {
+    const baseItems = createBaseTransactionCopyItems(transaction);
+    const messageItem = { ...baseItems.find(i => i.id === 'message')!, isDefaultSelected: true };
+    const promptItem = baseItems.find(i => i.id === 'prompt')!;
+    const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
+    const uuidItem = baseItems.find(i => i.id === 'uuid')!;
+
     return [
-        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message, isDefaultSelected: true },
-        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
-        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '', isDefaultSelected: true },
+        messageItem,
+        promptItem,
+        reasoningItem,
         { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
         { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
-        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+        uuidItem,
         { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
     ];
 };

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { TransactionService } from '../services/transaction.service';
-import type { Transaction, TransactionStatus } from '../types/transaction.types';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
 
-export type { Transaction } from '../types/transaction.types';
+export type { Transaction };
 
 interface TransactionState {
     transactions: Transaction[];

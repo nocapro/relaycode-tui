@@ -2,8 +2,8 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import { type Transaction, type DashboardStatus } from '../stores/dashboard.store';
-import type { TransactionStatus } from '../types/transaction.types';
 import Separator from './Separator';
+import type { TransactionStatus } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 
 // --- Sub-components & Helpers ---

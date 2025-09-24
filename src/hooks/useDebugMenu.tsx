@@ -13,6 +13,7 @@ import { ReviewService } from '../services/review.service';
 import { useReviewStore } from '../stores/review.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
+import type { Transaction } from '../types/domain.types';
 import { moveIndex } from '../stores/navigation.utils';
 export type { MenuItem } from '../types/debug.types';
 
@@ -106,12 +107,15 @@ export const useDebugMenu = () => {
             action: () => {
                 ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
-                const { transactionId, files, selectedItemIndex } = useReviewStore.getState();
+                const { transactionId, selectedItemIndex } = useReviewStore.getState();
                 const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
                 if (!tx) return;
-                const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
-                const items = CopyService.getCopyItemsForReview(tx, files, selectedFile);
-                useCopyStore.getState().actions.open('Select data to copy from review:', items);
+                const selectedFile = tx.files && selectedItemIndex < tx.files.length
+                    ? tx.files[selectedItemIndex]
+                    : undefined;
+                const items = CopyService.getCopyItemsForReview(tx, tx.files || [], selectedFile);
+                useCopyStore.getState().actions.open(
+                    'Select data to copy from review:', items);
             },
         },
         {
@@ -188,10 +192,14 @@ export const useDebugMenu = () => {
             action: () => {
                 historyActions.prepareDebugState('copy');
                 appActions.showTransactionHistoryScreen();
-                const { transactions: allTxs, selectedForAction } = useTransactionHistoryStore.getState();
-                const txsToCopy = allTxs.filter(tx => selectedForAction.has(tx.id));
+                const { selectedForAction } = useTransactionHistoryStore.getState();
+                const allTxs = useTransactionStore.getState().transactions;
+                const txsToCopy = allTxs.filter((tx: Transaction) =>
+                    selectedForAction.has(tx.id),
+                );
                 const items = CopyService.getCopyItemsForHistory(txsToCopy);
-                useCopyStore.getState().actions.open(`Select data to copy from ${txsToCopy.length} transactions:`, items);
+                useCopyStore.getState().actions.open(
+                    `Select data to copy from ${txsToCopy.length} transactions:`, items);
             },
         },
     ];

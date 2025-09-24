@@ -1,4 +1,4 @@
-import type { Transaction } from '../types/transaction.types';
+import type { Transaction } from '../types/domain.types';
 
 const mockReasoning1 = `1. Identified a potential uncaught exception in the \`restoreSnapshot\` function
    if a file operation fails midway through a loop of many files. This could
@@ -20,9 +20,9 @@ export const allMockTransactions: Transaction[] = [
         prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
         reasoning: mockReasoning1,
         files: [
-            { id: '1-1', path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 18, linesRemoved: 5, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -15,7 +15,7 @@ export class Transaction {\n   }\n\n-  calculateChanges(): ChangeSet {\n+  computeDelta(): ChangeSet {\n     return this.changes;\n   }\n }', strategy: 'replace' },
-            { id: '1-2', path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 0, linesRemoved: 0, diff: '', strategy: 'standard-diff' },
-            { id: '1-3', path: 'src/commands/apply.ts', type: 'MOD', linesAdded: 0, linesRemoved: 0, diff: '', strategy: 'standard-diff' },
+            { id: '1-1', type: 'MOD', path: 'src/core/transaction.ts', linesAdded: 18, linesRemoved: 5, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -15,7 +15,7 @@ export class Transaction {\n   }\n\n-  calculateChanges(): ChangeSet {\n+  computeDelta(): ChangeSet {\n     return this.changes;\n   }\n }', strategy: 'replace' },
+            { id: '1-2', type: 'MOD', path: 'src/utils/logger.ts', linesAdded: 0, linesRemoved: 0, diff: '', strategy: 'standard-diff' },
+            { id: '1-3', type: 'MOD', path: 'src/commands/apply.ts', linesAdded: 0, linesRemoved: 0, diff: '', strategy: 'standard-diff' },
         ],
         stats: { files: 3, linesAdded: 18, linesRemoved: 5 },
     },
@@ -35,8 +35,8 @@ export const allMockTransactions: Transaction[] = [
         prompt: 'Simplify the clipboard logic using an external library...',
         reasoning: 'The existing clipboard logic was complex and platform-dependent. Using the `clipboardy` library simplifies the code and improves reliability across different operating systems.',
         files: [
-            { id: '2-1', path: 'src/core/clipboard.ts', type: 'MOD', linesAdded: 15, linesRemoved: 8, diff: '--- a/src/core/clipboard.ts\n+++ b/src/core/clipboard.ts\n@@ -1,5 +1,6 @@\n import { copy as copyToClipboard } from \'clipboardy\';', strategy: 'replace' },
-            { id: '2-2', path: 'src/utils/shell.ts', type: 'MOD', linesAdded: 7, linesRemoved: 3, diff: '--- a/src/utils/shell.ts\n+++ b/src/utils/shell.ts', strategy: 'standard-diff' },
+            { id: '2-1', type: 'MOD', path: 'src/core/clipboard.ts', linesAdded: 15, linesRemoved: 8, diff: '--- a/src/core/clipboard.ts\n+++ b/src/core/clipboard.ts\n@@ -1,5 +1,6 @@\n import { copy as copyToClipboard } from \'clipboardy\';', strategy: 'replace' },
+            { id: '2-2', type: 'MOD', path: 'src/utils/shell.ts', linesAdded: 7, linesRemoved: 3, diff: '--- a/src/utils/shell.ts\n+++ b/src/utils/shell.ts', strategy: 'standard-diff' },
         ],
         stats: { files: 2, linesAdded: 22, linesRemoved: 11 },
         scripts: [
@@ -53,9 +53,9 @@ export const allMockTransactions: Transaction[] = [
         prompt: 'The user requested to add more robust error handling to the `restoreSnapshot` function. Specifically, it should not halt on the first error but instead attempt all file restorations and then report a summary of any failures.',
         reasoning: mockReasoning1,
         files: [
-            { id: '3-1', path: 'src/core/transaction.ts', type: 'MOD', linesAdded: 18, linesRemoved: 5, diff: '... diff ...' },
-            { id: '3-2', path: 'src/utils/logger.ts', type: 'MOD', linesAdded: 7, linesRemoved: 3, diff: '... diff ...' },
-            { id: '3-3', path: 'src/utils/old-helper.ts', type: 'DEL', linesAdded: 0, linesRemoved: 30, diff: '... diff ...' },
+            { id: '3-1', type: 'MOD', path: 'src/core/transaction.ts', linesAdded: 18, linesRemoved: 5, diff: '... diff ...' },
+            { id: '3-2', type: 'MOD', path: 'src/utils/logger.ts', linesAdded: 7, linesRemoved: 3, diff: '... diff ...' },
+            { id: '3-3', type: 'DEL', path: 'src/utils/old-helper.ts', linesAdded: 0, linesRemoved: 30, diff: '... diff ...' },
         ],
         stats: { files: 3, linesAdded: 25, linesRemoved: 38 },
     },

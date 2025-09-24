@@ -1,9 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
-import { type FileChange } from '../stores/transaction-history.store';
-import type { Transaction } from '../types/transaction.types';
 import Separator from './Separator';
+import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
 
 // --- Sub-components ---
@@ -27,7 +26,7 @@ const DiffPreview = ({ diff }: { diff: string }) => {
     );
 };
 
-const FileRow = ({ file, isSelected, isExpanded }: { file: FileChange, isSelected: boolean, isExpanded: boolean }) => {
+const FileRow = ({ file, isSelected, isExpanded }: { file: FileItem, isSelected: boolean, isExpanded: boolean }) => {
     const icon = isExpanded ? '▾' : '▸';
     const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
     
@@ -62,15 +61,22 @@ const TransactionRow = ({
     const date = new Date(tx.timestamp).toISOString().split('T')[0];
     const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
     
+    const statusDisplay = statusMap[tx.status as keyof typeof statusMap] || tx.status;
+
     return (
         <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
             <Text color={isSelected ? 'cyan' : undefined}>
                 {isSelected ? '> ' : '  '}
-                {selectionIndicator} {icon} {statusMap[tx.status as keyof typeof statusMap] || tx.status} · {tx.hash} · {date} · {tx.message}
+                {selectionIndicator} {icon} {statusDisplay} · {tx.hash} · {date} ·{' '}
+                {tx.message}
             </Text>
             {isExpanded && (
                 <Box flexDirection="column" paddingLeft={8}>
-                    {tx.stats && <Text color="gray">Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}</Text>}
+                    {tx.stats && (
+                        <Text color="gray">
+                            Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}
+                        </Text>
+                    )}
                     <Text>Files:</Text>
                 </Box>
             )}
@@ -98,6 +104,7 @@ const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: n
 const TransactionHistoryScreen = () => {
     const {
         store,
+        transactions,
         itemsInView,
         transactionsInView,
         pathsInViewSet,
@@ -128,13 +135,13 @@ const TransactionHistoryScreen = () => {
                 ) : (
                     <Text>{filterStatus}</Text>
                 )}
-                <Text> · {showingStatus} ({store.transactions.length} txns)</Text>
+                <Text> · {showingStatus} ({transactions.length} txns)</Text>
             </Box>
 
             <Box flexDirection="column" marginY={1}>
                 {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
 
-                {store.mode === 'LIST' && store.transactions.map(tx => {
+                {store.mode === 'LIST' && transactions.map((tx: Transaction) => {
                     const isTxSelected = store.selectedItemPath.startsWith(tx.id);
                     const isTxExpanded = store.expandedIds.has(tx.id);
                     const isSelectedForAction = store.selectedForAction.has(tx.id);
@@ -151,7 +158,7 @@ const TransactionHistoryScreen = () => {
                                     isSelectedForAction={isSelectedForAction}
                                 />
                             )}
-                            {isTxExpanded && tx.files?.map(file => {
+                            {isTxExpanded && tx.files?.map((file: FileItem) => {
                                 if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
                                 const filePath = `${tx.id}/${file.id}`;
                                 const isFileSelected = store.selectedItemPath === filePath;

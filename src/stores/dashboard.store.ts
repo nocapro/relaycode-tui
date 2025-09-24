@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { DashboardService } from '../services/dashboard.service';
-import { useTransactionStore, type Transaction } from './transaction.store';
-import type { DashboardStatus } from '../types/dashboard.types';
+import { useTransactionStore } from './transaction.store';
+import type { DashboardStatus } from '../types/view.types';
+import type { Transaction } from '../types/domain.types';
 import { moveIndex } from './navigation.utils';
 
-export type { Transaction } from '../types/transaction.types';
-export type { DashboardStatus } from '../types/dashboard.types';
+export type { Transaction, DashboardStatus };
 
 // --- Store Interface ---
 interface DashboardState {

@@ -1,18 +1,19 @@
-import { useReviewStore, type ReviewFileItem } from '../stores/review.store';
+import { useReviewStore } from '../stores/review.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
-import type { ApplyStep, ApplyUpdate, ReviewBodyView } from '../types/review.types';
+import type { ApplyStep, ApplyUpdate, ReviewBodyView } from '../types/view.types';
+import type { FileItem } from '../types/domain.types';
 
-const generateBulkRepairPrompt = (files: ReviewFileItem[]): string => {
-    const failedFiles = files.filter(f => f.status === 'FAILED');
+const generateBulkRepairPrompt = (files: FileItem[]): string => {
+    const failedFiles = files.filter(f => f.reviewStatus === 'FAILED');
     return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
 
 IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
 
 ${failedFiles.map(file => `--- FILE: ${file.path} ---
 Strategy: ${file.strategy}
-Error: ${file.error}
+Error: ${file.reviewError}
 
 ORIGINAL CONTENT:
 ---
@@ -32,10 +33,10 @@ const generateHandoffPrompt = (
     hash: string,
     message: string,
     reasoning: string,
-    files: ReviewFileItem[],
+    files: FileItem[],
 ): string => {
-    const successfulFiles = files.filter(f => f.status === 'APPROVED');
-    const failedFiles = files.filter(f => f.status === 'FAILED');
+    const successfulFiles = files.filter(f => f.reviewStatus === 'APPROVED');
+    const failedFiles = files.filter(f => f.reviewStatus === 'FAILED');
 
     return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
 
@@ -53,7 +54,7 @@ SUCCESSFUL CHANGES (already applied, no action needed):
 ${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || '  (None)'}
 
 FAILED CHANGES (these are the files you need to fix):
-${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${f.error})`).join('\n')}
+${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${f.reviewError})`).join('\n')}
 
 Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.`;
 };
@@ -114,10 +115,10 @@ const loadTransactionForReview = (transactionId: string, initialState?: { bodyVi
     useReviewStore.getState().actions.load(transactionId, initialState);
 };
 
-const generateSingleFileRepairPrompt = (file: ReviewFileItem): string => {
+const generateSingleFileRepairPrompt = (file: FileItem): string => {
     return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
 
-Error: ${file.error}
+Error: ${file.reviewError}
 Strategy: ${file.strategy}
 
 ORIGINAL CONTENT:
@@ -133,18 +134,18 @@ ${file.diff || '// ... failed diff would be here ...'}
 Please provide a corrected patch that addresses the error.`;
 };
 
-const tryRepairFile = (file: ReviewFileItem): ReviewFileItem => {
+const tryRepairFile = (file: FileItem): FileItem => {
     const repairPrompt = generateSingleFileRepairPrompt(file);
     // In a real app: clipboardy.writeSync(repairPrompt)
     // eslint-disable-next-line no-console
     console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
 
     // Mock: return the updated file
-    return { ...file, status: 'APPROVED' as const, error: undefined, linesAdded: 5, linesRemoved: 2 };
+    return { ...file, reviewStatus: 'APPROVED' as const, reviewError: undefined, linesAdded: 5, linesRemoved: 2 };
 };
 
-const runBulkReapply = async (files: ReviewFileItem[]): Promise<ReviewFileItem[]> => {
-    const failedFileIds = new Set(files.filter(f => f.status === 'FAILED').map(f => f.id));
+const runBulkReapply = async (files: FileItem[]): Promise<FileItem[]> => {
+    const failedFileIds = new Set(files.filter(f => f.reviewStatus === 'FAILED').map(f => f.id));
     if (failedFileIds.size === 0) {
         return files;
     }
@@ -158,9 +159,9 @@ const runBulkReapply = async (files: ReviewFileItem[]): Promise<ReviewFileItem[]
             if (first) {
                 first = false;
                 // The file coming in already has the 'RE_APPLYING' status from the store action
-                return { ...file, status: 'APPROVED' as const, strategy: 'replace' as const, error: undefined, linesAdded: 9, linesRemoved: 2 };
+                return { ...file, reviewStatus: 'APPROVED' as const, strategy: 'replace' as const, reviewError: undefined, linesAdded: 9, linesRemoved: 2 };
             }
-            return { ...file, status: 'FAILED' as const, error: "'replace' failed: markers not found" };
+            return { ...file, reviewStatus: 'FAILED' as const, reviewError: "'replace' failed: markers not found" };
         }
         return file;
     });

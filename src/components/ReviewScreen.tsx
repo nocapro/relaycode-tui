@@ -1,17 +1,17 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { type ReviewFileItem, type ScriptResult } from '../stores/review.store';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
+import type { ScriptResult, FileItem } from '../types/domain.types';
 import { useReviewScreen } from '../hooks/useReviewScreen';
 
 // --- Sub-components ---
 
-const FileItemRow = ({ file, isSelected }: { file: ReviewFileItem, isSelected: boolean }) => {
+const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean }) => {
     let icon;
     let iconColor;
-    switch (file.status) {
+    switch (file.reviewStatus) {
         case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
         case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
         case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
@@ -23,18 +23,18 @@ const FileItemRow = ({ file, isSelected }: { file: ReviewFileItem, isSelected: b
     const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
     const prefix = isSelected ? '> ' : '  ';
 
-    if (file.status === 'FAILED') {
+    if (file.reviewStatus === 'FAILED') {
         return (
             <Box>
                 <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
                     {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
-                    <Text color="red">    ({file.error})</Text>
+                    <Text color="red">    ({file.reviewError})</Text>
                 </Text>
             </Box>
         );
     }
 
-    if (file.status === 'AWAITING') {
+    if (file.reviewStatus === 'AWAITING') {
         return (
             <Box>
                 <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
@@ -45,7 +45,7 @@ const FileItemRow = ({ file, isSelected }: { file: ReviewFileItem, isSelected: b
         );
     }
 
-    if (file.status === 'RE_APPLYING') {
+    if (file.reviewStatus === 'RE_APPLYING') {
         return (
              <Box>
                 <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
@@ -100,7 +100,7 @@ const ReviewScreen = () => {
     const {
         transaction,
         files,
-        scripts,
+        scripts = [],
         patchStatus,
         selectedItemIndex, bodyView, isDiffExpanded, reasoningScrollIndex, scriptErrorIndex,
         numFiles,
@@ -155,14 +155,14 @@ const ReviewScreen = () => {
              if (!selectedScript) return null;
              
              const outputLines = selectedScript.output.split('\n');
-             const errorLines = outputLines.filter(line =>
+             const errorLines = outputLines.filter((line: string) =>
                 line.includes('Error') || line.includes('Warning'),
              );
              
              return (
                 <Box flexDirection="column">
                     <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
-                    <Box marginTop={1}>
+                    <Box marginTop={1} flexDirection="column">
                         {outputLines.map((line, index) => {
                             const isError = line.includes('Error');
                             const isWarning = line.includes('Warning');
@@ -206,7 +206,7 @@ const ReviewScreen = () => {
         }
 
         if (bodyView === 'bulk_repair') {
-            const failedFiles = files.filter(f => f.status === 'FAILED');
+            const failedFiles = files.filter((f: FileItem) => f.reviewStatus === 'FAILED');
             const repairOptions = [
                 '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
                 '(2) Bulk Change Strategy & Re-apply',
@@ -221,7 +221,7 @@ const ReviewScreen = () => {
 
                     <Box flexDirection="column">
                         <Text>The following {failedFiles.length} files failed to apply:</Text>
-                        {failedFiles.map(file => (
+                        {failedFiles.map((file: FileItem) => (
                             <Text key={file.id}>- {file.path}</Text>
                         ))}
                     </Box>
@@ -267,17 +267,17 @@ const ReviewScreen = () => {
         const actions = ['(↑↓) Nav'];
 
         const isFileSelected = selectedItemIndex < numFiles;
-        const hasFailedFiles = files.some(f => f.status === 'FAILED');
+        const hasFailedFiles = files.some((f: FileItem) => f.reviewStatus === 'FAILED');
         
         if (isFileSelected) {
             const selectedFile = files[selectedItemIndex];
-            if (selectedFile && selectedFile.status !== 'FAILED') {
+            if (selectedFile && selectedFile.reviewStatus !== 'FAILED') {
                 actions.push('(Spc) Toggle');
             }
             actions.push('(D)iff');
             
             // Add repair options for failed files
-            if (selectedFile && selectedFile.status === 'FAILED') {
+            if (selectedFile && selectedFile.reviewStatus === 'FAILED') {
                 actions.push('(T)ry Repair');
             }
         } else { // script selected
@@ -297,7 +297,7 @@ const ReviewScreen = () => {
             actions.push('(A)pprove');
         }
 
-        if (files.some(f => f.status === 'APPROVED' || f.status === 'FAILED')) {
+        if (files.some((f: FileItem) => f.reviewStatus === 'APPROVED' || f.reviewStatus === 'FAILED')) {
             actions.push('(Shift+R) Reject All');
         }
         actions.push('(Q)uit');
@@ -339,7 +339,7 @@ const ReviewScreen = () => {
             {scripts.length > 0 && (
                 <>
                     <Box flexDirection="column" marginY={1}>
-                        {scripts.map((script, index) => (
+                        {scripts.map((script: ScriptResult, index: number) => (
                             <ScriptItemRow
                                 key={script.command}
                                 script={script}
@@ -355,7 +355,7 @@ const ReviewScreen = () => {
             {/* Files Section */}
             <Box flexDirection="column" marginY={1}>
                 <Text bold>FILES</Text>
-                {files.map((file, index) => (
+                {files.map((file: FileItem, index: number) => (
                     <FileItemRow
                         key={file.id}
                         file={file}

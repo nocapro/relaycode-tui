@@ -1,4 +1,4 @@
-import type { Transaction } from '../types/transaction.types';
+import type { Transaction } from '../types/domain.types';
 import { sleep } from '../utils';
 import { useTransactionStore } from '../stores/transaction.store';
 

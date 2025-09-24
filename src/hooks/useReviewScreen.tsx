@@ -1,21 +1,34 @@
-import { useMemo } from 'react';
+import { useMemo, useDebugValue } from 'react';
 import { useInput, useApp } from 'ink';
 import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useCopyStore, type CopyItem } from '../stores/copy.store';
 import { CopyService } from '../services/copy.service';
+import type { FileItem } from '../types/domain.types';
 
 export const useReviewScreen = () => {
     const { exit } = useApp();
     const store = useReviewStore();
-    const { transactionId } = store;
+    const { transactionId, fileReviewStates } = store;
     const transaction = useTransactionStore(s => s.transactions.find(t => t.id === transactionId));
     const { showDashboardScreen } = useAppStore(s => s.actions);
     const {
-        files, scripts, patchStatus,
         selectedItemIndex, bodyView,
     } = store;
+
+    const files: FileItem[] = useMemo(() => {
+        if (!transaction?.files) return [];
+        return transaction.files.map(file => ({
+            ...file,
+            reviewStatus: fileReviewStates[file.id]?.status || 'AWAITING',
+            reviewError: fileReviewStates[file.id]?.error,
+        }));
+    }, [transaction, fileReviewStates]);
+
+    const scripts = transaction?.scripts || [];
+    const patchStatus = store.patchStatus;
+
     const {
         moveSelectionUp, moveSelectionDown, toggleFileApproval, expandDiff,
         toggleBodyView, setBodyView,
@@ -23,14 +36,13 @@ export const useReviewScreen = () => {
         tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
         scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
     } = store.actions;
-
     const {
         numFiles,
         approvedFilesCount,
         approvedLinesAdded,
         approvedLinesRemoved,
     } = useMemo(() => {
-        const approvedFiles = files.filter(f => f.status === 'APPROVED');
+        const approvedFiles = files.filter((f: FileItem) => f.reviewStatus === 'APPROVED');
         return {
             numFiles: files.length,
             approvedFilesCount: approvedFiles.length,
@@ -43,7 +55,7 @@ export const useReviewScreen = () => {
         if (!transaction) return;
         const title = 'Select data to copy from review:';
         const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
-        const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+        const items = CopyService.getCopyItemsForReview(transaction, transaction.files || [], selectedFile);
         useCopyStore.getState().actions.open(title, items);
     };
 
@@ -138,7 +150,7 @@ export const useReviewScreen = () => {
         if (input === ' ') {
             if (selectedItemIndex < numFiles) {
                 const file = files[selectedItemIndex];
-                if (file && file.status !== 'FAILED') {
+                if (file && file.reviewStatus !== 'FAILED') {
                     toggleFileApproval();
                 }
             }
@@ -169,15 +181,15 @@ export const useReviewScreen = () => {
 
         // Handle T for single repair and Shift+T for bulk repair
         if (input.toLowerCase() === 't') {
-            if (key.shift) {
-                const hasFailedFiles = files.some(f => f.status === 'FAILED');
+            if (key.shift) { // Bulk repair
+                const hasFailedFiles = files.some(f => f.reviewStatus === 'FAILED');
                 if (hasFailedFiles) {
                     showBulkRepair();
                 }
             } else {
                 if (selectedItemIndex < numFiles) {
                     const file = files[selectedItemIndex];
-                    if (file && file.status === 'FAILED') {
+                    if (file && file.reviewStatus === 'FAILED') {
                         tryRepairFile();
                     }
                 }
@@ -192,6 +204,9 @@ export const useReviewScreen = () => {
     return {
         ...store,
         transaction,
+        files,
+        scripts,
+        patchStatus,
         numFiles,
         approvedFilesCount,
         approvedLinesAdded,

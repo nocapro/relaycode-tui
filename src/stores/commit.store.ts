@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction } from '../types/transaction.types';
+import type { Transaction } from '../types/domain.types';
 import { CommitService } from '../services/commit.service';
 import { useTransactionStore } from './transaction.store';
 

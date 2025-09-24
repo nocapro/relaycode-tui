@@ -1,1 +1,0 @@
-export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';

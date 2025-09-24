@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppScreen } from '../types/app.types';
+import type { AppScreen } from '../types/view.types';
 
 interface AppState {
     isHelpOpen: boolean;

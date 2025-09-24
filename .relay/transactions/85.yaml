@@ -1,0 +1,965 @@
+uuid: c32c57f5-2342-4f30-80de-c7a36c6158e8
+projectId: relaycode-tui
+createdAt: '2025-09-24T14:59:24.722Z'
+gitCommitMsg: |-
+  refactor(state): Streamline services and hooks for single source of truth
+  Executed Part 3 of the radical DRY refactoring plan:
+  - Refactored `copy.service.ts` to use a helper function,
+    `createBaseTransactionCopyItems`, eliminating redundant logic for
+    generating common copyable items across different screens.
+
+  - Updated `useReviewScreen` hook to align with the centralized state
+    model. It now derives its view model by merging the canonical
+    transaction data from `transaction.store` with transient UI state
+    from `review.store`.
+
+  - Updated `ReviewScreen.tsx` to use the unified `FileItem` type,
+    removing dependencies on obsolete, duplicated type definitions and
+    ensuring consistency with the underlying data model.
+promptSummary: >-
+  The user asked me to execute part 3 of a multi-part refactoring plan. The goal
+  was to make services and hooks more "DRY" by eliminating redundant logic and
+  ensuring they rely on a single source of truth for application data.
+reasoning:
+  - >-
+    I will now execute Part 3 of the master plan: Streamlining Services and
+    Hooks. This involves refactoring `copy.service.ts` to reduce duplication and
+    updating `useReviewScreen` and `ReviewScreen` to align with the new
+    centralized state management model where data types are unified and stores
+    no longer hold redundant copies of transaction data.
+  - '### Part 3.1: Refactor `copy.service.ts` for DRYness'
+  - >-
+    I will introduce a helper function, `createBaseTransactionCopyItems`, to
+    generate the common set of copyable items for a transaction (UUID, message,
+    prompt, reasoning). This helper will then be used by `getCopyItemsForReview`
+    and `getCopyItemsForDetail` to reduce code duplication.
+  - '### Part 3.2: Update `useReviewScreen` Hook'
+  - >-
+    Next, I'll update the `useReviewScreen` hook. This involves changing type
+    imports to reflect the new unified `FileItem` type and ensuring the hook
+    correctly derives its view model (`files`) by combining data from the
+    central `transaction.store` and the state from `review.store`.
+  - '### Part 3.3: Update `ReviewScreen` Component'
+  - >-
+    Finally, I'll update the `ReviewScreen` component to use the unified
+    `FileItem` type, removing references to the now-obsolete `ReviewFileItem`.
+    This ensures the UI layer is consistent with the refactored data model and
+    hooks.
+  - >-
+    These changes complete Part 3 of the refactoring plan, streamlining services
+    and hooks to work with a single source of truth for transaction data.
+operations:
+  - type: write
+    path: src/services/copy.service.ts
+    content: >+
+      --- src/services/copy.service.ts
+
+      +++ src/services/copy.service.ts
+
+      @@ -3,18 +3,20 @@
+       import type { CopyItem } from '../types/copy.types';
+       import { COPYABLE_ITEMS } from '../types/copy.types';
+       
+      +const createBaseTransactionCopyItems = (transaction: Transaction):
+      CopyItem[] => [
+
+      +    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () =>
+      transaction.id },
+
+      +    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: ()
+      => transaction.message },
+
+      +    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: ()
+      => transaction.prompt || '' },
+
+      +    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING,
+      getData: () => transaction.reasoning || '' },
+
+      +];
+
+      +
+       const getCopyItemsForReview = (
+           transaction: Transaction,
+           files: FileItem[],
+           selectedFile?: FileItem,
+       ): CopyItem[] => {
+           return [
+      -        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: ()
+      => transaction.id },
+
+      -        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE,
+      getData: () => transaction.message },
+
+      -        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData:
+      () => transaction.prompt || '' },
+
+      -        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING,
+      getData: () => transaction.reasoning || '' },
+
+      +        ...createBaseTransactionCopyItems(transaction),
+               { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+               { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+           ];
+      @@ -24,14 +26,19 @@
+           transaction: Transaction,
+           selectedFile?: FileItem,
+       ): CopyItem[] => {
+      +    const baseItems = createBaseTransactionCopyItems(transaction);
+
+      +    const messageItem = { ...baseItems.find(i => i.id === 'message')!,
+      isDefaultSelected: true };
+
+      +    const promptItem = baseItems.find(i => i.id === 'prompt')!;
+
+      +    const reasoningItem = { ...baseItems.find(i => i.id ===
+      'reasoning')!, isDefaultSelected: true };
+
+      +    const uuidItem = baseItems.find(i => i.id === 'uuid')!;
+
+      +
+           return [
+      -        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE,
+      getData: () => transaction.message, isDefaultSelected: true },
+
+      -        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData:
+      () => transaction.prompt || '' },
+
+      -        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING,
+      getData: () => transaction.reasoning || '', isDefaultSelected: true },
+
+      +        messageItem,
+
+      +        promptItem,
+
+      +        reasoningItem,
+               { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+               { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+      -        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: ()
+      => transaction.id },
+
+      +        uuidItem,
+               { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+           ];
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: >+
+      --- src/hooks/useReviewScreen.tsx
+
+      +++ src/hooks/useReviewScreen.tsx
+
+      @@ -1,13 +1,14 @@
+       import { useMemo, useDebugValue } from 'react';
+       import { useInput, useApp } from 'ink';
+      -import { useReviewStore, type ReviewFileItem } from
+      '../stores/review.store';
+
+      +import { useReviewStore } from '../stores/review.store';
+       import { useAppStore } from '../stores/app.store';
+       import { useTransactionStore } from '../stores/transaction.store';
+       import { useCopyStore, type CopyItem } from '../stores/copy.store';
+       import { CopyService } from '../services/copy.service';
+      +import type { FileItem } from '../types/domain.types';
+       
+       export const useReviewScreen = () => {
+           const { exit } = useApp();
+      @@ -17,7 +18,7 @@
+           const { selectedItemIndex, bodyView,
+           } = store;
+       
+      -    const files: ReviewFileItem[] = useMemo(() => {
+
+      +    const files: FileItem[] = useMemo(() => {
+               if (!transaction?.files) return [];
+               return transaction.files.map(file => ({
+                   ...file,
+      @@ -37,7 +38,7 @@
+               approvedLinesRemoved,
+           } = useMemo(() => {
+      -        const approvedFiles = files.filter((f: ReviewFileItem) =>
+      f.reviewStatus === 'APPROVED');
+
+      +        const approvedFiles = files.filter((f: FileItem) =>
+      f.reviewStatus === 'APPROVED');
+               return {
+                   numFiles: files.length,
+                   approvedFilesCount: approvedFiles.length,
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: >+
+      --- src/components/ReviewScreen.tsx
+
+      +++ src/components/ReviewScreen.tsx
+
+      @@ -3,14 +3,13 @@
+       import Separator from './Separator';
+       import DiffScreen from './DiffScreen';
+       import ReasonScreen from './ReasonScreen';
+      -import { type ScriptResult } from '../types/domain.types';
+
+      -import { type ReviewFileItem } from '../stores/review.store';
+
+      +import type { ScriptResult, FileItem } from '../types/domain.types';
+       import { useReviewScreen } from '../hooks/useReviewScreen';
+       
+       // --- Sub-components ---
+       
+      -const FileItemRow = ({ file, isSelected }: { file: ReviewFileItem,
+      isSelected: boolean }) => {
+
+      +const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected:
+      boolean }) => {
+           let icon;
+           let iconColor;
+           switch (file.reviewStatus) {
+      @@ -244,7 +243,7 @@
+               }
+       
+               if (bodyView === 'bulk_repair') {
+      -            const failedFiles = files.filter((f: ReviewFileItem) =>
+      f.reviewStatus === 'FAILED');
+
+      +            const failedFiles = files.filter((f: FileItem) =>
+      f.reviewStatus === 'FAILED');
+                   const repairOptions = [
+                       '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+                       '(2) Bulk Change Strategy & Re-apply',
+      @@ -259,7 +258,7 @@
+       
+                           <Box flexDirection="column">
+                               <Text>The following {failedFiles.length} files failed to apply:</Text>
+      -                        {failedFiles.map((file: ReviewFileItem) => (
+
+      +                        {failedFiles.map((file: FileItem) => (
+                                   <Text key={file.id}>- {file.path}</Text>
+                               ))}
+                           </Box>
+      @@ -303,7 +302,7 @@
+               const actions = ['(↑↓) Nav'];
+       
+               const isFileSelected = selectedItemIndex < numFiles;
+      -        const hasFailedFiles = files.some((f: ReviewFileItem) =>
+      f.reviewStatus === 'FAILED');
+
+      +        const hasFailedFiles = files.some((f: FileItem) => f.reviewStatus
+      === 'FAILED');
+               
+               if (isFileSelected) {
+                   const selectedFile = files[selectedItemIndex];
+      @@ -328,7 +327,7 @@
+                   actions.push('(A)pprove');
+               }
+       
+      -        if (files.some((f: ReviewFileItem) => f.reviewStatus ===
+      'APPROVED' || f.reviewStatus === 'FAILED')) {
+
+      +        if (files.some((f: FileItem) => f.reviewStatus === 'APPROVED' ||
+      f.reviewStatus === 'FAILED')) {
+                   actions.push('(Shift+R) Reject All');
+               }
+               actions.push('(Q)uit');
+      @@ -375,7 +374,7 @@
+                   {/* Files Section */}
+                   <Box flexDirection="column" marginY={1}>
+                       <Text bold>FILES</Text>
+      -                {files.map((file: ReviewFileItem, index: number) => (
+
+      +                {files.map((file: FileItem, index: number) => (
+                           <FileItemRow
+                               key={file.id}
+                               file={file}
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/copy.service.ts: |-
+    import type { Transaction, FileItem } from '../types/domain.types';
+    import type { CopyItem } from '../types/copy.types';
+    import { COPYABLE_ITEMS } from '../types/copy.types';
+
+    const getCopyItemsForReview = (
+        transaction: Transaction,
+        files: FileItem[],
+        selectedFile?: FileItem,
+    ): CopyItem[] => {
+        return [
+            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+            { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+        ];
+    };
+
+    const getCopyItemsForDetail = (
+        transaction: Transaction,
+        selectedFile?: FileItem,
+    ): CopyItem[] => {
+        return [
+            { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message, isDefaultSelected: true },
+            { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+            { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '', isDefaultSelected: true },
+            { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+            { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+        ];
+    };
+
+    const getCopyItemsForHistory = (
+        transactions: Transaction[],
+    ): CopyItem[] => {
+        if (transactions.length === 0) return [];
+        
+        return [
+            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+            { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+        ];
+    };
+
+    export const CopyService = {
+        getCopyItemsForReview,
+        getCopyItemsForDetail,
+        getCopyItemsForHistory,
+    };
+  src/hooks/useReviewScreen.tsx: >-
+    import { useMemo, useDebugValue } from 'react';
+
+    import { useInput, useApp } from 'ink';
+
+    import { useReviewStore, type ReviewFileItem } from
+    '../stores/review.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useCopyStore, type CopyItem } from '../stores/copy.store';
+
+    import { CopyService } from '../services/copy.service';
+
+
+    export const useReviewScreen = () => {
+        const { exit } = useApp();
+        const store = useReviewStore();
+        const { transactionId, fileReviewStates } = store;
+        const transaction = useTransactionStore(s => s.transactions.find(t => t.id === transactionId));
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const {
+            selectedItemIndex, bodyView,
+        } = store;
+
+        const files: ReviewFileItem[] = useMemo(() => {
+            if (!transaction?.files) return [];
+            return transaction.files.map(file => ({
+                ...file,
+                reviewStatus: fileReviewStates[file.id]?.status || 'AWAITING',
+                reviewError: fileReviewStates[file.id]?.error,
+            }));
+        }, [transaction, fileReviewStates]);
+
+        const scripts = transaction?.scripts || [];
+        const patchStatus = store.patchStatus;
+
+        const {
+            moveSelectionUp, moveSelectionDown, toggleFileApproval, expandDiff,
+            toggleBodyView, setBodyView,
+            startApplySimulation, rejectAllFiles, approve,
+            tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
+            scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+        } = store.actions;
+        const {
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useMemo(() => {
+            const approvedFiles = files.filter((f: ReviewFileItem) => f.reviewStatus === 'APPROVED');
+            return {
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+                approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+                approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+            };
+        }, [files]);
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const title = 'Select data to copy from review:';
+            const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+            const items = CopyService.getCopyItemsForReview(transaction, transaction.files || [], selectedFile);
+            useCopyStore.getState().actions.open(title, items);
+        };
+
+        useInput((input, key) => {
+            // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+            if (input === '1') {
+                startApplySimulation('success');
+                return;
+            }
+            if (input === '2') {
+                // The store's default is failure, but to re-trigger the processing screen
+                startApplySimulation('failure');
+                return;
+            }
+
+            if (input.toLowerCase() === 'q') exit();
+
+            // Handle Escape key - context-sensitive behavior
+            if (key.escape) {
+                if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
+                    toggleBodyView(bodyView); // Close modal
+                } else if (bodyView !== 'none') {
+                    setBodyView('none');
+                } else {
+                    showDashboardScreen();
+                }
+                return;
+            }
+
+            // Handoff Confirmation
+            if (bodyView === 'confirm_handoff') {
+                if (key.return) {
+                    confirmHandoff();
+                }
+                return;
+            }
+
+            // Bulk Repair Navigation
+            if (bodyView === 'bulk_repair') {
+                if (input >= '1' && input <= '4') {
+                    executeBulkRepairOption(parseInt(input));
+                }
+                return;
+            }
+
+            // Reasoning Scroll Navigation
+            if (bodyView === 'reasoning') {
+                if (key.upArrow) scrollReasoningUp();
+                if (key.downArrow) scrollReasoningDown();
+                if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+                return;
+            }
+
+            // Script Output Navigation
+            if (bodyView === 'script_output') {
+                if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+                if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+                if (key.return) toggleBodyView('script_output');
+                if (input.toLowerCase() === 'c') {
+                    // Copy script output
+                    const scriptIndex = selectedItemIndex - numFiles;
+                    const selectedScript = scripts[scriptIndex];
+                    if (selectedScript) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                    }
+                }
+                return;
+            }
+
+            // Diff View Navigation
+            if (bodyView === 'diff') {
+                if (input.toLowerCase() === 'x') expandDiff();
+                if (input.toLowerCase() === 'd') toggleBodyView('diff');
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.reviewStatus !== 'FAILED') {
+                        toggleFileApproval();
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleBodyView('diff');
+                }
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleBodyView('script_output');
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+
+            // Handle T for single repair and Shift+T for bulk repair
+            if (input.toLowerCase() === 't') {
+                if (key.shift) { // Bulk repair
+                    const hasFailedFiles = files.some(f => f.reviewStatus === 'FAILED');
+                    if (hasFailedFiles) {
+                        showBulkRepair();
+                    }
+                } else {
+                    if (selectedItemIndex < numFiles) {
+                        const file = files[selectedItemIndex];
+                        if (file && file.reviewStatus === 'FAILED') {
+                            tryRepairFile();
+                        }
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        return {
+            ...store,
+            transaction,
+            files,
+            scripts,
+            patchStatus,
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        };
+    };
+  src/components/ReviewScreen.tsx: >-
+    import React from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import { type ScriptResult } from '../types/domain.types';
+
+    import { type ReviewFileItem } from '../stores/review.store';
+
+    import { useReviewScreen } from '../hooks/useReviewScreen';
+
+
+    // --- Sub-components ---
+
+
+    const FileItemRow = ({ file, isSelected }: { file: ReviewFileItem,
+    isSelected: boolean }) => {
+        let icon;
+        let iconColor;
+        switch (file.reviewStatus) {
+            case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
+            case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
+            case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+            case 'AWAITING': icon = '[●]'; iconColor = 'yellow'; break;
+            case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
+        }
+
+        const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+        const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+        const prefix = isSelected ? '> ' : '  ';
+
+        if (file.reviewStatus === 'FAILED') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
+                        <Text color="red">    ({file.reviewError})</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (file.reviewStatus === 'AWAITING') {
+            return (
+                <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
+                        <Text color="yellow">    (Bulk re-apply prompt copied!)</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (file.reviewStatus === 'RE_APPLYING') {
+            return (
+                 <Box>
+                    <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                        {prefix}<Text color={iconColor}>{icon} RE-APPLYING... {file.path}</Text>
+                        <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> MOD {file.path} {diffStats} [{strategy}]
+                </Text>
+            </Box>
+        );
+    };
+
+
+    const ScriptItemRow = ({
+        script,
+        isSelected,
+        isExpanded,
+    }: {
+        script: ScriptResult;
+        isSelected: boolean;
+        isExpanded: boolean;
+    }) => {
+        const icon = script.success ? '✓' : '✗';
+        const iconColor = script.success ? 'green' : 'red';
+        const arrow = isExpanded ? '▾' : '▸';
+        const prefix = isSelected ? '> ' : '  ';
+        
+        // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+        const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                          script.command.includes('lint') ? 'Linter' : 
+                          'Script';
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                    {script.summary}
+                </Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const ReviewScreen = () => {
+        const {
+            transaction,
+            files,
+            scripts = [],
+            patchStatus,
+            selectedItemIndex, bodyView, isDiffExpanded, reasoningScrollIndex, scriptErrorIndex,
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useReviewScreen();
+
+        if (!transaction) {
+            return <Text>Loading review...</Text>;
+        }
+        const { hash, message, prompt = '', reasoning = '' } = transaction;
+
+        const renderBody = () => {
+            if (bodyView === 'none') return null;
+
+            if (bodyView === 'reasoning') {
+                const reasoningLinesCount = (reasoning || '').split('\n').length;
+                const visibleLinesCount = 10;
+                return (
+                    <Box flexDirection="column">
+                        <ReasonScreen
+                            reasoning={reasoning}
+                            scrollIndex={reasoningScrollIndex}
+                            visibleLinesCount={visibleLinesCount}
+                        />
+                        {reasoningLinesCount > visibleLinesCount && (
+                            <Text color="gray">
+                                Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                                of {reasoningLinesCount}
+                            </Text>
+                        )}
+                    </Box>
+                );
+            }
+            
+            if (bodyView === 'diff') {
+                const selectedFile = files[selectedItemIndex];
+                if (!selectedFile) return null;
+                return (
+                    <DiffScreen
+                        filePath={selectedFile.path}
+                        diffContent={selectedFile.diff}
+                        isExpanded={isDiffExpanded}
+                    />
+                );
+            }
+
+            if (bodyView === 'script_output') {
+                 const scriptIndex = selectedItemIndex - numFiles;
+                 const selectedScript = scripts[scriptIndex];
+                 if (!selectedScript) return null;
+                 
+                 const outputLines = selectedScript.output.split('\n');
+                 const errorLines = outputLines.filter((line: string) =>
+                    line.includes('Error') || line.includes('Warning'),
+                 );
+                 
+                 return (
+                    <Box flexDirection="column">
+                        <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                        <Box marginTop={1} flexDirection="column">
+                            {outputLines.map((line, index) => {
+                                const isError = line.includes('Error');
+                                const isWarning = line.includes('Warning');
+                                const isHighlighted = errorLines[scriptErrorIndex] === line;
+                                
+                                return (
+                                    <Text 
+                                        key={index} 
+                                        color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                        bold={isHighlighted}
+                                        backgroundColor={isHighlighted ? 'blue' : undefined}
+                                    >
+                                        {line}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                        {errorLines.length > 0 && (
+                            <Text color="gray">
+                                Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                            </Text>
+                        )}
+                    </Box>
+                 );
+            }
+
+            if (bodyView === 'confirm_handoff') {
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+                        <Box flexDirection="column">
+                            <Text>This action will:</Text>
+                            <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
+                            <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
+                            <Text>3. Assume that you and the external agent will complete the work.</Text>
+                        </Box>
+                        <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
+                        <Text bold color="yellow">Are you sure you want to proceed?</Text>
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'bulk_repair') {
+                const failedFiles = files.filter((f: ReviewFileItem) => f.reviewStatus === 'FAILED');
+                const repairOptions = [
+                    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+                    '(2) Bulk Change Strategy & Re-apply',
+                    '(3) Handoff to External Agent',
+                    '(4) Bulk Abandon All Failed Files',
+                    '(Esc) Cancel',
+                ];
+
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>BULK REPAIR ACTION</Text>
+
+                        <Box flexDirection="column">
+                            <Text>The following {failedFiles.length} files failed to apply:</Text>
+                            {failedFiles.map((file: ReviewFileItem) => (
+                                <Text key={file.id}>- {file.path}</Text>
+                            ))}
+                        </Box>
+
+                        <Text>How would you like to proceed?</Text>
+
+                        <Box flexDirection="column">
+                            {repairOptions.map((opt, i) => (
+                                <Text key={i}>
+                                    {i === 0 ? '> ' : '  '}
+                                    {opt}
+                                </Text>
+                            ))}
+                        </Box>
+                    </Box>
+                );
+            }
+
+            return null;
+        };
+
+        const renderFooter = () => {
+            // Contextual footer for body views
+            if (bodyView === 'diff') {
+                return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
+            }
+            if (bodyView === 'reasoning') {
+                return <Text>(↑↓) Scroll Text · (R)Collapse View · (C)opy Mode</Text>;
+            }
+            if (bodyView === 'script_output') {
+                return (
+                    <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
+                );
+            }
+            if (bodyView === 'bulk_repair') {
+                return <Text>Choose an option [1-4, Esc]:</Text>;
+            }
+            if (bodyView === 'confirm_handoff') {
+                return <Text>(Enter) Confirm Handoff      (Esc) Cancel</Text>;
+            }
+
+            // Main footer
+            const actions = ['(↑↓) Nav'];
+
+            const isFileSelected = selectedItemIndex < numFiles;
+            const hasFailedFiles = files.some((f: ReviewFileItem) => f.reviewStatus === 'FAILED');
+            
+            if (isFileSelected) {
+                const selectedFile = files[selectedItemIndex];
+                if (selectedFile && selectedFile.reviewStatus !== 'FAILED') {
+                    actions.push('(Spc) Toggle');
+                }
+                actions.push('(D)iff');
+                
+                // Add repair options for failed files
+                if (selectedFile && selectedFile.reviewStatus === 'FAILED') {
+                    actions.push('(T)ry Repair');
+                }
+            } else { // script selected
+                actions.push('(Ent) Expand Details');
+            }
+
+            actions.push('(R)easoning');
+            
+            // Add bulk repair if there are failed files
+            if (hasFailedFiles) {
+                actions.push('(Shift+T) Bulk Repair');
+            }
+            
+            actions.push('(C)opy');
+
+            if (approvedFilesCount > 0) {
+                actions.push('(A)pprove');
+            }
+
+            if (files.some((f: ReviewFileItem) => f.reviewStatus === 'APPROVED' || f.reviewStatus === 'FAILED')) {
+                actions.push('(Shift+R) Reject All');
+            }
+            actions.push('(Q)uit');
+
+            return <Text>{actions.join(' · ')}</Text>;
+        };
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text color="cyan">▲ relaycode review</Text>
+                <Separator />
+                
+                {/* Navigator Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Box flexDirection="column">
+                        <Text>{hash} · {message}</Text>
+                        <Text>
+                            (<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files
+                            {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+                            {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                        </Text>
+                    </Box>
+
+                    <Box flexDirection="column" marginTop={1}>
+                        <Text>
+                            (P)rompt ▸ {(prompt || '').substring(0, 60)}...
+                        </Text>
+                        <Text>
+                            (R)easoning ({(reasoning || '').split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                            {((reasoning || '').split('\n')[0] ?? '').substring(0, 50)}...
+                        </Text>
+                    </Box>
+                </Box>
+
+                <Separator/>
+
+                {/* Script Results (if any) */}
+                {scripts.length > 0 && (
+                    <>
+                        <Box flexDirection="column" marginY={1}>
+                            {scripts.map((script: ScriptResult, index: number) => (
+                                <ScriptItemRow
+                                    key={script.command}
+                                    script={script}
+                                    isSelected={selectedItemIndex === numFiles + index}
+                                    isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
+                                />
+                            ))}
+                        </Box>
+                        <Separator/>
+                    </>
+                )}
+
+                {/* Files Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Text bold>FILES</Text>
+                    {files.map((file: ReviewFileItem, index: number) => (
+                        <FileItemRow
+                            key={file.id}
+                            file={file}
+                            isSelected={selectedItemIndex === index}
+                        />
+                    ))}
+                </Box>
+                
+                <Separator/>
+                
+                {/* Body Viewport */}
+                {bodyView !== 'none' && (
+                    <>
+                        <Box marginY={1}>
+                            {renderBody()}
+                        </Box>
+                        <Separator />
+                    </>
+                )}
+
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default ReviewScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 85

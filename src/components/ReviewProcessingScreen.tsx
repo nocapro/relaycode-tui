@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { useReviewStore, type ApplyStep } from '../stores/review.store';
 import { useTransactionStore } from '../stores/transaction.store';
+import { useReviewStore, type ApplyStep } from '../stores/review.store';
 import Separator from './Separator';
 
 const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep, isSubstep?: boolean }) => {

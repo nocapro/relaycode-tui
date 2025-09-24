@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import type { Task, TaskStatus, InitPhase, GitignoreChoice } from '../types/init.types';
-export type { Task } from '../types/init.types';
+import type { Task, TaskStatus, InitPhase, GitignoreChoice } from '../types/view.types';
 
 // Store Interface
+export type { Task };
 interface InitState {
     phase: InitPhase;
     analyzeTasks: Task[];

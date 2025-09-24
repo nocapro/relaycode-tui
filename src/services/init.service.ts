@@ -1,5 +1,5 @@
 import { useInitStore } from '../stores/init.store';
-import type { Task } from '../types/init.types';
+import type { Task } from '../types/view.types';
 import { sleep } from '../utils';
 
 const initialAnalyzeTasks: Task[] = [

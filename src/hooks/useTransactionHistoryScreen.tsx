@@ -11,13 +11,13 @@ export const useTransactionHistoryScreen = () => {
     const [, rows] = useStdoutDimensions();
     const store = useTransactionHistoryStore();
     const { showDashboardScreen } = useAppStore(s => s.actions);
-    const transactions = useTransactionStore(s => s.transactions);
+    const allTransactions = useTransactionStore(s => s.transactions);
 
     const [viewOffset, setViewOffset] = useState(0);
 
     const visibleItemPaths = useMemo(
-        () => getVisibleItemPaths(store.transactions, store.expandedIds),
-        [store.transactions, store.expandedIds],
+        () => getVisibleItemPaths(allTransactions, store.expandedIds),
+        [allTransactions, store.expandedIds],
     );
     const selectedIndex = visibleItemPaths.indexOf(store.selectedItemPath);
 
@@ -34,7 +34,7 @@ export const useTransactionHistoryScreen = () => {
 
     const openCopyMode = () => {
         const { selectedForAction } = store;
-        const transactionsToCopy = store.transactions.filter(tx => selectedForAction.has(tx.id));
+        const transactionsToCopy = allTransactions.filter(tx => selectedForAction.has(tx.id));
 
         if (transactionsToCopy.length === 0) return;
         const title = `Select data to copy from ${transactionsToCopy.length} transactions:`;
@@ -73,16 +73,17 @@ export const useTransactionHistoryScreen = () => {
     const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
     const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
     const transactionsInView = useMemo(
-        () => store.transactions.filter(tx => txIdsInView.has(tx.id)),
-        [store.transactions, txIdsInView],
+        () => allTransactions.filter(tx => txIdsInView.has(tx.id)),
+        [allTransactions, txIdsInView],
     );
     const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
 
     const filterStatus = store.filterQuery ? store.filterQuery : '(none)';
-    const showingStatus = `Showing ${viewOffset + 1}-${viewOffset + itemsInView.length} of ${visibleItemPaths.length} items`;
+    const showingStatus = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
     
     return {
         store,
+        transactions: allTransactions,
         viewOffset,
         itemsInView,
         transactionsInView,

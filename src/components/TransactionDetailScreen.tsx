@@ -1,10 +1,10 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { type FileChangeType } from '../types/file.types';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
 import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
+import type { FileChangeType } from '../types/domain.types';
 
 const getFileChangeTypeIcon = (type: FileChangeType) => {
     switch (type) {

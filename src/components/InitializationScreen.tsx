@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { type Task } from '../stores/init.store';
+import type { Task } from '../types/view.types';
 import Separator from './Separator';
 import { useInitializationScreen } from '../hooks/useInitializationScreen';
 
