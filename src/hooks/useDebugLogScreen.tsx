@@ -4,6 +4,7 @@ import { useLogStore } from '../stores/log.store';
 import { useViewStore } from '../stores/view.store';
 import { useViewport } from './useViewport';
 import { LoggerService } from '../services/logger.service';
+import type { LayoutConfig } from './useLayout';
 import { moveIndex } from '../stores/navigation.utils';
 
 export const useDebugLogScreen = () => {
@@ -19,16 +20,24 @@ export const useDebugLogScreen = () => {
         log.message.toLowerCase().includes(filterQuery.toLowerCase()),
     ), [logs, filterQuery]);
 
-    // Reset index if it's out of bounds after filtering
+    // Reset index to top when filter changes
+    useEffect(() => {
+        setSelectedIndex(0);
+    }, [filterQuery]);
+
+    // Clamp index if it's out of bounds after logs change for other reasons
     useEffect(() => {
         if (selectedIndex >= filteredLogs.length) {
             setSelectedIndex(Math.max(0, filteredLogs.length - 1));
         }
     }, [filteredLogs.length, selectedIndex]);
 
+    // Header, borders, footer, filter line
+    const layoutConfig: LayoutConfig = { paddingY: 2, header: 1, separators: 2, fixedRows: 1, marginsY: 1, footer: 1 };
+
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        reservedRows: 8, // Header, borders, footer, filter line
+        layoutConfig,
     });
 
     useInput((input, key) => {

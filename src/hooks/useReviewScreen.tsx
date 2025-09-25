@@ -1,12 +1,13 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useInput, type Key } from 'ink';
 import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
 import { useCopyStore } from '../stores/copy.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
+import { useLayout } from './useLayout';
+import { useContentViewport } from './useContentViewport';
 import { useViewport } from './useViewport';
-import { useStdoutDimensions } from '../utils';
 
 type NavigableItem =
     | { type: 'prompt' }
@@ -26,22 +27,35 @@ export const useReviewScreen = () => {
 
     const transaction = useTransactionStore(selectSelectedTransaction);
     const { showDashboardScreen } = useAppStore(s => s.actions);
-    const [contentScrollIndex, setContentScrollIndex] = useState(0);
-    const [height] = useStdoutDimensions();
 
-    // Reset scroll when body view changes
-    useEffect(() => {
-        setContentScrollIndex(0);
-    }, [bodyView]);
-
-    // Header(2) + Meta(3) + Prompt/Reasoning(2) + Separator(1) + Scripts(N) + Separator(1) + FilesHeader(1) + Separator(1) + BodyMargin(1) + Footer(1)
     const scriptCount = transaction?.scripts?.length || 0;
-    const RESERVED_ROWS_MAIN = 13 + scriptCount;
-    const { viewOffset, viewportHeight } = useViewport({ selectedIndex: selectedItemIndex, reservedRows: RESERVED_ROWS_MAIN });
-
-    // For body content, it's simpler
     const fileCount = transaction?.files?.length || 0;
-    const availableBodyHeight = Math.max(1, height - (RESERVED_ROWS_MAIN + fileCount));
+
+    // Layout for the main navigable item list (prompt, reasoning, files, etc.)
+    const mainListLayoutConfig = useMemo(() => ({
+        header: 2, // title+sep
+        fixedRows: 2 + 1 + 1, // meta + prompt + reasoning headers are static before list
+        marginsY: 1, // meta container
+        separators: 3, // after meta, after scripts, after files
+        footer: 2, // ActionFooter can be tall
+        // The body, if visible, also reserves space
+        dynamicRows: { count: bodyView !== 'none' ? 10 : 0 }, // Reserve a block for the body view
+    }), [bodyView]);
+
+    const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
+    const { viewOffset } = useViewport({ selectedIndex: selectedItemIndex, layoutConfig: mainListLayoutConfig });
+
+    // Layout for the body content (diff, reasoning, etc.)
+    const bodyLayoutConfig = useMemo(() => ({
+        header: 2,
+        fixedRows: 2, // meta
+        marginsY: 1 + 1 + 1, // meta, scripts, files
+        separators: 4, // after title, meta, scripts, files, body
+        footer: 2,
+        dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
+    }), [scriptCount, fileCount]);
+
+    const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
 
     const navigableItems = useMemo((): NavigableItem[] => {
         if (!transaction) return [];
@@ -50,7 +64,27 @@ export const useReviewScreen = () => {
         return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
     }, [transaction]);
 
-    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + viewportHeight);
+    const contentLineCount = useMemo(() => {
+        const currentItem = navigableItems[selectedItemIndex];
+        switch (bodyView) {
+            case 'reasoning':
+                return (transaction?.reasoning || '').split('\n').length;
+            case 'diff': {
+                if (currentItem?.type !== 'file') return 0;
+                const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
+                return (selectedFile?.diff || '').split('\n').length;
+            }
+            case 'script_output': {
+                if (currentItem?.type !== 'script') return 0;
+                const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
+                return (selectedScript?.output || '').split('\n').length;
+            }
+            default: return 0;
+        }
+    }, [bodyView, navigableItems, selectedItemIndex, transaction]);
+    const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
 
     // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
     const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
@@ -169,22 +203,12 @@ export const useReviewScreen = () => {
         if (!contentViews.includes(bodyView)) return false;
 
         if (key.upArrow) {
-            setContentScrollIndex(i => Math.max(0, i - 1));
+            contentViewport.actions.scrollUp();
             return true;
         }
-        if (key.downArrow) {
-            // This is a simplification; a real implementation would need content length.
-            setContentScrollIndex(i => i + 1);
-            return true;
-        }
-        if (key.pageUp) {
-            setContentScrollIndex(i => Math.max(0, i - availableBodyHeight));
-            return true;
-        }
-        if (key.pageDown) {
-            setContentScrollIndex(i => i + availableBodyHeight);
-            return true;
-        }
+        if (key.downArrow) { contentViewport.actions.scrollDown(); return true; }
+        if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+        if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
         return false;
     };
 
@@ -321,7 +345,7 @@ export const useReviewScreen = () => {
         isFileSelected,
         navigableItemsInView,
         viewOffset,
-        contentScrollIndex,
+        contentScrollIndex: contentViewport.scrollIndex,
         availableBodyHeight,
         selectedBulkRepairOptionIndex,
         selectedBulkInstructOptionIndex,

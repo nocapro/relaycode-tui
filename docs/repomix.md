@@ -29,6 +29,7 @@ src/
   data/
     mocks.ts
   hooks/
+    useContentViewport.ts
     useCopyScreen.tsx
     useDashboardScreen.tsx
     useDebugLogScreen.tsx
@@ -36,6 +37,7 @@ src/
     useGitCommitScreen.tsx
     useGlobalHotkeys.tsx
     useInitializationScreen.tsx
+    useLayout.ts
     useReviewScreen.tsx
     useSplashScreen.tsx
     useTransactionDetailScreen.tsx
@@ -81,159 +83,142 @@ tsconfig.json
 
 # Files
 
-## File: src/hooks/useCopyScreen.tsx
+## File: src/hooks/useContentViewport.ts
 ```typescript
-import { useInput } from 'ink';
-import { useCopyStore } from '../stores/copy.store';
-import { useViewStore } from '../stores/view.store';
-import { useViewport } from './useViewport';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
-// Header, separator, title, margin, separator, status, footer
-const RESERVED_ROWS = 8;
+interface ContentViewportConfig {
+    contentLineCount: number;
+    viewportHeight: number;
+}
 
-export const useCopyScreen = () => {
-    const activeOverlay = useViewStore(s => s.activeOverlay);
-    const {
-        title, items, selectedIndex, selectedIds, lastCopiedMessage,
-        actions,
-    } = useCopyStore(state => ({ ...state, actions: state.actions }));
+export interface ContentViewport {
+    scrollIndex: number;
+    canScrollUp: boolean;
+    canScrollDown: boolean;
+    actions: {
+        scrollUp: (lines?: number) => void;
+        scrollDown: (lines?: number) => void;
+        pageUp: () => void;
+        pageDown: () => void;
+        resetScroll: () => void;
+    };
+}
 
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex,
-        reservedRows: RESERVED_ROWS,
-    });
+/**
+ * Manages the scrolling state (index) for a block of content within a fixed viewport.
+ * @param config Configuration including total content lines and the height of the visible area.
+ * @returns State and actions for controlling the scroll position.
+ */
+export const useContentViewport = ({
+    contentLineCount,
+    viewportHeight,
+}: ContentViewportConfig): ContentViewport => {
+    const [scrollIndex, setScrollIndex] = useState(0);
 
-    useInput((input, key) => {
-        if (key.escape) {
-            actions.close();
-            return;
-        }
-        if (key.upArrow) {
-            actions.navigateUp();
-            return;
-        }
-        if (key.downArrow) {
-            actions.navigateDown();
-            return;
-        }
-        if (key.pageUp) {
-            actions.navigatePageUp(viewportHeight);
-            return;
-        }
-        if (key.pageDown) {
-            actions.navigatePageDown(viewportHeight);
-            return;
-        }
-        if (input === ' ') {
-            actions.toggleSelection();
-            return;
-        }
-        if (key.return) {
-            actions.executeCopy();
-            return;
-        }
-        
-        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
-        if(item) {
-            actions.toggleSelectionById(item.id);
-        }
-    }, { isActive: activeOverlay === 'copy' });
+    const maxScrollIndex = useMemo(
+        () => Math.max(0, contentLineCount - viewportHeight),
+        [contentLineCount, viewportHeight],
+    );
 
-    const itemsInView = items.slice(viewOffset, viewOffset + viewportHeight);
+    // Effect to clamp scrollIndex if content or viewport size changes
+    useEffect(() => {
+        if (scrollIndex > maxScrollIndex) {
+            setScrollIndex(maxScrollIndex);
+        }
+    }, [scrollIndex, maxScrollIndex]);
+
+    const canScrollUp = useMemo(() => scrollIndex > 0, [scrollIndex]);
+    const canScrollDown = useMemo(() => scrollIndex < maxScrollIndex, [scrollIndex, maxScrollIndex]);
+
+    const scrollUp = useCallback((lines = 1) => {
+        setScrollIndex(i => Math.max(0, i - lines));
+    }, []);
+
+    const scrollDown = useCallback((lines = 1) => {
+        setScrollIndex(i => Math.min(maxScrollIndex, i + lines));
+    }, [maxScrollIndex]);
+
+    const pageUp = useCallback(() => {
+        setScrollIndex(i => Math.max(0, i - viewportHeight));
+    }, [viewportHeight]);
+
+    const pageDown = useCallback(() => {
+        setScrollIndex(i => Math.min(maxScrollIndex, i + viewportHeight));
+    }, [maxScrollIndex, viewportHeight]);
+    
+    const resetScroll = useCallback(() => {
+        setScrollIndex(0);
+    }, []);
 
     return {
-        title,
-        itemsInView,
-        selectedIndex,
-        selectedIds,
-        lastCopiedMessage,
-        viewOffset,
+        scrollIndex,
+        canScrollUp,
+        canScrollDown,
+        actions: {
+            scrollUp,
+            scrollDown,
+            pageUp,
+            pageDown,
+            resetScroll,
+        },
     };
 };
 ```
 
-## File: src/components/ActionFooter.tsx
+## File: src/hooks/useLayout.ts
 ```typescript
-import { Box, Text } from 'ink';
+import { useMemo } from 'react';
 import { useStdoutDimensions } from '../utils';
-import { UI_CONFIG } from '../config/ui.config';
-import type { ActionItem } from '../types/actions.types';
 
-interface ActionFooterProps {
-    actions: ActionItem[];
+export interface LayoutConfig {
+    header?: number;
+    footer?: number;
+    separators?: number;
+    marginsY?: number; // Total vertical margin
+    paddingY?: number; // Total vertical padding
+    fixedRows?: number; // For any other static rows
+    dynamicRows?: {
+        count: number;
+        lineHeight?: number; // Default to 1
+    };
 }
 
-const Action = ({ item }: { item: ActionItem }) => (
-    <Text>
-        (<Text color="cyan" bold>{item.key}</Text>) {item.label}
-    </Text>
-);
+export interface LayoutInfo {
+    totalHeight: number;
+    remainingHeight: number;
+}
 
-const ActionFooter = ({ actions }: ActionFooterProps) => {
-    const [width] = useStdoutDimensions();
-    const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
-    const separatorWidth = actionSeparator.length;
+/**
+ * Calculates available vertical space based on terminal height and a declarative layout config.
+ * @param config A declarative object describing static and dynamic rows to reserve.
+ * @returns An object with total terminal height and the calculated remaining height for content.
+ */
+export const useLayout = (config: LayoutConfig): LayoutInfo => {
+    const [, totalHeight] = useStdoutDimensions();
 
-    // Calculate required width for a single line
-    const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
-    const singleLineWidth = formattedActions.join(actionSeparator).length;
+    const reservedHeight = useMemo(() => {
+        let reserved = 0;
+        reserved += config.header || 0;
+        reserved += config.footer || 0;
+        reserved += config.separators || 0;
+        reserved += config.marginsY || 0;
+        reserved += config.paddingY || 0;
+        reserved += config.fixedRows || 0;
 
-    // 1. Render horizontally if it fits
-    if (singleLineWidth <= width - horizontalPadding * 2) {
-        return (
-            <Box>
-                {actions.map((item, index) => (
-                    <Text key={item.key}>
-                        <Action item={item} />
-                        {index < actions.length - 1 && <Text>{actionSeparator}</Text>}
-                    </Text>
-                ))}
-            </Box>
-        );
-    }
-
-    // 2. If it doesn't fit, calculate multi-column layout
-    const itemWidths = formattedActions.map(a => a.length);
-    const maxItemWidth = Math.max(...itemWidths);
-    
-    // Determine how many columns can fit, ensuring at least one
-    const availableWidth = width - horizontalPadding * 2;
-    // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
-    const numColumns = Math.min(
-        actions.length,
-        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth))),
-    );
-    
-    const itemsPerColumn = Math.ceil(actions.length / numColumns);
-    const columns: ActionItem[][] = Array.from({ length: numColumns }, () => []);
-
-    actions.forEach((action, index) => {
-        const columnIndex = Math.floor(index / itemsPerColumn);
-        if (columns[columnIndex]) {
-            columns[columnIndex].push(action);
+        if (config.dynamicRows) {
+            reserved += config.dynamicRows.count * (config.dynamicRows.lineHeight || 1);
         }
-    });
+        return reserved;
+    }, [config]);
 
-    return (
-        <Box flexDirection="row" width="100%">
-            {columns.map((column, colIndex) => (
-                <Box
-                    key={colIndex}
-                    flexDirection="column"
-                    // Use a flex-basis approach for more even distribution if needed,
-                    // but fixed width is better for alignment.
-                    width={maxItemWidth + separatorWidth}
-                >
-                    {column.map(item => (
-                        <Action key={item.key} item={item} />
-                    ))}
-                </Box>
-            ))}
-        </Box>
-    );
+    const remainingHeight = Math.max(1, totalHeight - reservedHeight);
+
+    return {
+        totalHeight,
+        remainingHeight,
+    };
 };
-
-export default ActionFooter;
 ```
 
 ## File: src/constants/detail.constants.ts
@@ -290,6 +275,78 @@ export const INITIAL_APPLY_STEPS: ApplyStep[] = [
     { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
     { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
 ];
+```
+
+## File: src/hooks/useCopyScreen.tsx
+```typescript
+import { useInput } from 'ink';
+import { useCopyStore } from '../stores/copy.store';
+import { useViewStore } from '../stores/view.store';
+import { useViewport } from './useViewport';
+import type { LayoutConfig } from './useLayout';
+
+export const useCopyScreen = () => {
+    const activeOverlay = useViewStore(s => s.activeOverlay);
+    const {
+        title, items, selectedIndex, selectedIds, lastCopiedMessage,
+        actions,
+    } = useCopyStore(state => ({ ...state, actions: state.actions }));
+    
+    // Header, separator, title, margin, separator, status, footer
+    const layoutConfig: LayoutConfig = { header: 1, separators: 2, fixedRows: 2, marginsY: 1, footer: 1 };
+    
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        layoutConfig,
+    });
+
+    useInput((input, key) => {
+        if (key.escape) {
+            actions.close();
+            return;
+        }
+        if (key.upArrow) {
+            actions.navigateUp();
+            return;
+        }
+        if (key.downArrow) {
+            actions.navigateDown();
+            return;
+        }
+        if (key.pageUp) {
+            actions.navigatePageUp(viewportHeight);
+            return;
+        }
+        if (key.pageDown) {
+            actions.navigatePageDown(viewportHeight);
+            return;
+        }
+        if (input === ' ') {
+            actions.toggleSelection();
+            return;
+        }
+        if (key.return) {
+            actions.executeCopy();
+            return;
+        }
+        
+        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
+        if(item) {
+            actions.toggleSelectionById(item.id);
+        }
+    }, { isActive: activeOverlay === 'copy' });
+
+    const itemsInView = items.slice(viewOffset, viewOffset + viewportHeight);
+
+    return {
+        title,
+        itemsInView,
+        selectedIndex,
+        selectedIds,
+        lastCopiedMessage,
+        viewOffset,
+    };
+};
 ```
 
 ## File: src/services/fs.service.ts
@@ -392,125 +449,88 @@ export interface LogEntry {
 }
 ```
 
-## File: src/components/DebugLogScreen.tsx
+## File: src/components/ActionFooter.tsx
 ```typescript
 import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
-import Separator from './Separator';
-import ActionFooter from './ActionFooter';
-import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
-import type { LogEntry } from '../types/log.types';
 import { useStdoutDimensions } from '../utils';
+import { UI_CONFIG } from '../config/ui.config';
+import type { ActionItem } from '../types/actions.types';
 
-const LogLevelColors = {
-    DEBUG: 'gray',
-    INFO: 'white',
-    WARN: 'yellow',
-    ERROR: 'red',
-};
+interface ActionFooterProps {
+    actions: ActionItem[];
+}
 
-const LogLevelTag = {
-    DEBUG: { color: 'white', backgroundColor: 'gray' },
-    INFO: { color: 'black', backgroundColor: 'cyan' },
-    WARN: { color: 'black', backgroundColor: 'yellow' },
-    ERROR: { color: 'white', backgroundColor: 'red' },
-};
+const Action = ({ item }: { item: ActionItem }) => (
+    <Text>
+        (<Text color="cyan" bold>{item.key}</Text>) {item.label}
+    </Text>
+);
 
-const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
-    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
-    const color = LogLevelColors[entry.level];
-    const tagColors = LogLevelTag[entry.level];
-
-    return (
-        <Text color={color}>
-            {isSelected ? '> ' : '  '}
-            <Text color="gray">{time}</Text>
-            {' '}
-            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
-                {' '}{entry.level.padEnd(5, ' ')}{' '}
-            </Text>
-            {' '}
-            {entry.message}
-        </Text>
-    );
-};
-
-const DebugLogScreen = () => {
-    const {
-        logsInView,
-        logCount,
-        filteredLogCount,
-        selectedIndex,
-        mode,
-        filterQuery,
-        setFilterQuery,
-        viewOffset,
-    } = useDebugLogScreen();
+const ActionFooter = ({ actions }: ActionFooterProps) => {
     const [width] = useStdoutDimensions();
+    const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
+    const separatorWidth = actionSeparator.length;
 
-    const renderFilter = () => (
-        <Box>
-            <Text>Filter: </Text>
-            {mode === 'FILTER' ? (
-                <TextInput
-                    value={filterQuery}
-                    onChange={setFilterQuery}
-                    placeholder="Type to filter log messages..."
-                />
-            ) : (
-                <Text color="gray">{filterQuery || '(none)'}</Text>
-            )}
-            <Box flexGrow={1} /> 
-            <Text>
-                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
-                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
-            </Text> 
-        </Box>
+    // Calculate required width for a single line
+    const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
+    const singleLineWidth = formattedActions.join(actionSeparator).length;
+
+    // 1. Render horizontally if it fits
+    if (singleLineWidth <= width - horizontalPadding * 2) {
+        return (
+            <Box>
+                {actions.map((item, index) => (
+                    <Text key={item.key}>
+                        <Action item={item} />
+                        {index < actions.length - 1 && <Text>{actionSeparator}</Text>}
+                    </Text>
+                ))}
+            </Box>
+        );
+    }
+
+    // 2. If it doesn't fit, calculate multi-column layout
+    const itemWidths = formattedActions.map(a => a.length);
+    const maxItemWidth = Math.max(...itemWidths);
+    
+    // Determine how many columns can fit, ensuring at least one
+    const availableWidth = width - horizontalPadding * 2;
+    // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
+    const numColumns = Math.min(
+        actions.length,
+        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth))),
     );
+    
+    const itemsPerColumn = Math.ceil(actions.length / numColumns);
+    const columns: ActionItem[][] = Array.from({ length: numColumns }, () => []);
 
-    const footerActions =
-        mode === 'FILTER'
-            ? [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }]
-            : [
-                  { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
-                  { key: 'F', label: 'Filter' },
-                  { key: 'C', label: 'Clear' },
-                  { key: 'Esc/Ctrl+L', label: 'Close' },
-              ];
+    actions.forEach((action, index) => {
+        const columnIndex = Math.floor(index / itemsPerColumn);
+        if (columns[columnIndex]) {
+            columns[columnIndex].push(action);
+        }
+    });
 
     return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            height="100%"
-            paddingX={2}
-            paddingY={1}
-        >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
-            <Separator width={width - 4} />
-            <Box marginY={1}>{renderFilter()}</Box>
-            <Box flexDirection="column" flexGrow={1}>
-                {logsInView.map((entry, index) => (
-                    <LogEntryRow
-                        key={`${entry.timestamp}-${index}`}
-                        entry={entry}
-                        isSelected={selectedIndex === index + viewOffset}
-                    />
-                ))}
-                {logCount > 0 && filteredLogCount === 0 && (
-                    <Text color="gray">No logs match your filter.</Text>
-                )}
-                {logCount === 0 && (
-                    <Text color="gray">No log entries yet. Waiting for system activity...</Text>
-                )}
-            </Box>
-            <Separator width={width - 4} />
-            <ActionFooter actions={footerActions} />
+        <Box flexDirection="row" width="100%">
+            {columns.map((column, colIndex) => (
+                <Box
+                    key={colIndex}
+                    flexDirection="column"
+                    // Use a flex-basis approach for more even distribution if needed,
+                    // but fixed width is better for alignment.
+                    width={maxItemWidth + separatorWidth}
+                >
+                    {column.map(item => (
+                        <Action key={item.key} item={item} />
+                    ))}
+                </Box>
+            ))}
         </Box>
     );
 };
 
-export default DebugLogScreen;
+export default ActionFooter;
 ```
 
 ## File: src/config/ui.config.ts
@@ -593,117 +613,20 @@ export const COPYABLE_ITEMS = {
 } as const;
 ```
 
-## File: src/hooks/useDebugLogScreen.tsx
-```typescript
-import { useState, useEffect, useMemo } from 'react';
-import { useInput } from 'ink';
-import { useLogStore } from '../stores/log.store';
-import { useViewStore } from '../stores/view.store';
-import { useViewport } from './useViewport';
-import { LoggerService } from '../services/logger.service';
-import { moveIndex } from '../stores/navigation.utils';
-
-export const useDebugLogScreen = () => {
-    const logs = useLogStore(s => s.logs);
-    const clearLogs = useLogStore(s => s.actions.clearLogs);
-    const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
-
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const [mode, setMode] = useState<'LIST' | 'FILTER'>('LIST');
-    const [filterQuery, setFilterQuery] = useState('');
-
-    const filteredLogs = useMemo(() => logs.filter(log =>
-        log.message.toLowerCase().includes(filterQuery.toLowerCase()),
-    ), [logs, filterQuery]);
-
-    // Reset index if it's out of bounds after filtering
-    useEffect(() => {
-        if (selectedIndex >= filteredLogs.length) {
-            setSelectedIndex(Math.max(0, filteredLogs.length - 1));
-        }
-    }, [filteredLogs.length, selectedIndex]);
-
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex,
-        reservedRows: 8, // Header, borders, footer, filter line
-    });
-
-    useInput((input, key) => {
-        if (mode === 'FILTER') {
-            if (key.escape || key.return) {
-                setMode('LIST');
-            }
-            return;
-        }
-
-        if (key.escape) {
-            setActiveOverlay('none');
-            return;
-        }
-        if (key.upArrow) {
-            setSelectedIndex(i => moveIndex(i, 'up', filteredLogs.length));
-            return;
-        }
-        if (key.downArrow) {
-            setSelectedIndex(i => moveIndex(i, 'down', filteredLogs.length));
-            return;
-        }
-        if (key.pageUp) {
-            setSelectedIndex(i => Math.max(0, i - viewportHeight));
-            return;
-        }
-        if (key.pageDown) {
-            setSelectedIndex(i => Math.min(filteredLogs.length - 1, i + viewportHeight));
-            return;
-        }
-        if (input.toLowerCase() === 'c') {
-            clearLogs();
-            setFilterQuery('');
-            setSelectedIndex(0);
-            return;
-        }
-        if (input.toLowerCase() === 'f') {
-            setMode('FILTER');
-        }
-    });
-
-    useEffect(() => {
-        LoggerService.startSimulator();
-        return () => {
-            LoggerService.stopSimulator();
-        };
-    }, []);
-
-    const logsInView = filteredLogs.slice(viewOffset, viewOffset + viewportHeight);
-
-    return {
-        logsInView,
-        logCount: logs.length,
-        filteredLogCount: filteredLogs.length,
-        selectedIndex,
-        mode,
-        filterQuery,
-        setFilterQuery,
-        viewOffset,
-    };
-};
-```
-
 ## File: src/hooks/useViewport.ts
 ```typescript
 import { useState, useEffect } from 'react';
 import { useStdoutDimensions } from '../utils';
+import { useLayout, type LayoutConfig } from './useLayout';
 
 interface UseViewportOptions {
 	selectedIndex: number;
-	reservedRows: number; // Vertical padding (headers, footers, etc.)
+	layoutConfig: LayoutConfig;
 }
 
-export const useViewport = ({ selectedIndex, reservedRows }: UseViewportOptions) => {
-	const [columns, rows] = useStdoutDimensions();
+export const useViewport = ({ selectedIndex, layoutConfig }: UseViewportOptions) => {
+	const { remainingHeight: viewportHeight } = useLayout(layoutConfig);
 	const [viewOffset, setViewOffset] = useState(0);
-
-	const viewportHeight = Math.max(1, rows - reservedRows);
 
 	useEffect(() => {
 		if (selectedIndex >= 0 && selectedIndex < viewOffset) {
@@ -716,7 +639,7 @@ export const useViewport = ({ selectedIndex, reservedRows }: UseViewportOptions)
     return {
         viewOffset,
         viewportHeight,
-        width: columns,
+        width: useStdoutDimensions()[0],
     };
 };
 ```
@@ -740,69 +663,6 @@ const getTransactionYamlPath = (transactionHash: string): string => {
 export const EditorService = {
     openFileInEditor,
     getTransactionYamlPath,
-};
-```
-
-## File: src/services/logger.service.ts
-```typescript
-import { useLogStore } from '../stores/log.store';
-
-let simulatorInterval: ReturnType<typeof setInterval> | null = null;
-
-const mockClipboardContents = [
-    'feat(dashboard): implement new UI components',
-    'const clipboardy = require(\'clipboardy\');',
-    'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890 100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import React from \'react\';',
-    'All changes have been applied successfully. You can now commit them.',
-    '{\n  "id": "123",\n  "status": "PENDING"\n}',
-    'Can you refactor this to use a switch statement?',
-];
-let currentClipboardIndex = 0;
-
-const startSimulator = () => {
-    if (simulatorInterval) return;
-
-    // Initial burst of logs to populate the view
-    LoggerService.info('Log simulator started.');
-    LoggerService.debug('Initializing clipboard watcher...');
-    setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
-
-    simulatorInterval = setInterval(() => {
-        const random = Math.random();
-        if (random < 0.6) {
-            LoggerService.debug('Clipboard watcher polling...');
-        } else if (random < 0.8) {
-            LoggerService.debug('No clipboard change detected.');
-        } else {
-            const newContent = mockClipboardContents[currentClipboardIndex]!;
-            currentClipboardIndex = (currentClipboardIndex + 1) % mockClipboardContents.length;
-            const excerpt = newContent.replace(/\n/g, ' ').substring(0, 50).trim();
-            LoggerService.info(`Clipboard content changed. Excerpt: "${excerpt}..."`);
-        }
-    }, 2000);
-};
-
-const stopSimulator = () => {
-    if (simulatorInterval) {
-        clearInterval(simulatorInterval);
-        simulatorInterval = null;
-        LoggerService.info('Log simulator stopped.');
-    }
-};
-
-const debug = (message: string) => useLogStore.getState().actions.addLog('DEBUG', message);
-const info = (message: string) => useLogStore.getState().actions.addLog('INFO', message);
-const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
-const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
-
-
-export const LoggerService = {
-    debug,
-    info,
-    warn,
-    error,
-    startSimulator,
-    stopSimulator,
 };
 ```
 
@@ -887,67 +747,6 @@ export interface Transaction {
         linesRemoved: number;
     };
 }
-```
-
-## File: src/utils.ts
-```typescript
-import { useState, useEffect } from 'react';
-
-// Utility for simulation
-export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-type Dimensions = { columns: number; rows: number };
-const subscribers = new Set<(dims: Dimensions) => void>();
-let currentDimensions: Dimensions = {
-    columns: process.stdout.columns || 80,
-    rows: process.stdout.rows || 24,
-};
-
-let listenerAttached = false;
-
-const updateAndNotify = () => {
-    const newDimensions = {
-        columns: process.stdout.columns || 80,
-        rows: process.stdout.rows || 24,
-    };
-
-    if (newDimensions.columns !== currentDimensions.columns || newDimensions.rows !== currentDimensions.rows) {
-        currentDimensions = newDimensions;
-        subscribers.forEach(subscriber => subscriber(currentDimensions));
-    }
-};
-
-if (!listenerAttached) {
-    process.stdout.on('resize', updateAndNotify);
-    listenerAttached = true;
-}
-
-export const useStdoutDimensions = (): [number, number] => {
-    const [dimensions, setDimensions] = useState(currentDimensions);
-
-    useEffect(() => {
-        const subscriber = (newDims: Dimensions) => setDimensions(newDims);
-        subscribers.add(subscriber);
-
-        // On mount, check if dimensions are stale and update if needed for this hook instance.
-        setDimensions(dims => {
-            const latestDims = {
-                columns: process.stdout.columns || 80,
-                rows: process.stdout.rows || 24,
-            };
-            if (latestDims.columns !== dims.columns || latestDims.rows !== dims.rows) {
-                return latestDims;
-            }
-            return dims;
-        });
-
-        return () => {
-            subscribers.delete(subscriber);
-        };
-    }, []);
-
-    return [dimensions.columns, dimensions.rows];
-};
 ```
 
 ## File: eslint.config.js
@@ -1103,6 +902,363 @@ export default [
 }
 ```
 
+## File: src/components/DebugLogScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import Separator from './Separator';
+import ActionFooter from './ActionFooter';
+import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+import type { LogEntry } from '../types/log.types';
+import { useStdoutDimensions } from '../utils';
+
+const LogLevelColors = {
+    DEBUG: 'gray',
+    INFO: 'white',
+    WARN: 'yellow',
+    ERROR: 'red',
+};
+
+const LogLevelTag = {
+    DEBUG: { color: 'white', backgroundColor: 'gray' },
+    INFO: { color: 'black', backgroundColor: 'cyan' },
+    WARN: { color: 'black', backgroundColor: 'yellow' },
+    ERROR: { color: 'white', backgroundColor: 'red' },
+};
+
+const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
+    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+    const color = LogLevelColors[entry.level];
+    const tagColors = LogLevelTag[entry.level];
+
+    return (
+        <Text color={color}>
+            {isSelected ? '> ' : '  '}
+            <Text color="gray">{time}</Text>
+            {' '}
+            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
+                {' '}{entry.level.padEnd(5, ' ')}{' '}
+            </Text>
+            {' '}
+            {entry.message}
+        </Text>
+    );
+};
+
+const DebugLogScreen = () => {
+    const {
+        logsInView,
+        logCount,
+        filteredLogCount,
+        selectedIndex,
+        mode,
+        filterQuery,
+        setFilterQuery,
+        viewOffset,
+    } = useDebugLogScreen();
+    const [width] = useStdoutDimensions();
+
+    const renderFilter = () => (
+        <Box>
+            <Text>Filter: </Text>
+            {mode === 'FILTER' ? (
+                <TextInput
+                    value={filterQuery}
+                    onChange={setFilterQuery}
+                    placeholder="Type to filter log messages..."
+                />
+            ) : (
+                <Text color="gray">{filterQuery || '(none)'}</Text>
+            )}
+            <Box flexGrow={1} /> 
+            <Text>
+                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
+                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
+            </Text> 
+        </Box>
+    );
+
+    const footerActions =
+        mode === 'FILTER'
+            ? [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }]
+            : [
+                  { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+                  { key: 'F', label: 'Filter' },
+                  { key: 'C', label: 'Clear' },
+                  { key: 'Esc/Ctrl+L', label: 'Close' },
+              ];
+
+    return (
+        <Box
+            flexDirection="column"
+            width="100%"
+            height="100%"
+            paddingX={2}
+            paddingY={1}
+        >
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+            <Separator width={width - 4} />
+            <Box marginY={1}>{renderFilter()}</Box>
+            <Box flexDirection="column" flexGrow={1}>
+                {logsInView.map((entry, index) => (
+                    <LogEntryRow
+                        key={`${entry.timestamp}-${index}`}
+                        entry={entry}
+                        isSelected={selectedIndex === index + viewOffset}
+                    />
+                ))}
+                {logCount > 0 && filteredLogCount === 0 && (
+                    <Text color="gray">No logs match your filter.</Text>
+                )}
+                {logCount === 0 && (
+                    <Text color="gray">No log entries yet. Waiting for system activity...</Text>
+                )}
+            </Box>
+            <Separator width={width - 4} />
+            <ActionFooter actions={footerActions} />
+        </Box>
+    );
+};
+
+export default DebugLogScreen;
+```
+
+## File: src/hooks/useDebugLogScreen.tsx
+```typescript
+import { useState, useEffect, useMemo } from 'react';
+import { useInput } from 'ink';
+import { useLogStore } from '../stores/log.store';
+import { useViewStore } from '../stores/view.store';
+import { useViewport } from './useViewport';
+import { LoggerService } from '../services/logger.service';
+import type { LayoutConfig } from './useLayout';
+import { moveIndex } from '../stores/navigation.utils';
+
+export const useDebugLogScreen = () => {
+    const logs = useLogStore(s => s.logs);
+    const clearLogs = useLogStore(s => s.actions.clearLogs);
+    const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
+
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [mode, setMode] = useState<'LIST' | 'FILTER'>('LIST');
+    const [filterQuery, setFilterQuery] = useState('');
+
+    const filteredLogs = useMemo(() => logs.filter(log =>
+        log.message.toLowerCase().includes(filterQuery.toLowerCase()),
+    ), [logs, filterQuery]);
+
+    // Reset index if it's out of bounds after filtering
+    useEffect(() => {
+        if (selectedIndex >= filteredLogs.length) {
+            setSelectedIndex(Math.max(0, filteredLogs.length - 1));
+        }
+    }, [filteredLogs.length, selectedIndex]);
+
+    // Header, borders, footer, filter line
+    const layoutConfig: LayoutConfig = { paddingY: 2, header: 1, separators: 2, fixedRows: 1, marginsY: 1, footer: 1 };
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        layoutConfig,
+    });
+
+    useInput((input, key) => {
+        if (mode === 'FILTER') {
+            if (key.escape || key.return) {
+                setMode('LIST');
+            }
+            return;
+        }
+
+        if (key.escape) {
+            setActiveOverlay('none');
+            return;
+        }
+        if (key.upArrow) {
+            setSelectedIndex(i => moveIndex(i, 'up', filteredLogs.length));
+            return;
+        }
+        if (key.downArrow) {
+            setSelectedIndex(i => moveIndex(i, 'down', filteredLogs.length));
+            return;
+        }
+        if (key.pageUp) {
+            setSelectedIndex(i => Math.max(0, i - viewportHeight));
+            return;
+        }
+        if (key.pageDown) {
+            setSelectedIndex(i => Math.min(filteredLogs.length - 1, i + viewportHeight));
+            return;
+        }
+        if (input.toLowerCase() === 'c') {
+            clearLogs();
+            setFilterQuery('');
+            setSelectedIndex(0);
+            return;
+        }
+        if (input.toLowerCase() === 'f') {
+            setMode('FILTER');
+        }
+    });
+
+    useEffect(() => {
+        LoggerService.startSimulator();
+        return () => {
+            LoggerService.stopSimulator();
+        };
+    }, []);
+
+    const logsInView = filteredLogs.slice(viewOffset, viewOffset + viewportHeight);
+
+    return {
+        logsInView,
+        logCount: logs.length,
+        filteredLogCount: filteredLogs.length,
+        selectedIndex,
+        mode,
+        filterQuery,
+        setFilterQuery,
+        viewOffset,
+    };
+};
+```
+
+## File: src/services/logger.service.ts
+```typescript
+import { useLogStore } from '../stores/log.store';
+
+let simulatorInterval: ReturnType<typeof setInterval> | null = null;
+
+const mockClipboardContents = [
+    'feat(dashboard): implement new UI components',
+    'const clipboardy = require(\'clipboardy\');',
+    'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890 100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import React from \'react\';',
+    'All changes have been applied successfully. You can now commit them.',
+    '{\n  "id": "123",\n  "status": "PENDING"\n}',
+    'Can you refactor this to use a switch statement?',
+];
+let currentClipboardIndex = 0;
+
+const startSimulator = () => {
+    if (simulatorInterval) return;
+
+    // Initial burst of logs to populate the view
+    LoggerService.info('Log simulator started.');
+    LoggerService.debug('Initializing clipboard watcher...');
+    setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
+
+    simulatorInterval = setInterval(() => {
+        const random = Math.random();
+        if (random < 0.6) {
+            LoggerService.debug('Clipboard watcher polling...');
+        } else if (random < 0.8) {
+            LoggerService.debug('No clipboard change detected.');
+        } else {
+            const newContent = mockClipboardContents[currentClipboardIndex]!;
+            currentClipboardIndex = (currentClipboardIndex + 1) % mockClipboardContents.length;
+            const excerpt = newContent.replace(/\n/g, ' ').substring(0, 50).trim();
+            LoggerService.info(`Clipboard content changed. Excerpt: "${excerpt}..."`);
+        }
+    }, 2000);
+};
+
+const stopSimulator = () => {
+    if (simulatorInterval) {
+        clearInterval(simulatorInterval);
+        simulatorInterval = null;
+        LoggerService.info('Log simulator stopped.');
+    }
+};
+
+const debug = (message: string) => useLogStore.getState().actions.addLog('DEBUG', message);
+const info = (message: string) => useLogStore.getState().actions.addLog('INFO', message);
+const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
+const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
+
+
+export const LoggerService = {
+    debug,
+    info,
+    warn,
+    error,
+    startSimulator,
+    stopSimulator,
+};
+```
+
+## File: src/types/view.types.ts
+```typescript
+import type { APP_SCREENS } from '../constants/app.constants';
+
+// --- UI / View-Specific Types ---
+
+// app.store
+type ObjectValues<T> = T[keyof T];
+
+export type AppScreen = ObjectValues<typeof APP_SCREENS>;
+```
+
+## File: src/utils.ts
+```typescript
+import { useState, useEffect } from 'react';
+
+// Utility for simulation
+export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+type Dimensions = { columns: number; rows: number };
+const subscribers = new Set<(dims: Dimensions) => void>();
+let currentDimensions: Dimensions = {
+    columns: process.stdout.columns || 80,
+    rows: process.stdout.rows || 24,
+};
+
+let listenerAttached = false;
+
+const updateAndNotify = () => {
+    const newDimensions = {
+        columns: process.stdout.columns || 80,
+        rows: process.stdout.rows || 24,
+    };
+
+    if (newDimensions.columns !== currentDimensions.columns || newDimensions.rows !== currentDimensions.rows) {
+        currentDimensions = newDimensions;
+        subscribers.forEach(subscriber => subscriber(currentDimensions));
+    }
+};
+
+if (!listenerAttached) {
+    process.stdout.on('resize', updateAndNotify);
+    listenerAttached = true;
+}
+
+export const useStdoutDimensions = (): [number, number] => {
+    const [dimensions, setDimensions] = useState(currentDimensions);
+
+    useEffect(() => {
+        const subscriber = (newDims: Dimensions) => setDimensions(newDims);
+        subscribers.add(subscriber);
+
+        // On mount, check if dimensions are stale and update if needed for this hook instance.
+        setDimensions(dims => {
+            const latestDims = {
+                columns: process.stdout.columns || 80,
+                rows: process.stdout.rows || 24,
+            };
+            if (latestDims.columns !== dims.columns || latestDims.rows !== dims.rows) {
+                return latestDims;
+            }
+            return dims;
+        });
+
+        return () => {
+            subscribers.delete(subscriber);
+        };
+    }, []);
+
+    return [dimensions.columns, dimensions.rows];
+};
+```
+
 ## File: src/components/DiffScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -1161,6 +1317,120 @@ const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHei
 };
 
 export default DiffScreen;
+```
+
+## File: src/components/GlobalHelpScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+
+const GlobalHelpScreen = () => {
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                paddingX={2}
+                paddingY={1}
+                width="80%"
+            >
+                <Box justifyContent="center" marginBottom={1}>
+                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
+                </Box>
+                <Box flexDirection="column" gap={1}>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">GLOBAL</Text>
+                        <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
+                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">DASHBOARD (watch)</Text>
+                        <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                        <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
+                        <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
+                        <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                        <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                        <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
+                        <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
+                        <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
+                        <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
+                    </Box>
+                </Box>
+            </Box>
+            <Box marginTop={1}>
+                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default GlobalHelpScreen;
+```
+
+## File: src/components/ReasonScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+
+interface ReasonScreenProps {
+    reasoning: string,
+    scrollIndex?: number,
+    visibleLinesCount?: number, // if not provided, all lines are shown
+}
+
+const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonScreenProps) => {
+    const lines = reasoning.split('\n');
+    const visibleLines = visibleLinesCount ? lines.slice(scrollIndex, scrollIndex + visibleLinesCount) : lines;
+
+    return (
+        <Box flexDirection="column">
+            <Text>REASONING</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {visibleLines.map((line, index) => <Text key={index}>{line}</Text>)}
+            </Box>
+        </Box>
+    );
+};
+
+export default ReasonScreen;
+```
+
+## File: src/services/dashboard.service.ts
+```typescript
+import { sleep } from '../utils';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+import { LoggerService } from './logger.service';
+
+const approveAll = async () => {
+    LoggerService.info('Starting bulk approval process...');
+    const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
+    const pendingTxIds = pendingTransactions.map(tx => tx.id);
+    LoggerService.debug(`Found ${pendingTxIds.length} pending transactions to approve.`);
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
+    pendingTxIds.forEach(id => {
+        updateTransactionStatus(id, 'IN-PROGRESS');
+        LoggerService.debug(`Transaction ${id} status set to IN-PROGRESS.`);
+    });
+
+    await sleep(2000); // Simulate approval process
+
+    // Mark them as applied
+    pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+    LoggerService.info(`Bulk approval complete. ${pendingTxIds.length} transactions applied.`);
+};
+
+export const DashboardService = {
+    approveAll,
+};
 ```
 
 ## File: src/stores/history.store.ts
@@ -1337,132 +1607,6 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 }));
 ```
 
-## File: src/types/view.types.ts
-```typescript
-import type { APP_SCREENS } from '../constants/app.constants';
-
-// --- UI / View-Specific Types ---
-
-// app.store
-type ObjectValues<T> = T[keyof T];
-
-export type AppScreen = ObjectValues<typeof APP_SCREENS>;
-```
-
-## File: src/components/GlobalHelpScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-
-const GlobalHelpScreen = () => {
-    return (
-        <Box
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-            width="100%"
-            height="100%"
-        >
-            <Box
-                flexDirection="column"
-                borderStyle="round"
-                paddingX={2}
-                paddingY={1}
-                width="80%"
-            >
-                <Box justifyContent="center" marginBottom={1}>
-                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
-                </Box>
-                <Box flexDirection="column" gap={1}>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">GLOBAL</Text>
-                        <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
-                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">DASHBOARD (watch)</Text>
-                        <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
-                        <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
-                        <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
-                        <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
-                        <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
-                        <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
-                        <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
-                        <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
-                        <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
-                        <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
-                        <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
-                    </Box>
-                </Box>
-            </Box>
-            <Box marginTop={1}>
-                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
-            </Box>
-        </Box>
-    );
-};
-
-export default GlobalHelpScreen;
-```
-
-## File: src/components/ReasonScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-
-interface ReasonScreenProps {
-    reasoning: string,
-    scrollIndex?: number,
-    visibleLinesCount?: number, // if not provided, all lines are shown
-}
-
-const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonScreenProps) => {
-    const lines = reasoning.split('\n');
-    const visibleLines = visibleLinesCount ? lines.slice(scrollIndex, scrollIndex + visibleLinesCount) : lines;
-
-    return (
-        <Box flexDirection="column">
-            <Text>REASONING</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {visibleLines.map((line, index) => <Text key={index}>{line}</Text>)}
-            </Box>
-        </Box>
-    );
-};
-
-export default ReasonScreen;
-```
-
-## File: src/services/dashboard.service.ts
-```typescript
-import { sleep } from '../utils';
-import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
-import { LoggerService } from './logger.service';
-
-const approveAll = async () => {
-    LoggerService.info('Starting bulk approval process...');
-    const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
-    const pendingTxIds = pendingTransactions.map(tx => tx.id);
-    LoggerService.debug(`Found ${pendingTxIds.length} pending transactions to approve.`);
-    const { updateTransactionStatus } = useTransactionStore.getState().actions;
-    pendingTxIds.forEach(id => {
-        updateTransactionStatus(id, 'IN-PROGRESS');
-        LoggerService.debug(`Transaction ${id} status set to IN-PROGRESS.`);
-    });
-
-    await sleep(2000); // Simulate approval process
-
-    // Mark them as applied
-    pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
-    LoggerService.info(`Bulk approval complete. ${pendingTxIds.length} transactions applied.`);
-};
-
-export const DashboardService = {
-    approveAll,
-};
-```
-
 ## File: src/stores/navigation.utils.ts
 ```typescript
 import type { Transaction } from '../types/domain.types';
@@ -1516,73 +1660,6 @@ export const getVisibleItemPaths = (
     }
     return paths;
 };
-```
-
-## File: src/components/CopyScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
-import { useCopyScreen } from '../hooks/useCopyScreen';
-
-const CopyScreen = () => {
-    const {
-        title,
-        itemsInView,
-        selectedIndex,
-        selectedIds,
-        lastCopiedMessage,
-        viewOffset,
-    } = useCopyScreen();
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box 
-            width="100%"
-            height="100%"
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-        >
-            <Box 
-                flexDirection="column" 
-                borderStyle="round" 
-                borderColor="yellow" 
-                paddingX={2}
-                width="80%"
-            >
-                <Text bold color="yellow">▲ relaycode · copy mode</Text>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                <Box flexDirection="column" marginY={1}>
-                    <Text>{title}</Text>
-                    <Box flexDirection="column" marginTop={1}>
-                        {itemsInView.map((item, index) => {
-                            const isSelected = (index + viewOffset) === selectedIndex;
-                            const isChecked = selectedIds.has(item.id);
-                            return (
-                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
-                                    {isSelected ? '> ' : '  '}
-                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                </Box>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <ActionFooter actions={[
-                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
-                    { key: 'Spc/Hotkey', label: 'Toggle' },
-                    { key: 'Enter', label: 'Copy' },
-                    { key: 'Esc', label: 'Close' },
-                ]}/>
-            </Box>
-        </Box>
-    );
-};
-
-export default CopyScreen;
 ```
 
 ## File: src/data/mocks.ts
@@ -1740,138 +1817,6 @@ export const CommitService = {
 };
 ```
 
-## File: src/stores/copy.store.ts
-```typescript
-import { create } from 'zustand';
-import { moveIndex } from './navigation.utils';
-import { useViewStore } from './view.store';
-import { LoggerService } from '../services/logger.service';
-import { CopyService } from '../services/copy.service';
-import type { CopyItem } from '../types/copy.types';
-import type { Transaction, FileItem } from '../types/domain.types';
-
-export type { CopyItem };
-
-interface CopyState {
-    title: string;
-    items: CopyItem[];
-    selectedIndex: number;
-    selectedIds: Set<string>;
-    lastCopiedMessage: string | null;
-    onClose?: () => void;
-
-    actions: {
-        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
-        close: () => void;
-        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
-        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
-        openForHistory: (transactions: Transaction[]) => void;
-        navigateUp: () => void;
-        navigateDown: () => void;
-        navigatePageUp: (viewportHeight: number) => void;
-        navigatePageDown: (viewportHeight: number) => void;
-        toggleSelection: () => void;
-        toggleSelectionById: (id: string) => void;
-        executeCopy: () => void;
-    };
-}
-
-export const useCopyStore = create<CopyState>((set, get) => ({
-    title: '',
-    items: [],
-    selectedIndex: 0,
-    selectedIds: new Set(),
-    lastCopiedMessage: null,
-    onClose: undefined,
-
-    actions: {
-        open: (title, items, onClose) => {
-            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
-            useViewStore.getState().actions.setActiveOverlay('copy');
-            set({
-                title,
-                items,
-                selectedIndex: 0,
-                selectedIds: defaultSelectedIds,
-                lastCopiedMessage: null,
-                onClose,
-            });
-        },
-        close: () => {
-            useViewStore.getState().actions.setActiveOverlay('none');
-            get().onClose?.();
-            set({ items: [], onClose: undefined });
-        },
-        openForReview: (transaction, files, selectedFile) => {
-            const { actions } = get();
-            const title = 'Select data to copy from review:';
-            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
-            actions.open(title, items);
-        },
-        openForDetail: (transaction, selectedFile) => {
-            const { actions } = get();
-            const title = `Select data to copy from transaction ${transaction.hash}:`;
-            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
-            actions.open(title, items);
-        },
-        openForHistory: (transactions) => {
-            const { actions } = get();
-            const title = `Select data to copy from ${transactions.length} transactions:`;
-            const items = CopyService.getCopyItemsForHistory(transactions);
-            actions.open(title, items);
-        },
-        navigateUp: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
-        })),
-        navigateDown: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
-        })),
-        navigatePageUp: (viewportHeight: number) => set(state => ({
-            selectedIndex: Math.max(0, state.selectedIndex - viewportHeight),
-        })),
-        navigatePageDown: (viewportHeight: number) => set(state => ({
-            selectedIndex: Math.min(state.items.length - 1, state.selectedIndex + viewportHeight),
-        })),
-        toggleSelection: () => set(state => {
-            const currentItem = state.items[state.selectedIndex];
-            if (!currentItem) return {};
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(currentItem.id)) {
-                newSelectedIds.delete(currentItem.id);
-            } else {
-                newSelectedIds.add(currentItem.id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        toggleSelectionById: (id: string) => set(state => {
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(id)) {
-                newSelectedIds.delete(id);
-            } else {
-                newSelectedIds.add(id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        executeCopy: async () => {
-            const { items, selectedIds } = get();
-            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
-            if (itemsToCopy.length === 0) return;
-
-            LoggerService.info(`Copying ${itemsToCopy.length} item(s) to clipboard.`);
-            const dataPromises = itemsToCopy.map(item => item.getData());
-            const resolvedData = await Promise.all(dataPromises);
-
-            const content = itemsToCopy
-                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
-                .join('\n\n');
-            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
-            LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
-            set({ lastCopiedMessage: message });
-        },
-    },
-}));
-```
-
 ## File: src/stores/detail.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -2016,6 +1961,71 @@ export interface CopyItem {
     getData: () => string | Promise<string>;
     isDefaultSelected?: boolean;
 }
+```
+
+## File: src/components/CopyScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
+import { useCopyScreen } from '../hooks/useCopyScreen';
+
+const CopyScreen = () => {
+    const {
+        title,
+        itemsInView,
+        selectedIndex,
+        selectedIds,
+        lastCopiedMessage,
+        viewOffset,
+    } = useCopyScreen();
+    const [width] = useStdoutDimensions();
+
+    return (
+        <Box 
+            width="100%"
+            height="100%"
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+        >
+            <Box 
+                flexDirection="column" 
+                paddingX={2}
+                width="80%"
+            >
+                <Text bold color="yellow">▲ relaycode · copy mode</Text>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                <Box flexDirection="column" marginY={1}>
+                    <Text>{title}</Text>
+                    <Box flexDirection="column" marginTop={1}>
+                        {itemsInView.map((item, index) => {
+                            const isSelected = (index + viewOffset) === selectedIndex;
+                            const isChecked = selectedIds.has(item.id);
+                            return (
+                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
+                                    {isSelected ? '> ' : '  '}
+                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                </Box>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+                <ActionFooter actions={[
+                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                    { key: 'Spc/Hotkey', label: 'Toggle' },
+                    { key: 'Enter', label: 'Copy' },
+                    { key: 'Esc', label: 'Close' },
+                ]}/>
+            </Box>
+        </Box>
+    );
+};
+
+export default CopyScreen;
 ```
 
 ## File: src/components/ReviewProcessingScreen.tsx
@@ -2303,6 +2313,138 @@ export const InitService = {
     runInitializationProcess,
     resumeInitializationProcess,
 };
+```
+
+## File: src/stores/copy.store.ts
+```typescript
+import { create } from 'zustand';
+import { moveIndex } from './navigation.utils';
+import { useViewStore } from './view.store';
+import { LoggerService } from '../services/logger.service';
+import { CopyService } from '../services/copy.service';
+import type { CopyItem } from '../types/copy.types';
+import type { Transaction, FileItem } from '../types/domain.types';
+
+export type { CopyItem };
+
+interface CopyState {
+    title: string;
+    items: CopyItem[];
+    selectedIndex: number;
+    selectedIds: Set<string>;
+    lastCopiedMessage: string | null;
+    onClose?: () => void;
+
+    actions: {
+        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+        close: () => void;
+        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+        openForHistory: (transactions: Transaction[]) => void;
+        navigateUp: () => void;
+        navigateDown: () => void;
+        navigatePageUp: (viewportHeight: number) => void;
+        navigatePageDown: (viewportHeight: number) => void;
+        toggleSelection: () => void;
+        toggleSelectionById: (id: string) => void;
+        executeCopy: () => void;
+    };
+}
+
+export const useCopyStore = create<CopyState>((set, get) => ({
+    title: '',
+    items: [],
+    selectedIndex: 0,
+    selectedIds: new Set(),
+    lastCopiedMessage: null,
+    onClose: undefined,
+
+    actions: {
+        open: (title, items, onClose) => {
+            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+            useViewStore.getState().actions.setActiveOverlay('copy');
+            set({
+                title,
+                items,
+                selectedIndex: 0,
+                selectedIds: defaultSelectedIds,
+                lastCopiedMessage: null,
+                onClose,
+            });
+        },
+        close: () => {
+            useViewStore.getState().actions.setActiveOverlay('none');
+            get().onClose?.();
+            set({ items: [], onClose: undefined });
+        },
+        openForReview: (transaction, files, selectedFile) => {
+            const { actions } = get();
+            const title = 'Select data to copy from review:';
+            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+            actions.open(title, items);
+        },
+        openForDetail: (transaction, selectedFile) => {
+            const { actions } = get();
+            const title = `Select data to copy from transaction ${transaction.hash}:`;
+            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+            actions.open(title, items);
+        },
+        openForHistory: (transactions) => {
+            const { actions } = get();
+            const title = `Select data to copy from ${transactions.length} transactions:`;
+            const items = CopyService.getCopyItemsForHistory(transactions);
+            actions.open(title, items);
+        },
+        navigateUp: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
+        })),
+        navigateDown: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+        })),
+        navigatePageUp: (viewportHeight: number) => set(state => ({
+            selectedIndex: Math.max(0, state.selectedIndex - viewportHeight),
+        })),
+        navigatePageDown: (viewportHeight: number) => set(state => ({
+            selectedIndex: Math.min(state.items.length - 1, state.selectedIndex + viewportHeight),
+        })),
+        toggleSelection: () => set(state => {
+            const currentItem = state.items[state.selectedIndex];
+            if (!currentItem) return {};
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(currentItem.id)) {
+                newSelectedIds.delete(currentItem.id);
+            } else {
+                newSelectedIds.add(currentItem.id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        toggleSelectionById: (id: string) => set(state => {
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(id)) {
+                newSelectedIds.delete(id);
+            } else {
+                newSelectedIds.add(id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        executeCopy: async () => {
+            const { items, selectedIds } = get();
+            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+            if (itemsToCopy.length === 0) return;
+
+            LoggerService.info(`Copying ${itemsToCopy.length} item(s) to clipboard.`);
+            const dataPromises = itemsToCopy.map(item => item.getData());
+            const resolvedData = await Promise.all(dataPromises);
+
+            const content = itemsToCopy
+                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                .join('\n\n');
+            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+            LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            set({ lastCopiedMessage: message });
+        },
+    },
+}));
 ```
 
 ## File: package.json
@@ -2705,9 +2847,10 @@ import { useTransactionStore, selectTransactionsByStatus } from '../stores/trans
 import { useReviewStore } from '../stores/review.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useHistoryStore } from '../stores/history.store';
+import type { LayoutConfig } from './useLayout';
 import { useViewport } from './useViewport';
 
-export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) => {
+export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
     const {
         status,
         selectedTransactionIndex,
@@ -2719,7 +2862,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
 
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex: selectedTransactionIndex,
-        reservedRows,
+        layoutConfig,
     });
 
     const {
@@ -3050,132 +3193,6 @@ const InitializationScreen = () => {
 export default InitializationScreen;
 ```
 
-## File: src/hooks/useTransactionDetailScreen.tsx
-```typescript
-import { useInput, type Key } from 'ink';
-import { useDetailStore } from '../stores/detail.store';
-import { useViewStore } from '../stores/view.store';
-import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
-import { useMemo, useState, useEffect } from 'react';
-import { useCopyStore } from '../stores/copy.store';
-import { EditorService } from '../services/editor.service';
-import { useStdoutDimensions } from '../utils';
-
-export const useTransactionDetailScreen = () => {
-    const store = useDetailStore();
-    const transaction = useTransactionStore(selectSelectedTransaction);
-    const files = useMemo(() => transaction?.files || [], [transaction]);
-
-    const {
-        navigateUp,
-        navigateDown,
-        expandOrDrillDown,
-        collapseOrBubbleUp,
-        toggleRevertConfirm,
-        confirmRevert,
-    } = store.actions;
-    const [contentScrollIndex, setContentScrollIndex] = useState(0);
-    const [, height] = useStdoutDimensions();
-
-    // Reset scroll when body view changes
-    useEffect(() => {
-        setContentScrollIndex(0);
-    }, [store.bodyView]);
-
-    // Header(2) + Meta(4) + Navigator(3+) + Separator(1) + BodyMargin(1) + Separator(1) + Footer(1)
-    const availableBodyHeight = Math.max(1, height - 13 - (transaction?.files?.length || 0));
-
-    const openCopyMode = () => {
-        if (!transaction) return;
-        const { focusedItemPath } = store;
-        const fileId = focusedItemPath.split('/')[1];
-        const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
-        useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
-    };
-
-    useInput((input: string, key: Key) => {
-        if (store.bodyView === 'REVERT_CONFIRM') {
-            if (key.escape) toggleRevertConfirm();
-            if (key.return) confirmRevert();
-            return;
-        }
-        
-        // --- Content Scrolling ---
-        if (store.bodyView === 'PROMPT' || store.bodyView === 'REASONING' || store.bodyView === 'DIFF_VIEW') {
-             let contentLines = 0;
-            if (store.bodyView === 'PROMPT') {
-                contentLines = (transaction?.prompt || '').split('\n').length;
-            } else if (store.bodyView === 'REASONING') {
-                contentLines = (transaction?.reasoning || '').split('\n').length;
-            } else if (store.bodyView === 'DIFF_VIEW') {
-                const fileId = store.focusedItemPath.split('/')[1];
-                const file = files.find(f => f.id === fileId);
-                contentLines = (file?.diff || '').split('\n').length;
-            }
-            
-            if (key.upArrow) {
-                setContentScrollIndex(i => Math.max(0, i - 1));
-                return;
-            }
-            if (key.downArrow) {
-                setContentScrollIndex(i => Math.min(Math.max(0, contentLines - availableBodyHeight), i + 1));
-                return;
-            }
-            if (key.pageUp) {
-                setContentScrollIndex(i => Math.max(0, i - availableBodyHeight));
-                return;
-            }
-            if (key.pageDown) {
-                setContentScrollIndex(i => Math.min(Math.max(0, contentLines - availableBodyHeight), i + availableBodyHeight));
-                return;
-            }
-        }
-
-        // --- Main Input ---
-        if (input.toLowerCase() === 'c') {
-            openCopyMode();
-            return;
-        }
-        if (input.toLowerCase() === 'u') {
-            toggleRevertConfirm();
-            return;
-        }
-        if (input.toLowerCase() === 'o') {
-            if (!transaction) return;
-            const { focusedItemPath } = store;
-            if (focusedItemPath.includes('/')) { // Is a file
-                const fileId = focusedItemPath.split('/')[1];
-                const file = files.find(f => f.id === fileId);
-                if (file) EditorService.openFileInEditor(file.path);
-            } else { // Is a section, open the transaction YAML
-                const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
-                EditorService.openFileInEditor(yamlPath);
-            }
-        }
-
-        // Navigator movement only if not scrolling content
-        if (store.bodyView !== 'PROMPT' && store.bodyView !== 'REASONING' && store.bodyView !== 'DIFF_VIEW') {
-            if (key.upArrow) navigateUp();
-            if (key.downArrow) navigateDown();
-        }
-        if (key.rightArrow) expandOrDrillDown();
-        if (key.leftArrow) collapseOrBubbleUp();
-        if (key.return) expandOrDrillDown();
-        if (key.escape) collapseOrBubbleUp();
-    }, { isActive: useViewStore.getState().activeOverlay === 'none' }); // Prevent input when copy overlay is open
-
-    return {
-        transaction,
-        files,
-        focusedItemPath: store.focusedItemPath,
-        expandedItemPaths: store.expandedItemPaths,
-        bodyView: store.bodyView,
-        contentScrollIndex,
-        availableBodyHeight,
-    };
-};
-```
-
 ## File: src/services/review.service.ts
 ```typescript
 import { useTransactionStore } from '../stores/transaction.store';
@@ -3451,64 +3468,136 @@ export const useAppStore = create<AppState>((set, get) => ({
 }));
 ```
 
-## File: src/components/DebugMenu.tsx
+## File: src/hooks/useTransactionDetailScreen.tsx
 ```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useDebugMenu } from '../hooks/useDebugMenu';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
+import { useInput, type Key } from 'ink';
+import { useDetailStore } from '../stores/detail.store';
+import { useViewStore } from '../stores/view.store';
+import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
+import { useMemo, useEffect } from 'react';
+import { useCopyStore } from '../stores/copy.store';
+import { EditorService } from '../services/editor.service';
+import { useLayout } from './useLayout';
+import { useContentViewport } from './useContentViewport';
 
-const getKeyForIndex = (index: number): string => {
-    if (index < 9) {
-        return (index + 1).toString();
-    }
-    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+export const useTransactionDetailScreen = () => {
+    const store = useDetailStore();
+    const transaction = useTransactionStore(selectSelectedTransaction);
+    const files = useMemo(() => transaction?.files || [], [transaction]);
+
+    const {
+        navigateUp,
+        navigateDown,
+        expandOrDrillDown,
+        collapseOrBubbleUp,
+        toggleRevertConfirm,
+        confirmRevert,
+    } = store.actions;
+
+    const isFilesExpanded = store.expandedItemPaths.has('FILES');
+    const layoutConfig = useMemo(() => ({
+        header: 2, // Header text + separator
+        fixedRows: 4, // Meta info
+        separators: 2, // after nav, after body
+        marginsY: 1, // for body
+        footer: 2, // ActionFooter can be tall
+        dynamicRows: {
+            count: 3 + (isFilesExpanded ? (files.length || 0) : 0), // navigator items
+        },
+    }), [isFilesExpanded, files.length]);
+
+    const { remainingHeight: availableBodyHeight } = useLayout(layoutConfig);
+    
+    const contentLineCount = useMemo(() => {
+        if (store.bodyView === 'PROMPT') return (transaction?.prompt || '').split('\n').length;
+        if (store.bodyView === 'REASONING') return (transaction?.reasoning || '').split('\n').length;
+        if (store.bodyView === 'DIFF_VIEW') {
+            const fileId = store.focusedItemPath.split('/')[1];
+            const file = files.find(f => f.id === fileId);
+            return (file?.diff || '').split('\n').length;
+        }
+        return 0;
+    }, [store.bodyView, store.focusedItemPath, transaction, files]);
+
+    const viewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+    // Reset scroll when body view changes
+    useEffect(() => {
+        viewport.actions.resetScroll();
+    }, [store.bodyView]);
+
+    const openCopyMode = () => {
+        if (!transaction) return;
+        const { focusedItemPath } = store;
+        const fileId = focusedItemPath.split('/')[1];
+        const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
+        useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
+    };
+
+    useInput((input: string, key: Key) => {
+        if (store.bodyView === 'REVERT_CONFIRM') {
+            if (key.escape) toggleRevertConfirm();
+            if (key.return) confirmRevert();
+            return;
+        }
+        
+        // --- Content Scrolling ---
+        if (store.bodyView === 'PROMPT' || store.bodyView === 'REASONING' || store.bodyView === 'DIFF_VIEW') {
+            if (key.upArrow) {
+                viewport.actions.scrollUp();
+                return;
+            }
+            if (key.downArrow) {
+                viewport.actions.scrollDown();
+                return;
+            }
+            if (key.pageUp) { viewport.actions.pageUp(); return; }
+            if (key.pageDown) { viewport.actions.pageDown(); return; }
+        }
+
+        // --- Main Input ---
+        if (input.toLowerCase() === 'c') {
+            openCopyMode();
+            return;
+        }
+        if (input.toLowerCase() === 'u') {
+            toggleRevertConfirm();
+            return;
+        }
+        if (input.toLowerCase() === 'o') {
+            if (!transaction) return;
+            const { focusedItemPath } = store;
+            if (focusedItemPath.includes('/')) { // Is a file
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (file) EditorService.openFileInEditor(file.path);
+            } else { // Is a section, open the transaction YAML
+                const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
+                EditorService.openFileInEditor(yamlPath);
+            }
+        }
+
+        // Navigator movement only if not scrolling content
+        if (store.bodyView !== 'PROMPT' && store.bodyView !== 'REASONING' && store.bodyView !== 'DIFF_VIEW') {
+            if (key.upArrow) navigateUp();
+            if (key.downArrow) navigateDown();
+        }
+        if (key.rightArrow) expandOrDrillDown();
+        if (key.leftArrow) collapseOrBubbleUp();
+        if (key.return) expandOrDrillDown();
+        if (key.escape) collapseOrBubbleUp();
+    }, { isActive: useViewStore.getState().activeOverlay === 'none' }); // Prevent input when copy overlay is open
+
+    return {
+        transaction,
+        files,
+        focusedItemPath: store.focusedItemPath,
+        expandedItemPaths: store.expandedItemPaths,
+        bodyView: store.bodyView,
+        contentScrollIndex: viewport.scrollIndex,
+        availableBodyHeight,
+    };
 };
-
-const DebugMenu = () => {
-    const { selectedIndex, menuItems, viewOffset, totalItems } = useDebugMenu();
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            paddingX={2}
-            paddingY={1}
-        >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
-            <Separator width={width - 4} />
-            <Box flexDirection="column" marginY={1}>
-                {menuItems.map((item, index) => {
-                    const absoluteIndex = index + viewOffset;
-                    return (
-                        <Text key={item.title} color={selectedIndex === absoluteIndex ? 'cyan' : undefined}>
-                            {selectedIndex === absoluteIndex ? '> ' : '  '}
-                            ({getKeyForIndex(absoluteIndex)}) {item.title}
-                        </Text>
-                    );
-                })}
-            </Box>
-            <Separator width={width - 4} />
-            <Box>
-                <ActionFooter actions={[
-                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
-                    { key: '1-9,a-z', label: 'Jump' },
-                    { key: 'Enter', label: 'Select' },
-                    { key: 'Esc/Ctrl+B', label: 'Close' },
-                ]}/>
-                <Box flexGrow={1} />
-                <Text>
-                    {Math.min(viewOffset + 1, totalItems)}-
-                    {Math.min(viewOffset + menuItems.length, totalItems)} of {totalItems}
-                </Text>
-            </Box>
-        </Box>
-    );
-};
-
-export default DebugMenu;
 ```
 
 ## File: index.tsx
@@ -3590,6 +3679,66 @@ const main = () => {
 main();
 ```
 
+## File: src/components/DebugMenu.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useDebugMenu } from '../hooks/useDebugMenu';
+import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
+
+const getKeyForIndex = (index: number): string => {
+    if (index < 9) {
+        return (index + 1).toString();
+    }
+    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+};
+
+const DebugMenu = () => {
+    const { selectedIndex, menuItems, viewOffset, totalItems } = useDebugMenu();
+    const [width] = useStdoutDimensions();
+
+    return (
+        <Box
+            flexDirection="column"
+            width="100%"
+            paddingX={2}
+            paddingY={1}
+        >
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
+            <Separator width={width - 4} />
+            <Box flexDirection="column" marginY={1}>
+                {menuItems.map((item, index) => {
+                    const absoluteIndex = index + viewOffset;
+                    return (
+                        <Text key={item.title} color={selectedIndex === absoluteIndex ? 'cyan' : undefined}>
+                            {selectedIndex === absoluteIndex ? '> ' : '  '}
+                            ({getKeyForIndex(absoluteIndex)}) {item.title}
+                        </Text>
+                    );
+                })}
+            </Box>
+            <Separator width={width - 4} />
+            <Box>
+                <ActionFooter actions={[
+                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                    { key: '1-9,a-z', label: 'Jump' },
+                    { key: 'Enter', label: 'Select' },
+                    { key: 'Esc/Ctrl+B', label: 'Close' },
+                ]}/>
+                <Box flexGrow={1} />
+                <Text>
+                    {Math.min(viewOffset + 1, totalItems)}-
+                    {Math.min(viewOffset + menuItems.length, totalItems)} of {totalItems}
+                </Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default DebugMenu;
+```
+
 ## File: src/hooks/useReviewScreen.tsx
 ```typescript
 import { useMemo, useState, useEffect } from 'react';
@@ -3599,8 +3748,9 @@ import { useAppStore } from '../stores/app.store';
 import { useCopyStore } from '../stores/copy.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
+import { useLayout } from './useLayout';
+import { useContentViewport } from './useContentViewport';
 import { useViewport } from './useViewport';
-import { useStdoutDimensions } from '../utils';
 
 type NavigableItem =
     | { type: 'prompt' }
@@ -3620,22 +3770,45 @@ export const useReviewScreen = () => {
 
     const transaction = useTransactionStore(selectSelectedTransaction);
     const { showDashboardScreen } = useAppStore(s => s.actions);
-    const [contentScrollIndex, setContentScrollIndex] = useState(0);
-    const [height] = useStdoutDimensions();
+
+    const scriptCount = transaction?.scripts?.length || 0;
+    const fileCount = transaction?.files?.length || 0;
+
+    // Layout for the main navigable item list (prompt, reasoning, files, etc.)
+    const mainListLayoutConfig = useMemo(() => ({
+        header: 2, // title+sep
+        fixedRows: 2 + 1 + 1, // meta + prompt + reasoning headers are static before list
+        marginsY: 1, // meta container
+        separators: 3, // after meta, after scripts, after files
+        footer: 2, // ActionFooter can be tall
+        // The body, if visible, also reserves space
+        dynamicRows: { count: bodyView !== 'none' ? 10 : 0 }, // Reserve a block for the body view
+    }), [bodyView]);
+
+    const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
+    const { viewOffset } = useViewport({ selectedIndex: selectedItemIndex, layoutConfig: mainListLayoutConfig });
+
+    // Layout for the body content (diff, reasoning, etc.)
+    const bodyLayoutConfig = useMemo(() => ({
+        header: 2,
+        fixedRows: 2, // meta
+        marginsY: 1 + 1 + 1, // meta, scripts, files
+        separators: 4, // after title, meta, scripts, files, body
+        footer: 2,
+        dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
+    }), [scriptCount, fileCount]);
+
+    const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
+
+    // TODO: This could be more precise by calculating actual line counts
+    const contentLineCount = 100; // Assume large content for scrolling logic
+    const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
 
     // Reset scroll when body view changes
     useEffect(() => {
-        setContentScrollIndex(0);
+        contentViewport.actions.resetScroll();
     }, [bodyView]);
 
-    // Header(2) + Meta(3) + Prompt/Reasoning(2) + Separator(1) + Scripts(N) + Separator(1) + FilesHeader(1) + Separator(1) + BodyMargin(1) + Footer(1)
-    const scriptCount = transaction?.scripts?.length || 0;
-    const RESERVED_ROWS_MAIN = 13 + scriptCount;
-    const { viewOffset, viewportHeight } = useViewport({ selectedIndex: selectedItemIndex, reservedRows: RESERVED_ROWS_MAIN });
-
-    // For body content, it's simpler
-    const fileCount = transaction?.files?.length || 0;
-    const availableBodyHeight = Math.max(1, height - (RESERVED_ROWS_MAIN + fileCount));
 
     const navigableItems = useMemo((): NavigableItem[] => {
         if (!transaction) return [];
@@ -3644,7 +3817,7 @@ export const useReviewScreen = () => {
         return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
     }, [transaction]);
 
-    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + viewportHeight);
+    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
 
     // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
     const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
@@ -3763,22 +3936,12 @@ export const useReviewScreen = () => {
         if (!contentViews.includes(bodyView)) return false;
 
         if (key.upArrow) {
-            setContentScrollIndex(i => Math.max(0, i - 1));
+            contentViewport.actions.scrollUp();
             return true;
         }
-        if (key.downArrow) {
-            // This is a simplification; a real implementation would need content length.
-            setContentScrollIndex(i => i + 1);
-            return true;
-        }
-        if (key.pageUp) {
-            setContentScrollIndex(i => Math.max(0, i - availableBodyHeight));
-            return true;
-        }
-        if (key.pageDown) {
-            setContentScrollIndex(i => i + availableBodyHeight);
-            return true;
-        }
+        if (key.downArrow) { contentViewport.actions.scrollDown(); return true; }
+        if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+        if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
         return false;
     };
 
@@ -3915,7 +4078,7 @@ export const useReviewScreen = () => {
         isFileSelected,
         navigableItemsInView,
         viewOffset,
-        contentScrollIndex,
+        contentScrollIndex: contentViewport.scrollIndex,
         availableBodyHeight,
         selectedBulkRepairOptionIndex,
         selectedBulkInstructOptionIndex,
@@ -4037,7 +4200,7 @@ const TransactionDetailScreen = () => {
         }
         if (bodyView === 'REASONING') {
             if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
-            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={availableBodyHeight} />;
+            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
         }
         if (bodyView === 'FILES_LIST') {
              return <Text color="gray">(Select a file and press → to view the diff)</Text>;
@@ -4046,7 +4209,7 @@ const TransactionDetailScreen = () => {
             const fileId = focusedItemPath.split('/')[1];
             const file = files.find(f => f.id === fileId);
             if (!file) return null;
-            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={availableBodyHeight} />;
+            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
         }
         return null;
     };
@@ -4155,7 +4318,7 @@ import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
-import { UI_CONFIG } from '../config/ui.config';
+import type { LayoutConfig } from '../hooks/useLayout';
 import ActionFooter from './ActionFooter';
 import type { ActionItem } from '../types/actions.types';
 
@@ -4305,7 +4468,15 @@ const TransactionHistoryScreen = () => {
         showingStatus,
         statsStatus,
         hasSelection,
-    } = useTransactionHistoryScreen({ reservedRows: UI_CONFIG.history.reservedRows });
+    } = useTransactionHistoryScreen({
+        layoutConfig: {
+            header: 1,
+            separators: 2, // after header, after list
+            fixedRows: 1, // filter row
+            marginsY: 1, // for list
+            footer: 2,
+        },
+    });
 
     const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
 
@@ -4428,9 +4599,10 @@ import { useCopyStore } from '../stores/copy.store';
 import type { TransactionStatus } from '../types/domain.types';
 import { EditorService } from '../services/editor.service';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
+import type { LayoutConfig } from './useLayout';
 import { useViewport } from './useViewport';
 
-export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: number }) => {
+export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
     const store = useHistoryStore();
     const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
     const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
@@ -4444,7 +4616,7 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
 
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        reservedRows,
+        layoutConfig,
     });
 
     const openCopyMode = () => {
@@ -4635,6 +4807,85 @@ const App = () => {
 export default App;
 ```
 
+## File: src/stores/dashboard.store.ts
+```typescript
+import { create } from 'zustand';
+import { useTransactionStore } from './transaction.store';
+import { DashboardService } from '../services/dashboard.service';
+import { moveIndex } from './navigation.utils';
+
+export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'APPROVING';
+ 
+interface DashboardState {
+    status: DashboardStatus;
+    previousStatus: DashboardStatus;
+    selectedTransactionIndex: number;
+    expandedTransactionId: string | null;
+    actions: {
+        togglePause: () => void;
+        moveSelectionUp: () => void;
+        moveSelectionDown: () => void;
+        startApproveAll: () => void;
+        confirmAction: () => Promise<void>;
+        cancelAction: () => void;
+        setStatus: (status: DashboardStatus) => void;
+        toggleExpand: () => void;
+        setExpandedTransactionId: (id: string | null) => void;
+    };
+}
+
+export const useDashboardStore = create<DashboardState>((set, get) => ({
+    status: 'LISTENING',
+    previousStatus: 'LISTENING',
+    selectedTransactionIndex: 0,
+    expandedTransactionId: null,
+    actions: {
+        togglePause: () => set(state => ({
+            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+        })),
+        moveSelectionUp: () => set(state => {
+            const { transactions } = useTransactionStore.getState();
+            return {
+                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+                expandedTransactionId: null,
+            };
+        }),
+        moveSelectionDown: () => set(state => {
+            const { transactions } = useTransactionStore.getState();
+            return {
+                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+                expandedTransactionId: null,
+            };
+        }),
+        startApproveAll: () => set(state => ({
+            status: 'CONFIRM_APPROVE',
+            previousStatus: state.status,
+        })),
+        cancelAction: () => set(state => ({ status: state.previousStatus })),
+        setStatus: (status) => set({ status }),
+        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+            const previousStatus = get().previousStatus;
+            set({ status: 'APPROVING' });
+            await DashboardService.approveAll();
+            set({ status: previousStatus });
+        },
+        toggleExpand: () => {
+            const { selectedTransactionIndex, expandedTransactionId } = get();
+            const { transactions } = useTransactionStore.getState();
+            const selectedTx = transactions[selectedTransactionIndex];
+            if (!selectedTx) return;
+
+            if (expandedTransactionId === selectedTx.id) {
+                set({ expandedTransactionId: null });
+            } else {
+                set({ expandedTransactionId: selectedTx.id });
+            }
+        },
+        setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+    },
+}));
+```
+
 ## File: src/components/ReviewScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -4797,7 +5048,7 @@ const ReviewScreen = () => {
                     <ReasonScreen
                         reasoning={reasoningText}
                         scrollIndex={contentScrollIndex}
-                        visibleLinesCount={availableBodyHeight}
+                        visibleLinesCount={Math.max(1, availableBodyHeight)}
                     />
                     {reasoningLinesCount > visibleLinesCount && (
                         <Text color="gray">
@@ -4819,7 +5070,7 @@ const ReviewScreen = () => {
                     diffContent={selectedFile.diff}
                     isExpanded={isDiffExpanded}
                     scrollIndex={contentScrollIndex}
-                    maxHeight={availableBodyHeight}
+                    maxHeight={Math.max(1, availableBodyHeight)}
                 />
             );
         }
@@ -5141,646 +5392,6 @@ const ReviewScreen = () => {
 };
 
 export default ReviewScreen;
-```
-
-## File: src/stores/dashboard.store.ts
-```typescript
-import { create } from 'zustand';
-import { useTransactionStore } from './transaction.store';
-import { DashboardService } from '../services/dashboard.service';
-import { moveIndex } from './navigation.utils';
-
-export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'APPROVING';
- 
-interface DashboardState {
-    status: DashboardStatus;
-    previousStatus: DashboardStatus;
-    selectedTransactionIndex: number;
-    expandedTransactionId: string | null;
-    actions: {
-        togglePause: () => void;
-        moveSelectionUp: () => void;
-        moveSelectionDown: () => void;
-        startApproveAll: () => void;
-        confirmAction: () => Promise<void>;
-        cancelAction: () => void;
-        setStatus: (status: DashboardStatus) => void;
-        toggleExpand: () => void;
-        setExpandedTransactionId: (id: string | null) => void;
-    };
-}
-
-export const useDashboardStore = create<DashboardState>((set, get) => ({
-    status: 'LISTENING',
-    previousStatus: 'LISTENING',
-    selectedTransactionIndex: 0,
-    expandedTransactionId: null,
-    actions: {
-        togglePause: () => set(state => ({
-            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
-        })),
-        moveSelectionUp: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return {
-                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
-                expandedTransactionId: null,
-            };
-        }),
-        moveSelectionDown: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return {
-                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
-                expandedTransactionId: null,
-            };
-        }),
-        startApproveAll: () => set(state => ({
-            status: 'CONFIRM_APPROVE',
-            previousStatus: state.status,
-        })),
-        cancelAction: () => set(state => ({ status: state.previousStatus })),
-        setStatus: (status) => set({ status }),
-        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
-            const previousStatus = get().previousStatus;
-            set({ status: 'APPROVING' });
-            await DashboardService.approveAll();
-            set({ status: previousStatus });
-        },
-        toggleExpand: () => {
-            const { selectedTransactionIndex, expandedTransactionId } = get();
-            const { transactions } = useTransactionStore.getState();
-            const selectedTx = transactions[selectedTransactionIndex];
-            if (!selectedTx) return;
-
-            if (expandedTransactionId === selectedTx.id) {
-                set({ expandedTransactionId: null });
-            } else {
-                set({ expandedTransactionId: selectedTx.id });
-            }
-        },
-        setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
-    },
-}));
-```
-
-## File: src/components/DashboardScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
-import { useDashboardScreen } from '../hooks/useDashboardScreen';
-import { UI_CONFIG } from '../config/ui.config';
-import ActionFooter from './ActionFooter';
-import type { ActionItem } from '../types/actions.types';
-
-// --- Sub-components & Helpers ---
-
-const getStatusIcon = (status: TransactionStatus) => {
-    switch (status) {
-        case 'PENDING': return <Text color="yellow">?</Text>;
-        case 'APPLIED': return <Text color="green">✓</Text>;
-        case 'COMMITTED': return <Text color="blue">→</Text>;
-        case 'HANDOFF': return <Text color="magenta">→</Text>;
-        case 'FAILED': return <Text color="red">✗</Text>;
-        case 'REVERTED': return <Text color="gray">↩</Text>;
-        case 'IN-PROGRESS': return <Spinner type="dots" />;
-        default: return <Text> </Text>;
-    }
-};
-
-const getFileChangeTypeIcon = (type: FileChangeType) => {
-    switch (type) {
-        case 'MOD': return '[MOD]';
-        case 'ADD': return '[ADD]';
-        case 'DEL': return '[DEL]';
-        case 'REN': return '[REN]';
-    }
-};
-
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}m`;
-};
-
-const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
-    const stats = transaction.stats;
-    const files = transaction.files || [];
-
-    return (
-        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
-            {stats && (
-                <Text color="gray">
-                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
-                </Text>
-            )}
-             <Box flexDirection="column" paddingLeft={1}>
-                {files.map(file => (
-                     <Text key={file.id}>
-                        <Text color="gray">{getFileChangeTypeIcon(file.type)}</Text> {file.path}
-                    </Text>
-                ))}
-             </Box>
-        </Box>
-    );
-};
-
-const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
-    const icon = getStatusIcon(transaction.status);
-    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
-    const statusText = transaction.status.padEnd(11, ' ');
-    const expandIcon = isExpanded ? '▾' : '▸';
-    
-    const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color="cyan">{transaction.message}</Text>
-        : transaction.message;
-    
-    const content = (
-        <Text>
-            {time} {expandIcon} {icon} {statusText}{' '}
-            <Text color="gray">{transaction.hash}</Text>
-            {' '}· {messageNode}
-        </Text>
-    );
-
-    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
-};
-
-const ConfirmationContent = ({
-    transactionsToConfirm,
-}: {
-    transactionsToConfirm: Transaction[];
-}) => {
-    const actionText = 'APPROVE';
-    
-    return (
-        <Box flexDirection="column" marginY={1} paddingLeft={2}>
-            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
-            <Text>
-                The following {transactionsToConfirm.length} transaction(s) will be approved:
-            </Text>
-            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-                {transactionsToConfirm.map(tx => (
-                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-                ))}
-            </Box>
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const DashboardScreen = () => {
-    const {
-        status,
-        transactions,
-        selectedTransactionIndex,
-        pendingApprovals,
-        pendingCommits,
-        isModal,
-        isProcessing,
-        viewOffset,
-        viewportHeight,
-        transactionsToConfirm,
-        expandedTransactionId,
-    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });
-
-    const renderStatusBar = () => {
-        let statusText: string;
-        let statusIcon: React.ReactNode;
-        switch (status) {
-            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
-            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
-            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
-        }
-
-        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
-        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
-
-        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === 'CONFIRM_APPROVE') {
-            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
-        }
-        
-        return (
-            <Text>
-                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
-            </Text>
-        );
-    };
-
-    const renderFooter = () => {
-        if (isModal) return (
-            <ActionFooter actions={[
-                { key: 'Enter', label: 'Confirm' },
-                { key: 'Esc', label: 'Cancel' },
-            ]}/>
-        );
-        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
-
-        const footerActions: ActionItem[] = [
-            { key: '↑↓', label: 'Nav' },
-            { key: '→/Ent', label: 'View' },
-            { key: '←', label: 'Collapse' },
-            { key: 'L', label: 'Log' },
-            { key: 'A', label: 'Approve All' },
-            { key: 'C', label: 'Commit' },
-            { key: 'P', label: status === 'PAUSED' ? 'Resume' : 'Pause' },
-            { key: 'Q', label: 'Quit' },
-        ];
-		return <ActionFooter actions={footerActions} />;
-    };
-    
-    return (
-        <Box flexDirection="column" height="100%">
-            <Text color="cyan">▲ relaycode dashboard</Text>
-            <Separator />
-            <Box marginY={1}>
-                {renderStatusBar()}
-            </Box>
-            
-            {isModal && (
-                <>
-                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                    <Separator />
-                </>
-            )}
-            
-            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {transactions.length === 0 && (
-                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
-                )}
-                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
-                    const actualIndex = viewOffset + index;
-                    const isExpanded = expandedTransactionId === tx.id;
-                    return (
-                        <React.Fragment key={tx.id}>
-                            <EventStreamItem
-                                transaction={tx}
-                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                                isExpanded={isExpanded}
-                            />
-                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
-                        </React.Fragment>
-                    );
-                })}
-            </Box>
-
-            <Box marginTop={1}><Separator /></Box>
-            {renderFooter()}
-        </Box>
-    );
-};
-
-export default DashboardScreen;
-```
-
-## File: src/hooks/useDebugMenu.tsx
-```typescript
-import { useState } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { useViewStore } from '../stores/view.store';
-import { useDashboardStore } from '../stores/dashboard.store';
-import { useReviewStore } from '../stores/review.store';
-import { useDetailStore } from '../stores/detail.store';
-import { useHistoryStore } from '../stores/history.store';
-import { useInitStore } from '../stores/init.store';
-import { useCommitStore } from '../stores/commit.store';
-import { useCopyStore } from '../stores/copy.store';
-import type { MenuItem } from '../types/debug.types';
-import { useTransactionStore } from '../stores/transaction.store';
-import { moveIndex } from '../stores/navigation.utils';
-import { useViewport } from './useViewport';
-export type { MenuItem } from '../types/debug.types';
-
-const useDebugMenuActions = () => {
-    const { actions: appActions } = useAppStore();
-    const { actions: initActions } = useInitStore();
-    const { actions: commitActions } = useCommitStore();
-    const { actions: dashboardActions } = useDashboardStore();
-    const { actions: reviewActions } = useReviewStore();
-    const { actions: detailActions } = useDetailStore();
-    const { actions: historyActions } = useHistoryStore();
-
-    const menuItems: MenuItem[] = [
-        {
-            title: 'View Debug Log',
-            action: () => useViewStore.getState().actions.setActiveOverlay('log'),
-        },
-        {
-            title: 'Splash Screen',
-            action: () => appActions.showSplashScreen(),
-        },
-        {
-            title: 'Init: Analyze Phase',
-            action: () => {
-                initActions.setPhase('ANALYZE');
-                appActions.showInitScreen();
-            },
-        },
-        {
-            title: 'Init: Interactive Phase',
-            action: () => {
-                initActions.setPhase('INTERACTIVE');
-                appActions.showInitScreen();
-            },
-        },
-        {
-            title: 'Init: Finalize Phase',
-            action: () => {
-                initActions.setPhase('FINALIZE');
-                appActions.showInitScreen();
-            },
-        },
-        {
-            title: 'Dashboard: Listening',
-            action: () => {
-                dashboardActions.setStatus('LISTENING');
-                appActions.showDashboardScreen();
-            },
-        },
-        {
-            title: 'Dashboard: Confirm Approve',
-            action: () => {
-                dashboardActions.startApproveAll();
-                appActions.showDashboardScreen();
-            },
-        },
-        {
-            title: 'Dashboard: Approving',
-            action: () => {
-                dashboardActions.setStatus('APPROVING');
-                appActions.showDashboardScreen();
-            },
-        },
-        {
-            title: 'Dashboard: Expanded View',
-            action: () => {
-                dashboardActions.setStatus('LISTENING');
-                dashboardActions.setExpandedTransactionId('1');
-                appActions.showDashboardScreen();
-            },
-        },
-        {
-            title: 'Review: Partial Failure (Default)',
-            action: () => {
-                reviewActions.load('1');
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Success',
-            action: () => {
-                reviewActions.load('2');
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Diff View',
-            action: () => {
-                reviewActions.load('1');
-                reviewActions.setBodyView('diff');
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Reasoning View',
-            action: () => {
-                reviewActions.load('1', { bodyView: 'reasoning' });
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Copy Mode',
-            action: () => {
-                reviewActions.load('1');
-                appActions.showReviewScreen();
-                const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
-                if (!tx) return;
-                // On load, selected index is 0, so we can assume the first file.
-                const selectedFile = tx.files && tx.files.length > 0
-                    ? tx.files[0]
-                    : undefined;
-                useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
-            },
-        },
-        {
-            title: 'Review: Script Output',
-            action: () => {
-                reviewActions.load('2');
-                appActions.showReviewScreen();
-                reviewActions.setBodyView('script_output');
-            },
-        },
-        {
-            title: 'Review: Bulk Repair',
-            action: () => {
-                reviewActions.load('1', { bodyView: 'bulk_repair' });
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Bulk Repair (Navigable)',
-            action: () => {
-                reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Bulk Instruct',
-            action: () => {
-                reviewActions.load('2'); // Load success case
-                // Reject some files to enable the workflow
-                reviewActions.toggleFileApproval('2-1');
-                reviewActions.toggleFileApproval('2-2');
-                reviewActions.showBulkInstruct();
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Handoff Confirm',
-            action: () => {
-                reviewActions.load('1', { bodyView: 'confirm_handoff' });
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review Processing',
-            action: () => {
-                reviewActions.load('2'); // Use tx '2' which has scripts
-                appActions.showReviewProcessingScreen();
-            },
-        },
-        {
-            title: 'Git Commit Screen',
-            action: () => {
-                commitActions.prepareCommitScreen();
-                appActions.showGitCommitScreen();
-            },
-        },
-        {
-            title: 'Transaction Detail Screen',
-            action: () => {
-                // The dashboard store has transactions, we'll just pick one.
-                detailActions.load('3'); // 'feat: implement new dashboard UI'
-                appActions.showTransactionDetailScreen();
-            },
-        },
-        {
-            title: 'Detail: Copy Mode',
-            action: () => {
-                detailActions.load('3');
-                appActions.showTransactionDetailScreen();
-                const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
-                if (!tx) return;
-                const selectedFile = tx.files?.[0];
-                useCopyStore.getState().actions.openForDetail(tx, selectedFile);
-            },
-        },
-        {
-            title: 'Detail: Diff View (for File Open action)',
-            action: () => {
-                detailActions.load('3', {
-                    focusedItemPath: 'FILES/3-1',
-                    bodyView: 'DIFF_VIEW',
-                    expandedItemPaths: new Set(['FILES']),
-                });
-                appActions.showTransactionDetailScreen();
-            },
-        },
-        {
-            title: 'Detail: Revert Confirm',
-            action: () => {
-                detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
-                appActions.showTransactionDetailScreen();
-            },
-        },
-        {
-            title: 'Transaction History Screen',
-            action: () => {
-                historyActions.load();
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: L1 Drilldown (Content)',
-            action: () => {
-                historyActions.prepareDebugState('l1-drill-content');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: L2 Drilldown (Reasoning)',
-            action: () => {
-                historyActions.prepareDebugState('l2-drill-reasoning');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: L2 Drilldown (for File Open action)',
-            action: () => {
-                historyActions.prepareDebugState('l2-drill-diff');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: Filter Mode',
-            action: () => {
-                historyActions.prepareDebugState('filter');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: Copy Mode',
-            action: () => {
-                historyActions.prepareDebugState('copy');
-                appActions.showTransactionHistoryScreen();
-                const { transactions } = useTransactionStore.getState();
-                const { selectedForAction } = useHistoryStore.getState();
-                const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
-                useCopyStore.getState().actions.openForHistory(txsToCopy);
-            },
-        },
-        {
-            title: 'History: Bulk Actions Mode',
-            action: () => {
-                historyActions.prepareDebugState('bulk');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-    ];
-    return { menuItems };
-};
-
-export const useDebugMenu = () => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const { menuItems } = useDebugMenuActions();
-
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex,
-        reservedRows: 6, // Header, 2 separators, footer
-    });
-    
-    useInput((input, key) => {
-        if (key.upArrow) {
-            setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
-            return;
-        }
-        if (key.downArrow) {
-            setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
-            return;
-        }
-        if (key.pageUp) {
-            setSelectedIndex(i => Math.max(0, i - viewportHeight));
-            return;
-        }
-        if (key.pageDown) {
-            setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
-            return;
-        }
-        if (key.return) {
-            const item = menuItems[selectedIndex];
-            if (item) {
-                item.action();
-                useViewStore.getState().actions.setActiveOverlay('none');
-            }
-            return;
-        }
-        if (key.escape) {
-            useViewStore.getState().actions.setActiveOverlay('none');
-            return;
-        }
-
-        // No ctrl/meta keys for selection shortcuts, and only single characters
-        if (key.ctrl || key.meta || input.length !== 1) return;
-
-        if (input >= '1' && input <= '9') {
-            const targetIndex = parseInt(input, 10) - 1;
-            if (targetIndex < menuItems.length) {
-                setSelectedIndex(targetIndex);
-            }
-        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
-            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
-            if (targetIndex < menuItems.length) {
-                setSelectedIndex(targetIndex);
-            }
-        }
-    });
-
-    const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
-
-    return {
-        selectedIndex,
-        menuItems: menuItemsInView,
-        viewOffset,
-        totalItems: menuItems.length,
-    };
-};
 ```
 
 ## File: src/stores/review.store.ts
@@ -6134,4 +5745,578 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         })),
     },
 }));
+```
+
+## File: src/components/DashboardScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
+import { useDashboardScreen } from '../hooks/useDashboardScreen';
+import { UI_CONFIG } from '../config/ui.config';
+import type { LayoutConfig } from '../hooks/useLayout';
+import ActionFooter from './ActionFooter';
+import type { ActionItem } from '../types/actions.types';
+
+// --- Sub-components & Helpers ---
+
+const getStatusIcon = (status: TransactionStatus) => {
+    switch (status) {
+        case 'PENDING': return <Text color="yellow">?</Text>;
+        case 'APPLIED': return <Text color="green">✓</Text>;
+        case 'COMMITTED': return <Text color="blue">→</Text>;
+        case 'HANDOFF': return <Text color="magenta">→</Text>;
+        case 'FAILED': return <Text color="red">✗</Text>;
+        case 'REVERTED': return <Text color="gray">↩</Text>;
+        case 'IN-PROGRESS': return <Spinner type="dots" />;
+        default: return <Text> </Text>;
+    }
+};
+
+const getFileChangeTypeIcon = (type: FileChangeType) => {
+    switch (type) {
+        case 'MOD': return '[MOD]';
+        case 'ADD': return '[ADD]';
+        case 'DEL': return '[DEL]';
+        case 'REN': return '[REN]';
+    }
+};
+
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m`;
+};
+
+const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
+    const stats = transaction.stats;
+    const files = transaction.files || [];
+
+    return (
+        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
+            {stats && (
+                <Text color="gray">
+                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
+                </Text>
+            )}
+             <Box flexDirection="column" paddingLeft={1}>
+                {files.map(file => (
+                     <Text key={file.id}>
+                        <Text color="gray">{getFileChangeTypeIcon(file.type)}</Text> {file.path}
+                    </Text>
+                ))}
+             </Box>
+        </Box>
+    );
+};
+
+const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
+    const icon = getStatusIcon(transaction.status);
+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+    const statusText = transaction.status.padEnd(11, ' ');
+    const expandIcon = isExpanded ? '▾' : '▸';
+    
+    const messageNode = transaction.status === 'IN-PROGRESS'
+        ? <Text color="cyan">{transaction.message}</Text>
+        : transaction.message;
+    
+    const content = (
+        <Text>
+            {time} {expandIcon} {icon} {statusText}{' '}
+            <Text color="gray">{transaction.hash}</Text>
+            {' '}· {messageNode}
+        </Text>
+    );
+
+    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+};
+
+const ConfirmationContent = ({
+    transactionsToConfirm,
+}: {
+    transactionsToConfirm: Transaction[];
+}) => {
+    const actionText = 'APPROVE';
+    
+    return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text>
+                The following {transactionsToConfirm.length} transaction(s) will be approved:
+            </Text>
+            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                {transactionsToConfirm.map(tx => (
+                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                ))}
+            </Box>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const DashboardScreen = () => {
+    const {
+        status,
+        transactions,
+        selectedTransactionIndex,
+        pendingApprovals,
+        pendingCommits,
+        isModal,
+        isProcessing,
+        viewOffset,
+        viewportHeight,
+        transactionsToConfirm,
+        expandedTransactionId,
+    } = useDashboardScreen({
+        layoutConfig: {
+            header: 1,
+            separators: 2,
+            fixedRows: 1 + 1, // status bar, event stream header
+            marginsY: 1 + 1 + 1, // status bar, event stream list, separator
+            footer: 2,
+            // Non-event stream vertical space (header, footer, etc.)
+        },
+    });
+
+    const renderStatusBar = () => {
+        let statusText: string;
+        let statusIcon: React.ReactNode;
+        switch (status) {
+            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
+        }
+
+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
+        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
+
+        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'CONFIRM_APPROVE') {
+            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        }
+        
+        return (
+            <Text>
+                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+            </Text>
+        );
+    };
+
+    const renderFooter = () => {
+        if (isModal) return (
+            <ActionFooter actions={[
+                { key: 'Enter', label: 'Confirm' },
+                { key: 'Esc', label: 'Cancel' },
+            ]}/>
+        );
+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+        const footerActions: ActionItem[] = [
+            { key: '↑↓', label: 'Nav' },
+            { key: '→/Ent', label: 'View' },
+            { key: '←', label: 'Collapse' },
+            { key: 'L', label: 'Log' },
+            { key: 'A', label: 'Approve All' },
+            { key: 'C', label: 'Commit' },
+            { key: 'P', label: status === 'PAUSED' ? 'Resume' : 'Pause' },
+            { key: 'Q', label: 'Quit' },
+        ];
+		return <ActionFooter actions={footerActions} />;
+    };
+    
+    return (
+        <Box flexDirection="column" height="100%">
+            <Text color="cyan">▲ relaycode dashboard</Text>
+            <Separator />
+            <Box marginY={1}>
+                {renderStatusBar()}
+            </Box>
+            
+            {isModal && (
+                <>
+                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
+                    <Separator />
+                </>
+            )}
+            
+            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {transactions.length === 0 && (
+                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+                )}
+                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                    const actualIndex = viewOffset + index;
+                    const isExpanded = expandedTransactionId === tx.id;
+                    return (
+                        <React.Fragment key={tx.id}>
+                            <EventStreamItem
+                                transaction={tx}
+                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                isExpanded={isExpanded}
+                            />
+                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                        </React.Fragment>
+                    );
+                })}
+            </Box>
+
+            <Box marginTop={1}><Separator /></Box>
+            {renderFooter()}
+        </Box>
+    );
+};
+
+export default DashboardScreen;
+```
+
+## File: src/hooks/useDebugMenu.tsx
+```typescript
+import { useState } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { useDashboardStore } from '../stores/dashboard.store';
+import { useReviewStore } from '../stores/review.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useHistoryStore } from '../stores/history.store';
+import { useInitStore } from '../stores/init.store';
+import { useCommitStore } from '../stores/commit.store';
+import { useCopyStore } from '../stores/copy.store';
+import type { MenuItem } from '../types/debug.types';
+import { useTransactionStore } from '../stores/transaction.store';
+import { moveIndex } from '../stores/navigation.utils';
+import type { LayoutConfig } from './useLayout';
+import { useViewport } from './useViewport';
+export type { MenuItem } from '../types/debug.types';
+
+const useDebugMenuActions = () => {
+    const { actions: appActions } = useAppStore();
+    const { actions: initActions } = useInitStore();
+    const { actions: commitActions } = useCommitStore();
+    const { actions: dashboardActions } = useDashboardStore();
+    const { actions: reviewActions } = useReviewStore();
+    const { actions: detailActions } = useDetailStore();
+    const { actions: historyActions } = useHistoryStore();
+
+    const menuItems: MenuItem[] = [
+        {
+            title: 'View Debug Log',
+            action: () => useViewStore.getState().actions.setActiveOverlay('log'),
+        },
+        {
+            title: 'Splash Screen',
+            action: () => appActions.showSplashScreen(),
+        },
+        {
+            title: 'Init: Analyze Phase',
+            action: () => {
+                initActions.setPhase('ANALYZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Interactive Phase',
+            action: () => {
+                initActions.setPhase('INTERACTIVE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Finalize Phase',
+            action: () => {
+                initActions.setPhase('FINALIZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Listening',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Confirm Approve',
+            action: () => {
+                dashboardActions.startApproveAll();
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Approving',
+            action: () => {
+                dashboardActions.setStatus('APPROVING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Expanded View',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                dashboardActions.setExpandedTransactionId('1');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Review: Partial Failure (Default)',
+            action: () => {
+                reviewActions.load('1');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Success',
+            action: () => {
+                reviewActions.load('2');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Diff View',
+            action: () => {
+                reviewActions.load('1');
+                reviewActions.setBodyView('diff');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Reasoning View',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'reasoning' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Copy Mode',
+            action: () => {
+                reviewActions.load('1');
+                appActions.showReviewScreen();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                if (!tx) return;
+                // On load, selected index is 0, so we can assume the first file.
+                const selectedFile = tx.files && tx.files.length > 0
+                    ? tx.files[0]
+                    : undefined;
+                useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+            },
+        },
+        {
+            title: 'Review: Script Output',
+            action: () => {
+                reviewActions.load('2');
+                appActions.showReviewScreen();
+                reviewActions.setBodyView('script_output');
+            },
+        },
+        {
+            title: 'Review: Bulk Repair',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'bulk_repair' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Bulk Repair (Navigable)',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Bulk Instruct',
+            action: () => {
+                reviewActions.load('2'); // Load success case
+                // Reject some files to enable the workflow
+                reviewActions.toggleFileApproval('2-1');
+                reviewActions.toggleFileApproval('2-2');
+                reviewActions.showBulkInstruct();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Handoff Confirm',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review Processing',
+            action: () => {
+                reviewActions.load('2'); // Use tx '2' which has scripts
+                appActions.showReviewProcessingScreen();
+            },
+        },
+        {
+            title: 'Git Commit Screen',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            },
+        },
+        {
+            title: 'Transaction Detail Screen',
+            action: () => {
+                // The dashboard store has transactions, we'll just pick one.
+                detailActions.load('3'); // 'feat: implement new dashboard UI'
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Detail: Copy Mode',
+            action: () => {
+                detailActions.load('3');
+                appActions.showTransactionDetailScreen();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                if (!tx) return;
+                const selectedFile = tx.files?.[0];
+                useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+            },
+        },
+        {
+            title: 'Detail: Diff View (for File Open action)',
+            action: () => {
+                detailActions.load('3', {
+                    focusedItemPath: 'FILES/3-1',
+                    bodyView: 'DIFF_VIEW',
+                    expandedItemPaths: new Set(['FILES']),
+                });
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Detail: Revert Confirm',
+            action: () => {
+                detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Transaction History Screen',
+            action: () => {
+                historyActions.load();
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L1 Drilldown (Content)',
+            action: () => {
+                historyActions.prepareDebugState('l1-drill-content');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L2 Drilldown (Reasoning)',
+            action: () => {
+                historyActions.prepareDebugState('l2-drill-reasoning');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L2 Drilldown (for File Open action)',
+            action: () => {
+                historyActions.prepareDebugState('l2-drill-diff');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: Filter Mode',
+            action: () => {
+                historyActions.prepareDebugState('filter');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: Copy Mode',
+            action: () => {
+                historyActions.prepareDebugState('copy');
+                appActions.showTransactionHistoryScreen();
+                const { transactions } = useTransactionStore.getState();
+                const { selectedForAction } = useHistoryStore.getState();
+                const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                useCopyStore.getState().actions.openForHistory(txsToCopy);
+            },
+        },
+        {
+            title: 'History: Bulk Actions Mode',
+            action: () => {
+                historyActions.prepareDebugState('bulk');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+    ];
+    return { menuItems };
+};
+
+export const useDebugMenu = () => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const { menuItems } = useDebugMenuActions();
+
+    const layoutConfig: LayoutConfig = { paddingY: 2, header: 1, separators: 2, footer: 1 };
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        layoutConfig,
+    });
+    
+    useInput((input, key) => {
+        if (key.upArrow) {
+            setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+            return;
+        }
+        if (key.downArrow) {
+            setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+            return;
+        }
+        if (key.pageUp) {
+            setSelectedIndex(i => Math.max(0, i - viewportHeight));
+            return;
+        }
+        if (key.pageDown) {
+            setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
+            return;
+        }
+        if (key.return) {
+            const item = menuItems[selectedIndex];
+            if (item) {
+                item.action();
+                useViewStore.getState().actions.setActiveOverlay('none');
+            }
+            return;
+        }
+        if (key.escape) {
+            useViewStore.getState().actions.setActiveOverlay('none');
+            return;
+        }
+
+        // No ctrl/meta keys for selection shortcuts, and only single characters
+        if (key.ctrl || key.meta || input.length !== 1) return;
+
+        if (input >= '1' && input <= '9') {
+            const targetIndex = parseInt(input, 10) - 1;
+            if (targetIndex < menuItems.length) {
+                setSelectedIndex(targetIndex);
+            }
+        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+            if (targetIndex < menuItems.length) {
+                setSelectedIndex(targetIndex);
+            }
+        }
+    });
+
+    const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+    return {
+        selectedIndex,
+        menuItems: menuItemsInView,
+        viewOffset,
+        totalItems: menuItems.length,
+    };
+};
 ```

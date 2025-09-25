@@ -2,9 +2,7 @@ import { useInput } from 'ink';
 import { useCopyStore } from '../stores/copy.store';
 import { useViewStore } from '../stores/view.store';
 import { useViewport } from './useViewport';
-
-// Header, separator, title, margin, separator, status, footer
-const RESERVED_ROWS = 8;
+import type { LayoutConfig } from './useLayout';
 
 export const useCopyScreen = () => {
     const activeOverlay = useViewStore(s => s.activeOverlay);
@@ -12,10 +10,13 @@ export const useCopyScreen = () => {
         title, items, selectedIndex, selectedIds, lastCopiedMessage,
         actions,
     } = useCopyStore(state => ({ ...state, actions: state.actions }));
-
+    
+    // Header, separator, title, margin, separator, status, footer
+    const layoutConfig: LayoutConfig = { header: 1, separators: 2, fixedRows: 2, marginsY: 1, footer: 1 };
+    
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        reservedRows: RESERVED_ROWS,
+        layoutConfig,
     });
 
     useInput((input, key) => {

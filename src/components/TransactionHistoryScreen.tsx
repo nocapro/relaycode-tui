@@ -5,7 +5,7 @@ import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
-import { UI_CONFIG } from '../config/ui.config';
+import type { LayoutConfig } from '../hooks/useLayout';
 import ActionFooter from './ActionFooter';
 import type { ActionItem } from '../types/actions.types';
 
@@ -155,7 +155,15 @@ const TransactionHistoryScreen = () => {
         showingStatus,
         statsStatus,
         hasSelection,
-    } = useTransactionHistoryScreen({ reservedRows: UI_CONFIG.history.reservedRows });
+    } = useTransactionHistoryScreen({
+        layoutConfig: {
+            header: 1,
+            separators: 2, // after header, after list
+            fixedRows: 1, // filter row
+            marginsY: 1, // for list
+            footer: 2,
+        },
+    });
 
     const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
 

@@ -2,10 +2,11 @@ import { useInput, type Key } from 'ink';
 import { useDetailStore } from '../stores/detail.store';
 import { useViewStore } from '../stores/view.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useCopyStore } from '../stores/copy.store';
 import { EditorService } from '../services/editor.service';
-import { useStdoutDimensions } from '../utils';
+import { useLayout } from './useLayout';
+import { useContentViewport } from './useContentViewport';
 
 export const useTransactionDetailScreen = () => {
     const store = useDetailStore();
@@ -20,16 +21,33 @@ export const useTransactionDetailScreen = () => {
         toggleRevertConfirm,
         confirmRevert,
     } = store.actions;
-    const [contentScrollIndex, setContentScrollIndex] = useState(0);
-    const [, height] = useStdoutDimensions();
 
-    // Reset scroll when body view changes
-    useEffect(() => {
-        setContentScrollIndex(0);
-    }, [store.bodyView]);
+    const isFilesExpanded = store.expandedItemPaths.has('FILES');
+    const layoutConfig = useMemo(() => ({
+        header: 2, // Header text + separator
+        fixedRows: 4, // Meta info
+        separators: 2, // after nav, after body
+        marginsY: 1, // for body
+        footer: 2, // ActionFooter can be tall
+        dynamicRows: {
+            count: 3 + (isFilesExpanded ? (files.length || 0) : 0), // navigator items
+        },
+    }), [isFilesExpanded, files.length]);
 
-    // Header(2) + Meta(4) + Navigator(3+) + Separator(1) + BodyMargin(1) + Separator(1) + Footer(1)
-    const availableBodyHeight = Math.max(1, height - 13 - (transaction?.files?.length || 0));
+    const { remainingHeight: availableBodyHeight } = useLayout(layoutConfig);
+    
+    const contentLineCount = useMemo(() => {
+        if (store.bodyView === 'PROMPT') return (transaction?.prompt || '').split('\n').length;
+        if (store.bodyView === 'REASONING') return (transaction?.reasoning || '').split('\n').length;
+        if (store.bodyView === 'DIFF_VIEW') {
+            const fileId = store.focusedItemPath.split('/')[1];
+            const file = files.find(f => f.id === fileId);
+            return (file?.diff || '').split('\n').length;
+        }
+        return 0;
+    }, [store.bodyView, store.focusedItemPath, transaction, files]);
+
+    const viewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
 
     const openCopyMode = () => {
         if (!transaction) return;
@@ -48,33 +66,16 @@ export const useTransactionDetailScreen = () => {
         
         // --- Content Scrolling ---
         if (store.bodyView === 'PROMPT' || store.bodyView === 'REASONING' || store.bodyView === 'DIFF_VIEW') {
-             let contentLines = 0;
-            if (store.bodyView === 'PROMPT') {
-                contentLines = (transaction?.prompt || '').split('\n').length;
-            } else if (store.bodyView === 'REASONING') {
-                contentLines = (transaction?.reasoning || '').split('\n').length;
-            } else if (store.bodyView === 'DIFF_VIEW') {
-                const fileId = store.focusedItemPath.split('/')[1];
-                const file = files.find(f => f.id === fileId);
-                contentLines = (file?.diff || '').split('\n').length;
-            }
-            
             if (key.upArrow) {
-                setContentScrollIndex(i => Math.max(0, i - 1));
+                viewport.actions.scrollUp();
                 return;
             }
             if (key.downArrow) {
-                setContentScrollIndex(i => Math.min(Math.max(0, contentLines - availableBodyHeight), i + 1));
+                viewport.actions.scrollDown();
                 return;
             }
-            if (key.pageUp) {
-                setContentScrollIndex(i => Math.max(0, i - availableBodyHeight));
-                return;
-            }
-            if (key.pageDown) {
-                setContentScrollIndex(i => Math.min(Math.max(0, contentLines - availableBodyHeight), i + availableBodyHeight));
-                return;
-            }
+            if (key.pageUp) { viewport.actions.pageUp(); return; }
+            if (key.pageDown) { viewport.actions.pageDown(); return; }
         }
 
         // --- Main Input ---
@@ -116,7 +117,7 @@ export const useTransactionDetailScreen = () => {
         focusedItemPath: store.focusedItemPath,
         expandedItemPaths: store.expandedItemPaths,
         bodyView: store.bodyView,
-        contentScrollIndex,
+        contentScrollIndex: viewport.scrollIndex,
         availableBodyHeight,
     };
 };

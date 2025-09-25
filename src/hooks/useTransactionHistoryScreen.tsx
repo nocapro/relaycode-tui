@@ -8,9 +8,10 @@ import { useCopyStore } from '../stores/copy.store';
 import type { TransactionStatus } from '../types/domain.types';
 import { EditorService } from '../services/editor.service';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
+import type { LayoutConfig } from './useLayout';
 import { useViewport } from './useViewport';
 
-export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: number }) => {
+export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
     const store = useHistoryStore();
     const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
     const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
@@ -24,7 +25,7 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
 
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        reservedRows,
+        layoutConfig,
     });
 
     const openCopyMode = () => {

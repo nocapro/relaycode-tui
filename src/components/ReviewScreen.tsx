@@ -158,7 +158,7 @@ const ReviewScreen = () => {
                     <ReasonScreen
                         reasoning={reasoningText}
                         scrollIndex={contentScrollIndex}
-                        visibleLinesCount={availableBodyHeight}
+                        visibleLinesCount={Math.max(1, availableBodyHeight)}
                     />
                     {reasoningLinesCount > visibleLinesCount && (
                         <Text color="gray">
@@ -180,7 +180,7 @@ const ReviewScreen = () => {
                     diffContent={selectedFile.diff}
                     isExpanded={isDiffExpanded}
                     scrollIndex={contentScrollIndex}
-                    maxHeight={availableBodyHeight}
+                    maxHeight={Math.max(1, availableBodyHeight)}
                 />
             );
         }

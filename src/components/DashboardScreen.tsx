@@ -5,6 +5,7 @@ import Separator from './Separator';
 import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 import { UI_CONFIG } from '../config/ui.config';
+import type { LayoutConfig } from '../hooks/useLayout';
 import ActionFooter from './ActionFooter';
 import type { ActionItem } from '../types/actions.types';
 
@@ -119,7 +120,16 @@ const DashboardScreen = () => {
         viewportHeight,
         transactionsToConfirm,
         expandedTransactionId,
-    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });
+    } = useDashboardScreen({
+        layoutConfig: {
+            header: 1,
+            separators: 2,
+            fixedRows: 1 + 1, // status bar, event stream header
+            marginsY: 1 + 1 + 1, // status bar, event stream list, separator
+            footer: 2,
+            // Non-event stream vertical space (header, footer, etc.)
+        },
+    });
 
     const renderStatusBar = () => {
         let statusText: string;

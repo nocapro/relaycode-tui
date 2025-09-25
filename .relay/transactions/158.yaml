@@ -1,0 +1,104 @@
+uuid: 13bb6591-177c-473d-9d48-3575ccb9893d
+projectId: relaycode-tui
+createdAt: '2025-09-25T23:09:18.301Z'
+gitCommitMsg: >-
+  style(copy): make copy screen borderless
+
+  Removes the border from the copy mode overlay to give it a more minimalistic
+  appearance.
+promptSummary: I was asked to make the copy mode screen borderless.
+reasoning:
+  - >-
+    I will make the copy mode screen borderless by modifying
+    `src/components/CopyScreen.tsx`. I will remove the `borderStyle` and
+    `borderColor` props from the main container `Box` to achieve the requested
+    borderless appearance.
+operations:
+  - type: write
+    path: src/components/CopyScreen.tsx
+    content: |+
+      --- src/components/CopyScreen.tsx
+      +++ src/components/CopyScreen.tsx
+      @@ -22,9 +22,7 @@
+               >
+                   <Box 
+                       flexDirection="column" 
+      -                borderStyle="round" 
+      -                borderColor="yellow" 
+                       paddingX={2}
+                       width="80%"
+                   >
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/CopyScreen.tsx: |-
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useStdoutDimensions } from '../utils';
+    import ActionFooter from './ActionFooter';
+    import { useCopyScreen } from '../hooks/useCopyScreen';
+
+    const CopyScreen = () => {
+        const {
+            title,
+            itemsInView,
+            selectedIndex,
+            selectedIds,
+            lastCopiedMessage,
+            viewOffset,
+        } = useCopyScreen();
+        const [width] = useStdoutDimensions();
+
+        return (
+            <Box 
+                width="100%"
+                height="100%"
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+            >
+                <Box 
+                    flexDirection="column" 
+                    borderStyle="round" 
+                    borderColor="yellow" 
+                    paddingX={2}
+                    width="80%"
+                >
+                    <Text bold color="yellow">▲ relaycode · copy mode</Text>
+                    <Separator width={Math.floor(width * 0.8) - 4} />
+                    <Box flexDirection="column" marginY={1}>
+                        <Text>{title}</Text>
+                        <Box flexDirection="column" marginTop={1}>
+                            {itemsInView.map((item, index) => {
+                                const isSelected = (index + viewOffset) === selectedIndex;
+                                const isChecked = selectedIds.has(item.id);
+                                return (
+                                    <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
+                                        {isSelected ? '> ' : '  '}
+                                        [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                    </Box>
+                    <Separator width={Math.floor(width * 0.8) - 4} />
+                    {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+                    <ActionFooter actions={[
+                        { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                        { key: 'Spc/Hotkey', label: 'Toggle' },
+                        { key: 'Enter', label: 'Copy' },
+                        { key: 'Esc', label: 'Close' },
+                    ]}/>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default CopyScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 158

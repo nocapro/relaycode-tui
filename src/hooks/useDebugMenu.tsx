@@ -12,6 +12,7 @@ import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
+import type { LayoutConfig } from './useLayout';
 import { useViewport } from './useViewport';
 export type { MenuItem } from '../types/debug.types';
 
@@ -278,9 +279,11 @@ export const useDebugMenu = () => {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const { menuItems } = useDebugMenuActions();
 
+    const layoutConfig: LayoutConfig = { paddingY: 2, header: 1, separators: 2, footer: 1 };
+
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        reservedRows: 6, // Header, 2 separators, footer
+        layoutConfig,
     });
     
     useInput((input, key) => {

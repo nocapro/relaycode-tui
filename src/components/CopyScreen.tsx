@@ -25,8 +25,6 @@ const CopyScreen = () => {
         >
             <Box 
                 flexDirection="column" 
-                borderStyle="round" 
-                borderColor="yellow" 
                 paddingX={2}
                 width="80%"
             >

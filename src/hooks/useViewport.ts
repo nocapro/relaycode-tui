@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useStdoutDimensions } from '../utils';
+import { useLayout, type LayoutConfig } from './useLayout';
 
 interface UseViewportOptions {
 	selectedIndex: number;
-	reservedRows: number; // Vertical padding (headers, footers, etc.)
+	layoutConfig: LayoutConfig;
 }
 
-export const useViewport = ({ selectedIndex, reservedRows }: UseViewportOptions) => {
-	const [columns, rows] = useStdoutDimensions();
+export const useViewport = ({ selectedIndex, layoutConfig }: UseViewportOptions) => {
+	const { remainingHeight: viewportHeight } = useLayout(layoutConfig);
 	const [viewOffset, setViewOffset] = useState(0);
-
-	const viewportHeight = Math.max(1, rows - reservedRows);
 
 	useEffect(() => {
 		if (selectedIndex >= 0 && selectedIndex < viewOffset) {
@@ -23,6 +22,6 @@ export const useViewport = ({ selectedIndex, reservedRows }: UseViewportOptions)
     return {
         viewOffset,
         viewportHeight,
-        width: columns,
+        width: useStdoutDimensions()[0],
     };
 };

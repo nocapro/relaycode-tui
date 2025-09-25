@@ -6,9 +6,10 @@ import { useTransactionStore, selectTransactionsByStatus } from '../stores/trans
 import { useReviewStore } from '../stores/review.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useHistoryStore } from '../stores/history.store';
+import type { LayoutConfig } from './useLayout';
 import { useViewport } from './useViewport';
 
-export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) => {
+export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
     const {
         status,
         selectedTransactionIndex,
@@ -20,7 +21,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
 
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex: selectedTransactionIndex,
-        reservedRows,
+        layoutConfig,
     });
 
     const {
