@@ -99,12 +99,17 @@ export const useCopyStore = create<CopyState>((set, get) => ({
             }
             return { selectedIds: newSelectedIds };
         }),
-        executeCopy: () => {
+        executeCopy: async () => {
             const { items, selectedIds } = get();
             const itemsToCopy = items.filter(i => selectedIds.has(i.id));
             if (itemsToCopy.length === 0) return;
 
-            const content = itemsToCopy.map(item => `--- ${item.label} ---\n${item.getData()}`).join('\n\n');
+            const dataPromises = itemsToCopy.map(item => item.getData());
+            const resolvedData = await Promise.all(dataPromises);
+
+            const content = itemsToCopy
+                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                .join('\n\n');
             const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
             // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);

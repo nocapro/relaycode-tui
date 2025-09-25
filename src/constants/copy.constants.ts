@@ -8,6 +8,7 @@ export const COPYABLE_ITEMS = {
     REASONING: 'Reasoning',
     FILE_DIFF: 'Diff for',
     ALL_DIFFS: 'All Diffs',
+    CONTEXT_FILES: 'Context Files (latest)',
     FULL_YAML: 'Full YAML representation',
     // For multi-selection contexts
     MESSAGES: 'Git Messages',

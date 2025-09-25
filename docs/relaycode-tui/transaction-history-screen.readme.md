@@ -164,8 +164,9 @@ After selecting one or more transactions with `(Space)`, pressing `(C)` transfor
  Select data to copy from 2 transactions:
 
  [x] (M) Git Messages         [ ] (P) Prompts          [x] (R) Reasonings
- [ ] (D) Diffs                [ ] (U) UUIDs            [ ] (Y) Full YAML
-
+ [ ] (D) Diffs                [ ] (X) Context Files    [ ] (U) UUIDs
+ [ ] (Y) Full YAML
+ 
  ──────────────────────────────────────────────────────────────────────────────
  (↑↓) Nav Panels · (←→) Nav Items · (Spc) Toggle · (Enter) Copy · (C)opy/Exit
 ```

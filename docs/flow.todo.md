@@ -28,13 +28,17 @@ should dim another layout area when screen is asking for user action like what t
 
 on terminal widht height size changes, UI should be responsive. so not appear broken
 
-===
+=== DONE
 
-add copy context feature to advanced copy of below screen
+1. add copy context feature to advanced copy of below screen
 
 transaction history screen, transaction detail screen, review screen .
 
 so context feature is useful for user to get latest files content as parsable markdown format the same file as the transaction point
+
+2. dont forget to add to debug menu for any new screen state
+
+3. dont forget to update readme if you have updated design
 
 === DONE
 

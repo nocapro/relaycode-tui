@@ -1,0 +1,1518 @@
+uuid: f7366367-27b2-4d2b-b6d8-e1c5188f6f89
+projectId: relaycode-tui
+createdAt: '2025-09-25T09:35:43.166Z'
+gitCommitMsg: >-
+  docs(ui): update copy mode mockups with 'Context Files' option
+
+  Updates the README documentation for the Transaction Detail, Transaction
+  History, and Review screens to include the new "Copy Context" feature in all
+  relevant ASCII art mockups.
+
+  This ensures the design specifications remain aligned with the latest
+  implementation, reflecting the new capability to copy the full, latest content
+  of files involved in a transaction. The hotkey 'X' is also added where
+  appropriate.
+promptSummary: I need to update the documentation to reflect the new "Copy Context" feature.
+reasoning:
+  - >-
+    This is the final part of the plan, updating the documentation to reflect
+    the new "Copy Context" feature.
+  - '### Part 3: UI and Documentation Updates'
+  - >-
+    I will update the documentation for the three relevant screens to include
+    the new "Copy Context" option in their respective copy mode mockups. This
+    ensures the project's specifications remain the single source of truth for
+    the UI's design and functionality.
+  - First, I'll update the Transaction Detail Screen's documentation.
+  - >-
+    Next, I'll update the Transaction History Screen's documentation. The layout
+    of the copy options will be adjusted to accommodate the new item while
+    maintaining a clean grid.
+  - >-
+    Finally, I'll update the Review Screen's documentation, adding the new
+    option and its corresponding 'X' hotkey to the footer.
+operations:
+  - type: write
+    path: docs/relaycode-tui/transaction-detail-screen.readme.md
+    content: |
+      --- docs/relaycode-tui/transaction-detail-screen.readme.md
+      +++ docs/relaycode-tui/transaction-detail-screen.readme.md
+      @@ -216,6 +216,7 @@
+          [x] (R) Reasoning
+          [ ] (A) All Diffs (3 files)
+          [ ] (F) Diff for: src/core/transaction.ts
+      +   [ ] (X) Context Files (latest) (3 files)
+          [ ] (U) UUID
+          [ ] (Y) Full YAML representation
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: docs/relaycode-tui/transaction-history-screen.readme.md
+    content: |-
+      --- docs/relaycode-tui/transaction-history-screen.readme.md
+      +++ docs/relaycode-tui/transaction-history-screen.readme.md
+      @@ -218,8 +218,8 @@
+        Select data to copy from 2 transactions:
+       
+        [x] (M) Git Messages         [ ] (P) Prompts          [x] (R) Reasonings
+      - [ ] (D) Diffs                [ ] (U) UUIDs            [ ] (Y) Full YAML
+      -
+      + [ ] (D) Diffs                [ ] (X) Context Files    [ ] (U) UUIDs
+      + [ ] (Y) Full YAML
+      + 
+        ──────────────────────────────────────────────────────────────────────────────
+        (↑↓) Nav Panels · (←→) Nav Items · (Spc) Toggle · (Enter) Copy · (C)opy/Exit
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: docs/relaycode-tui/review-screen.readme.md
+    content: >-
+      --- docs/relaycode-tui/review-screen.readme.md
+
+      +++ docs/relaycode-tui/review-screen.readme.md
+
+      @@ -219,10 +219,11 @@
+        ──────────────────────────────────────────────────────────────────────────────
+          [F] Diff for:    src/core/transaction.ts
+          [A] All Diffs (3 files)
+      +   [X] Context Files (latest) (3 files)
+        ──────────────────────────────────────────────────────────────────────────────
+         ✓ Copied UUID to clipboard.
+       
+        ──────────────────────────────────────────────────────────────────────────────
+      - (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit
+
+      + (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A,X) Hotkeys · (C, Esc)
+      Exit
+       
+    patchStrategy: standard-diff
+snapshot:
+  docs/relaycode-tui/transaction-history-screen.readme.md: >
+    # TRANSACTION-HISTORY-SCREEN.README.MD
+
+
+    ## Relaycode TUI: The Stateful Transaction History Screen
+
+
+    This document specifies the final design and behavior of the stateful
+    Transaction History screen, the command center for a project's AI-driven
+    development history. Triggered by `relay log`, this screen transforms a
+    simple log into a powerful, interactive database explorer.
+
+
+    ### 1. Core Philosophy
+
+
+    The transaction history is the project's institutional memory. This screen
+    is engineered to make that memory **discoverable, drillable, queryable, and
+    actionable**.
+
+
+    -   **Discoverable & Drillable:** The log is an interactive outline. Users
+    get a high-level overview and then progressively disclose more detail
+    *in-place* using familiar arrow key navigation, minimizing context
+    switching.
+
+    -   **Queryable:** A powerful, live-filtering system allows users to
+    instantly find specific transactions based on content, status, file paths,
+    or dates.
+
+    -   **Actionable:** The screen provides sophisticated tools for bulk data
+    extraction (Copy Mode) and history management (Bulk Actions), turning
+    insight into action.
+
+
+    ---
+
+
+    ### 2. The Interaction Journey: A Walkthrough
+
+
+    The power of the screen is best understood by following a user's workflow
+    from browsing to deep analysis and action.
+
+
+    #### **State 2.1: Default View - The 10,000-Foot Overview**
+
+
+    Upon launching `relay log`, the user is presented with a clean, compact, and
+    reverse-chronological list of all transactions. Each entry is a single line,
+    prefixed with `▸` to indicate it can be expanded.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+     > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+       ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI
+       ▸ ↩ Reverted  · b2c9e04d · 2023-10-26 · style: update button component
+       ▸ ✗ Reverted  · 9c2e1a05 · 2023-10-25 · docs: update readme with TUI spec
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (→) Expand · (Spc) Select · (Ent) Details · (F)ilter · (C)opy · (B)ulk
+    ```
+
+
+    #### **State 2.2: Level 1 Drill-Down - The Content Overview**
+
+
+    Pressing `(→)` on the selected transaction expands it in-place, revealing
+    its core components: Commit Message, Prompt, Reasoning, and Files. The icon
+    changes to `▾` and the footer updates to include the `(←) Collapse` action.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+     > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+           ▸ Commit Message
+           ▸ Prompt
+           ▸ Reasoning
+           ▸ Files (3)
+
+       ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (←) Collapse · (→) Expand · (Ent) Details · (F)ilter · (C)opy
+    ```
+
+
+    #### **State 2.3: Level 2 Drill-Down - In-place Content Preview**
+
+
+    With the transaction expanded, the user can navigate `(↓)` to a content item
+    like `Reasoning` and press `(→)` again. This performs a second-level
+    expansion, showing the full text content directly within the list.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+     > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+           ▸ Commit Message
+           ▸ Prompt
+           ▾ Reasoning
+               1. Identified a potential uncaught exception in the `restoreSnapshot`
+                  function if a file operation fails midway through a loop...
+               2. Wrapped the file restoration loop in a `Promise.all` for
+                  robustness and comprehensive error collection.
+           ▸ Files (3)
+
+       ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (←→) Collapse/Expand · (Ent) Details · (F)ilter · (C)opy
+    ```
+
+
+    #### **State 2.4: Level 3 Drill-Down - The In-place Diff Preview**
+
+
+    By navigating to and expanding the `Files` item, the user can then select a
+    specific file and press `(→)` again. This performs a third-level expansion,
+    showing a truncated preview of that file's diff directly within the list.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+     > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+           ...
+           ▾ Files (3)
+             ▾ [MOD] src/core/transaction.ts
+                   --- a/src/core/transaction.ts
+                   +++ b/src/core/transaction.ts
+                   @@ -45,7 +45,9 @@
+                   -    for (const [filePath, content] of entries) {
+                   +    const restoreErrors: { path: string, error: unknown }[] = [];
+                   ... 4 lines hidden ...
+             ▸ [MOD] src/utils/logger.ts
+             ▸ [DEL] src/utils/old-helper.ts
+
+       ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav File/Tx · (←→) Collapse/Expand · (Ent) Full Diff · (X)pand Full Diff
+    ```
+
+
+    ---
+
+    *(Page Break)*
+
+    ---
+
+
+    #### **State 2.5: Filtering Mode - Querying the History**
+
+
+    From any browsing state, pressing `(F)` shifts focus to the filter bar. The
+    transaction list updates in real-time as the user constructs their query.
+    The footer shows context-specific actions.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: logger.ts status:committed ▸ |
+
+     > ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+       ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (Enter) Apply Filter & Return      (Esc) Cancel
+    ```
+
+    After pressing `(Enter)`, the filter is applied, the status bar is updated,
+    and control returns to the (now much shorter) transaction list.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: logger.ts status:committed · Showing 2 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+     > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+       ▸ ✓ Committed · 1a2b3c4d · 2023-10-22 · feat: introduce structured logging
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (→) Expand · (Ent) Details · (F)ilter · (C)opy · (B)ulk Actions
+    ```
+
+
+    #### **State 2.6: Advanced Copy Mode - Aggregating Data for Export**
+
+
+    After selecting one or more transactions with `(Space)`, pressing `(C)`
+    transforms the entire screen into a powerful, two-panel data aggregation
+    tool. The user can select multiple transactions *and* multiple data fields
+    to create a custom report.
+
+
+    ```
+     ▲ relaycode history · copy mode
+     ──────────────────────────────────────────────────────────────────────────────
+     [x] ✓ e4a7c112 · fix: add missing error handling
+     [ ] ✓ 4b9d8f03 · refactor: simplify clipboard logic
+     [x] → 8a3f21b8 · feat: implement new dashboard UI
+     ...
+     ──────────────────────────────────────────────────────────────────────────────
+     Select data to copy from 2 transactions:
+
+     [x] (M) Git Messages         [ ] (P) Prompts          [x] (R) Reasonings
+     [ ] (D) Diffs                [ ] (U) UUIDs            [ ] (Y) Full YAML
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav Panels · (←→) Nav Items · (Spc) Toggle · (Enter) Copy · (C)opy/Exit
+    ```
+
+    Pressing `(Enter)` aggregates the selected data (`Git Messages` and
+    `Reasonings` from two transactions) and places it on the clipboard,
+    providing instant feedback.
+
+
+    ```
+     ──────────────────────────────────────────────────────────────────────────────
+     ✓ Copied Messages & Reasonings to clipboard.
+     ──────────────────────────────────────────────────────────────────────────────
+    ```
+
+    **Example Clipboard Output:**
+
+    ```
+
+    --- TRANSACTION e4a7c112 ---
+
+
+    [Git Message]
+
+    fix: add missing error handling
+
+    - Added try/catch to restoreSnapshot to prevent crashes on partial reverts.
+
+
+    [Reasoning]
+
+    1. Identified a potential uncaught exception in the restoreSnapshot
+    function.
+
+    2. Wrapped the file restoration loop in a Promise.all for robustness.
+
+
+    --- TRANSACTION 8a3f21b8 ---
+
+
+    [Git Message]
+
+    feat: implement new dashboard UI
+
+    - Creates a new stateful dashboard screen for the 'watch' command.
+
+
+    [Reasoning]
+
+    1. The goal was to provide a more application-like feel for the watch
+    command.
+
+    2. Designed a high-density layout to show system status and recent history.
+
+    ```
+
+
+    #### **State 2.7: Bulk Actions Mode - Managing History**
+
+
+    Multi-selecting items with `(Space)` and then pressing `(B)` brings up a
+    modal for performing operations on the entire selection. This is for
+    powerful, state-changing actions.
+
+
+    ```
+     ▲ relaycode history · bulk actions
+     ──────────────────────────────────────────────────────────────────────────────
+     [x] ✓ e4a7c112 · fix: add missing error handling
+     [ ] ✓ 4b9d8f03 · refactor: simplify clipboard logic
+     [x] → 8a3f21b8 · feat: implement new dashboard UI
+     ...
+     ──────────────────────────────────────────────────────────────────────────────
+      PERFORM BULK ACTION ON 2 SELECTED ITEMS
+
+      This action is often irreversible. Are you sure?
+
+      (1) Revert Selected Transactions
+      (2) Mark as 'Git Committed'
+      (3) Delete Selected Transactions (from Relaycode history)
+      (Esc) Cancel
+
+     ──────────────────────────────────────────────────────────────────────────────
+     Choose an option [1-3, Esc]:
+    ```
+
+    This comprehensive design ensures the Transaction History screen is an
+    indispensable tool for managing the entire lifecycle of AI-assisted changes,
+    providing unparalleled efficiency and control.
+  docs/relaycode-tui/transaction-detail-screen.readme.md: >
+    Of course. Here is the final, comprehensive
+    `TRANSACTION-DETAIL-SCREEN.README.MD`. It is structured to be a "show, don't
+    tell" specification, using full-screen mockups to disclose every major state
+    and interaction. This document is designed to be the single source of truth
+    for implementing this feature.
+
+
+    ***
+
+
+    # TRANSACTION-DETAIL-SCREEN.README.MD
+
+
+    ## Relaycode TUI: The Transaction Detail Screen Specification
+
+
+    This document specifies the final design and behavior of the stateful
+    Transaction Detail screen. This screen serves as the single source of truth
+    for a past transaction, providing a deep, forensic analysis view. It is
+    engineered for complete context via progressive disclosure, interactive data
+    extraction, and direct, safe actions.
+
+
+    ### 1. Anatomy of the Screen
+
+
+    The interface is divided into four consistent, logical components.
+
+
+    ```
+     ▲ relaycode transaction details                                    (Header)
+     ──────────────────────────────────────────────────────────────────────────────
+      UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+      Git:  fix: add missing error handling
+      Date: 2023-10-27 14:32:15 · Status: Committed           (Navigator - Part A)
+      Stats: 3 Files · +25 lines, -8 lines
+
+     > ▸ (P)rompt
+       ▸ (R)easoning (3 steps)                                  (Navigator - Part B)
+       ▸ (F)iles (3)
+     ──────────────────────────────────────────────────────────────────────────────
+
+      (The Body is a dynamic viewport that renders content based on     (Body)
+       the user's focus and actions within the Navigator.)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (→) Expand · (C)opy Mode · (U)ndo · (Q)uit         (Footer)
+    ```
+
+
+    1.  **Header:** Static branding, confirming the user's location.
+
+    2.  **Navigator:** The top half of the screen and the primary control
+    surface. It contains static metadata (Part A) and a navigable list of
+    expandable sections (Part B).
+
+    3.  **Body:** A dynamic viewport that renders detailed content (like diffs
+    or full text) based on the user's selection in the Navigator.
+
+    4.  **Footer:** The contextual action bar, which updates to show only the
+    currently available keyboard shortcuts.
+
+
+    ---
+
+
+    ### 2. The User Journey: A State-by-State Disclosure
+
+
+    This section illustrates the screen's behavior through a typical user
+    interaction flow.
+
+
+    #### 2.1. Initial State: The Collapsed Overview
+
+
+    This is the default view upon selecting a transaction. It provides a
+    complete, scannable summary with all detailed sections collapsed.
+
+
+    **Behavior:**
+
+    *   The initial focus is on the navigable sections (`(P)rompt`,
+    `(R)easoning`, `(F)iles`).
+
+    *   The Body is empty, prompting the user to expand a section for more
+    details.
+
+    *   The `▸` symbol indicates a collapsed section.
+
+
+    ```
+     ▲ relaycode transaction details
+     ──────────────────────────────────────────────────────────────────────────────
+      UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+      Git:  fix: add missing error handling
+      Date: 2023-10-27 14:32:15 · Status: Committed
+      Stats: 3 Files · +25 lines, -8 lines
+
+     > ▸ (P)rompt
+       ▸ (R)easoning (3 steps)
+       ▸ (F)iles (3)
+
+     ──────────────────────────────────────────────────────────────────────────────
+
+      (Press → to expand a section and view its contents)
+
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (→) Expand · (C)opy Mode · (U)ndo · (Q)uit
+    ```
+
+
+    #### 2.2. Expanding a Section: Viewing Reasoning
+
+
+    The user wants to read the full reasoning behind the transaction.
+
+
+    **Trigger:** The user navigates to `▸ (R)easoning` and presses `(→)`.
+
+
+    **Behavior:**
+
+    *   The `▸` icon for Reasoning flips to `▾`, indicating it is expanded.
+
+    *   The Body renders the full, formatted text of the reasoning.
+
+    *   The Footer updates to show that `(←)` will now collapse the section and
+    that `(↑↓)` can be used to scroll if the content overflows.
+
+
+    ```
+     ▲ relaycode transaction details
+     ──────────────────────────────────────────────────────────────────────────────
+      UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+      Git:  fix: add missing error handling
+      Date: 2023-10-27 14:32:15 · Status: Committed
+      Stats: 3 Files · +25 lines, -8 lines
+
+       ▸ (P)rompt
+     > ▾ (R)easoning (3 steps)
+       ▸ (F)iles (3)
+
+     ──────────────────────────────────────────────────────────────────────────────
+      REASONING
+
+      1. The primary goal was to make the rollback functionality in `restoreSnapshot`
+         more robust. The previous implementation used a simple for-loop which would
+         halt on the first error, leaving the project in a partially restored state.
+
+      2. I opted for a `Promise.all` approach to run file restorations in parallel.
+         This improves performance slightly but, more importantly, ensures all
+         restoration attempts are completed, even if some fail.
+
+      3. An `restoreErrors` array was introduced to collect any exceptions that occur
+         during the process. If this array is not empty after the `Promise.all`
+         completes, a comprehensive error is thrown, informing the user exactly which
+         files failed to restore. This provides much better diagnostics.
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav/Scroll · (←) Collapse · (C)opy Mode · (U)ndo · (Q)uit
+    ```
+
+
+    #### 2.3. Hierarchical Drill-Down: Inspecting File Diffs
+
+
+    This demonstrates the powerful two-level navigation for inspecting code
+    changes.
+
+
+    **Step A: Expand the File List**
+
+
+    **Trigger:** The user navigates to `▸ (F)iles (3)` and presses `(→)`.
+
+
+    **Behavior:**
+
+    *   The `(F)iles` section expands *within the Navigator*, revealing an
+    interactive list of affected files.
+
+    *   Focus shifts to this new inner list. `[MOD]`, `[ADD]`, etc., denote the
+    change type.
+
+
+    ```
+     ▲ relaycode transaction details
+     ──────────────────────────────────────────────────────────────────────────────
+      UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+      Git:  fix: add missing error handling
+      Date: 2023-10-27 14:32:15 · Status: Committed
+      Stats: 3 Files · +25 lines, -8 lines
+
+       ▸ (P)rompt
+       ▸ (R)easoning (3 steps)
+       ▾ (F)iles (3)
+         > [MOD] src/core/transaction.ts (+18/-5)
+           [MOD] src/utils/logger.ts    (+7/-3)
+           [DEL] src/utils/old-helper.ts
+
+     ──────────────────────────────────────────────────────────────────────────────
+
+      (Select a file and press → to view the diff)
+
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav Files · (→) View Diff · (←) Back to Sections · (C)opy Mode · (Q)uit
+    ```
+
+
+    **Step B: Display the Diff**
+
+
+    **Trigger:** With `src/core/transaction.ts` selected, the user presses `(→)`
+    again.
+
+
+    **Behavior:**
+
+    *   The Body renders a clean, syntax-highlighted diff for the selected file.
+
+    *   Navigating with `(↑↓)` in the file list will now instantly update the
+    Body with the diff for the newly selected file.
+
+    *   Pressing `(←)` will clear the Body and return focus to the file list
+    itself (the state in Step A).
+
+
+    ```
+     ▲ relaycode transaction details
+     ──────────────────────────────────────────────────────────────────────────────
+      UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+      Git:  fix: add missing error handling
+      Date: 2023-10-27 14:32:15 · Status: Committed
+      Stats: 3 Files · +25 lines, -8 lines
+
+       ▸ (P)rompt
+       ▸ (R)easoning (3 steps)
+       ▾ (F)iles (3)
+         > [MOD] src/core/transaction.ts (+18/-5)
+           [MOD] src/utils/logger.ts    (+7/-3)
+           [DEL] src/utils/old-helper.ts
+
+     ──────────────────────────────────────────────────────────────────────────────
+      DIFF: src/core/transaction.ts
+
+       export const restoreSnapshot = async (snapshot: FileSnapshot, ...): ... => {
+         ...
+    -    for (const [filePath, content] of entries) {
+
+    -        if (content === null) {
+
+    -            await deleteFile(filePath, cwd);
+
+    -        }
+
+    -    }
+
+    +    const restoreErrors: { path: string, error: unknown }[] = [];
+
+    +
+
+    +    await Promise.all(entries.map(async ([filePath, content]) => {
+
+    +        try {
+
+    +          if (content === null) { ... }
+
+    +        } catch (error) {
+
+    +          restoreErrors.push({ path: filePath, error });
+
+    +        }
+
+    +    }));
+
+    +
+
+    +    if (restoreErrors.length > 0) { ... }
+       }
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav Files · (←) Back to Files · (C)opy Mode · (U)ndo · (Q)uit
+    ```
+
+
+    ---
+
+
+    ### 3. Advanced Modes & Actions
+
+
+    #### 3.1. Advanced Copy Mode
+
+
+    This mode transforms the screen into a powerful data extraction tool.
+
+
+    **Trigger:** The user presses `(C)` from any non-modal view.
+
+
+    **Behavior:**
+
+    *   The entire screen is replaced by a multi-select checklist interface.
+
+    *   The user can navigate `(↑↓)`, toggle items with `(Spc)`, and press
+    `(Enter)` to copy a formatted aggregation of the selected data to the
+    clipboard.
+
+    *   A confirmation message provides immediate feedback. Pressing `(C)` or
+    `(Esc)` exits the mode.
+
+
+    ```
+     ▲ relaycode details · copy mode
+     ──────────────────────────────────────────────────────────────────────────────
+     Select data to copy from transaction e4a7c112 (use Space to toggle):
+
+     > [x] (M) Git Message
+       [ ] (P) Prompt
+       [x] (R) Reasoning
+       [ ] (A) All Diffs (3 files)
+       [ ] (F) Diff for: src/core/transaction.ts
+       [ ] (U) UUID
+       [ ] (Y) Full YAML representation
+
+     ──────────────────────────────────────────────────────────────────────────────
+      ✓ Copied 2 items to clipboard.
+
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Spc) Toggle · (Enter) Copy Selected · (C)opy/Exit
+    ```
+
+
+    #### 3.2. Revert Confirmation Modal
+
+
+    This action initiates a safe, non-destructive revert of the transaction.
+
+
+    **Trigger:** The user presses `(U)` from any primary view.
+
+
+    **Behavior:**
+
+    *   A modal overlay appears, halting all other interactions to prevent
+    accidental reverts.
+
+    *   The text clearly explains that this creates a *new* transaction,
+    preserving history.
+
+    *   The footer simplifies to the only two possible actions: Confirm or
+    Cancel.
+
+
+    ```
+     ▲ relaycode transaction details
+     ──────────────────────────────────────────────────────────────────────────────
+      UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+      Git:  ┌──────────────────────────────────────────────────────────┐
+      Date: │                 REVERT THIS TRANSACTION?                 │
+            │                                                          │
+      Stats:│ This will create a NEW transaction that reverses all     │
+            │ changes made by e4a7c112. The original transaction       │
+     ───────│ record will be preserved.                                │
+            │                                                          │
+       ▸ (P)│                       Are you sure?                      │
+       ▸ (R)└──────────────────────────────────────────────────────────┘
+       ▾ (F)iles (3)
+         > [MOD] src/core/transaction.ts (+18/-5)
+           [MOD] src/utils/logger.ts    (+7/-3)
+           [DEL] src/utils/old-helper.ts
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (Enter) Confirm Revert      (Esc) Cancel
+    ```
+
+
+    ---
+
+
+    ### 4. UI Legend & Keybindings
+
+
+    | Symbol | Meaning                 | Context       |
+    Description                                  |
+
+    | :----- | :---------------------- | :------------ |
+    :------------------------------------------- |
+
+    | `>`    | Focused/Selected Item   | Universal     | The currently active
+    line for navigation.    |
+
+    | `▸`    | Collapsed Section       | Navigator     | Indicates a section can
+    be expanded with `→`. |
+
+    | `▾`    | Expanded Section        | Navigator     | Indicates a section can
+    be collapsed with `←`.|
+
+    | `[MOD]`| Modified File           | File List     | The file was
+    modified.                       |
+
+    | `[ADD]`| Added File              | File List     | The file was newly
+    created.                  |
+
+    | `[DEL]`| Deleted File            | File List     | The file was
+    deleted.                        |
+
+    | `[REN]`| Renamed File            | File List     | The file was
+    renamed.                        |
+
+
+    | Key(s)       | Action             |
+    Context                                    |
+
+    | :----------- | :----------------- |
+    :----------------------------------------- |
+
+    | `↑` `↓`      | Navigate           |
+    Universal                                  |
+
+    | `→`          | Expand / Drill Down| Navigator (Sections or
+    Files)              |
+
+    | `←`          | Collapse / Go Back | Navigator (Expanded Sections or
+    Files)     |
+
+    | `(C)`        | Enter/Exit Copy Mode | Primary Views & Copy
+    Mode                  |
+
+    | `(U)`        | Initiate Revert    | Primary
+    Views                              |
+
+    | `(Q)` `Esc`  | Quit / Cancel      |
+    Universal                                  |
+
+    | `(Enter)`    | Confirm Action     | Copy Mode (to copy), Revert Modal (to
+    revert) |
+
+    | `(Spc)`      | Toggle Selection   | Copy
+    Mode                                  |
+  docs/relaycode-tui/review-screen.readme.md: >
+    # REVIEW-SCREEN.README.MD
+
+
+    ## Relaycode TUI: The Stateful Apply & Review Screen
+
+
+    This document specifies the design and behavior of the stateful **Apply &
+    Review Screen**. This screen is the interactive core of the Relaycode
+    workflow, appearing immediately after a patch has been processed and applied
+    to the filesystem. It is a command center for analysis, granular control,
+    data extraction, and iterative repair.
+
+
+    ### 1. Core Philosophy
+
+
+    The Review screen is not a simple "accept/reject" dialog. It is a strategic
+    workspace designed to give the user complete control and insight over
+    incoming code changes.
+
+
+    -   **Information Supremacy:** The UI provides all necessary context at a
+    glance: high-level stats, the AI's reasoning, post-script results, the patch
+    strategy used per file, and deep-dive diffs. Nothing is hidden.
+
+    -   **Granular Control:** The user is empowered to make decisions on a
+    per-file basis. The UI dynamically recalculates and reflects the impact of
+    these decisions in real-time.
+
+    -   **Iterative Repair Workflow:** Failure is treated as a temporary state,
+    not an endpoint. The UI provides a powerful suite of tools—from AI-driven
+    prompts to manual overrides—to handle even complex, multi-file failures
+    gracefully.
+
+    -   **Data Accessibility:** Every piece of information (prompts, diffs,
+    reasoning, script outputs) is easily copyable, respecting the user's need to
+    use this data in other contexts.
+
+
+    ### 2. UI Layout Components
+
+
+    1.  **Header:** `▲ relaycode review`.
+
+    2.  **Navigator:** The top section, acting as a command-and-control center.
+    It contains the transaction summary, global stats, expandable
+    reasoning/prompt, script results, and the file list.
+
+    3.  **Body:** A dynamic viewport that renders detailed content—like diffs or
+    script outputs—based on the user's focus in the Navigator.
+
+    4.  **Footer:** The contextual action bar, showing available keyboard
+    shortcuts that change constantly based on the UI's state and focus.
+
+
+    ### 3. The Interactive States & Workflow
+
+
+    This screen is the interactive workspace that appears after the initial
+    patch application is complete (whether successful or not). It allows the
+    user to review, repair, and resolve the transaction.
+
+
+    ---
+
+
+    #### **State 3.1: Interactive Review (Multi-File Failure)**
+
+
+    This state appears after a partial failure during the live application
+    phase. The screen is now waiting for user intervention.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (+18/-5) · 3 Files · 1/3 Approved · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+
+     (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+     (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts (+18/-5) [replace]
+     > [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
+       [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (D)iff · (Ent) Expand · (T)ry Repair · (Shift+T) Bulk Repair · (Shift+R) Reject All
+    ```
+
+    -   **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`.
+    The footer presents both single-file `(T)` and `(Shift+T)` bulk repair
+    options.
+
+
+    ---
+
+
+    #### **State 3.2: Granular File Rejection & Dynamic Recalculation**
+
+
+    The user decides one of the successful changes is undesirable and rejects
+    it.
+
+
+    **Trigger:** User navigates to `src/core/transaction.ts` and presses
+    `(Space)`.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (+18/-5) · 3 Files · 0/3 Approved · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+
+     (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+     (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+     > [✗] MOD src/core/transaction.ts (+18/-5) [replace]
+       [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
+       [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Spc) Toggle · (D)iff · (Shift+R) Reject All
+    ```
+
+    -   **Behavior:** The UI instantly recalculates. The file icon changes to
+    `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect
+    the new reality. The footer updates as there are no longer any approved
+    files to commit.
+
+
+    ---
+
+
+    #### **State 3.3: Interactive Review (Success Case with Script Results)**
+
+
+    This is the state after a fully successful patch application.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      4b9d8f03 · refactor: simplify clipboard logic
+      (+22/-11) · 2 Files · 2/2 Approved · 3.9s
+
+     (P)rompt ▸ Simplify the clipboard logic using an external library...
+     (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
+     ──────────────────────────────────────────────────────────────────────────────
+      ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
+      ✗ Linter: `bun run lint` (1.2s) ▸ 1 Error, 3 Warnings
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+     > [✓] MOD src/core/clipboard.ts (+15/-8) [replace]
+       [✓] MOD src/utils/shell.ts     (+7/-3)  [diff]
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Spc) Toggle · (D)iff · (Ent) Expand Details · (C)opy · (A)pprove · (Q)uit
+    ```
+
+    -   **Behavior:** New, expandable sections appear for each post-application
+    script, providing an at-a-glance summary of their results (`✓`/`✗`).
+
+
+    ---
+
+
+    #### **State 3.4: Expanding Script Results (Body View)**
+
+
+    **Trigger:** User navigates to the Linter line and presses `(Enter)`.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      4b9d8f03 · refactor: simplify clipboard logic
+      (+22/-11) · 2 Files · 2/2 Approved · 3.9s
+
+     (P)rompt ▸ Simplify the clipboard logic using an external library...
+     (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
+     ──────────────────────────────────────────────────────────────────────────────
+      ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
+    > ✗ Linter: `bun run lint` (1.2s) ▾ 1 Error, 3 Warnings
+     ──────────────────────────────────────────────────────────────────────────────
+      LINTER OUTPUT: `bun run lint`
+
+      src/core/clipboard.ts
+        45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+        88:5   Warning  Unexpected console statement. (no-console)
+
+      src/utils/shell.ts
+        23:9   Warning  'result' is never reassigned. Use 'const' instead. (prefer-const)
+        25:1   Warning  Empty block statement. (no-empty)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) Collapse · (J↓/K↑) Next/Prev Error · (C)opy Output · (Esc) Back
+    ```
+
+    -   **Behavior:** The Body viewport is replaced with the detailed, formatted
+    output from the linter. The footer provides contextual navigation hotkeys
+    (`J/K`) to jump between errors.
+
+
+    ---
+
+
+    #### **State 3.5: Copy Mode**
+
+
+    **Trigger:** User presses `(C)` from any primary review state.
+
+
+    ```
+     ▲ relaycode review · copy mode
+     ──────────────────────────────────────────────────────────────────────────────
+     Select item to copy to clipboard:
+
+     > [U] UUID:        e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+       [M] Git Message: refactor: rename core utility function
+       [P] Prompt:      Rename the `calculateChanges` utility to...
+       [R] Reasoning:   1. Renamed the function in its definition...
+     ──────────────────────────────────────────────────────────────────────────────
+       [F] Diff for:    src/core/transaction.ts
+       [A] All Diffs (3 files)
+     ──────────────────────────────────────────────────────────────────────────────
+      ✓ Copied UUID to clipboard.
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit
+    ```
+
+    -   **Behavior:** A modal overlay appears, allowing the user to copy any
+    piece of metadata related to the transaction to their clipboard with single
+    keystrokes.
+
+
+    ### 4. The Advanced Repair Workflow
+
+
+    ---
+
+
+    #### **State 4.1: Initiating Bulk Repair**
+
+
+    **Trigger:** From the multi-failure state (3.1), the user presses
+    `(Shift+T)`.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+     ... (Navigator remains the same) ...
+     ──────────────────────────────────────────────────────────────────────────────
+      BULK REPAIR ACTION
+
+      The following 2 files failed to apply:
+      - src/utils/logger.ts
+      - src/commands/apply.ts
+
+      How would you like to proceed?
+
+    > (1) Copy Bulk Re-apply Prompt (for single-shot AI)
+      (2) Bulk Change Strategy & Re-apply
+      (3) Handoff to External Agent
+      (4) Bulk Abandon All Failed Files
+      (Esc) Cancel
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) Select · [1-4, Esc] Hotkeys
+    ```
+
+    -   **Behavior:** A blocking modal appears, presenting four distinct repair
+    strategies that will apply to all failed files simultaneously.
+
+
+    ---
+
+
+    #### **Flow 4.2: The "Re-apply Prompt" (AI-driven Repair)**
+
+
+    **Trigger:** User selects option `(1)`. A detailed prompt is copied to the
+    clipboard, and the UI enters a waiting state.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (+18/-5) · 1/3 Files · 0.6s · AWAITING PATCH
+
+     (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
+     (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+     > [●] AWAITING src/utils/logger.ts    (Bulk re-apply prompt copied!)
+       [●] AWAITING src/commands/apply.ts
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (D)iff · (C)opy · (Esc) Abandon & Commit Approved
+    ```
+
+
+    **Generated Prompt (Copied to Clipboard):**
+
+    ```text
+
+    The previous patch failed to apply to MULTIPLE files. Please generate a new,
+    corrected patch that addresses all the files listed below.
+
+
+    IMPORTANT: The response MUST contain a complete code block for EACH file
+    that needs to be fixed.
+
+
+    --- FILE: src/utils/logger.ts ---
+
+    Strategy: standard-diff
+
+    Error: Hunk #1 failed to apply
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    import chalk from 'chalk';
+
+    // ... entire original content of logger.ts ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    --- a/src/utils/logger.ts
+
+    +++ b/src/utils/logger.ts
+
+    // ... the failed diff block ...
+
+    ---
+
+
+
+    --- FILE: src/commands/apply.ts ---
+
+    Strategy: standard-diff
+
+    Error: Context mismatch at line 92
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    import { applyPatch } from 'relaycode-core';
+
+    // ... entire original content of apply.ts ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    --- a/src/commands/apply.ts
+
+    +++ b/src/commands/apply.ts
+
+    // ... the second failed diff block ...
+
+    ---
+
+
+    Please analyze all failed files and provide a complete, corrected response.
+
+    ```
+
+
+    ---
+
+
+    #### **Flow 4.3: The "Change Strategy" (User-driven Repair)**
+
+
+    **Trigger:** User selects option `(2)` and chooses a new strategy (e.g.,
+    `replace`). The system re-applies the original patches with the new
+    strategy, providing live feedback.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+     ... (Navigator) ... · BULK RE-APPLYING...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+     > [●] RE-APPLYING... src/utils/logger.ts (using 'replace' strategy)
+       [ ] PENDING...     src/commands/apply.ts
+
+     ──────────────────────────────────────────────────────────────────────────────
+     Re-applying failed patches...
+    ```
+
+
+    **Resolution (Mixed Result):**
+
+    The re-application finishes with one success and one failure.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      e4a7c112 · refactor: rename core utility function
+      (+27/-7) · 3 Files · 2/3 Approved · PATCH FAILED
+
+     ... (Navigator) ...
+     ──────────────────────────────────────────────────────────────────────────────
+     FILES
+       [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
+     > [✓] MOD src/utils/logger.ts    (+9/-2) [replace]
+       [!] FAILED src/commands/apply.ts   ('replace' failed: markers not found)
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Spc) Toggle · (T)ry Repair · (C)opy · (A)pprove Approved
+    ```
+
+
+    ---
+
+
+    #### **Flow 4.4: The "Handoff" (Agentic Repair)**
+
+
+    **Trigger:** User selects option `(3)`. A confirmation modal appears first.
+    Upon confirmation, a specialized prompt is copied, and the transaction is
+    finalized with a `Handoff` status.
+
+
+    ```
+     ▲ relaycode review
+     ──────────────────────────────────────────────────────────────────────────────
+      HANDOFF TO EXTERNAL AGENT
+
+      This action will:
+      1. Copy a detailed prompt to your clipboard for an agentic AI.
+      2. Mark the current transaction as 'Handoff' and close this review.
+      3. Assume that you and the external agent will complete the work.
+
+      Relaycode will NOT wait for a new patch. This is a final action.
+
+      Are you sure you want to proceed?
+     ──────────────────────────────────────────────────────────────────────────────
+     (Enter) Confirm Handoff      (Esc) Cancel
+    ```
+
+
+    **Resolution (Dashboard View):**
+
+    After handoff, the user is returned to the dashboard, which now logs the
+    action.
+
+
+    ```
+     ▲ relaycode dashboard
+     ──────────────────────────────────────────────────────────────────────────────
+     STATUS: ● LISTENING · APPROVALS: 00 · COMMITS: 04
+
+      EVENT STREAM (Last 15 minutes)
+
+      > -5s    → HANDOFF   e4a7c112 · refactor: rename core utility function
+        -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+        ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) View Details · (P)ause · (Q)uit
+    ```
+
+    -   **Behavior:** A new `→ HANDOFF` icon and status provide a permanent
+    record. The transaction is considered "done" by Relaycode's automated
+    systems, and responsibility is now with the user and their external agent.
+
+
+    ### 5. The Handoff Prompt: Design & Specification
+
+
+    The "Handoff Prompt" is a specialized, machine-generated text block copied
+    to the user's clipboard during the Handoff workflow. It is not a simple
+    error message; it is a carefully engineered "briefing document" designed to
+    transfer the entire context of a failed Relaycode transaction to an
+    external, conversational AI assistant (like Claude, GPT-4, or an
+    IDE-integrated agent).
+
+
+    #### Core Design Principles
+
+
+    1.  **Context is King:** The prompt's primary goal is to eliminate the need
+    for the user to manually explain the situation. It must contain the *goal*,
+    the *plan*, the *partial results*, and the *failures* of the original
+    transaction.
+
+    2.  **Clear Separation of Concerns:** The prompt must unambiguously
+    distinguish between what has already been successfully applied to the
+    filesystem and what remains broken. This prevents the external agent from
+    re-doing completed work.
+
+    3.  **Actionable & Conversational:** It should not be a passive data dump.
+    The prompt must end with a clear call to action that initiates a
+    collaborative, turn-by-turn repair session.
+
+    4.  **Pointer to the Source of Truth:** For maximum fidelity, it must
+    reference the on-disk transaction YAML file. This allows an advanced agent
+    (or the user) to consult the original, detailed plan if the summary is
+    insufficient.
+
+
+    ---
+
+
+    #### Handoff Prompt Template
+
+
+    This is the template used by Relaycode to generate the prompt. It
+    dynamically fills in the placeholders with data from the current failed
+    transaction.
+
+
+    ```text
+
+    I am handing off a failed automated code transaction to you. Your task is to
+    act as my programming assistant and complete the planned changes.
+
+
+    The full plan for this transaction is detailed in the YAML file located at:
+    `.relay/transactions/{{TRANSACTION_UUID}}.yml`. Please use this file as your
+    primary source of truth for the overall goal.
+
+
+    Here is the current status of the transaction:
+
+
+    --- TRANSACTION SUMMARY ---
+
+    Goal: {{GIT_COMMIT_MESSAGE}}
+
+    Reasoning:
+
+    {{AI_REASONING_STEPS}}
+
+
+    --- CURRENT FILE STATUS ---
+
+    SUCCESSFUL CHANGES (already applied, no action needed):
+
+    {{#each successful_files}}
+
+    - {{operation}}: {{path}}
+
+    {{/each}}
+
+
+    FAILED CHANGES (these are the files you need to fix):
+
+    {{#each failed_files}}
+
+    - FAILED: {{path}} (Error: {{error_message}})
+
+    {{/each}}
+
+
+    Your job is to now work with me to fix the FAILED files and achieve the
+    original goal of the transaction. Please start by asking me which file you
+    should work on first.
+
+    ```
+
+
+    ---
+
+
+    #### Concrete Example
+
+
+    Let's use the multi-file failure scenario from this document.
+
+
+    -   **Transaction UUID:** `e4a7c112`
+
+    -   **Goal:** `refactor: rename core utility function`
+
+    -   **Reasoning:**
+        1.  Renamed the function in its definition file, `src/core/transaction.ts`.
+        2.  Attempted to update all call sites for the renamed function.
+    -   **Successful Files:**
+        -   `MODIFIED: src/core/transaction.ts`
+    -   **Failed Files:**
+        -   `FAILED: src/utils/logger.ts` (Error: Hunk #1 failed to apply)
+        -   `FAILED: src/commands/apply.ts` (Error: Context mismatch at line 92)
+
+    When the user confirms the Handoff action, the following text is copied
+    directly to their clipboard:
+
+
+    ```text
+
+    I am handing off a failed automated code transaction to you. Your task is to
+    act as my programming assistant and complete the planned changes.
+
+
+    The full plan for this transaction is detailed in the YAML file located at:
+    `.relay/transactions/e4a7c112.yml`. Please use this file as your primary
+    source of truth for the overall goal.
+
+
+    Here is the current status of the transaction:
+
+
+    --- TRANSACTION SUMMARY ---
+
+    Goal: refactor: rename core utility function
+
+    Reasoning:
+
+    1. Renamed the function in its definition file, `src/core/transaction.ts`.
+
+    2. Attempted to update all call sites for the renamed function.
+
+
+    --- CURRENT FILE STATUS ---
+
+    SUCCESSFUL CHANGES (already applied, no action needed):
+
+    - MODIFIED: src/core/transaction.ts
+
+
+    FAILED CHANGES (these are the files you need to fix):
+
+    - FAILED: src/utils/logger.ts (Error: Hunk #1 failed to apply)
+
+    - FAILED: src/commands/apply.ts (Error: Context mismatch at line 92)
+
+
+    Your job is to now work with me to fix the FAILED files and achieve the
+    original goal of the transaction. Please start by asking me which file you
+    should work on first.
+
+    ```
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 138

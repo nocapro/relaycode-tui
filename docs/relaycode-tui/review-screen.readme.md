@@ -154,11 +154,12 @@ This is the state after a fully successful patch application.
  ──────────────────────────────────────────────────────────────────────────────
    [F] Diff for:    src/core/transaction.ts
    [A] All Diffs (3 files)
+   [X] Context Files (latest) (3 files)
  ──────────────────────────────────────────────────────────────────────────────
   ✓ Copied UUID to clipboard.
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit
+ (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A,X) Hotkeys · (C, Esc) Exit
 ```
 -   **Behavior:** A modal overlay appears, allowing the user to copy any piece of metadata related to the transaction to their clipboard with single keystrokes.
 

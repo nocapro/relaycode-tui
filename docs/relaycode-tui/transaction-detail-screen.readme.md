@@ -228,6 +228,7 @@ This mode transforms the screen into a powerful data extraction tool.
    [x] (R) Reasoning
    [ ] (A) All Diffs (3 files)
    [ ] (F) Diff for: src/core/transaction.ts
+   [ ] (X) Context Files (latest) (3 files)
    [ ] (U) UUID
    [ ] (Y) Full YAML representation
 

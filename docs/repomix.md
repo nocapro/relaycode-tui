@@ -42,6 +42,7 @@ src/
     commit.service.ts
     copy.service.ts
     dashboard.service.ts
+    fs.service.ts
     init.service.ts
     review.service.ts
     transaction.service.ts
@@ -73,6 +74,35 @@ tsconfig.json
 
 # Files
 
+## File: src/services/fs.service.ts
+```typescript
+import { sleep } from '../utils';
+
+/**
+ * Mock file system service.
+ * In a real application, this would interact with the actual filesystem.
+ */
+const readFileContent = async (filePath: string): Promise<string> => {
+    // Simulate async file read
+    await sleep(50 + Math.random() * 100);
+
+    const lang = filePath.split('.').pop() || '';
+    
+    return `// Mock content for ${filePath}
+// Language: ${lang}
+// In a real implementation, this would read from the filesystem.
+
+function helloWorld() {
+    console.log("Hello from ${filePath}!");
+}
+`;
+};
+
+export const FileSystemService = {
+    readFileContent,
+};
+```
+
 ## File: src/components/ActionFooter.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -93,12 +123,14 @@ const Action = ({ item }: { item: ActionItem }) => (
 const ActionFooter = ({ actions }: ActionFooterProps) => {
     const [width] = useStdoutDimensions();
     const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
+    const separatorWidth = actionSeparator.length;
 
+    // Calculate required width for a single line
     const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
-    const requiredWidth = formattedActions.join(actionSeparator).length;
+    const singleLineWidth = formattedActions.join(actionSeparator).length;
 
-    // Render horizontally if it fits
-    if (requiredWidth <= width - horizontalPadding * 2) {
+    // 1. Render horizontally if it fits
+    if (singleLineWidth <= width - horizontalPadding * 2) {
         return (
             <Box>
                 {actions.map((item, index) => (
@@ -111,66 +143,48 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
         );
     }
 
-    // Render in two columns if it doesn't fit horizontally
-    const midPoint = Math.ceil(actions.length / 2);
-    const leftColumn = actions.slice(0, midPoint);
-    const rightColumn = actions.slice(midPoint);
+    // 2. If it doesn't fit, calculate multi-column layout
+    const itemWidths = formattedActions.map(a => a.length);
+    const maxItemWidth = Math.max(...itemWidths);
+    
+    // Determine how many columns can fit, ensuring at least one
+    const availableWidth = width - horizontalPadding * 2;
+    // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
+    const numColumns = Math.min(
+        actions.length,
+        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth)))
+    );
+    
+    const itemsPerColumn = Math.ceil(actions.length / numColumns);
+    const columns: ActionItem[][] = Array.from({ length: numColumns }, () => []);
 
-    // Calculate max width for left column to align columns nicely
-    const leftColumnMaxWidth = Math.max(...leftColumn.map(a => `(${a.key}) ${a.label}`.length));
+    actions.forEach((action, index) => {
+        const columnIndex = Math.floor(index / itemsPerColumn);
+        if (columns[columnIndex]) {
+            columns[columnIndex].push(action);
+        }
+    });
 
     return (
         <Box flexDirection="row" width="100%">
-            <Box flexDirection="column" width={`${leftColumnMaxWidth + 4}px`}>
-                {leftColumn.map(item => <Action key={item.key} item={item} />)}
-            </Box>
-            <Box flexDirection="column">
-                {rightColumn.map(item => <Action key={item.key} item={item} />)}
-            </Box>
+            {columns.map((column, colIndex) => (
+                <Box
+                    key={colIndex}
+                    flexDirection="column"
+                    // Use a flex-basis approach for more even distribution if needed,
+                    // but fixed width is better for alignment.
+                    width={maxItemWidth + separatorWidth}
+                >
+                    {column.map(item => (
+                        <Action key={item.key} item={item} />
+                    ))}
+                </Box>
+            ))}
         </Box>
     );
 };
 
 export default ActionFooter;
-```
-
-## File: src/types/actions.types.ts
-```typescript
-/**
- * Represents a single action item for display in a responsive footer.
- */
-export interface ActionItem {
-    key: string;
-    label: string;
-}
-```
-
-## File: src/config/ui.config.ts
-```typescript
-/**
- * Centralized UI configuration.
- * This object is the single source of truth for layout constants, thresholds,
- * and other UI-related magic numbers.
- */
-export const UI_CONFIG = {
-    diffScreen: {
-        collapseThreshold: 20, // Lines before collapsing
-        collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
-    },
-    dashboard: {
-        reservedRows: 9, // Non-event stream vertical space (header, footer, etc.)
-    },
-    history: {
-        reservedRows: 8, // Non-content vertical space (header, footer, filter)
-    },
-    splash: {
-        initialCountdown: 3, // Seconds before auto-skip
-    },
-    footer: {
-        horizontalPadding: 2, // Minimum space from the left/right edges of the screen
-        actionSeparator: ' · ',
-    },
-} as const;
 ```
 
 ## File: src/constants/copy.constants.ts
@@ -185,6 +199,7 @@ export const COPYABLE_ITEMS = {
     REASONING: 'Reasoning',
     FILE_DIFF: 'Diff for',
     ALL_DIFFS: 'All Diffs',
+    CONTEXT_FILES: 'Context Files (latest)',
     FULL_YAML: 'Full YAML representation',
     // For multi-selection contexts
     MESSAGES: 'Git Messages',
@@ -274,12 +289,51 @@ export const useViewStore = create<ViewState>((set) => ({
 }));
 ```
 
+## File: src/types/actions.types.ts
+```typescript
+/**
+ * Represents a single action item for display in a responsive footer.
+ */
+export interface ActionItem {
+    key: string;
+    label: string;
+}
+```
+
 ## File: src/types/debug.types.ts
 ```typescript
 export interface MenuItem {
     title: string;
     action: () => void;
 }
+```
+
+## File: src/config/ui.config.ts
+```typescript
+/**
+ * Centralized UI configuration.
+ * This object is the single source of truth for layout constants, thresholds,
+ * and other UI-related magic numbers.
+ */
+export const UI_CONFIG = {
+    diffScreen: {
+        collapseThreshold: 20, // Lines before collapsing
+        collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
+    },
+    dashboard: {
+        reservedRows: 9, // Non-event stream vertical space (header, footer, etc.)
+    },
+    history: {
+        reservedRows: 8, // Non-content vertical space (header, footer, filter)
+    },
+    splash: {
+        initialCountdown: 3, // Seconds before auto-skip
+    },
+    footer: {
+        horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+        actionSeparator: ' · ',
+    },
+} as const;
 ```
 
 ## File: src/constants/app.constants.ts
@@ -764,12 +818,17 @@ export const useCopyStore = create<CopyState>((set, get) => ({
             }
             return { selectedIds: newSelectedIds };
         }),
-        executeCopy: () => {
+        executeCopy: async () => {
             const { items, selectedIds } = get();
             const itemsToCopy = items.filter(i => selectedIds.has(i.id));
             if (itemsToCopy.length === 0) return;
 
-            const content = itemsToCopy.map(item => `--- ${item.label} ---\n${item.getData()}`).join('\n\n');
+            const dataPromises = itemsToCopy.map(item => item.getData());
+            const resolvedData = await Promise.all(dataPromises);
+
+            const content = itemsToCopy
+                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                .join('\n\n');
             const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
             // eslint-disable-next-line no-console
             console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
@@ -939,99 +998,6 @@ import type { APP_SCREENS } from '../constants/app.constants';
 type ObjectValues<T> = T[keyof T];
 
 export type AppScreen = ObjectValues<typeof APP_SCREENS>;
-```
-
-## File: src/components/CopyScreen.tsx
-```typescript
-import { Box, Text, useInput } from 'ink';
-import { useCopyStore } from '../stores/copy.store';
-import Separator from './Separator';
-import { useViewStore } from '../stores/view.store';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
-
-const CopyScreen = () => {
-    const activeOverlay = useViewStore(s => s.activeOverlay);
-    const {
-        title, items, selectedIndex, selectedIds, lastCopiedMessage,
-        actions,
-    } = useCopyStore(state => ({ ...state, actions: state.actions }));
-
-    useInput((input, key) => {
-        if (key.escape) {
-            actions.close();
-            return;
-        }
-        if (key.upArrow) {
-            actions.navigateUp();
-            return;
-        }
-        if (key.downArrow) {
-            actions.navigateDown();
-            return;
-        }
-        if (input === ' ') {
-            actions.toggleSelection();
-            return;
-        }
-        if (key.return) {
-            actions.executeCopy();
-            return;
-        }
-        
-        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
-        if(item) {
-            actions.toggleSelectionById(item.id);
-        }
-    }, { isActive: activeOverlay === 'copy' });
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box 
-            width="100%"
-            height="100%"
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-        >
-            <Box 
-                flexDirection="column" 
-                borderStyle="round" 
-                borderColor="yellow" 
-                paddingX={2}
-                width="80%"
-            >
-                <Text bold color="yellow">▲ relaycode · copy mode</Text>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                <Box flexDirection="column" marginY={1}>
-                    <Text>{title}</Text>
-                    <Box flexDirection="column" marginTop={1}>
-                        {items.map((item, index) => {
-                            const isSelected = index === selectedIndex;
-                            const isChecked = selectedIds.has(item.id);
-                            return (
-                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
-                                    {isSelected ? '> ' : '  '}
-                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                </Box>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <ActionFooter actions={[
-                    { key: '↑↓', label: 'Nav' },
-                    { key: 'Spc/Hotkey', label: 'Toggle' },
-                    { key: 'Enter', label: 'Copy' },
-                    { key: 'Esc', label: 'Close' },
-                ]}/>
-            </Box>
-        </Box>
-    );
-};
-
-export default CopyScreen;
 ```
 
 ## File: src/components/GlobalHelpScreen.tsx
@@ -1356,9 +1322,102 @@ export interface CopyItem {
     id: string;
     key: string;
     label: string;
-    getData: () => string;
+    getData: () => string | Promise<string>;
     isDefaultSelected?: boolean;
 }
+```
+
+## File: src/components/CopyScreen.tsx
+```typescript
+import { Box, Text, useInput } from 'ink';
+import { useCopyStore } from '../stores/copy.store';
+import Separator from './Separator';
+import { useViewStore } from '../stores/view.store';
+import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
+
+const CopyScreen = () => {
+    const activeOverlay = useViewStore(s => s.activeOverlay);
+    const {
+        title, items, selectedIndex, selectedIds, lastCopiedMessage,
+        actions,
+    } = useCopyStore(state => ({ ...state, actions: state.actions }));
+
+    useInput((input, key) => {
+        if (key.escape) {
+            actions.close();
+            return;
+        }
+        if (key.upArrow) {
+            actions.navigateUp();
+            return;
+        }
+        if (key.downArrow) {
+            actions.navigateDown();
+            return;
+        }
+        if (input === ' ') {
+            actions.toggleSelection();
+            return;
+        }
+        if (key.return) {
+            actions.executeCopy();
+            return;
+        }
+        
+        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
+        if(item) {
+            actions.toggleSelectionById(item.id);
+        }
+    }, { isActive: activeOverlay === 'copy' });
+    const [width] = useStdoutDimensions();
+
+    return (
+        <Box 
+            width="100%"
+            height="100%"
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+        >
+            <Box 
+                flexDirection="column" 
+                borderStyle="round" 
+                borderColor="yellow" 
+                paddingX={2}
+                width="80%"
+            >
+                <Text bold color="yellow">▲ relaycode · copy mode</Text>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                <Box flexDirection="column" marginY={1}>
+                    <Text>{title}</Text>
+                    <Box flexDirection="column" marginTop={1}>
+                        {items.map((item, index) => {
+                            const isSelected = index === selectedIndex;
+                            const isChecked = selectedIds.has(item.id);
+                            return (
+                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
+                                    {isSelected ? '> ' : '  '}
+                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                </Box>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+                <ActionFooter actions={[
+                    { key: '↑↓', label: 'Nav' },
+                    { key: 'Spc/Hotkey', label: 'Toggle' },
+                    { key: 'Enter', label: 'Copy' },
+                    { key: 'Esc', label: 'Close' },
+                ]}/>
+            </Box>
+        </Box>
+    );
+};
+
+export default CopyScreen;
 ```
 
 ## File: src/data/mocks.ts
@@ -1574,58 +1633,6 @@ export const InitService = {
     runInitializationProcess,
     resumeInitializationProcess,
 };
-```
-
-## File: src/components/GitCommitScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
-import ActionFooter from './ActionFooter';
-
-const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
-
-    const transactionLines = transactionsToCommit.map(tx => (
-        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-    ));
-
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode git commit</Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold>TRANSACTIONS INCLUDED</Text>
-                    {transactionLines}
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text bold>FINAL COMMIT MESSAGE</Text>
-                <Box marginTop={1}>
-                    <Text>{finalCommitMessage}</Text>
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} paddingX={2}>
-                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
-            </Box>
-            <Separator />
-            {isCommitting
-                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-                : <ActionFooter actions={[
-                    { key: 'Enter', label: 'Confirm & Commit' },
-                    { key: 'Esc', label: 'Cancel' },
-                ]}/>
-            }
-        </Box>
-    );
-};
-
-export default GitCommitScreen;
 ```
 
 ## File: src/components/ReviewProcessingScreen.tsx
@@ -1859,6 +1866,20 @@ export const useInitializationScreen = () => {
 import type { Transaction, FileItem } from '../types/domain.types';
 import type { CopyItem } from '../types/copy.types';
 import { COPYABLE_ITEMS } from '../constants/copy.constants';
+import { FileSystemService } from './fs.service';
+
+const formatFileContext = (filePath: string, content: string): string => {
+    const lang = filePath.split('.').pop() || '';
+    return `--- CONTEXT FOR FILE: ${filePath} ---\n\`\`\`${lang}\n${content}\n\`\`\``;
+};
+
+const getContextForFilePaths = async (filePaths: string[]): Promise<string> => {
+    const contentPromises = filePaths.map(path => FileSystemService.readFileContent(path));
+    const resolvedContents = await Promise.all(contentPromises);
+    return filePaths
+        .map((path, index) => formatFileContext(path, resolvedContents[index]!))
+        .join('\n\n');
+};
 
 const createBaseTransactionCopyItems = (transaction: Transaction): CopyItem[] => [
     { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
@@ -1872,10 +1893,20 @@ const getCopyItemsForReview = (
     files: FileItem[],
     selectedFile?: FileItem,
 ): CopyItem[] => {
+    const allFilePaths = [...new Set(files.map(f => f.path))];
+
     return [
         ...createBaseTransactionCopyItems(transaction),
         { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
         { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+        {
+            id: 'context_files',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
+        },
     ];
 };
 
@@ -1889,12 +1920,22 @@ const getCopyItemsForDetail = (
     const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
     const uuidItem = baseItems.find(i => i.id === 'uuid')!;
 
+    const allFilePaths = [...new Set((transaction.files || []).map(f => f.path))];
+
     return [
         messageItem,
         promptItem,
         reasoningItem,
         { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
         { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+        {
+            id: 'context_files',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
+        },
         uuidItem,
         { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
     ];
@@ -1904,12 +1945,24 @@ const getCopyItemsForHistory = (
     transactions: Transaction[],
 ): CopyItem[] => {
     if (transactions.length === 0) return [];
-    
+
+    const allFilePaths = [
+        ...new Set(transactions.flatMap(tx => tx.files?.map(f => f.path) || [])),
+    ];
+
     return [
         { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
         { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
         { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
         { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+        {
+            id: 'context_files_history',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
+        },
         { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
         { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
     ];
@@ -1957,6 +2010,58 @@ export const CopyService = {
     "typescript": "^5.9.2"
   }
 }
+```
+
+## File: src/components/GitCommitScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+import ActionFooter from './ActionFooter';
+
+const GitCommitScreen = () => {
+    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+    const transactionLines = transactionsToCommit.map(tx => (
+        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+    ));
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode git commit</Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text bold>TRANSACTIONS INCLUDED</Text>
+                    {transactionLines}
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text bold>FINAL COMMIT MESSAGE</Text>
+                <Box marginTop={1}>
+                    <Text>{finalCommitMessage}</Text>
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} paddingX={2}>
+                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+            </Box>
+            <Separator />
+            {isCommitting
+                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                : <ActionFooter actions={[
+                    { key: 'Enter', label: 'Confirm & Commit' },
+                    { key: 'Esc', label: 'Cancel' },
+                ]}/>
+            }
+        </Box>
+    );
+};
+
+export default GitCommitScreen;
 ```
 
 ## File: src/services/transaction.service.ts
@@ -2304,57 +2409,6 @@ export const useInitStore = create<InitState>((set) => ({
 }));
 ```
 
-## File: src/components/DebugMenu.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useDebugMenu } from '../hooks/useDebugMenu';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
-
-const getKeyForIndex = (index: number): string => {
-    if (index < 9) {
-        return (index + 1).toString();
-    }
-    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
-};
-
-const DebugMenu = () => {
-    const { selectedIndex, menuItems } = useDebugMenu();
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box
-            flexDirection="column"
-            borderStyle="round"
-            borderColor="yellow"
-            width="100%"
-            paddingX={2}
-        >
-            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
-            <Separator width={width - 4} />
-            <Box flexDirection="column" marginY={1}>
-                {menuItems.map((item, index) => (
-                    <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
-                        {selectedIndex === index ? '> ' : '  '}
-                        ({getKeyForIndex(index)}) {item.title}
-                    </Text>
-                ))}
-            </Box>
-            <Separator width={width - 4} />
-            <ActionFooter actions={[
-                { key: '↑↓', label: 'Nav' },
-                { key: '1-9,a-z', label: 'Jump' },
-                { key: 'Enter', label: 'Select' },
-                { key: 'Esc/Ctrl+B', label: 'Close' },
-            ]}/>
-        </Box>
-    );
-};
-
-export default DebugMenu;
-```
-
 ## File: src/components/InitializationScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -2551,6 +2605,57 @@ export const useTransactionDetailScreen = () => {
         bodyView: store.bodyView,
     };
 };
+```
+
+## File: src/components/DebugMenu.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useDebugMenu } from '../hooks/useDebugMenu';
+import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
+
+const getKeyForIndex = (index: number): string => {
+    if (index < 9) {
+        return (index + 1).toString();
+    }
+    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+};
+
+const DebugMenu = () => {
+    const { selectedIndex, menuItems } = useDebugMenu();
+    const [width] = useStdoutDimensions();
+
+    return (
+        <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor="yellow"
+            width="100%"
+            paddingX={2}
+        >
+            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+            <Separator width={width - 4} />
+            <Box flexDirection="column" marginY={1}>
+                {menuItems.map((item, index) => (
+                    <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                        {selectedIndex === index ? '> ' : '  '}
+                        ({getKeyForIndex(index)}) {item.title}
+                    </Text>
+                ))}
+            </Box>
+            <Separator width={width - 4} />
+            <ActionFooter actions={[
+                { key: '↑↓', label: 'Nav' },
+                { key: '1-9,a-z', label: 'Jump' },
+                { key: 'Enter', label: 'Select' },
+                { key: 'Esc/Ctrl+B', label: 'Close' },
+            ]}/>
+        </Box>
+    );
+};
+
+export default DebugMenu;
 ```
 
 ## File: src/services/review.service.ts
@@ -2901,6 +3006,288 @@ const main = () => {
 };
 
 main();
+```
+
+## File: src/hooks/useReviewScreen.tsx
+```typescript
+import { useMemo } from 'react';
+import { useInput, type Key } from 'ink';
+import { useReviewStore } from '../stores/review.store';
+import { useAppStore } from '../stores/app.store';
+import { useCopyStore } from '../stores/copy.store';
+import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
+import type { FileItem } from '../types/domain.types';
+
+type NavigableItem =
+    | { type: 'prompt' }
+    | { type: 'reasoning' }
+    | { type: 'script'; id: string }
+    | { type: 'file'; id: string };
+
+export const useReviewScreen = () => {
+    const store = useReviewStore();
+    const {
+        selectedItemIndex,
+        bodyView,
+        patchStatus,
+        selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
+    } = store;
+
+    const transaction = useTransactionStore(selectSelectedTransaction);
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const navigableItems = useMemo((): NavigableItem[] => {
+        if (!transaction) return [];
+        const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
+        const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
+        return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+    }, [transaction]);
+
+    // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
+    const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
+    const fileReviewStates = useReviewStore(s => s.fileReviewStates);
+
+    const reviewStats = useMemo(() => {
+        const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+        return {
+            totalFiles: files.length,
+            totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
+            totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
+            numFiles: files.length,
+            approvedFilesCount: approvedFiles.length,
+        };
+    }, [files, fileReviewStates]);
+
+    const hasRejectedFiles = useMemo(() => {
+        if (!fileReviewStates) return false;
+        return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
+    }, [fileReviewStates]);
+
+    const { approvedFilesCount } = reviewStats;
+
+    const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
+
+    const scripts = transaction?.scripts || [];
+
+    const {
+        moveSelectionUp,
+        moveSelectionDown,
+        expandDiff,
+        toggleBodyView,
+        setBodyView,
+        startApplySimulation,
+        approve,
+        tryRepairFile,
+        tryInstruct,
+        showBulkRepair,
+        showBulkInstruct,
+        executeBulkRepairOption,
+        executeBulkInstructOption,
+        confirmHandoff,
+        scrollReasoningUp,
+        scrollReasoningDown,
+        navigateScriptErrorUp,
+        navigateScriptErrorDown,
+        toggleFileApproval,
+        rejectAllFiles,
+        navigateBulkRepairUp,
+        navigateBulkRepairDown,
+        navigateBulkInstructUp,
+        navigateBulkInstructDown,
+    } = store.actions;
+
+    const openCopyMode = () => {
+        if (!transaction) return;
+        const currentItem = navigableItems[selectedItemIndex];
+        const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+        useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+    };
+
+    // --- Input Handlers ---
+
+    const handleGlobalInput = (input: string, key: Key): boolean => {
+        if (input === '1') { // For demo purposes
+            startApplySimulation('success'); return true;
+        }
+        if (input === '2') { // For demo purposes
+            startApplySimulation('failure'); return true;
+        }
+        // The 'q' (quit/back) is now handled by the global hotkey hook.
+
+        if (key.escape) {
+            if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff' || bodyView === 'bulk_instruct') {
+                toggleBodyView(bodyView);
+            } else if (bodyView !== 'none') {
+                setBodyView('none');
+            }
+            return true;
+        }
+        return false;
+    };
+
+    const handleHandoffConfirmInput = (_input: string, key: Key): void => {
+        if (key.return) confirmHandoff();
+    };
+
+    const handleBulkRepairInput = (input: string, key: Key): void => {
+        if (key.upArrow) navigateBulkRepairUp();
+        if (key.downArrow) navigateBulkRepairDown();
+        if (key.return) {
+            executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
+            return;
+        }
+
+        if (input >= '1' && input <= '4') {
+            executeBulkRepairOption(parseInt(input));
+        }
+    };
+    
+    const handleBulkInstructInput = (input: string, key: Key): void => {
+        if (key.upArrow) navigateBulkInstructUp();
+        if (key.downArrow) navigateBulkInstructDown();
+        if (key.return) {
+            executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
+            return;
+        }
+
+        if (input >= '1' && input <= '3') {
+            executeBulkInstructOption(parseInt(input));
+        }
+    };
+
+    const handleReasoningInput = (input: string, key: Key): void => {
+        if (key.upArrow) scrollReasoningUp();
+        if (key.downArrow) scrollReasoningDown();
+        if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+    };
+
+    const handleScriptOutputInput = (input: string, key: Key): void => {
+        if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+        if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+        if (key.return) toggleBodyView('script_output');
+        if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
+            if (selectedScript) {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+            }
+        }
+    };
+
+    const handleDiffInput = (input: string) => {
+        if (input.toLowerCase() === 'x') expandDiff();
+        if (input.toLowerCase() === 'd') toggleBodyView('diff');
+    };
+
+    const handleMainNavigationInput = (input: string, key: Key): void => {
+        // Handle Shift+R for reject all
+        if (key.shift && input.toLowerCase() === 'r') {
+            if (approvedFilesCount > 0 && transaction) {
+                rejectAllFiles();
+            }
+            return;
+        }
+
+        // Main View Navigation
+        if (key.upArrow) moveSelectionUp(navigableItems.length);
+        if (key.downArrow) moveSelectionDown(navigableItems.length);
+
+        const currentItem = navigableItems[selectedItemIndex];
+
+        if (input === ' ') {
+            if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState && fileState.status !== 'FAILED') {
+                    toggleFileApproval(currentItem.id);
+                }
+            }
+        }
+
+        if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+            toggleBodyView('diff');
+        }
+
+        if (input.toLowerCase() === 'r') {
+            toggleBodyView('reasoning');
+        }
+
+        if (key.return) { // Enter key
+            if (currentItem?.type === 'file') {
+                toggleBodyView('diff');
+            } else if (currentItem?.type === 'reasoning') {
+                toggleBodyView('reasoning');
+            } else if (currentItem?.type === 'script') {
+                toggleBodyView('script_output');
+            }
+        }
+
+        if (input.toLowerCase() === 'a') {
+            if (approvedFilesCount > 0) {
+                approve();
+                showDashboardScreen();
+            }
+        }
+
+        if (input.toLowerCase() === 'c') {
+            openCopyMode();
+        }
+
+        if (input.toLowerCase() === 't') {
+            if (key.shift) {
+                const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+                if (hasFailedFiles) showBulkRepair();
+            } else if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+            }
+        }
+
+        if (input.toLowerCase() === 'i') {
+            if (key.shift) {
+                if (hasRejectedFiles) showBulkInstruct();
+            } else if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState?.status === 'REJECTED') {
+                    tryInstruct(currentItem.id);
+                }
+            }
+        }
+    };
+
+    useInput((input: string, key: Key) => {
+        if (handleGlobalInput(input, key)) {
+            return;
+        }
+
+        switch (bodyView) {
+            case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
+            case 'bulk_repair': return handleBulkRepairInput(input, key);
+            case 'bulk_instruct': return handleBulkInstructInput(input, key);
+            case 'reasoning': return handleReasoningInput(input, key);
+            case 'script_output': return handleScriptOutputInput(input, key);
+            case 'diff': return handleDiffInput(input);
+            default: return handleMainNavigationInput(input, key);
+        }
+    });
+
+    return {
+        ...store,
+        fileReviewStates,
+        selectedItemIndex,
+        transaction,
+        files,
+        scripts,
+        patchStatus,
+        navigableItems,
+        isFileSelected,
+        selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
+        ...reviewStats,
+        hasRejectedFiles,
+    };
+};
 ```
 
 ## File: src/components/TransactionDetailScreen.tsx
@@ -3381,288 +3768,6 @@ const TransactionHistoryScreen = () => {
 };
 
 export default TransactionHistoryScreen;
-```
-
-## File: src/hooks/useReviewScreen.tsx
-```typescript
-import { useMemo } from 'react';
-import { useInput, type Key } from 'ink';
-import { useReviewStore } from '../stores/review.store';
-import { useAppStore } from '../stores/app.store';
-import { useCopyStore } from '../stores/copy.store';
-import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
-import type { FileItem } from '../types/domain.types';
-
-type NavigableItem =
-    | { type: 'prompt' }
-    | { type: 'reasoning' }
-    | { type: 'script'; id: string }
-    | { type: 'file'; id: string };
-
-export const useReviewScreen = () => {
-    const store = useReviewStore();
-    const {
-        selectedItemIndex,
-        bodyView,
-        patchStatus,
-        selectedBulkRepairOptionIndex,
-        selectedBulkInstructOptionIndex,
-    } = store;
-
-    const transaction = useTransactionStore(selectSelectedTransaction);
-    const { showDashboardScreen } = useAppStore(s => s.actions);
-
-    const navigableItems = useMemo((): NavigableItem[] => {
-        if (!transaction) return [];
-        const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
-        const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
-        return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
-    }, [transaction]);
-
-    // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
-    const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
-    const fileReviewStates = useReviewStore(s => s.fileReviewStates);
-
-    const reviewStats = useMemo(() => {
-        const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
-        return {
-            totalFiles: files.length,
-            totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
-            totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
-            numFiles: files.length,
-            approvedFilesCount: approvedFiles.length,
-        };
-    }, [files, fileReviewStates]);
-
-    const hasRejectedFiles = useMemo(() => {
-        if (!fileReviewStates) return false;
-        return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
-    }, [fileReviewStates]);
-
-    const { approvedFilesCount } = reviewStats;
-
-    const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
-
-    const scripts = transaction?.scripts || [];
-
-    const {
-        moveSelectionUp,
-        moveSelectionDown,
-        expandDiff,
-        toggleBodyView,
-        setBodyView,
-        startApplySimulation,
-        approve,
-        tryRepairFile,
-        tryInstruct,
-        showBulkRepair,
-        showBulkInstruct,
-        executeBulkRepairOption,
-        executeBulkInstructOption,
-        confirmHandoff,
-        scrollReasoningUp,
-        scrollReasoningDown,
-        navigateScriptErrorUp,
-        navigateScriptErrorDown,
-        toggleFileApproval,
-        rejectAllFiles,
-        navigateBulkRepairUp,
-        navigateBulkRepairDown,
-        navigateBulkInstructUp,
-        navigateBulkInstructDown,
-    } = store.actions;
-
-    const openCopyMode = () => {
-        if (!transaction) return;
-        const currentItem = navigableItems[selectedItemIndex];
-        const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
-        useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
-    };
-
-    // --- Input Handlers ---
-
-    const handleGlobalInput = (input: string, key: Key): boolean => {
-        if (input === '1') { // For demo purposes
-            startApplySimulation('success'); return true;
-        }
-        if (input === '2') { // For demo purposes
-            startApplySimulation('failure'); return true;
-        }
-        // The 'q' (quit/back) is now handled by the global hotkey hook.
-
-        if (key.escape) {
-            if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff' || bodyView === 'bulk_instruct') {
-                toggleBodyView(bodyView);
-            } else if (bodyView !== 'none') {
-                setBodyView('none');
-            }
-            return true;
-        }
-        return false;
-    };
-
-    const handleHandoffConfirmInput = (_input: string, key: Key): void => {
-        if (key.return) confirmHandoff();
-    };
-
-    const handleBulkRepairInput = (input: string, key: Key): void => {
-        if (key.upArrow) navigateBulkRepairUp();
-        if (key.downArrow) navigateBulkRepairDown();
-        if (key.return) {
-            executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
-            return;
-        }
-
-        if (input >= '1' && input <= '4') {
-            executeBulkRepairOption(parseInt(input));
-        }
-    };
-    
-    const handleBulkInstructInput = (input: string, key: Key): void => {
-        if (key.upArrow) navigateBulkInstructUp();
-        if (key.downArrow) navigateBulkInstructDown();
-        if (key.return) {
-            executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
-            return;
-        }
-
-        if (input >= '1' && input <= '3') {
-            executeBulkInstructOption(parseInt(input));
-        }
-    };
-
-    const handleReasoningInput = (input: string, key: Key): void => {
-        if (key.upArrow) scrollReasoningUp();
-        if (key.downArrow) scrollReasoningDown();
-        if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
-    };
-
-    const handleScriptOutputInput = (input: string, key: Key): void => {
-        if (input.toLowerCase() === 'j') navigateScriptErrorDown();
-        if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-        if (key.return) toggleBodyView('script_output');
-        if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
-            const currentItem = navigableItems[selectedItemIndex];
-            const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
-            if (selectedScript) {
-                // eslint-disable-next-line no-console
-                console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
-            }
-        }
-    };
-
-    const handleDiffInput = (input: string) => {
-        if (input.toLowerCase() === 'x') expandDiff();
-        if (input.toLowerCase() === 'd') toggleBodyView('diff');
-    };
-
-    const handleMainNavigationInput = (input: string, key: Key): void => {
-        // Handle Shift+R for reject all
-        if (key.shift && input.toLowerCase() === 'r') {
-            if (approvedFilesCount > 0 && transaction) {
-                rejectAllFiles();
-            }
-            return;
-        }
-
-        // Main View Navigation
-        if (key.upArrow) moveSelectionUp(navigableItems.length);
-        if (key.downArrow) moveSelectionDown(navigableItems.length);
-
-        const currentItem = navigableItems[selectedItemIndex];
-
-        if (input === ' ') {
-            if (currentItem?.type === 'file') {
-                const fileState = fileReviewStates.get(currentItem.id);
-                if (fileState && fileState.status !== 'FAILED') {
-                    toggleFileApproval(currentItem.id);
-                }
-            }
-        }
-
-        if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
-            toggleBodyView('diff');
-        }
-
-        if (input.toLowerCase() === 'r') {
-            toggleBodyView('reasoning');
-        }
-
-        if (key.return) { // Enter key
-            if (currentItem?.type === 'file') {
-                toggleBodyView('diff');
-            } else if (currentItem?.type === 'reasoning') {
-                toggleBodyView('reasoning');
-            } else if (currentItem?.type === 'script') {
-                toggleBodyView('script_output');
-            }
-        }
-
-        if (input.toLowerCase() === 'a') {
-            if (approvedFilesCount > 0) {
-                approve();
-                showDashboardScreen();
-            }
-        }
-
-        if (input.toLowerCase() === 'c') {
-            openCopyMode();
-        }
-
-        if (input.toLowerCase() === 't') {
-            if (key.shift) {
-                const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
-                if (hasFailedFiles) showBulkRepair();
-            } else if (currentItem?.type === 'file') {
-                const fileState = fileReviewStates.get(currentItem.id);
-                if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
-            }
-        }
-
-        if (input.toLowerCase() === 'i') {
-            if (key.shift) {
-                if (hasRejectedFiles) showBulkInstruct();
-            } else if (currentItem?.type === 'file') {
-                const fileState = fileReviewStates.get(currentItem.id);
-                if (fileState?.status === 'REJECTED') {
-                    tryInstruct(currentItem.id);
-                }
-            }
-        }
-    };
-
-    useInput((input: string, key: Key) => {
-        if (handleGlobalInput(input, key)) {
-            return;
-        }
-
-        switch (bodyView) {
-            case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
-            case 'bulk_repair': return handleBulkRepairInput(input, key);
-            case 'bulk_instruct': return handleBulkInstructInput(input, key);
-            case 'reasoning': return handleReasoningInput(input, key);
-            case 'script_output': return handleScriptOutputInput(input, key);
-            case 'diff': return handleDiffInput(input);
-            default: return handleMainNavigationInput(input, key);
-        }
-    });
-
-    return {
-        ...store,
-        fileReviewStates,
-        selectedItemIndex,
-        transaction,
-        files,
-        scripts,
-        patchStatus,
-        navigableItems,
-        isFileSelected,
-        selectedBulkRepairOptionIndex,
-        selectedBulkInstructOptionIndex,
-        ...reviewStats,
-        hasRejectedFiles,
-    };
-};
 ```
 
 ## File: src/hooks/useTransactionHistoryScreen.tsx

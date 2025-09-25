@@ -1,0 +1,507 @@
+uuid: c257c742-0fec-4eb0-a0ac-c50f82318621
+projectId: relaycode-tui
+createdAt: '2025-09-25T09:35:27.271Z'
+gitCommitMsg: >-
+  feat(copy): add 'Copy Context' for latest file content
+
+  Introduces a "Copy Context" feature to the advanced copy overlay on the
+  Review, Detail, and History screens. This allows users to extract the full,
+  latest content of relevant files, formatted as markdown code blocks.
+
+  This is crucial for AI-driven workflows where the diff alone is insufficient
+  and full file context is required for subsequent analysis or repair prompts.
+
+  - Creates a mock `FileSystemService` to simulate async file reads. - Makes
+  `CopyItem.getData` asynchronous to support I/O operations. - Updates the copy
+  store's `executeCopy` action to handle promises. - Integrates the new "Context
+  Files (latest)" option into the copy
+    service for all three relevant screens.
+promptSummary: >-
+  I need to add a "copy context" feature to the advanced copy screens for
+  transaction history, transaction detail, and review. This feature should
+  provide the latest full file content in a parsable markdown format.
+reasoning:
+  - This is a comprehensive plan to add the "Copy Context" feature.
+  - '### Part 1 & 2: Foundational Changes and Business Logic'
+  - >-
+    First, I'll create a new mock file system service. This isolates the new
+    dependency and prepares the architecture for real file system integration.
+  - >-
+    Next, I'll update the core `CopyItem` type to support asynchronous data
+    fetching, which is essential for reading file content without blocking the
+    UI.
+  - I'll add a new constant for the UI label of this feature.
+  - >-
+    Now I'll refactor the `copy` store to handle these asynchronous data sources
+    correctly.
+  - >-
+    Finally, I'll integrate the new "Copy Context" option into the copy service
+    for the three relevant screens: Review, Detail, and History. This involves
+    adding helper functions to fetch and format the file content.
+operations:
+  - type: write
+    path: src/services/fs.service.ts
+    content: |-
+      import { sleep } from '../utils';
+
+      /**
+       * Mock file system service.
+       * In a real application, this would interact with the actual filesystem.
+       */
+      const readFileContent = async (filePath: string): Promise<string> => {
+          // Simulate async file read
+          await sleep(50 + Math.random() * 100);
+
+          const lang = filePath.split('.').pop() || '';
+          
+          return `// Mock content for ${filePath}
+      // Language: ${lang}
+      // In a real implementation, this would read from the filesystem.
+
+      function helloWorld() {
+          console.log("Hello from ${filePath}!");
+      }
+      `;
+      };
+
+      export const FileSystemService = {
+          readFileContent,
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/types/copy.types.ts
+    content: |
+      <<<<<<< SEARCH
+          getData: () => string;
+      =======
+          getData: () => string | Promise<string>;
+      >>>>>>> REPLACE
+    patchStrategy: search-replace
+  - type: write
+    path: src/constants/copy.constants.ts
+    content: |+
+      --- src/constants/copy.constants.ts
+      +++ src/constants/copy.constants.ts
+      @@ -7,6 +7,7 @@
+           REASONING: 'Reasoning',
+           FILE_DIFF: 'Diff for',
+           ALL_DIFFS: 'All Diffs',
+      +    CONTEXT_FILES: 'Context Files (latest)',
+           FULL_YAML: 'Full YAML representation',
+           // For multi-selection contexts
+           MESSAGES: 'Git Messages',
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/copy.store.ts
+    content: >+
+      --- src/stores/copy.store.ts
+
+      +++ src/stores/copy.store.ts
+
+      @@ -107,12 +107,17 @@
+                   }
+                   return { selectedIds: newSelectedIds };
+               }),
+      -        executeCopy: () => {
+
+      +        executeCopy: async () => {
+                   const { items, selectedIds } = get();
+                   const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+                   if (itemsToCopy.length === 0) return;
+       
+      -            const content = itemsToCopy.map(item => `--- ${item.label}
+      ---\n${item.getData()}`).join('\n\n');
+
+      +            const dataPromises = itemsToCopy.map(item => item.getData());
+
+      +            const resolvedData = await Promise.all(dataPromises);
+
+      +
+
+      +            const content = itemsToCopy
+
+      +                .map((item, index) => `--- ${item.label}
+      ---\n${resolvedData[index]}`)
+
+      +                .join('\n\n');
+                   const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+                   // eslint-disable-next-line no-console
+                   console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/copy.service.ts
+    content: >+
+      --- src/services/copy.service.ts
+
+      +++ src/services/copy.service.ts
+
+      @@ -2,6 +2,19 @@
+       import type { Transaction, FileItem } from '../types/domain.types';
+       import type { CopyItem } from '../types/copy.types';
+       import { COPYABLE_ITEMS } from '../constants/copy.constants';
+      +import { FileSystemService } from './fs.service';
+
+      +
+
+      +const formatFileContext = (filePath: string, content: string): string =>
+      {
+
+      +    const lang = filePath.split('.').pop() || '';
+
+      +    return `--- CONTEXT FOR FILE: ${filePath}
+      ---\n\`\`\`${lang}\n${content}\n\`\`\``;
+
+      +};
+
+      +
+
+      +const getContextForFilePaths = async (filePaths: string[]):
+      Promise<string> => {
+
+      +    const contentPromises = filePaths.map(path =>
+      FileSystemService.readFileContent(path));
+
+      +    const resolvedContents = await Promise.all(contentPromises);
+
+      +    return filePaths
+
+      +        .map((path, index) => formatFileContext(path,
+      resolvedContents[index]!))
+
+      +        .join('\n\n');
+
+      +};
+       
+       const createBaseTransactionCopyItems = (transaction: Transaction): CopyItem[] => [
+           { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+      @@ -14,10 +27,20 @@
+           files: FileItem[],
+           selectedFile?: FileItem,
+       ): CopyItem[] => {
+      +    const allFilePaths = [...new Set(files.map(f => f.path))];
+
+      +
+           return [
+               ...createBaseTransactionCopyItems(transaction),
+               { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+               { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+      +        {
+
+      +            id: 'context_files',
+
+      +            key: 'X',
+
+      +            label: `${COPYABLE_ITEMS.CONTEXT_FILES}
+      (${allFilePaths.length} files)`,
+
+      +            getData: async () => {
+
+      +                return getContextForFilePaths(allFilePaths);
+
+      +            },
+
+      +        },
+           ];
+       };
+       
+      @@ -32,12 +55,22 @@
+           const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
+           const uuidItem = baseItems.find(i => i.id === 'uuid')!;
+       
+      +    const allFilePaths = [...new Set((transaction.files || []).map(f =>
+      f.path))];
+
+      +
+           return [
+               messageItem,
+               promptItem,
+               reasoningItem,
+               { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+               { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+      +        {
+
+      +            id: 'context_files',
+
+      +            key: 'X',
+
+      +            label: `${COPYABLE_ITEMS.CONTEXT_FILES}
+      (${allFilePaths.length} files)`,
+
+      +            getData: async () => {
+
+      +                return getContextForFilePaths(allFilePaths);
+
+      +            },
+
+      +        },
+               uuidItem,
+               { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+           ];
+      @@ -47,12 +80,24 @@
+           transactions: Transaction[],
+       ): CopyItem[] => {
+           if (transactions.length === 0) return [];
+      -    
+
+      +
+
+      +    const allFilePaths = [
+
+      +        ...new Set(transactions.flatMap(tx => tx.files?.map(f => f.path)
+      || [])),
+
+      +    ];
+
+      +
+           return [
+               { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+               { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+               { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+               { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+      +        {
+
+      +            id: 'context_files_history',
+
+      +            key: 'X',
+
+      +            label: `${COPYABLE_ITEMS.CONTEXT_FILES}
+      (${allFilePaths.length} files)`,
+
+      +            getData: async () => {
+
+      +                return getContextForFilePaths(allFilePaths);
+
+      +            },
+
+      +        },
+               { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+               { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+           ];
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/fs.service.ts: null
+  src/types/copy.types.ts: |-
+    export interface CopyItem {
+        id: string;
+        key: string;
+        label: string;
+        getData: () => string;
+        isDefaultSelected?: boolean;
+    }
+  src/services/copy.service.ts: >-
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    import type { CopyItem } from '../types/copy.types';
+
+    import { COPYABLE_ITEMS } from '../constants/copy.constants';
+
+
+    const createBaseTransactionCopyItems = (transaction: Transaction):
+    CopyItem[] => [
+        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+    ];
+
+
+    const getCopyItemsForReview = (
+        transaction: Transaction,
+        files: FileItem[],
+        selectedFile?: FileItem,
+    ): CopyItem[] => {
+        return [
+            ...createBaseTransactionCopyItems(transaction),
+            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+            { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+        ];
+    };
+
+
+    const getCopyItemsForDetail = (
+        transaction: Transaction,
+        selectedFile?: FileItem,
+    ): CopyItem[] => {
+        const baseItems = createBaseTransactionCopyItems(transaction);
+        const messageItem = { ...baseItems.find(i => i.id === 'message')!, isDefaultSelected: true };
+        const promptItem = baseItems.find(i => i.id === 'prompt')!;
+        const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
+        const uuidItem = baseItems.find(i => i.id === 'uuid')!;
+
+        return [
+            messageItem,
+            promptItem,
+            reasoningItem,
+            { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+            uuidItem,
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+        ];
+    };
+
+
+    const getCopyItemsForHistory = (
+        transactions: Transaction[],
+    ): CopyItem[] => {
+        if (transactions.length === 0) return [];
+        
+        return [
+            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+            { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+        ];
+    };
+
+
+    export const CopyService = {
+        getCopyItemsForReview,
+        getCopyItemsForDetail,
+        getCopyItemsForHistory,
+    };
+  src/stores/copy.store.ts: |-
+    import { create } from 'zustand';
+    import { moveIndex } from './navigation.utils';
+    import { useViewStore } from './view.store';
+    import { CopyService } from '../services/copy.service';
+    import type { CopyItem } from '../types/copy.types';
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    export type { CopyItem };
+
+    interface CopyState {
+        title: string;
+        items: CopyItem[];
+        selectedIndex: number;
+        selectedIds: Set<string>;
+        lastCopiedMessage: string | null;
+        onClose?: () => void;
+
+        actions: {
+            open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+            close: () => void;
+            openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+            openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+            openForHistory: (transactions: Transaction[]) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            toggleSelection: () => void;
+            toggleSelectionById: (id: string) => void;
+            executeCopy: () => void;
+        };
+    }
+
+    export const useCopyStore = create<CopyState>((set, get) => ({
+        title: '',
+        items: [],
+        selectedIndex: 0,
+        selectedIds: new Set(),
+        lastCopiedMessage: null,
+        onClose: undefined,
+
+        actions: {
+            open: (title, items, onClose) => {
+                const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+                useViewStore.getState().actions.setActiveOverlay('copy');
+                set({
+                    title,
+                    items,
+                    selectedIndex: 0,
+                    selectedIds: defaultSelectedIds,
+                    lastCopiedMessage: null,
+                    onClose,
+                });
+            },
+            close: () => {
+                useViewStore.getState().actions.setActiveOverlay('none');
+                get().onClose?.();
+                set({ items: [], onClose: undefined });
+            },
+            openForReview: (transaction, files, selectedFile) => {
+                const { actions } = get();
+                const title = 'Select data to copy from review:';
+                const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+                actions.open(title, items);
+            },
+            openForDetail: (transaction, selectedFile) => {
+                const { actions } = get();
+                const title = `Select data to copy from transaction ${transaction.hash}:`;
+                const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+                actions.open(title, items);
+            },
+            openForHistory: (transactions) => {
+                const { actions } = get();
+                const title = `Select data to copy from ${transactions.length} transactions:`;
+                const items = CopyService.getCopyItemsForHistory(transactions);
+                actions.open(title, items);
+            },
+            navigateUp: () => set(state => ({
+                selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
+            })),
+            navigateDown: () => set(state => ({
+                selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+            })),
+            toggleSelection: () => set(state => {
+                const currentItem = state.items[state.selectedIndex];
+                if (!currentItem) return {};
+                const newSelectedIds = new Set(state.selectedIds);
+                if (newSelectedIds.has(currentItem.id)) {
+                    newSelectedIds.delete(currentItem.id);
+                } else {
+                    newSelectedIds.add(currentItem.id);
+                }
+                return { selectedIds: newSelectedIds };
+            }),
+            toggleSelectionById: (id: string) => set(state => {
+                const newSelectedIds = new Set(state.selectedIds);
+                if (newSelectedIds.has(id)) {
+                    newSelectedIds.delete(id);
+                } else {
+                    newSelectedIds.add(id);
+                }
+                return { selectedIds: newSelectedIds };
+            }),
+            executeCopy: () => {
+                const { items, selectedIds } = get();
+                const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+                if (itemsToCopy.length === 0) return;
+
+                const content = itemsToCopy.map(item => `--- ${item.label} ---\n${item.getData()}`).join('\n\n');
+                const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+                set({ lastCopiedMessage: message });
+            },
+        },
+    }));
+  src/constants/copy.constants.ts: |-
+    /**
+     * Constants for the Copy/Clipboard feature.
+     */
+    export const COPYABLE_ITEMS = {
+        UUID: 'UUID',
+        MESSAGE: 'Git Message',
+        PROMPT: 'Prompt',
+        REASONING: 'Reasoning',
+        FILE_DIFF: 'Diff for',
+        ALL_DIFFS: 'All Diffs',
+        FULL_YAML: 'Full YAML representation',
+        // For multi-selection contexts
+        MESSAGES: 'Git Messages',
+        PROMPTS: 'Prompts',
+        REASONINGS: 'Reasonings',
+        DIFFS: 'Diffs',
+        UUIDS: 'UUIDs',
+    } as const;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 137

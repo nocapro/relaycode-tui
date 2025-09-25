@@ -71,6 +71,14 @@ const useDebugMenuActions = () => {
             },
         },
         {
+            title: 'Dashboard: Expanded View',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                dashboardActions.setExpandedTransactionId('1');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
             title: 'Review: Partial Failure (Default)',
             action: () => {
                 reviewActions.load('1');
@@ -172,6 +180,35 @@ const useDebugMenuActions = () => {
             action: () => {
                 // The dashboard store has transactions, we'll just pick one.
                 detailActions.load('3'); // 'feat: implement new dashboard UI'
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Detail: Copy Mode',
+            action: () => {
+                detailActions.load('3');
+                appActions.showTransactionDetailScreen();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                if (!tx) return;
+                const selectedFile = tx.files?.[0];
+                useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+            },
+        },
+        {
+            title: 'Detail: Diff View',
+            action: () => {
+                detailActions.load('3', {
+                    focusedItemPath: 'FILES/3-1',
+                    bodyView: 'DIFF_VIEW',
+                    expandedItemPaths: new Set(['FILES']),
+                });
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Detail: Revert Confirm',
+            action: () => {
+                detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
                 appActions.showTransactionDetailScreen();
             },
         },

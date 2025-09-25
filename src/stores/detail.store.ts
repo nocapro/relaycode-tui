@@ -9,13 +9,16 @@ type ObjectValues<T> = T[keyof T];
 
 export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
 export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
+
+// Omit 'actions' from state type for partial updates
+type DetailStateData = Omit<DetailState, 'actions'>;
  
 interface DetailState {
     focusedItemPath: string; // e.g., 'PROMPT', 'FILES', 'FILES/1-1'
     expandedItemPaths: Set<string>;
     bodyView: DetailBodyView;
     actions: {
-        load: (transactionId: string) => void;
+        load: (transactionId: string, initialState?: Partial<DetailStateData>) => void;
         navigateUp: () => void;
         navigateDown: () => void;
         expandOrDrillDown: () => void;
@@ -44,12 +47,13 @@ export const useDetailStore = create<DetailState>((set, get) => ({
     expandedItemPaths: new Set(),
     bodyView: DETAIL_BODY_VIEWS.NONE,
     actions: {
-        load: (transactionId) => {
+        load: (transactionId, initialState) => {
             useViewStore.getState().actions.setSelectedTransactionId(transactionId);
             set({
                 focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
                 expandedItemPaths: new Set(),
                 bodyView: DETAIL_BODY_VIEWS.NONE,
+                ...initialState,
             });
         },
         navigateUp: () => {
