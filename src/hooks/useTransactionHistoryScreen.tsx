@@ -3,6 +3,7 @@ import { useInput, type Key } from 'ink';
 import { useHistoryStore } from '../stores/history.store';
 import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
+import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
 import { useViewport } from './useViewport';
@@ -11,7 +12,7 @@ import { VIEW_CONSTANTS } from '../constants/view.constants';
 export const useTransactionHistoryScreen = () => {
     const store = useHistoryStore();
     const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, actions } = store;
-    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
     const transactions = useTransactionStore(s => s.transactions);
 
     const visibleItemPaths = useMemo(
@@ -38,9 +39,16 @@ export const useTransactionHistoryScreen = () => {
         if (key.return) actions.applyFilter();
     };
 
-    const handleBulkActionsInput = (_input: string, key: Key): void => {
-        if (key.escape) actions.setMode('LIST');
-        // Add number handlers...
+    const handleBulkActionsInput = (input: string, key: Key): void => {
+        if (key.escape) {
+            actions.setMode('LIST');
+            return;
+        }
+        if (input >= '1' && input <= '3') {
+            // eslint-disable-next-line no-console
+            console.log(`[MOCK] Bulk action #${input} selected.`);
+            actions.setMode('LIST');
+        }
     };
 
     const handleListInput = (input: string, key: Key): void => {
@@ -49,6 +57,13 @@ export const useTransactionHistoryScreen = () => {
         if (key.rightArrow) actions.expandOrDrillDown();
         if (key.leftArrow) actions.collapseOrBubbleUp();
         if (input === ' ') actions.toggleSelection();
+        if (key.return) {
+            const txId = selectedItemPath.split('/')[0];
+            if (txId && !selectedItemPath.includes('/')) {
+                useDetailStore.getState().actions.load(txId);
+                showTransactionDetailScreen();
+            }
+        }
 
         if (input.toLowerCase() === 'f') actions.setMode('FILTER');
         if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();

@@ -11,8 +11,31 @@ export const useSplashScreen = () => {
         showInitScreen();
     };
 
-    useInput(() => {
-        handleSkip();
+    useInput((input) => {
+        const lowerInput = input.toLowerCase();
+        if (lowerInput === 'v') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening noca.pro in browser...');
+            return;
+        }
+        if (lowerInput === 'x') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening X/Twitter in browser...');
+            return;
+        }
+        if (lowerInput === 'd') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening Discord in browser...');
+            return;
+        }
+        if (lowerInput === 'g') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening GitHub in browser...');
+            return;
+        }
+
+        // Any other key skips
+        handleSkip(); 
     });
 
     useEffect(() => {

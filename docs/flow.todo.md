@@ -94,7 +94,7 @@ update transaction history screen
 
 - implement drilling left righ arrow
 
-===
+=== DONE
 
 make sure the screens flows all connected, like navigation to another screens is working, etc
 
@@ -102,7 +102,7 @@ make sure the screens flows all connected, like navigation to another screens is
 
 extract out all content strings,urls to content/[entity].content.ts files for easier UI strings/copywriting management
 
-===
+=== DONE
 
 extract out all constants to constants/[domain].constants.ts files
 

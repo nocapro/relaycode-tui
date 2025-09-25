@@ -23,6 +23,9 @@ export const useInitializationScreen = () => {
             if (input.toLowerCase() === 'w') {
                 showDashboardScreen();
             }
+            if (input.toLowerCase() === 'q') {
+                exit();
+            }
         }
     });
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { render } from 'ink';
 import App from './src/App';
 import { useAppStore } from './src/stores/app.store';
+import { useViewStore } from './src/stores/view.store';
 import { useDetailStore } from './src/stores/detail.store';
 import { useHistoryStore } from './src/stores/history.store';
 import { useReviewStore } from './src/stores/review.store';
@@ -47,6 +48,10 @@ const main = () => {
             case 'SplashScreen':
                  appActions.showSplashScreen();
                  break;
+            case 'DebugMenu':
+                appActions.showDashboardScreen();
+                useViewStore.getState().actions.setActiveOverlay('debug');
+                break;
             default:
                 process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
                 process.exit(1);

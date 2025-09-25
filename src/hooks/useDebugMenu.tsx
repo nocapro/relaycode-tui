@@ -10,7 +10,6 @@ import { useInitStore } from '../stores/init.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
 import { COPYABLE_ITEMS } from '../constants/copy.constants';
-import { CopyService } from '../services/copy.service';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import type { Transaction } from '../types/domain.types';
@@ -113,9 +112,7 @@ const useDebugMenuActions = () => {
                 const selectedFile = tx.files && tx.files.length > 0
                     ? tx.files[0]
                     : undefined;
-                const items = CopyService.getCopyItemsForReview(tx, tx.files || [], selectedFile);
-                useCopyStore.getState().actions.open(
-                    'Select data to copy from review:', items);
+                useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
             },
         },
         {
@@ -195,12 +192,17 @@ const useDebugMenuActions = () => {
             action: () => {
                 historyActions.prepareDebugState('copy');
                 appActions.showTransactionHistoryScreen();
-                const allTxs = useTransactionStore.getState().transactions;
-                // The 'copy' debug state sets selectedForAction to ['3', '6']. We'll use that directly.
-                const txsToCopy = allTxs.filter((tx: Transaction) => ['3', '6'].includes(tx.id));
-                const items = CopyService.getCopyItemsForHistory(txsToCopy);
-                useCopyStore.getState().actions.open(
-                    `Select data to copy from ${txsToCopy.length} transactions:`, items);
+                const { transactions } = useTransactionStore.getState();
+                const { selectedForAction } = useHistoryStore.getState();
+                const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                useCopyStore.getState().actions.openForHistory(txsToCopy);
+            },
+        },
+        {
+            title: 'History: Bulk Actions Mode',
+            action: () => {
+                historyActions.prepareDebugState('bulk');
+                appActions.showTransactionHistoryScreen();
             },
         },
     ];

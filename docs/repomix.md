@@ -191,60 +191,6 @@ export const VIEW_CONSTANTS = {
 } as const;
 ```
 
-## File: src/components/DiffScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-import { VIEW_CONSTANTS } from '../constants/view.constants';
-
-interface DiffScreenProps {
-    filePath: string;
-    diffContent: string;
-    isExpanded: boolean;
-}
-const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
-    const lines = diffContent.split('\n');
-    const COLLAPSE_THRESHOLD = VIEW_CONSTANTS.DIFF_COLLAPSE_THRESHOLD;
-    const COLLAPSE_SHOW_LINES = VIEW_CONSTANTS.DIFF_COLLAPSE_SHOW_LINES;
-
-    const renderContent = () => {
-        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
-            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
-            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
-            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
-
-            return (
-                <>
-                    {topLines.map((line, i) => renderLine(line, i))}
-                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
-                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
-                </>
-            );
-        }
-        return lines.map((line, i) => renderLine(line, i));
-    };
-
-    const renderLine = (line: string, key: number) => {
-        let color = 'white';
-        if (line.startsWith('+')) color = 'green';
-        if (line.startsWith('-')) color = 'red';
-        if (line.startsWith('@@')) color = 'cyan';
-        return <Text key={key} color={color}>{line}</Text>;
-    };
-
-    return (
-        <Box flexDirection="column">
-            <Text>DIFF: {filePath}</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {renderContent()}
-            </Box>
-        </Box>
-    );
-};
-
-export default DiffScreen;
-```
-
 ## File: src/hooks/useViewport.ts
 ```typescript
 import { useState, useEffect } from 'react';
@@ -275,122 +221,6 @@ export const useViewport = ({ selectedIndex, padding }: UseViewportOptions) => {
         width: columns,
     };
 };
-```
-
-## File: src/stores/detail.store.ts
-```typescript
-import { create } from 'zustand';
-import { useTransactionStore } from './transaction.store';
-import { useViewStore } from './view.store';
-import { TransactionService } from '../services/transaction.service';
-import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from '../constants/detail.constants';
-
-type ObjectValues<T> = T[keyof T];
-
-export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
-export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
- 
-interface DetailState {
-    navigatorFocus: NavigatorSection | 'FILES_LIST';
-    expandedSection: NavigatorSection | null;
-    selectedFileIndex: number;
-    bodyView: DetailBodyView;
-    actions: {
-        load: (transactionId: string) => void;
-        navigateUp: () => void;
-        navigateDown: () => void;
-        handleEnterOrRight: () => void;
-        handleEscapeOrLeft: () => void;
-        toggleRevertConfirm: () => void;
-        confirmRevert: () => void;
-    };
-}
-
-export const useDetailStore = create<DetailState>((set, get) => ({
-    navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
-    expandedSection: null,
-    selectedFileIndex: 0,
-    bodyView: DETAIL_BODY_VIEWS.NONE,
-    actions: {
-        load: (transactionId) => {
-            useViewStore.getState().actions.setSelectedTransactionId(transactionId);
-            set({
-                navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
-                expandedSection: null,
-                selectedFileIndex: 0,
-                bodyView: DETAIL_BODY_VIEWS.NONE,
-            });
-        },
-        navigateUp: () => {
-            const navigatorOrder: NavigatorSection[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
-            const { navigatorFocus, selectedFileIndex } = get();
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ selectedFileIndex: Math.max(0, selectedFileIndex - 1) });
-            } else {
-                const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
-                if (currentIndex > 0) {
-                    set({ navigatorFocus: navigatorOrder[currentIndex - 1]! });
-                }
-            }
-        },
-        navigateDown: () => {
-            const navigatorOrder: NavigatorSection[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
-            const { navigatorFocus, selectedFileIndex } = get();
-            const { selectedTransactionId } = useViewStore.getState();
-            const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
-            const files = transaction?.files || [];
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ selectedFileIndex: Math.min(files.length - 1, selectedFileIndex + 1) });
-            } else {
-                const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
-                if (currentIndex < navigatorOrder.length - 1) {
-                    set({ navigatorFocus: navigatorOrder[currentIndex + 1]! });
-                }
-            }
-        },
-        handleEnterOrRight: () => {
-            const { navigatorFocus, expandedSection } = get();
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW });
-                return;
-            }
-            if (expandedSection === navigatorFocus) {
-                if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) {
-                    set({ navigatorFocus: 'FILES_LIST', bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
-                }
-                return;
-            }
-            set({ expandedSection: navigatorFocus as NavigatorSection });
-            if (navigatorFocus === NAVIGATOR_SECTIONS.PROMPT) set({ bodyView: DETAIL_BODY_VIEWS.PROMPT });
-            if (navigatorFocus === NAVIGATOR_SECTIONS.REASONING) set({ bodyView: DETAIL_BODY_VIEWS.REASONING });
-            if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
-        },
-        handleEscapeOrLeft: () => {
-            const { navigatorFocus, expandedSection, bodyView } = get();
-            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
-                set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
-                return;
-            }
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ navigatorFocus: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.NONE });
-                return;
-            }
-            if (expandedSection) {
-                set({ expandedSection: null, bodyView: DETAIL_BODY_VIEWS.NONE });
-            }
-        },
-        toggleRevertConfirm: () => set(state => ({
-            bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? DETAIL_BODY_VIEWS.NONE : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
-        })),
-        confirmRevert: () => {
-            const { selectedTransactionId } = useViewStore.getState();
-            if (!selectedTransactionId) return;
-            TransactionService.revertTransaction(selectedTransactionId);
-            useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
-            set({ bodyView: DETAIL_BODY_VIEWS.NONE });
-        },
-    },
-}));
 ```
 
 ## File: src/stores/history.store.ts
@@ -710,6 +540,60 @@ export default [
 }
 ```
 
+## File: src/components/DiffScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
+
+interface DiffScreenProps {
+    filePath: string;
+    diffContent: string;
+    isExpanded: boolean;
+}
+const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
+    const lines = diffContent.split('\n');
+    const COLLAPSE_THRESHOLD = VIEW_CONSTANTS.DIFF_COLLAPSE_THRESHOLD;
+    const COLLAPSE_SHOW_LINES = VIEW_CONSTANTS.DIFF_COLLAPSE_SHOW_LINES;
+
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
+        }
+        return lines.map((line, i) => renderLine(line, i));
+    };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (line.startsWith('+')) color = 'green';
+        if (line.startsWith('-')) color = 'red';
+        if (line.startsWith('@@')) color = 'cyan';
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>DIFF: {filePath}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DiffScreen;
+```
+
 ## File: src/components/GlobalHelpScreen.tsx
 ```typescript
 import React from 'react';
@@ -767,40 +651,130 @@ const GlobalHelpScreen = () => {
 export default GlobalHelpScreen;
 ```
 
-## File: src/hooks/useSplashScreen.tsx
+## File: src/stores/detail.store.ts
 ```typescript
-import { useState, useEffect } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { VIEW_CONSTANTS } from '../constants/view.constants';
+import { create } from 'zustand';
+import { useTransactionStore } from './transaction.store';
+import { useViewStore } from './view.store';
+import { TransactionService } from '../services/transaction.service';
+import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from '../constants/detail.constants';
 
-export const useSplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
+type ObjectValues<T> = T[keyof T];
 
-    const handleSkip = () => {
-        showInitScreen();
+export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
+export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
+ 
+interface DetailState {
+    navigatorFocus: NavigatorSection | 'FILES_LIST';
+    expandedSection: NavigatorSection | null;
+    selectedFileIndex: number;
+    bodyView: DetailBodyView;
+    actions: {
+        load: (transactionId: string) => void;
+        navigateUp: () => void;
+        navigateDown: () => void;
+        handleEnterOrRight: () => void;
+        handleEscapeOrLeft: () => void;
+        toggleRevertConfirm: () => void;
+        confirmRevert: () => void;
     };
+}
 
-    useInput(() => {
-        handleSkip();
-    });
-
-    useEffect(() => {
-        if (countdown === 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
-
-    return { countdown };
-};
+export const useDetailStore = create<DetailState>((set, get) => ({
+    navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
+    expandedSection: null,
+    selectedFileIndex: 0,
+    bodyView: DETAIL_BODY_VIEWS.NONE,
+    actions: {
+        load: (transactionId) => {
+            useViewStore.getState().actions.setSelectedTransactionId(transactionId);
+            set({
+                navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
+                expandedSection: null,
+                selectedFileIndex: 0,
+                bodyView: DETAIL_BODY_VIEWS.NONE,
+            });
+        },
+        navigateUp: () => {
+            const navigatorOrder: NavigatorSection[] = [
+                NAVIGATOR_SECTIONS.PROMPT,
+                NAVIGATOR_SECTIONS.REASONING,
+                NAVIGATOR_SECTIONS.FILES,
+            ];
+            const { navigatorFocus, selectedFileIndex } = get();
+            if (navigatorFocus === 'FILES_LIST') {
+                set({ selectedFileIndex: Math.max(0, selectedFileIndex - 1) });
+            } else {
+                const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
+                if (currentIndex > 0) {
+                    set({ navigatorFocus: navigatorOrder[currentIndex - 1]! });
+                }
+            }
+        },
+        navigateDown: () => {
+            const navigatorOrder: NavigatorSection[] = [
+                NAVIGATOR_SECTIONS.PROMPT,
+                NAVIGATOR_SECTIONS.REASONING,
+                NAVIGATOR_SECTIONS.FILES,
+            ];
+            const { navigatorFocus, selectedFileIndex } = get();
+            const { selectedTransactionId } = useViewStore.getState();
+            const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+            const files = transaction?.files || [];
+            if (navigatorFocus === 'FILES_LIST') {
+                set({ selectedFileIndex: Math.min(files.length - 1, selectedFileIndex + 1) });
+            } else {
+                const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
+                if (currentIndex < navigatorOrder.length - 1) {
+                    set({ navigatorFocus: navigatorOrder[currentIndex + 1]! });
+                }
+            }
+        },
+        handleEnterOrRight: () => {
+            const { navigatorFocus, expandedSection } = get();
+            if (navigatorFocus === 'FILES_LIST') {
+                set({ bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW });
+                return;
+            }
+            if (expandedSection === navigatorFocus) {
+                if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) {
+                    set({ navigatorFocus: 'FILES_LIST', bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
+                }
+                return;
+            }
+            set({ expandedSection: navigatorFocus as NavigatorSection });
+            if (navigatorFocus === NAVIGATOR_SECTIONS.PROMPT) set({ bodyView: DETAIL_BODY_VIEWS.PROMPT });
+            if (navigatorFocus === NAVIGATOR_SECTIONS.REASONING) set({ bodyView: DETAIL_BODY_VIEWS.REASONING });
+            if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
+        },
+        handleEscapeOrLeft: () => {
+            const { navigatorFocus, expandedSection, bodyView } = get();
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
+                return;
+            }
+            if (navigatorFocus === 'FILES_LIST') {
+                set({ navigatorFocus: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.NONE });
+                return;
+            }
+            if (expandedSection) {
+                set({ expandedSection: null, bodyView: DETAIL_BODY_VIEWS.NONE });
+            }
+        },
+        toggleRevertConfirm: () => set(state => ({
+            bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
+                ? DETAIL_BODY_VIEWS.NONE
+                : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+        })),
+        confirmRevert: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (!selectedTransactionId) return;
+            TransactionService.revertTransaction(selectedTransactionId);
+            useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
+            set({ bodyView: DETAIL_BODY_VIEWS.NONE });
+        },
+    },
+}));
 ```
 
 ## File: src/stores/navigation.utils.ts
@@ -893,18 +867,6 @@ export interface Transaction {
         linesRemoved: number;
     };
 }
-```
-
-## File: src/types/view.types.ts
-```typescript
-import type { APP_SCREENS } from '../constants/app.constants';
-
-// --- UI / View-Specific Types ---
-
-// app.store
-type ObjectValues<T> = T[keyof T];
-
-export type AppScreen = ObjectValues<typeof APP_SCREENS>;
 ```
 
 ## File: src/utils.ts
@@ -1083,56 +1045,39 @@ export const useGitCommitScreen = () => {
 };
 ```
 
-## File: src/hooks/useGlobalHotkeys.tsx
+## File: src/hooks/useSplashScreen.tsx
 ```typescript
-import { useApp, useInput } from 'ink';
+import { useState, useEffect } from 'react';
+import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
-import { useViewStore } from '../stores/view.store';
-import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
 
-export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
-    const { exit } = useApp();
-    const { currentScreen } = useAppStore(s => ({
-        currentScreen: s.currentScreen,
-    }));
-    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
-        activeOverlay: s.activeOverlay,
-        setActiveOverlay: s.actions.setActiveOverlay,
-    }));
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState<number>(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
 
-    useInput((input, key) => {
-        // Debug Menu toggle is the highest priority global key
-        if (key.ctrl && input === 'b') {
-            setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+    const handleSkip = () => {
+        showInitScreen();
+    };
+
+    useInput(() => {
+        handleSkip();
+    });
+
+    useEffect(() => {
+        if (countdown === 0) {
+            showInitScreen();
             return;
         }
 
-        // If debug menu is open, it has its own input handler, so we stop here.
-        if (activeOverlay === 'debug') {
-            return;
-        }
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
 
-        // Help screen takes precedence over other keys
-        if (activeOverlay === 'help') {
-            if (key.escape || input === '?') {
-                setActiveOverlay('none');
-            }
-            return;
-        }
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
 
-        // --- Global hotkeys when no modal/overlay is open ---
-        
-        // Open Help
-        if (input === '?') {
-            setActiveOverlay('help');
-            return;
-        }
-        
-        // Quit from main screens
-        if (input.toLowerCase() === 'q' && MAIN_SCREENS_FOR_QUIT.includes(currentScreen)) {
-            exit();
-        }
-    }, { isActive });
+    return { countdown };
 };
 ```
 
@@ -1276,15 +1221,69 @@ export const useCopyStore = create<CopyState>((set, get) => ({
 }));
 ```
 
-## File: src/types/copy.types.ts
+## File: src/types/view.types.ts
 ```typescript
-export interface CopyItem {
-    id: string;
-    key: string;
-    label: string;
-    getData: () => string;
-    isDefaultSelected?: boolean;
-}
+import type { APP_SCREENS } from '../constants/app.constants';
+
+// --- UI / View-Specific Types ---
+
+// app.store
+type ObjectValues<T> = T[keyof T];
+
+export type AppScreen = ObjectValues<typeof APP_SCREENS>;
+```
+
+## File: src/hooks/useGlobalHotkeys.tsx
+```typescript
+import { useApp, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+
+export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+    const { exit } = useApp();
+    const { currentScreen } = useAppStore(s => ({
+        currentScreen: s.currentScreen,
+    }));
+    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+        activeOverlay: s.activeOverlay,
+        setActiveOverlay: s.actions.setActiveOverlay,
+    }));
+
+    useInput((input, key) => {
+        // Debug Menu toggle is the highest priority global key
+        if (key.ctrl && input === 'b') {
+            setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+            return;
+        }
+
+        // If debug menu is open, it has its own input handler, so we stop here.
+        if (activeOverlay === 'debug') {
+            return;
+        }
+
+        // Help screen takes precedence over other keys
+        if (activeOverlay === 'help') {
+            if (key.escape || input === '?') {
+                setActiveOverlay('none');
+            }
+            return;
+        }
+
+        // --- Global hotkeys when no modal/overlay is open ---
+        
+        // Open Help
+        if (input === '?') {
+            setActiveOverlay('help');
+            return;
+        }
+        
+        // Quit from main screens
+        if (input.toLowerCase() === 'q' && (MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+            exit();
+        }
+    }, { isActive });
+};
 ```
 
 ## File: src/hooks/useInitializationScreen.tsx
@@ -1397,57 +1396,15 @@ export const CommitService = {
 };
 ```
 
-## File: src/services/init.service.ts
+## File: src/types/copy.types.ts
 ```typescript
-import { useInitStore } from '../stores/init.store';
-import { sleep } from '../utils';
-import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
-
-const runInitializationProcess = async () => {
-    const { actions } = useInitStore.getState();
-    actions.resetInit();
-    actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
-
-    actions.setPhase('ANALYZE');
-    for (const task of INITIAL_ANALYZE_TASKS) {
-        actions.updateAnalyzeTask(task.id, 'active');
-        await sleep(800);
-        actions.updateAnalyzeTask(task.id, 'done');
-    }
-    actions.setAnalysisResults('relaycode (from package.json)', true);
-    await sleep(500);
-
-    actions.setPhase('CONFIGURE');
-    const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
-    for (const task of configTasksUntilInteractive) {
-        actions.updateConfigureTask(task.id, 'active');
-        await sleep(800);
-        actions.updateConfigureTask(task.id, 'done');
-    }
-    await sleep(500);
-
-    actions.setPhase('INTERACTIVE');
-};
-
-const resumeInitializationProcess = async () => {
-    const { actions } = useInitStore.getState();
-    
-    actions.setPhase('CONFIGURE');
-    const lastTask = INITIAL_CONFIGURE_TASKS[2];
-    if (lastTask) {
-        actions.updateConfigureTask(lastTask.id, 'active');
-        await sleep(800);
-        actions.updateConfigureTask(lastTask.id, 'done');
-        await sleep(500);
-
-        actions.setPhase('FINALIZE');
-    }
-};
-
-export const InitService = {
-    runInitializationProcess,
-    resumeInitializationProcess,
-};
+export interface CopyItem {
+    id: string;
+    key: string;
+    label: string;
+    getData: () => string;
+    isDefaultSelected?: boolean;
+}
 ```
 
 ## File: src/components/GitCommitScreen.tsx
@@ -1677,6 +1634,109 @@ export const createMockTransactions = (): Transaction[] => {
 };
 ```
 
+## File: src/services/init.service.ts
+```typescript
+import { useInitStore } from '../stores/init.store';
+import { sleep } from '../utils';
+import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
+
+const runInitializationProcess = async () => {
+    const { actions } = useInitStore.getState();
+    actions.resetInit();
+    actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+
+    actions.setPhase('ANALYZE');
+    for (const task of INITIAL_ANALYZE_TASKS) {
+        actions.updateAnalyzeTask(task.id, 'active');
+        await sleep(800);
+        actions.updateAnalyzeTask(task.id, 'done');
+    }
+    actions.setAnalysisResults('relaycode (from package.json)', true);
+    await sleep(500);
+
+    actions.setPhase('CONFIGURE');
+    const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
+    for (const task of configTasksUntilInteractive) {
+        actions.updateConfigureTask(task.id, 'active');
+        await sleep(800);
+        actions.updateConfigureTask(task.id, 'done');
+    }
+    await sleep(500);
+
+    actions.setPhase('INTERACTIVE');
+};
+
+const resumeInitializationProcess = async () => {
+    const { actions } = useInitStore.getState();
+    
+    actions.setPhase('CONFIGURE');
+    const lastTask = INITIAL_CONFIGURE_TASKS[2];
+    if (lastTask) {
+        actions.updateConfigureTask(lastTask.id, 'active');
+        await sleep(800);
+        actions.updateConfigureTask(lastTask.id, 'done');
+        await sleep(500);
+
+        actions.setPhase('FINALIZE');
+    }
+};
+
+export const InitService = {
+    runInitializationProcess,
+    resumeInitializationProcess,
+};
+```
+
+## File: src/stores/transaction.store.ts
+```typescript
+import { create } from 'zustand';
+import { TransactionService } from '../services/transaction.service';
+import type { Transaction, TransactionStatus, FileReviewStatus } from '../types/domain.types';
+
+export type { Transaction };
+
+interface TransactionState {
+    transactions: Transaction[];
+    actions: {
+        loadTransactions: () => void;
+        updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+    };
+}
+
+export const useTransactionStore = create<TransactionState>((set, get) => ({
+    transactions: [],
+    actions: {
+        loadTransactions: () => {
+            const transactions = TransactionService.getAllTransactions();
+            set({ transactions });
+        },
+        updateTransactionStatus: (id, status) => {
+            set(state => ({
+                transactions: state.transactions.map(tx =>
+                    tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                ),
+            }));
+        },
+    },
+}));
+
+// --- Selectors ---
+
+/** Selects transactions by their status. */
+export const selectTransactionsByStatus = (status: TransactionStatus) => (state: TransactionState) =>
+    state.transactions.filter(tx => tx.status === status);
+
+/** Selects statistics for the review screen for a given transaction. */
+export const selectReviewStats = (transactionId: string | null) => (state: TransactionState) => {
+    // This selector is now dependent on the review store.
+    // It's better to compute these stats inside the useReviewScreen hook
+    // where both transaction data and review state are available.
+    // We will select the transaction here and the hook will do the rest.
+    const transaction = state.transactions.find(t => t.id === transactionId);
+    return { transaction };
+};
+```
+
 ## File: src/hooks/useDashboardScreen.tsx
 ```typescript
 import { useMemo } from 'react';
@@ -1840,56 +1900,6 @@ export const CopyService = {
     getCopyItemsForReview,
     getCopyItemsForDetail,
     getCopyItemsForHistory,
-};
-```
-
-## File: src/stores/transaction.store.ts
-```typescript
-import { create } from 'zustand';
-import { TransactionService } from '../services/transaction.service';
-import type { Transaction, TransactionStatus, FileReviewStatus } from '../types/domain.types';
-
-export type { Transaction };
-
-interface TransactionState {
-    transactions: Transaction[];
-    actions: {
-        loadTransactions: () => void;
-        updateTransactionStatus: (id: string, status: TransactionStatus) => void;
-    };
-}
-
-export const useTransactionStore = create<TransactionState>((set, get) => ({
-    transactions: [],
-    actions: {
-        loadTransactions: () => {
-            const transactions = TransactionService.getAllTransactions();
-            set({ transactions });
-        },
-        updateTransactionStatus: (id, status) => {
-            set(state => ({
-                transactions: state.transactions.map(tx =>
-                    tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
-                ),
-            }));
-        },
-    },
-}));
-
-// --- Selectors ---
-
-/** Selects transactions by their status. */
-export const selectTransactionsByStatus = (status: TransactionStatus) => (state: TransactionState) =>
-    state.transactions.filter(tx => tx.status === status);
-
-/** Selects statistics for the review screen for a given transaction. */
-export const selectReviewStats = (transactionId: string | null) => (state: TransactionState) => {
-    // This selector is now dependent on the review store.
-    // It's better to compute these stats inside the useReviewScreen hook
-    // where both transaction data and review state are available.
-    // We will select the transaction here and the hook will do the rest.
-    const transaction = state.transactions.find(t => t.id === transactionId);
-    return { transaction };
 };
 ```
 
@@ -2856,111 +2866,6 @@ const main = () => {
 main();
 ```
 
-## File: src/hooks/useTransactionHistoryScreen.tsx
-```typescript
-import { useMemo } from 'react';
-import { useInput, type Key } from 'ink';
-import { useHistoryStore } from '../stores/history.store';
-import { useAppStore } from '../stores/app.store';
-import { useTransactionStore } from '../stores/transaction.store';
-import { useCopyStore } from '../stores/copy.store';
-import { getVisibleItemPaths } from '../stores/navigation.utils';
-import { useViewport } from './useViewport';
-import { VIEW_CONSTANTS } from '../constants/view.constants';
-
-export const useTransactionHistoryScreen = () => {
-    const store = useHistoryStore();
-    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, actions } = store;
-    const { showDashboardScreen } = useAppStore(s => s.actions);
-    const transactions = useTransactionStore(s => s.transactions);
-
-    const visibleItemPaths = useMemo(
-        () => getVisibleItemPaths(transactions, expandedIds),
-        [transactions, expandedIds],
-    );
-    const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
-
-    const NON_CONTENT_HEIGHT = VIEW_CONSTANTS.HISTORY_NON_CONTENT_HEIGHT;
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex,
-        padding: NON_CONTENT_HEIGHT,
-    });
-
-    const openCopyMode = () => {
-        const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
-
-        if (transactionsToCopy.length === 0) return;
-        useCopyStore.getState().actions.openForHistory(transactionsToCopy);
-    };
-
-    const handleFilterInput = (_input: string, key: Key): void => {
-        if (key.escape) actions.setMode('LIST');
-        if (key.return) actions.applyFilter();
-    };
-
-    const handleBulkActionsInput = (_input: string, key: Key): void => {
-        if (key.escape) actions.setMode('LIST');
-        // Add number handlers...
-    };
-
-    const handleListInput = (input: string, key: Key): void => {
-        if (key.upArrow) actions.navigateUp();
-        if (key.downArrow) actions.navigateDown();
-        if (key.rightArrow) actions.expandOrDrillDown();
-        if (key.leftArrow) actions.collapseOrBubbleUp();
-        if (input === ' ') actions.toggleSelection();
-
-        if (input.toLowerCase() === 'f') actions.setMode('FILTER');
-        if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
-        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode('BULK_ACTIONS');
-        
-        if (key.escape || input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-    };
-
-    useInput((input: string, key: Key) => {
-        if (mode === 'FILTER') {
-            handleFilterInput(input, key);
-            return;
-        }
-        if (mode === 'BULK_ACTIONS') {
-            handleBulkActionsInput(input, key);
-            return;
-        }
-        handleListInput(input, key);
-    });
-
-    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
-    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
-    const transactionsInView = useMemo(
-        () => transactions.filter(tx => txIdsInView.has(tx.id)),
-        [transactions, txIdsInView],
-    );
-    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
-
-    const filterStatusText = filterQuery ? filterQuery : '(none)';
-    const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
-    
-    return {
-        mode,
-        filterQuery,
-        selectedForAction,
-        selectedItemPath,
-        expandedIds,
-        actions,
-        transactions,
-        viewOffset,
-        itemsInView,
-        transactionsInView,
-        pathsInViewSet,
-        filterStatus: filterStatusText,
-        showingStatus: showingStatusText,
-        visibleItemPaths,
-    };
-};
-```
-
 ## File: src/stores/app.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -3371,262 +3276,107 @@ const TransactionHistoryScreen = () => {
 export default TransactionHistoryScreen;
 ```
 
-## File: src/hooks/useDebugMenu.tsx
+## File: src/hooks/useTransactionHistoryScreen.tsx
 ```typescript
-import { useState } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { useViewStore } from '../stores/view.store';
-import { useDashboardStore } from '../stores/dashboard.store';
-import { useReviewStore } from '../stores/review.store';
-import { useDetailStore } from '../stores/detail.store';
+import { useMemo } from 'react';
+import { useInput, type Key } from 'ink';
 import { useHistoryStore } from '../stores/history.store';
-import { useInitStore } from '../stores/init.store';
-import { useCommitStore } from '../stores/commit.store';
-import { useCopyStore } from '../stores/copy.store';
-import { COPYABLE_ITEMS } from '../constants/copy.constants';
-import { CopyService } from '../services/copy.service';
-import type { MenuItem } from '../types/debug.types';
+import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
-import type { Transaction } from '../types/domain.types';
-import { moveIndex } from '../stores/navigation.utils';
-export type { MenuItem } from '../types/debug.types';
+import { useCopyStore } from '../stores/copy.store';
+import { getVisibleItemPaths } from '../stores/navigation.utils';
+import { useViewport } from './useViewport';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
 
-const useDebugMenuActions = () => {
-    const { actions: appActions } = useAppStore();
-    const { actions: initActions } = useInitStore();
-    const { actions: commitActions } = useCommitStore();
-    const { actions: dashboardActions } = useDashboardStore();
-    const { actions: reviewActions } = useReviewStore();
-    const { actions: detailActions } = useDetailStore();
-    const { actions: historyActions } = useHistoryStore();
+export const useTransactionHistoryScreen = () => {
+    const store = useHistoryStore();
+    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, actions } = store;
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const transactions = useTransactionStore(s => s.transactions);
 
-    const menuItems: MenuItem[] = [
-        {
-            title: 'Splash Screen',
-            action: () => appActions.showSplashScreen(),
-        },
-        {
-            title: 'Init: Analyze Phase',
-            action: () => {
-                initActions.setPhase('ANALYZE');
-                appActions.showInitScreen();
-            },
-        },
-        {
-            title: 'Init: Interactive Phase',
-            action: () => {
-                initActions.setPhase('INTERACTIVE');
-                appActions.showInitScreen();
-            },
-        },
-        {
-            title: 'Init: Finalize Phase',
-            action: () => {
-                initActions.setPhase('FINALIZE');
-                appActions.showInitScreen();
-            },
-        },
-        {
-            title: 'Dashboard: Listening',
-            action: () => {
-                dashboardActions.setStatus('LISTENING');
-                appActions.showDashboardScreen();
-            },
-        },
-        {
-            title: 'Dashboard: Confirm Approve',
-            action: () => {
-                dashboardActions.startApproveAll();
-                appActions.showDashboardScreen();
-            },
-        },
-        {
-            title: 'Dashboard: Approving',
-            action: () => {
-                dashboardActions.setStatus('APPROVING');
-                appActions.showDashboardScreen();
-            },
-        },
-        {
-            title: 'Review: Partial Failure (Default)',
-            action: () => {
-                reviewActions.load('1');
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Success',
-            action: () => {
-                reviewActions.load('2');
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Diff View',
-            action: () => {
-                reviewActions.load('1');
-                reviewActions.setBodyView('diff');
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Reasoning View',
-            action: () => {
-                reviewActions.load('1', { bodyView: 'reasoning' });
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Copy Mode',
-            action: () => {
-                reviewActions.load('1');
-                appActions.showReviewScreen();
-                const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
-                if (!tx) return;
-                // On load, selected index is 0, so we can assume the first file.
-                const selectedFile = tx.files && tx.files.length > 0
-                    ? tx.files[0]
-                    : undefined;
-                const items = CopyService.getCopyItemsForReview(tx, tx.files || [], selectedFile);
-                useCopyStore.getState().actions.open(
-                    'Select data to copy from review:', items);
-            },
-        },
-        {
-            title: 'Review: Script Output',
-            action: () => {
-                reviewActions.load('2');
-                appActions.showReviewScreen();
-                reviewActions.setBodyView('script_output');
-            },
-        },
-        {
-            title: 'Review: Bulk Repair',
-            action: () => {
-                reviewActions.load('1', { bodyView: 'bulk_repair' });
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review: Handoff Confirm',
-            action: () => {
-                reviewActions.load('1', { bodyView: 'confirm_handoff' });
-                appActions.showReviewScreen();
-            },
-        },
-        {
-            title: 'Review Processing',
-            action: () => {
-                reviewActions.load('2'); // Use tx '2' which has scripts
-                appActions.showReviewProcessingScreen();
-            },
-        },
-        {
-            title: 'Git Commit Screen',
-            action: () => {
-                commitActions.prepareCommitScreen();
-                appActions.showGitCommitScreen();
-            },
-        },
-        {
-            title: 'Transaction Detail Screen',
-            action: () => {
-                // The dashboard store has transactions, we'll just pick one.
-                detailActions.load('3'); // 'feat: implement new dashboard UI'
-                appActions.showTransactionDetailScreen();
-            },
-        },
-        {
-            title: 'Transaction History Screen',
-            action: () => {
-                historyActions.load();
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: L1 Drilldown',
-            action: () => {
-                historyActions.prepareDebugState('l1-drill');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: L2 Drilldown (Diff)',
-            action: () => {
-                historyActions.prepareDebugState('l2-drill');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: Filter Mode',
-            action: () => {
-                historyActions.prepareDebugState('filter');
-                appActions.showTransactionHistoryScreen();
-            },
-        },
-        {
-            title: 'History: Copy Mode',
-            action: () => {
-                historyActions.prepareDebugState('copy');
-                appActions.showTransactionHistoryScreen();
-                const allTxs = useTransactionStore.getState().transactions;
-                // The 'copy' debug state sets selectedForAction to ['3', '6']. We'll use that directly.
-                const txsToCopy = allTxs.filter((tx: Transaction) => ['3', '6'].includes(tx.id));
-                const items = CopyService.getCopyItemsForHistory(txsToCopy);
-                useCopyStore.getState().actions.open(
-                    `Select data to copy from ${txsToCopy.length} transactions:`, items);
-            },
-        },
-    ];
-    return { menuItems, appActions };
-};
+    const visibleItemPaths = useMemo(
+        () => getVisibleItemPaths(transactions, expandedIds),
+        [transactions, expandedIds],
+    );
+    const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
 
-export const useDebugMenu = () => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const { menuItems, appActions } = useDebugMenuActions();
-    
-    useInput((input, key) => {
-        if (key.upArrow) {
-            setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
-            return;
-        }
-        if (key.downArrow) {
-            setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
-            return;
-        }
-        if (key.return) {
-            const item = menuItems[selectedIndex];
-            if (item) {
-                item.action();
-                useViewStore.getState().actions.setActiveOverlay('none');
-            }
-            return;
-        }
-        if (key.escape) {
-            useViewStore.getState().actions.setActiveOverlay('none');
-            return;
-        }
-
-        // No ctrl/meta keys for selection shortcuts, and only single characters
-        if (key.ctrl || key.meta || input.length !== 1) return;
-
-        if (input >= '1' && input <= '9') {
-            const targetIndex = parseInt(input, 10) - 1;
-            if (targetIndex < menuItems.length) {
-                setSelectedIndex(targetIndex);
-            }
-        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
-            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
-            if (targetIndex < menuItems.length) {
-                setSelectedIndex(targetIndex);
-            }
-        }
+    const NON_CONTENT_HEIGHT = VIEW_CONSTANTS.HISTORY_NON_CONTENT_HEIGHT;
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        padding: NON_CONTENT_HEIGHT,
     });
 
+    const openCopyMode = () => {
+        const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+
+        if (transactionsToCopy.length === 0) return;
+        useCopyStore.getState().actions.openForHistory(transactionsToCopy);
+    };
+
+    const handleFilterInput = (_input: string, key: Key): void => {
+        if (key.escape) actions.setMode('LIST');
+        if (key.return) actions.applyFilter();
+    };
+
+    const handleBulkActionsInput = (_input: string, key: Key): void => {
+        if (key.escape) actions.setMode('LIST');
+        // Add number handlers...
+    };
+
+    const handleListInput = (input: string, key: Key): void => {
+        if (key.upArrow) actions.navigateUp();
+        if (key.downArrow) actions.navigateDown();
+        if (key.rightArrow) actions.expandOrDrillDown();
+        if (key.leftArrow) actions.collapseOrBubbleUp();
+        if (input === ' ') actions.toggleSelection();
+
+        if (input.toLowerCase() === 'f') actions.setMode('FILTER');
+        if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode('BULK_ACTIONS');
+        
+        if (key.escape || input.toLowerCase() === 'q') {
+            showDashboardScreen();
+        }
+    };
+
+    useInput((input: string, key: Key) => {
+        if (mode === 'FILTER') {
+            handleFilterInput(input, key);
+            return;
+        }
+        if (mode === 'BULK_ACTIONS') {
+            handleBulkActionsInput(input, key);
+            return;
+        }
+        handleListInput(input, key);
+    });
+
+    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+    const transactionsInView = useMemo(
+        () => transactions.filter(tx => txIdsInView.has(tx.id)),
+        [transactions, txIdsInView],
+    );
+    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+    const filterStatusText = filterQuery ? filterQuery : '(none)';
+    const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
+    
     return {
-        selectedIndex,
-        menuItems,
+        mode,
+        filterQuery,
+        selectedForAction,
+        selectedItemPath,
+        expandedIds,
+        actions,
+        transactions,
+        viewOffset,
+        itemsInView,
+        transactionsInView,
+        pathsInViewSet,
+        filterStatus: filterStatusText,
+        showingStatus: showingStatusText,
+        visibleItemPaths,
     };
 };
 ```
@@ -4034,6 +3784,266 @@ const ReviewScreen = () => {
 };
 
 export default ReviewScreen;
+```
+
+## File: src/hooks/useDebugMenu.tsx
+```typescript
+import { useState } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { useDashboardStore } from '../stores/dashboard.store';
+import { useReviewStore } from '../stores/review.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useHistoryStore } from '../stores/history.store';
+import { useInitStore } from '../stores/init.store';
+import { useCommitStore } from '../stores/commit.store';
+import { useCopyStore } from '../stores/copy.store';
+import { COPYABLE_ITEMS } from '../constants/copy.constants';
+import { CopyService } from '../services/copy.service';
+import type { MenuItem } from '../types/debug.types';
+import { useTransactionStore } from '../stores/transaction.store';
+import type { Transaction } from '../types/domain.types';
+import { moveIndex } from '../stores/navigation.utils';
+export type { MenuItem } from '../types/debug.types';
+
+const useDebugMenuActions = () => {
+    const { actions: appActions } = useAppStore();
+    const { actions: initActions } = useInitStore();
+    const { actions: commitActions } = useCommitStore();
+    const { actions: dashboardActions } = useDashboardStore();
+    const { actions: reviewActions } = useReviewStore();
+    const { actions: detailActions } = useDetailStore();
+    const { actions: historyActions } = useHistoryStore();
+
+    const menuItems: MenuItem[] = [
+        {
+            title: 'Splash Screen',
+            action: () => appActions.showSplashScreen(),
+        },
+        {
+            title: 'Init: Analyze Phase',
+            action: () => {
+                initActions.setPhase('ANALYZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Interactive Phase',
+            action: () => {
+                initActions.setPhase('INTERACTIVE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Finalize Phase',
+            action: () => {
+                initActions.setPhase('FINALIZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Listening',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Confirm Approve',
+            action: () => {
+                dashboardActions.startApproveAll();
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Approving',
+            action: () => {
+                dashboardActions.setStatus('APPROVING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Review: Partial Failure (Default)',
+            action: () => {
+                reviewActions.load('1');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Success',
+            action: () => {
+                reviewActions.load('2');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Diff View',
+            action: () => {
+                reviewActions.load('1');
+                reviewActions.setBodyView('diff');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Reasoning View',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'reasoning' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Copy Mode',
+            action: () => {
+                reviewActions.load('1');
+                appActions.showReviewScreen();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                if (!tx) return;
+                // On load, selected index is 0, so we can assume the first file.
+                const selectedFile = tx.files && tx.files.length > 0
+                    ? tx.files[0]
+                    : undefined;
+                const items = CopyService.getCopyItemsForReview(tx, tx.files || [], selectedFile);
+                useCopyStore.getState().actions.open(
+                    'Select data to copy from review:', items);
+            },
+        },
+        {
+            title: 'Review: Script Output',
+            action: () => {
+                reviewActions.load('2');
+                appActions.showReviewScreen();
+                reviewActions.setBodyView('script_output');
+            },
+        },
+        {
+            title: 'Review: Bulk Repair',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'bulk_repair' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Handoff Confirm',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review Processing',
+            action: () => {
+                reviewActions.load('2'); // Use tx '2' which has scripts
+                appActions.showReviewProcessingScreen();
+            },
+        },
+        {
+            title: 'Git Commit Screen',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            },
+        },
+        {
+            title: 'Transaction Detail Screen',
+            action: () => {
+                // The dashboard store has transactions, we'll just pick one.
+                detailActions.load('3'); // 'feat: implement new dashboard UI'
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Transaction History Screen',
+            action: () => {
+                historyActions.load();
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L1 Drilldown',
+            action: () => {
+                historyActions.prepareDebugState('l1-drill');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L2 Drilldown (Diff)',
+            action: () => {
+                historyActions.prepareDebugState('l2-drill');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: Filter Mode',
+            action: () => {
+                historyActions.prepareDebugState('filter');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: Copy Mode',
+            action: () => {
+                historyActions.prepareDebugState('copy');
+                appActions.showTransactionHistoryScreen();
+                const allTxs = useTransactionStore.getState().transactions;
+                // The 'copy' debug state sets selectedForAction to ['3', '6']. We'll use that directly.
+                const txsToCopy = allTxs.filter((tx: Transaction) => ['3', '6'].includes(tx.id));
+                const items = CopyService.getCopyItemsForHistory(txsToCopy);
+                useCopyStore.getState().actions.open(
+                    `Select data to copy from ${txsToCopy.length} transactions:`, items);
+            },
+        },
+    ];
+    return { menuItems, appActions };
+};
+
+export const useDebugMenu = () => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const { menuItems, appActions } = useDebugMenuActions();
+    
+    useInput((input, key) => {
+        if (key.upArrow) {
+            setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+            return;
+        }
+        if (key.downArrow) {
+            setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+            return;
+        }
+        if (key.return) {
+            const item = menuItems[selectedIndex];
+            if (item) {
+                item.action();
+                useViewStore.getState().actions.setActiveOverlay('none');
+            }
+            return;
+        }
+        if (key.escape) {
+            useViewStore.getState().actions.setActiveOverlay('none');
+            return;
+        }
+
+        // No ctrl/meta keys for selection shortcuts, and only single characters
+        if (key.ctrl || key.meta || input.length !== 1) return;
+
+        if (input >= '1' && input <= '9') {
+            const targetIndex = parseInt(input, 10) - 1;
+            if (targetIndex < menuItems.length) {
+                setSelectedIndex(targetIndex);
+            }
+        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+            if (targetIndex < menuItems.length) {
+                setSelectedIndex(targetIndex);
+            }
+        }
+    });
+
+    return {
+        selectedIndex,
+        menuItems,
+    };
+};
 ```
 
 ## File: src/App.tsx

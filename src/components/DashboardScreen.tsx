@@ -117,7 +117,7 @@ const DashboardScreen = () => {
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
         const pauseAction = status === 'PAUSED'
-			? <Text>(<Text color="cyan" bold>R</Text>)esume</Text>
+			? <Text>(<Text color="cyan" bold>P</Text>)resume</Text>
 			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
 		return (
             <Text color="gray">
