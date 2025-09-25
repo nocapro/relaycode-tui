@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
-import { getVisibleItemPaths } from './navigation.utils';
+import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath } from './navigation.utils';
 
 export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
  
@@ -49,19 +49,13 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             const { expandedIds, selectedItemPath } = get();
             const { transactions } = useTransactionStore.getState();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
-            const currentIndex = visibleItems.indexOf(selectedItemPath);
-            if (currentIndex > 0) {
-                set({ selectedItemPath: visibleItems[currentIndex - 1]! });
-            }
+            set({ selectedItemPath: findPrevPath(selectedItemPath, visibleItems) });
         },
         navigateDown: () => {
             const { expandedIds, selectedItemPath } = get();
             const { transactions } = useTransactionStore.getState();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
-            const currentIndex = visibleItems.indexOf(selectedItemPath);
-            if (currentIndex < visibleItems.length - 1) {
-                set({ selectedItemPath: visibleItems[currentIndex + 1]! });
-            }
+            set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
         },
         expandOrDrillDown: () => set(state => {
             const { selectedItemPath, expandedIds } = state;
@@ -82,8 +76,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                     }
                 }
                 return { expandedIds: newExpandedIds };
-            } else if (selectedItemPath.includes('/')) {
-                const parentId = selectedItemPath.split('/')[0];
+            }
+            const parentId = getParentPath(selectedItemPath);
+            if (parentId) {
                 return { selectedItemPath: parentId || '' };
             }
             return {};

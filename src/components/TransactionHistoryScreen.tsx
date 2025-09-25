@@ -1,9 +1,9 @@
-import React from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import Separator from './Separator';
 import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
+import { UI_CONFIG } from '../config/ui.config';
 
 // --- Sub-components ---
 
@@ -110,11 +110,10 @@ const TransactionHistoryScreen = () => {
         expandedIds,
         actions,
         transactions,
-        itemsInView,
         pathsInViewSet,
         filterStatus,
         showingStatus,
-    } = useTransactionHistoryScreen();
+    } = useTransactionHistoryScreen({ reservedRows: UI_CONFIG.history.reservedRows });
 
     const renderFooter = () => {
         if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 

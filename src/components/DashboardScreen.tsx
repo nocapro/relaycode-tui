@@ -4,6 +4,7 @@ import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import type { Transaction, TransactionStatus } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
+import { UI_CONFIG } from '../config/ui.config';
 
 // --- Sub-components & Helpers ---
 
@@ -81,7 +82,7 @@ const DashboardScreen = () => {
         viewOffset,
         viewportHeight,
         transactionsToConfirm,
-    } = useDashboardScreen();
+    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });
 
     const renderStatusBar = () => {
         let statusText: string;

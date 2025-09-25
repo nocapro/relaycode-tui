@@ -7,9 +7,8 @@ import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
 import { useViewport } from './useViewport';
-import { VIEW_CONSTANTS } from '../constants/view.constants';
 
-export const useTransactionHistoryScreen = () => {
+export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: number }) => {
     const store = useHistoryStore();
     const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, actions } = store;
     const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
@@ -21,10 +20,9 @@ export const useTransactionHistoryScreen = () => {
     );
     const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
 
-    const NON_CONTENT_HEIGHT = VIEW_CONSTANTS.HISTORY_NON_CONTENT_HEIGHT;
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        padding: NON_CONTENT_HEIGHT,
+        reservedRows,
     });
 
     const openCopyMode = () => {

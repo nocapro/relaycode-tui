@@ -1,16 +1,13 @@
 import { useInput, type Key } from 'ink';
 import { useDetailStore } from '../stores/detail.store';
 import { useViewStore } from '../stores/view.store';
-import { useAppStore } from '../stores/app.store';
-import { useTransactionStore } from '../stores/transaction.store';
+import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import { useMemo } from 'react';
 import { useCopyStore } from '../stores/copy.store';
 
 export const useTransactionDetailScreen = () => {
-    const { showDashboardScreen } = useAppStore(s => s.actions);
     const store = useDetailStore();
-    const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
-    const transaction = useTransactionStore(s => s.transactions.find(tx => tx.id === selectedTransactionId));
+    const transaction = useTransactionStore(selectSelectedTransaction);
     const files = useMemo(() => transaction?.files || [], [transaction]);
 
     const {
@@ -59,8 +56,5 @@ export const useTransactionDetailScreen = () => {
         focusedItemPath: store.focusedItemPath,
         expandedItemPaths: store.expandedItemPaths,
         bodyView: store.bodyView,
-        actions: {
-            showDashboardScreen,
-        },
     };
 };

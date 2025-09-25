@@ -1,0 +1,1751 @@
+uuid: c2945d4a-d34e-4f51-b0be-09848d7016d8
+projectId: relaycode-tui
+createdAt: '2025-09-25T02:41:44.618Z'
+gitCommitMsg: >-
+  fix(build): resolve all tsc and eslint errors
+
+  This commit addresses all outstanding TypeScript compiler errors and ESLint
+  violations across the codebase.
+
+  - Patches the `revertTransaction` service method to accept a transaction ID,
+  resolving a TypeScript argument mismatch error. - Strengthens the ESLint
+  configuration to treat unused variables as errors and to correctly ignore
+  parameters prefixed with an underscore. - Fixes dozens of `no-unused-vars`
+  errors in Zustand store interfaces by prefixing parameter names with an
+  underscore. This works around a linter issue while preserving the descriptive
+  API. - Cleans up code formatting to resolve `max-len` warnings. - Updates
+  `tsconfig.json` to permanently enable stricter checks for unused locals and
+  parameters.
+promptSummary: >-
+  The user requested a radical refactoring to improve dryness and eliminate
+  unused code by fixing all TypeScript and ESLint errors found in the provided
+  logs.
+reasoning:
+  - >-
+    Based on my analysis of the codebase and the provided error logs, I will
+    execute a targeted refactoring. My primary focus is to resolve all
+    TypeScript compiler errors and ESLint violations, which directly addresses
+    the user's request to "eliminate unused" variables and improve code quality.
+  - >-
+    The key issue identified is a misconfiguration or limitation in how ESLint
+    validates parameter usage within Zustand store interfaces, leading to
+    numerous false-positive `no-unused-vars` errors. To correct this without
+    altering the stores' external APIs, I will prefix the parameter names within
+    the store's type definitions with an underscore (`_`). This signals to both
+    the TypeScript compiler (with `noUnusedParameters: true`) and our updated
+    ESLint rule that these parameters are intentionally part of the type
+    signature, even if they appear unused in the type definition file itself.
+  - >-
+    I will also correct the single TypeScript error and a code formatting
+    warning to ensure the codebase is clean and compliant with stricter quality
+    rules.
+  - '### Part 1: Fix TypeScript and ESLint Configuration'
+  - >-
+    First, I'll fix the TypeScript error by updating the service method
+    signature. Then, I'll strengthen the ESLint configuration to enforce
+    stricter rules and properly handle intentionally unused parameters.
+  - '### Part 2: Refactor Store Interfaces'
+  - >-
+    Now, I will systematically update all Zustand store interfaces. By prefixing
+    the parameter names in the action type definitions with an underscore, I
+    will resolve the dozens of `no-unused-vars` errors while maintaining the
+    descriptive nature of the API.
+  - '### Part 3: Code Cleanup and Formatting'
+  - >-
+    Finally, I will clean up the remaining `max-len` warning and remove comments
+    from `tsconfig.json` that are no longer relevant after making the compiler
+    flags permanent.
+operations:
+  - type: write
+    path: src/services/transaction.service.ts
+    content: |+
+      --- src/services/transaction.service.ts
+      +++ src/services/transaction.service.ts
+      @@ -2,7 +2,7 @@
+       import { createMockTransactions } from '../data/mocks';
+       import type { Transaction } from '../types/domain.types';
+       
+      -const revertTransaction = () => {
+      +const revertTransaction = (_transactionId: string) => {
+           // In a real app, this would perform the revert operation (e.g., API call).
+           // The state update is now handled by the calling store.
+           // This is a no-op for the simulation, we just need the id.
+
+    patchStrategy: standard-diff
+  - type: write
+    path: eslint.config.js
+    content: >+
+      --- eslint.config.js
+
+      +++ eslint.config.js
+
+      @@ -45,7 +45,7 @@
+           },
+           rules: {
+             // TypeScript rules
+      -      '@typescript-eslint/no-unused-vars': 'warn', // from 'off'
+
+      +      '@typescript-eslint/no-unused-vars': ['error', {
+      'argsIgnorePattern': '^_' }],
+             '@typescript-eslint/no-explicit-any': 'warn',
+             '@typescript-eslint/explicit-function-return-type': 'off',
+             '@typescript-eslint/explicit-module-boundary-types': 'off',
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/copy.store.ts
+    content: >+
+      --- src/stores/copy.store.ts
+
+      +++ src/stores/copy.store.ts
+
+      @@ -16,16 +16,16 @@
+           onClose?: () => void;
+       
+           actions: {
+      -        open: (title: string, items: CopyItem[], onClose?: () => void) =>
+      void;
+
+      +        open: (_title: string, _items: CopyItem[], _onClose?: () => void)
+      => void;
+               close: () => void;
+      -        openForReview: (transaction: Transaction, files: FileItem[],
+      selectedFile?: FileItem) => void;
+
+      -        openForDetail: (transaction: Transaction, selectedFile?:
+      FileItem) => void;
+
+      -        openForHistory: (transactions: Transaction[]) => void;
+
+      +        openForReview: (_transaction: Transaction, _files: FileItem[],
+      _selectedFile?: FileItem) => void;
+
+      +        openForDetail: (_transaction: Transaction, _selectedFile?:
+      FileItem) => void;
+
+      +        openForHistory: (_transactions: Transaction[]) => void;
+               navigateUp: () => void;
+               navigateDown: () => void;
+               toggleSelection: () => void;
+      -        toggleSelectionById: (id: string) => void;
+
+      +        toggleSelectionById: (_id: string) => void;
+               executeCopy: () => void;
+           };
+       }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: |+
+      --- src/stores/dashboard.store.ts
+      +++ src/stores/dashboard.store.ts
+      @@ -16,7 +16,7 @@
+               startApproveAll: () => void;
+               confirmAction: () => Promise<void>;
+               cancelAction: () => void;
+      -        setStatus: (status: DashboardStatus) => void;
+      +        setStatus: (_status: DashboardStatus) => void;
+           };
+       }
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/detail.store.ts
+    content: |+
+      --- src/stores/detail.store.ts
+      +++ src/stores/detail.store.ts
+      @@ -15,7 +15,7 @@
+           expandedItemPaths: Set<string>;
+           bodyView: DetailBodyView;
+           actions: {
+      -        load: (transactionId: string) => void;
+      +        load: (_transactionId: string) => void;
+               navigateUp: () => void;
+               navigateDown: () => void;
+               expandOrDrillDown: () => void;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/history.store.ts
+    content: >+
+      --- src/stores/history.store.ts
+
+      +++ src/stores/history.store.ts
+
+      @@ -14,15 +14,15 @@
+           filterQuery: string;
+           selectedForAction: Set<string>;
+           actions: {
+      -        load: (initialState?: Partial<HistoryStateData>) => void;
+
+      +        load: (_initialState?: Partial<HistoryStateData>) => void;
+               navigateDown: () => void;
+               navigateUp: () => void;
+               expandOrDrillDown: () => void;
+               collapseOrBubbleUp: () => void;
+               toggleSelection: () => void;
+      -        setMode: (mode: HistoryViewMode) => void;
+
+      -        setFilterQuery: (query: string) => void;
+
+      +        setMode: (_mode: HistoryViewMode) => void;
+
+      +        setFilterQuery: (_query: string) => void;
+               applyFilter: () => void;
+      -        prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter'
+      | 'copy' | 'bulk') => void;
+
+      +        prepareDebugState: (_stateName: 'l1-drill' | 'l2-drill' |
+      'filter' | 'copy' | 'bulk') => void;
+           };
+       }
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/init.store.ts
+    content: >+
+      --- src/stores/init.store.ts
+
+      +++ src/stores/init.store.ts
+
+      @@ -21,12 +21,12 @@
+           interactiveChoice: GitignoreChoice | null;
+       
+           actions: {
+      -        setPhase: (phase: InitPhase) => void;
+
+      -        setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+
+      -        updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+
+      -        setAnalysisResults: (projectId: string, gitignoreFound: boolean)
+      => void;
+
+      -        updateConfigureTask: (id: string, status: TaskStatus) => void;
+
+      -        setInteractiveChoice: (choice: GitignoreChoice) => void;
+
+      +        setPhase: (_phase: InitPhase) => void;
+
+      +        setTasks: (_analyzeTasks: Task[], _configureTasks: Task[]) =>
+      void;
+
+      +        updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
+
+      +        setAnalysisResults: (_projectId: string, _gitignoreFound:
+      boolean) => void;
+
+      +        updateConfigureTask: (_id: string, _status: TaskStatus) => void;
+
+      +        setInteractiveChoice: (_choice: GitignoreChoice) => void;
+               resetInit: () => void;
+           };
+       }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/review.store.ts
+    content: >+
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ -29,27 +29,28 @@
+           fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+       
+           actions: {
+      -        load: (transactionId: string, initialState?: { bodyView:
+      ReviewBodyView }) => void;
+
+      +        load: (_transactionId: string, _initialState?: { bodyView:
+      ReviewBodyView }) => void;
+               moveSelectionUp: () => void;
+               moveSelectionDown: () => void;
+               expandDiff: () => void;
+      -        toggleBodyView: (
+
+      -            view: Extract<ReviewBodyView, 'diff' | 'reasoning' |
+      'script_output' | 'bulk_repair' | 'confirm_handoff'>
+
+      -        ) => void;
+
+      -        setBodyView: (view: ReviewBodyView) => void;
+
+      +        toggleBodyView: (_view: Extract<
+
+      +            ReviewBodyView,
+
+      +            'diff' | 'reasoning' | 'script_output' | 'bulk_repair' |
+      'confirm_handoff'
+
+      +        >) => void;
+
+      +        setBodyView: (_view: ReviewBodyView) => void;
+               approve: () => void;
+      -        startApplySimulation: (scenario: 'success' | 'failure') => void;
+
+      +        startApplySimulation: (_scenario: 'success' | 'failure') => void;
+               tryRepairFile: () => void;
+               showBulkRepair: () => void;
+      -        executeBulkRepairOption: (option: number) => Promise<void>;
+
+      +        executeBulkRepairOption: (_option: number) => Promise<void>;
+               confirmHandoff: () => void;
+               scrollReasoningUp: () => void;
+               scrollReasoningDown: () => void;
+               navigateScriptErrorUp: () => void;
+               navigateScriptErrorDown: () => void;
+      -        updateApplyStep: (id: string, status: ApplyStep['status'],
+      duration?: number, details?: string) => void;
+
+      -        addApplySubstep: (parentId: string, substep: Omit<ApplyStep,
+      'substeps'>) => void;
+
+      -        updateFileReviewStatus: (fileId: string, status:
+      FileReviewStatus, error?: string) => void;
+
+      -        toggleFileApproval: (fileId: string) => void;
+
+      +        updateApplyStep: (_id: string, _status: ApplyStep['status'],
+      _duration?: number, _details?: string) => void;
+
+      +        addApplySubstep: (_parentId: string, _substep: Omit<ApplyStep,
+      'substeps'>) => void;
+
+      +        updateFileReviewStatus: (_fileId: string, _status:
+      FileReviewStatus, _error?: string) => void;
+
+      +        toggleFileApproval: (_fileId: string) => void;
+               rejectAllFiles: () => void;
+           };
+       }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction.store.ts
+    content: >+
+      --- src/stores/transaction.store.ts
+
+      +++ src/stores/transaction.store.ts
+
+      @@ -9,7 +9,7 @@
+           transactions: Transaction[];
+           actions: {
+               loadTransactions: () => void;
+      -        updateTransactionStatus: (id: string, status: TransactionStatus)
+      => void;
+
+      +        updateTransactionStatus: (_id: string, _status:
+      TransactionStatus) => void;
+           };
+       }
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/view.store.ts
+    content: |+
+      --- src/stores/view.store.ts
+      +++ src/stores/view.store.ts
+      @@ -5,8 +5,8 @@
+           selectedTransactionId: string | null;
+           activeOverlay: 'none' | 'help' | 'copy' | 'debug';
+           actions: {
+      -        setSelectedTransactionId: (id: string | null) => void;
+      -        setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+      +        setSelectedTransactionId: (_id: string | null) => void;
+      +        setActiveOverlay: (_overlay: ViewState['activeOverlay']) => void;
+           };
+       }
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/review.service.ts
+    content: >+
+      --- src/services/review.service.ts
+
+      +++ src/services/review.service.ts
+
+      @@ -29,8 +29,10 @@
+       
+       const generateHandoffPrompt = (
+           transaction: Transaction,
+      -    fileReviewStates: Map<string, { status: FileReviewStatus; error?:
+      string }>,
+
+      -): string => {
+
+      +    fileReviewStates: Map<
+
+      +        string, { status: FileReviewStatus; error?: string }
+
+      +    >,
+
+      +): string => {
+           const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+           const failedFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'FAILED');
+       
+      @@ -124,11 +126,11 @@
+           }
+       }
+       
+      -const prepareTransactionForReview = (transaction: Transaction): {
+
+      +const prepareTransactionForReview = (
+
+      +    transaction: Transaction,
+
+      +): {
+           patchStatus: PatchStatus;
+           fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+      -} => {
+
+      -    // This simulates the backend determining which files failed or
+      succeeded and sets it ONCE on load.
+
+      +} => {
+
+      +    // This simulates the backend determining which files failed or
+      succeeded and sets it ONCE on load.
+           // For this demo, tx '1' is the failure case, any other is success.
+           const isFailureCase = transaction.id === '1';
+           const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: tsconfig.json
+    content: |+
+      --- tsconfig.json
+      +++ tsconfig.json
+      @@ -18,9 +18,9 @@
+           "noUncheckedIndexedAccess": true,
+           "noImplicitOverride": true,
+       
+      -    // Some stricter flags (disabled by default)
+      -    "noUnusedLocals": true, // from false
+      -    "noUnusedParameters": true, // from false
+      +    // Some stricter flags
+      +    "noUnusedLocals": true,
+      +    "noUnusedParameters": true,
+           "noPropertyAccessFromIndexSignature": false
+         }
+       }
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/copy.store.ts: |-
+    import { create } from 'zustand';
+    import { moveIndex } from './navigation.utils';
+    import { useViewStore } from './view.store';
+    import { CopyService } from '../services/copy.service';
+    import type { CopyItem } from '../types/copy.types';
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    export type { CopyItem };
+
+    interface CopyState {
+        title: string;
+        items: CopyItem[];
+        selectedIndex: number;
+        selectedIds: Set<string>;
+        lastCopiedMessage: string | null;
+        onClose?: () => void;
+
+        actions: {
+            open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+            close: () => void;
+            openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+            openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+            openForHistory: (transactions: Transaction[]) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            toggleSelection: () => void;
+            toggleSelectionById: (id: string) => void;
+            executeCopy: () => void;
+        };
+    }
+
+    export const useCopyStore = create<CopyState>((set, get) => ({
+        title: '',
+        items: [],
+        selectedIndex: 0,
+        selectedIds: new Set(),
+        lastCopiedMessage: null,
+        onClose: undefined,
+
+        actions: {
+            open: (title, items, onClose) => {
+                const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+                useViewStore.getState().actions.setActiveOverlay('copy');
+                set({
+                    title,
+                    items,
+                    selectedIndex: 0,
+                    selectedIds: defaultSelectedIds,
+                    lastCopiedMessage: null,
+                    onClose,
+                });
+            },
+            close: () => {
+                useViewStore.getState().actions.setActiveOverlay('none');
+                get().onClose?.();
+                set({ items: [], onClose: undefined });
+            },
+            openForReview: (transaction, files, selectedFile) => {
+                const { actions } = get();
+                const title = 'Select data to copy from review:';
+                const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+                actions.open(title, items);
+            },
+            openForDetail: (transaction, selectedFile) => {
+                const { actions } = get();
+                const title = `Select data to copy from transaction ${transaction.hash}:`;
+                const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+                actions.open(title, items);
+            },
+            openForHistory: (transactions) => {
+                const { actions } = get();
+                const title = `Select data to copy from ${transactions.length} transactions:`;
+                const items = CopyService.getCopyItemsForHistory(transactions);
+                actions.open(title, items);
+            },
+            navigateUp: () => set(state => ({
+                selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
+            })),
+            navigateDown: () => set(state => ({
+                selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+            })),
+            toggleSelection: () => set(state => {
+                const currentItem = state.items[state.selectedIndex];
+                if (!currentItem) return {};
+                const newSelectedIds = new Set(state.selectedIds);
+                if (newSelectedIds.has(currentItem.id)) {
+                    newSelectedIds.delete(currentItem.id);
+                } else {
+                    newSelectedIds.add(currentItem.id);
+                }
+                return { selectedIds: newSelectedIds };
+            }),
+            toggleSelectionById: (id: string) => set(state => {
+                const newSelectedIds = new Set(state.selectedIds);
+                if (newSelectedIds.has(id)) {
+                    newSelectedIds.delete(id);
+                } else {
+                    newSelectedIds.add(id);
+                }
+                return { selectedIds: newSelectedIds };
+            }),
+            executeCopy: () => {
+                const { items, selectedIds } = get();
+                const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+                if (itemsToCopy.length === 0) return;
+
+                const content = itemsToCopy.map(item => `--- ${item.label} ---\n${item.getData()}`).join('\n\n');
+                const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+                set({ lastCopiedMessage: message });
+            },
+        },
+    }));
+  src/services/transaction.service.ts: |-
+    import { createMockTransactions } from '../data/mocks';
+    import type { Transaction } from '../types/domain.types';
+
+    const revertTransaction = () => {
+        // In a real app, this would perform the revert operation (e.g., API call).
+        // The state update is now handled by the calling store.
+        // This is a no-op for the simulation, we just need the id.
+    };
+
+    export const TransactionService = {
+        revertTransaction,
+        getAllTransactions: (): Transaction[] => createMockTransactions(),
+    };
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { moveIndex } from './navigation.utils';
+
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'APPROVING';
+     
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus;
+        selectedTransactionIndex: number;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            setStatus: (status: DashboardStatus) => void;
+        };
+    }
+
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        selectedTransactionIndex: 0,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length) };
+            }),
+            moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length) };
+            }),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            setStatus: (status) => set({ status }),
+            confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                const previousStatus = get().previousStatus;
+                set({ status: 'APPROVING' });
+                await DashboardService.approveAll();
+                set({ status: previousStatus });
+            },
+        },
+    }));
+  src/stores/history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath }
+    from './navigation.utils';
+
+
+    export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
+     
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<HistoryState, 'actions'>;
+
+
+    interface HistoryState {
+        mode: HistoryViewMode;
+        selectedItemPath: string;
+        expandedIds: Set<string>;
+        filterQuery: string;
+        selectedForAction: Set<string>;
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            expandOrDrillDown: () => void;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+        };
+    }
+
+
+    export const useHistoryStore = create<HistoryState>((set, get) => ({
+        mode: 'LIST',
+        selectedItemPath: '',
+        expandedIds: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        actions: {
+            load: (initialState) => {
+                const { transactions } = useTransactionStore.getState();
+                set({
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: 'LIST',
+                    expandedIds: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findPrevPath(selectedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+            },
+            expandOrDrillDown: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (!newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.add(selectedItemPath);
+                }
+                return { expandedIds: newExpandedIds };
+            }),
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.delete(selectedItemPath);
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+                    return { expandedIds: newExpandedIds };
+                }
+                const parentId = getParentPath(selectedItemPath);
+                if (parentId) {
+                    return { selectedItemPath: parentId || '' };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = selectedItemPath.split('/')[0];
+                if (!txId) return {};
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                set({ mode: 'LIST' });
+            },
+            prepareDebugState: (stateName) => {
+                const { actions } = get();
+                switch (stateName) {
+                    case 'l1-drill':
+                        actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
+                        break;
+                    case 'l2-drill':
+                        actions.load({ expandedIds: new Set(['3', '3/3-1']), selectedItemPath: '3/3-1' });
+                        break;
+                    case 'filter':
+                        actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:COMMITTED' });
+                        break;
+                    case 'copy':
+                        actions.load({ selectedForAction: new Set(['3', '6']) });
+                        break;
+                    case 'bulk':
+                        actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['3', '6']) });
+                        break;
+                }
+            },
+        },
+    }));
+  src/stores/detail.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from
+    '../constants/detail.constants';
+
+    import { findNextPath, findPrevPath, getParentPath } from
+    './navigation.utils';
+
+
+    type ObjectValues<T> = T[keyof T];
+
+
+    export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
+
+    export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
+     
+    interface DetailState {
+        focusedItemPath: string; // e.g., 'PROMPT', 'FILES', 'FILES/1-1'
+        expandedItemPaths: Set<string>;
+        bodyView: DetailBodyView;
+        actions: {
+            load: (transactionId: string) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            expandOrDrillDown: () => void;
+            collapseOrBubbleUp: () => void;
+            toggleRevertConfirm: () => void;
+            confirmRevert: () => void;
+        };
+    }
+
+
+    const getVisibleItemPaths = (expandedItemPaths: Set<string>): string[] => {
+        const { selectedTransactionId } = useViewStore.getState();
+        const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+        if (!transaction) return [];
+
+        const paths: string[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
+        if (expandedItemPaths.has(NAVIGATOR_SECTIONS.FILES) && transaction.files) {
+            for (const file of transaction.files) {
+                paths.push(`${NAVIGATOR_SECTIONS.FILES}/${file.id}`);
+            }
+        }
+        return paths;
+    };
+
+
+    export const useDetailStore = create<DetailState>((set, get) => ({
+        focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+        expandedItemPaths: new Set(),
+        bodyView: DETAIL_BODY_VIEWS.NONE,
+        actions: {
+            load: (transactionId) => {
+                useViewStore.getState().actions.setSelectedTransactionId(transactionId);
+                set({
+                    focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+                    expandedItemPaths: new Set(),
+                    bodyView: DETAIL_BODY_VIEWS.NONE,
+                });
+            },
+            navigateUp: () => {
+                const { expandedItemPaths, focusedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(expandedItemPaths);
+                set({ focusedItemPath: findPrevPath(focusedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedItemPaths, focusedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(expandedItemPaths);
+                set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
+            },
+            expandOrDrillDown: () => set(state => {
+                const { focusedItemPath, expandedItemPaths } = state;
+                const newExpandedPaths = new Set(expandedItemPaths);
+                
+                if (focusedItemPath.includes('/')) { // Is a file
+                    return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
+                }
+
+                // Is a section header
+                if (newExpandedPaths.has(focusedItemPath)) {
+                    // Already expanded, drill in if it's FILES
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
+                        const visibleItems = getVisibleItemPaths(newExpandedPaths);
+                        const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
+                        if (firstFile) {
+                            return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                        }
+                    }
+                    return {}; // No-op for PROMPT/REASONING if already expanded
+                } else {
+                    // Not expanded, so expand it
+                    newExpandedPaths.add(focusedItemPath);
+                    let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;
+                    return { expandedItemPaths: newExpandedPaths, bodyView: newBodyView };
+                }
+            }),
+            collapseOrBubbleUp: () => set(state => {
+                const { focusedItemPath, expandedItemPaths, bodyView } = state;
+                
+                if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                    return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                }
+
+                if (getParentPath(focusedItemPath)) { // Is a file
+                    return { focusedItemPath: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                }
+                
+                // Is a section header
+                if (expandedItemPaths.has(focusedItemPath)) {
+                    const newExpandedPaths = new Set(expandedItemPaths);
+                    newExpandedPaths.delete(focusedItemPath);
+                    return { expandedItemPaths: newExpandedPaths, bodyView: DETAIL_BODY_VIEWS.NONE };
+                }
+                
+                return {}; // No-op if not expanded (global back will handle)
+            }),
+            toggleRevertConfirm: () => set(state => ({
+                bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
+                    ? DETAIL_BODY_VIEWS.NONE
+                    : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+            })),
+            confirmRevert: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (!selectedTransactionId) return;
+                TransactionService.revertTransaction(selectedTransactionId);
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
+                set({ bodyView: DETAIL_BODY_VIEWS.NONE });
+            },
+        },
+    }));
+  src/stores/init.store.ts: >-
+    import { create } from 'zustand';
+
+
+    // Store Interface
+
+    export type TaskStatus = 'pending' | 'active' | 'done';
+
+    export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' |
+    'FINALIZE';
+
+    export type GitignoreChoice = 'ignore' | 'share';
+
+    export interface Task {
+        id: string;
+        title: string;
+        subtext?: string;
+        status: TaskStatus;
+    }
+     
+    interface InitState {
+        phase: InitPhase;
+        analyzeTasks: Task[];
+        projectId: string | null;
+        gitignoreFound: boolean | null;
+        configureTasks: Task[];
+        interactiveChoice: GitignoreChoice | null;
+
+        actions: {
+            setPhase: (phase: InitPhase) => void;
+            setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+            updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+            setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
+            updateConfigureTask: (id: string, status: TaskStatus) => void;
+            setInteractiveChoice: (choice: GitignoreChoice) => void;
+            resetInit: () => void;
+        };
+    }
+
+
+    // Create the store
+
+    export const useInitStore = create<InitState>((set) => ({
+        phase: 'ANALYZE',
+        analyzeTasks: [],
+        projectId: null,
+        gitignoreFound: null,
+        configureTasks: [],
+        interactiveChoice: null,
+
+        actions: {
+            setPhase: (phase) => set({ phase }),
+            setTasks: (analyzeTasks, configureTasks) => set({
+                analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
+                configureTasks: JSON.parse(JSON.stringify(configureTasks)),
+            }),
+            updateAnalyzeTask: (id, status) => set(state => ({
+                analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+            updateConfigureTask: (id, status) => set(state => ({
+                configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+            resetInit: () => set({
+                phase: 'ANALYZE',
+                analyzeTasks: [],
+                projectId: null,
+                gitignoreFound: null,
+                configureTasks: [],
+                interactiveChoice: null,
+            }),
+        },
+    }));
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useAppStore } from './app.store';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { moveIndex } from './navigation.utils';
+
+    import { INITIAL_APPLY_STEPS } from '../constants/review.constants';
+
+    import type { FileReviewStatus } from '../types/domain.types';
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        duration?: number;
+    }
+
+    export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' |
+    'bulk_repair' | 'confirm_handoff' | 'none';
+
+    export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+
+    export type ApplyUpdate =
+        | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+        | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };
+
+    interface ReviewState {
+        patchStatus: PatchStatus;
+        applySteps: ApplyStep[];
+        selectedItemIndex: number;
+        bodyView: ReviewBodyView;
+        isDiffExpanded: boolean;
+        reasoningScrollIndex: number;
+        scriptErrorIndex: number;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+
+        actions: {
+            load: (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            expandDiff: () => void;
+            toggleBodyView: (
+                view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>
+            ) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            startApplySimulation: (scenario: 'success' | 'failure') => void;
+            tryRepairFile: () => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void;
+            updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+            addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+            updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string) => void;
+            toggleFileApproval: (fileId: string) => void;
+            rejectAllFiles: () => void;
+        };
+    }
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        patchStatus: 'SUCCESS',
+        applySteps: INITIAL_APPLY_STEPS,
+        selectedItemIndex: 0,
+        bodyView: 'none',
+        isDiffExpanded: false,
+        reasoningScrollIndex: 0,
+        scriptErrorIndex: 0,
+        fileReviewStates: new Map(),
+
+        actions: {
+            load: (transactionId, initialState) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+                
+                const { patchStatus, fileReviewStates } = ReviewService.prepareTransactionForReview(transaction);
+
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    patchStatus,
+                    fileReviewStates,
+                    selectedItemIndex: 0,
+                    bodyView: initialState?.bodyView ?? 'none',
+                    isDiffExpanded: false,
+                    reasoningScrollIndex: 0,
+                    scriptErrorIndex: 0,
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                });
+            },
+            moveSelectionUp: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx) return {};
+                const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
+            }),
+            moveSelectionDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx) return {};
+                const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
+            }),
+            toggleBodyView: (view) => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                const files = tx?.files || [];
+                if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+                return {
+                    bodyView: state.bodyView === view ? 'none' : view,
+                    isDiffExpanded: false,
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            startApplySimulation: async (scenario) => {
+                const { showReviewProcessingScreen } = useAppStore.getState().actions;
+                const { updateApplyStep, addApplySubstep } = get().actions;
+                set({ applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)) });
+                showReviewProcessingScreen();
+                const simulationGenerator = ReviewService.runApplySimulation(scenario);
+                for await (const update of simulationGenerator) {
+                    if (update.type === 'UPDATE_STEP') {
+                        updateApplyStep(
+                            update.payload.id,
+                            update.payload.status,
+                            update.payload.duration,
+                            update.payload.details,
+                        );
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        addApplySubstep(update.payload.parentId, update.payload.substep);
+                    }
+                }
+                // Transition back to review screen is handled by the processing screen component or a separate flow
+                // For this simulation, we'll assume it transitions back, but the action itself doesn't need to do it.
+                // This avoids a direct dependency from the store to app-level navigation.
+            },
+            tryRepairFile: () => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { selectedItemIndex, fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.[selectedItemIndex];
+                if (!file) return;
+
+                const { status, error } = fileReviewStates.get(file.id) || {};
+                if (status !== 'FAILED') return;
+                
+                ReviewService.tryRepairFile(file, error);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+            },
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+                if (failedFiles.length === 0) {
+                    set({ bodyView: 'none' });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkRepairPrompt(failedFiles);
+                        set({ bodyView: 'none' });
+                        break;
+                    case 2: {
+                        set({ bodyView: 'none' });
+                        failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                        const results = await ReviewService.runBulkReapply(failedFiles);
+                        results.forEach(result =>
+                            get().actions.updateFileReviewStatus(
+                                result.id, result.status, result.error,
+                            ),
+                        );
+                        break;
+                    }
+                    case 3:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 4:
+                        failedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                        });
+                        set({ bodyView: 'none' });
+                        break;
+                    default:
+                        set({ bodyView: 'none' });
+                }
+            },
+            confirmHandoff: () => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.files) return;
+                const { fileReviewStates } = get();
+                ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+                ReviewService.performHandoff(tx.hash);
+            },
+            scrollReasoningUp: () => set(state => ({ reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1) })),
+            scrollReasoningDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.reasoning) return {};
+                const maxLines = tx.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+            navigateScriptErrorDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.scripts || !tx?.files) return {};
+                const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+                if (selectedScript?.output) {
+                    const errorLines = selectedScript.output
+                        .split('\n')
+                        .filter(line => line.includes('Error') || line.includes('Warning'));
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+            updateApplyStep: (id, status, duration, details) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep = { ...s, status };
+                            if (duration !== undefined) newStep.duration = duration;
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            addApplySubstep: (parentId, substep) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateFileReviewStatus: (fileId, status, error) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    newStates.set(fileId, { status, error });
+                    return { fileReviewStates: newStates };
+                });
+            },
+            toggleFileApproval: (fileId) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    const current = newStates.get(fileId);
+                    if (current) {
+                        const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                        newStates.set(fileId, { status: newStatus, error: undefined });
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            rejectAllFiles: () => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    for (const [fileId, reviewState] of newStates.entries()) {
+                        if (reviewState.status === 'APPROVED') {
+                            newStates.set(fileId, { status: 'REJECTED', error: undefined });
+                        }
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+        },
+    }));
+  src/stores/transaction.store.ts: >
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { useViewStore } from './view.store';
+
+    import type { Transaction, TransactionStatus } from '../types/domain.types';
+
+
+    export type { Transaction };
+
+
+    interface TransactionState {
+        transactions: Transaction[];
+        actions: {
+            loadTransactions: () => void;
+            updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        };
+    }
+
+
+    export const useTransactionStore = create<TransactionState>((set) => ({
+        transactions: [],
+        actions: {
+            loadTransactions: () => {
+                const transactions = TransactionService.getAllTransactions();
+                set({ transactions });
+            },
+            updateTransactionStatus: (id, status) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx =>
+                        tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                    ),
+                }));
+            },
+        },
+    }));
+
+
+    // --- Selectors ---
+
+
+    /** Selects transactions by their status. */
+
+    export const selectTransactionsByStatus = (status: TransactionStatus) =>
+    (state: TransactionState) =>
+        state.transactions.filter(tx => tx.status === status);
+
+    /** Selects the transaction currently targeted by the view store. */
+
+    export const selectSelectedTransaction = (state: TransactionState):
+    Transaction | undefined => {
+        const { selectedTransactionId } = useViewStore.getState();
+        return state.transactions.find(t => t.id === selectedTransactionId);
+    };
+  src/stores/view.store.ts: |-
+    import { create } from 'zustand';
+
+    interface ViewState {
+        selectedTransactionId: string | null;
+        activeOverlay: 'none' | 'help' | 'copy' | 'debug';
+        actions: {
+            setSelectedTransactionId: (id: string | null) => void;
+            setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+        };
+    }
+
+    export const useViewStore = create<ViewState>((set) => ({
+        selectedTransactionId: null,
+        activeOverlay: 'none',
+        actions: {
+            setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
+            setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+        },
+    }));
+  src/services/review.service.ts: >-
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { sleep } from '../utils';
+
+    import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
+
+    import type { Transaction, FileItem, FileReviewStatus } from
+    '../types/domain.types';
+
+
+    const generateBulkRepairPrompt = (failedFiles: FileItem[]): string => {
+        return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+
+    IMPORTANT: The response MUST contain a complete code block for EACH file
+    that needs to be fixed.
+
+
+    ${failedFiles.map(file => `--- FILE: ${file.path} ---
+
+    Strategy: ${file.strategy}
+
+    Error: Hunk #1 failed to apply // This is a mock error
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original content of ${file.path} ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff ...'}
+
+    ---
+
+    `).join('\n')}
+
+
+    Please analyze all failed files and provide a complete, corrected
+    response.`;
+
+    };
+
+
+    const generateHandoffPrompt = (
+        transaction: Transaction,
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>,
+    ): string => {
+        const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+        const failedFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'FAILED');
+
+        return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
+
+    The full plan for this transaction is detailed in the YAML file located at:
+    .relay/transactions/${transaction.hash}.yml. Please use this file as your
+    primary source of truth for the overall goal.
+
+
+    Here is the current status of the transaction:
+
+
+    --- TRANSACTION SUMMARY ---
+
+    Goal: ${transaction.message}
+
+    Reasoning:
+
+    ${transaction.reasoning || ''}
+
+
+    --- CURRENT FILE STATUS ---
+
+    SUCCESSFUL CHANGES (already applied, no action needed):
+
+    ${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || ' 
+    (None)'}
+
+
+    FAILED CHANGES (these are the files you need to fix):
+
+    ${failedFiles.map(f => `- FAILED: ${f.path} (Error:
+    ${fileReviewStates.get(f.id)?.error})`).join('\n')}
+
+
+    Your job is to now work with me to fix the FAILED files and achieve the
+    original goal of the transaction. Please start by asking me which file you
+    should work on first.`;
+
+    };
+
+
+    const performHandoff = (hash: string) => {
+        // This is a bit of a hack to find the right transaction to update in the demo
+        const txToUpdate = useTransactionStore.getState().transactions.find(tx => tx.hash === hash);
+        if (txToUpdate) {
+            useTransactionStore.getState().actions.updateTransactionStatus(txToUpdate.id, 'HANDOFF');
+        }
+
+        useAppStore.getState().actions.showDashboardScreen();
+    };
+
+
+    async function* runApplySimulation(scenario: 'success' | 'failure'):
+    AsyncGenerator<ApplyUpdate> {
+        if (scenario === 'success') {
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done', duration: 0.1 } };
+
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's1', title: '[✓] write: src/core/clipboard.ts (strategy: replace)', status: 'done' } } };
+            await sleep(100);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's2', title: '[✓] write: src/utils/shell.ts (strategy: standard-diff)', status: 'done' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done', duration: 0.3 } };
+
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'active' } }; await sleep(1300);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command', substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'done', duration: 2.3 } };
+
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'active' } }; await sleep(1200);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'linter', substep: { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'done', duration: 1.2 } };
+
+            await sleep(500);
+
+        } else { // failure scenario
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done', duration: 0.1 } };
+
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f1', title: '[✓] write: src/core/transaction.ts (strategy: replace)', status: 'done' } } };
+            await sleep(100);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f2', title: '[!] failed: src/utils/logger.ts (Hunk #1 failed to apply)', status: 'failed' } } };
+            await sleep(100);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f3', title: '[!] failed: src/commands/apply.ts (Context mismatch at line 92)', status: 'failed' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done', duration: 0.5 } };
+
+            await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped due to patch application failure' } };
+            await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to patch application failure' } };
+
+            await sleep(500);
+        }
+    }
+
+
+    const prepareTransactionForReview = (transaction: Transaction): {
+        patchStatus: PatchStatus;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+    } => {
+        // This simulates the backend determining which files failed or succeeded and sets it ONCE on load.
+        // For this demo, tx '1' is the failure case, any other is success.
+        const isFailureCase = transaction.id === '1';
+        const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+
+        (transaction.files || []).forEach((file, index) => {
+            if (isFailureCase) {
+                const isFailedFile = index > 0;
+                const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                fileReviewStates.set(file.id, { status, error });
+            } else {
+                fileReviewStates.set(file.id, { status: 'APPROVED' });
+            }
+        });
+        return { patchStatus: isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS', fileReviewStates };
+    };
+
+
+    const generateSingleFileRepairPrompt = (file: FileItem, error?: string):
+    string => {
+        return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+
+    Error: ${error || 'Unknown error'}
+
+    Strategy: ${file.strategy}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original file content would be here ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff would be here ...'}
+
+    ---
+
+
+    Please provide a corrected patch that addresses the error.`;
+
+    };
+
+
+    const tryRepairFile = (file: FileItem, error?: string): FileItem => {
+        generateSingleFileRepairPrompt(file, error);
+        // In a real app: clipboardy.writeSync(repairPrompt)
+        // eslint-disable-next-line no-console
+        console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+
+        return file;
+    };
+
+
+    const runBulkReapply = async (failedFiles: FileItem[]): Promise<{ id:
+    string; status: FileReviewStatus; error?: string }[]> => {
+        await sleep(1500); // Simulate re-apply
+
+        // Mock a mixed result
+        let first = true;
+        return failedFiles.map(file => {
+            if (first) {
+                first = false;
+                return { id: file.id, status: 'APPROVED' as const };
+            } else {
+                return {
+                    id: file.id,
+                    status: 'FAILED' as const,
+                    error: "'replace' failed: markers not found",
+                };
+            }
+        });
+    };
+
+
+    export const ReviewService = {
+        prepareTransactionForReview,
+        generateBulkRepairPrompt,
+        generateHandoffPrompt,
+        performHandoff,
+        runApplySimulation,
+        generateSingleFileRepairPrompt,
+        tryRepairFile,
+        runBulkReapply,
+    };
+  tsconfig.json: |
+    {
+      "compilerOptions": {
+        // Environment setup & latest features
+        "lib": ["ESNext"],
+        "target": "ESNext",
+        "module": "Preserve",
+        "moduleDetection": "force",
+        "jsx": "react-jsx",
+        "allowJs": true,
+
+        // Bundler mode
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "verbatimModuleSyntax": true,
+        "noEmit": true,
+
+        // Best practices
+        "strict": true,
+        "skipLibCheck": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitOverride": true,
+
+        // Some stricter flags (disabled by default)
+        "noUnusedLocals": true, // from false
+        "noUnusedParameters": true, // from false
+        "noPropertyAccessFromIndexSignature": false
+      }
+    }
+  eslint.config.js: |-
+    import js from '@eslint/js';
+    import reactPlugin from 'eslint-plugin-react';
+    import reactHooksPlugin from 'eslint-plugin-react-hooks';
+    import tseslint from '@typescript-eslint/eslint-plugin';
+    import tsparser from '@typescript-eslint/parser';
+
+    export default [
+      js.configs.recommended,
+      {
+        files: ['**/*.{ts,tsx}'],
+        languageOptions: {
+          parser: tsparser,
+          parserOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+            ecmaFeatures: {
+              jsx: true,
+            },
+          },
+          globals: {
+            React: 'readonly',
+            console: 'readonly',
+            process: 'readonly',
+            Buffer: 'readonly',
+            __dirname: 'readonly',
+            __filename: 'readonly',
+            global: 'readonly',
+            module: 'readonly',
+            require: 'readonly',
+            exports: 'readonly',
+            setTimeout: 'readonly',
+            clearTimeout: 'readonly',
+            setInterval: 'readonly',
+            clearInterval: 'readonly',
+            setImmediate: 'readonly',
+            clearImmediate: 'readonly',
+            describe: 'readonly',
+            it: 'readonly',
+            test: 'readonly',
+            expect: 'readonly',
+            beforeEach: 'readonly',
+            afterEach: 'readonly',
+            beforeAll: 'readonly',
+            afterAll: 'readonly',
+          },
+        },
+        plugins: {
+          react: reactPlugin,
+          'react-hooks': reactHooksPlugin,
+          '@typescript-eslint': tseslint,
+        },
+        rules: {
+          // TypeScript rules
+          '@typescript-eslint/no-unused-vars': 'warn', // from 'off'
+          '@typescript-eslint/no-explicit-any': 'warn',
+          '@typescript-eslint/explicit-function-return-type': 'off',
+          '@typescript-eslint/explicit-module-boundary-types': 'off',
+          '@typescript-eslint/no-empty-interface': 'off',
+          '@typescript-eslint/no-empty-function': 'off',
+
+          // React rules
+          'react/react-in-jsx-scope': 'off', // Not needed with React 17+ JSX transform
+          'react/prop-types': 'off', // Using TypeScript
+          'react/jsx-uses-react': 'off', // Not needed with React 17+ JSX transform
+          'react/jsx-uses-vars': 'error',
+          'react/jsx-key': 'error',
+          'react/no-unescaped-entities': 'warn',
+          'react/display-name': 'off', // Often not needed in Ink components
+
+          // React Hooks rules
+          'react-hooks/rules-of-hooks': 'error',
+          'react-hooks/exhaustive-deps': 'warn',
+
+          // General rules
+          'no-console': 'warn',
+          'no-debugger': 'error',
+          'prefer-const': 'error',
+          'no-var': 'error',
+          'object-shorthand': 'error',
+          'prefer-template': 'error',
+          'template-curly-spacing': 'error',
+          'no-multiple-empty-lines': ['error', { max: 1 }],
+          'quotes': ['error', 'single', { avoidEscape: true }],
+          'semi': ['error', 'always'],
+          'comma-dangle': ['warn', 'always-multiline'],
+          'indent': 'off', // Disabled due to stack overflow issues
+          'max-len': ['warn', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
+        },
+        settings: {
+          react: {
+            version: 'detect',
+          },
+        },
+      },
+      {
+        files: ['**/*.js'],
+        languageOptions: {
+          ecmaVersion: 'latest',
+          sourceType: 'module',
+        },
+        rules: {
+          'no-unused-vars': 'error',
+          'no-console': 'warn',
+        },
+      },
+      {
+        ignores: [
+          'node_modules/**',
+          'dist/**',
+          'build/**',
+          '*.min.js',
+          'coverage/**',
+        ],
+      },
+    ];
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 112

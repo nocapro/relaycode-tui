@@ -1,7 +1,6 @@
-import React from 'react';
 import { Box, Text } from 'ink';
 import Separator from './Separator';
-import { useDebugMenu, type MenuItem } from '../hooks/useDebugMenu';
+import { useDebugMenu } from '../hooks/useDebugMenu';
 import { useStdoutDimensions } from '../utils';
 
 const getKeyForIndex = (index: number): string => {

@@ -20,12 +20,12 @@ interface InitState {
     interactiveChoice: GitignoreChoice | null;
 
     actions: {
-        setPhase: (_phase: InitPhase) => void;
+        setPhase: (phase: InitPhase) => void;
         setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
-        updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
-        setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
-        updateConfigureTask: (_id: string, _status: TaskStatus) => void;
-        setInteractiveChoice: (_choice: GitignoreChoice) => void;
+        updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+        setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
+        updateConfigureTask: (id: string, status: TaskStatus) => void;
+        setInteractiveChoice: (choice: GitignoreChoice) => void;
         resetInit: () => void;
     };
 }

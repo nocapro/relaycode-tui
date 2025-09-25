@@ -1,4 +1,3 @@
-import React from 'react';
 import { render } from 'ink';
 import App from './src/App';
 import { useAppStore } from './src/stores/app.store';

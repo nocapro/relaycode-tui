@@ -1,5 +1,4 @@
-import React, { useEffect } from 'react';
-import { Box, useInput } from 'ink';
+import { Box } from 'ink';
 import { useAppStore } from './stores/app.store';
 import SplashScreen from './components/SplashScreen';
 import InitializationScreen from './components/InitializationScreen';

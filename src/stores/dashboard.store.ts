@@ -42,13 +42,11 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         })),
         cancelAction: () => set(state => ({ status: state.previousStatus })),
         setStatus: (status) => set({ status }),
-        confirmAction: async () => {
-            const { status, previousStatus } = get();
-            if (status === 'CONFIRM_APPROVE') {
-                set({ status: 'APPROVING' });
-                await DashboardService.approveAll();
-                set({ status: previousStatus });
-            }
+        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+            const previousStatus = get().previousStatus;
+            set({ status: 'APPROVING' });
+            await DashboardService.approveAll();
+            set({ status: previousStatus });
         },
     },
 }));

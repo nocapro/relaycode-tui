@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useInput } from 'ink';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
@@ -8,10 +7,8 @@ import { useReviewStore } from '../stores/review.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useHistoryStore } from '../stores/history.store';
 import { useViewport } from './useViewport';
-import { VIEW_CONSTANTS } from '../constants/view.constants';
 
-export const useDashboardScreen = () => {
-    const NON_EVENT_STREAM_HEIGHT = VIEW_CONSTANTS.DASHBOARD_NON_EVENT_STREAM_HEIGHT;
+export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) => {
     const {
         status,
         selectedTransactionIndex,
@@ -22,7 +19,7 @@ export const useDashboardScreen = () => {
 
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex: selectedTransactionIndex,
-        padding: NON_EVENT_STREAM_HEIGHT,
+        reservedRows,
     });
 
     const {

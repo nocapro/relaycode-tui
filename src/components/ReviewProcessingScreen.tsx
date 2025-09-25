@@ -1,4 +1,3 @@
-import React from 'react';
 import { Box, Text } from 'ink';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useViewStore } from '../stores/view.store';

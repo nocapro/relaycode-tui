@@ -3,6 +3,7 @@ import { useTransactionStore } from './transaction.store';
 import { useViewStore } from './view.store';
 import { TransactionService } from '../services/transaction.service';
 import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from '../constants/detail.constants';
+import { findNextPath, findPrevPath, getParentPath } from './navigation.utils';
 
 type ObjectValues<T> = T[keyof T];
 
@@ -54,18 +55,12 @@ export const useDetailStore = create<DetailState>((set, get) => ({
         navigateUp: () => {
             const { expandedItemPaths, focusedItemPath } = get();
             const visibleItems = getVisibleItemPaths(expandedItemPaths);
-            const currentIndex = visibleItems.indexOf(focusedItemPath);
-            if (currentIndex > 0) {
-                set({ focusedItemPath: visibleItems[currentIndex - 1]! });
-            }
+            set({ focusedItemPath: findPrevPath(focusedItemPath, visibleItems) });
         },
         navigateDown: () => {
             const { expandedItemPaths, focusedItemPath } = get();
             const visibleItems = getVisibleItemPaths(expandedItemPaths);
-            const currentIndex = visibleItems.indexOf(focusedItemPath);
-            if (currentIndex < visibleItems.length - 1) {
-                set({ focusedItemPath: visibleItems[currentIndex + 1]! });
-            }
+            set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
         },
         expandOrDrillDown: () => set(state => {
             const { focusedItemPath, expandedItemPaths } = state;
@@ -103,7 +98,7 @@ export const useDetailStore = create<DetailState>((set, get) => ({
                 return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
             }
 
-            if (focusedItemPath.includes('/')) { // Is a file
+            if (getParentPath(focusedItemPath)) { // Is a file
                 return { focusedItemPath: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
             }
             

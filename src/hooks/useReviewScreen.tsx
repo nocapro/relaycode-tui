@@ -1,23 +1,20 @@
 import { useMemo } from 'react';
-import { useInput, useApp, type Key } from 'ink';
+import { useInput, type Key } from 'ink';
 import { useReviewStore } from '../stores/review.store';
-import { useViewStore } from '../stores/view.store';
 import { useAppStore } from '../stores/app.store';
 import { useCopyStore } from '../stores/copy.store';
-import { useTransactionStore } from '../stores/transaction.store';
+import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
 
 export const useReviewScreen = () => {
-    const { exit } = useApp();
     const store = useReviewStore();
-    const transactionId = useViewStore(s => s.selectedTransactionId);
     const {
         selectedItemIndex,
         bodyView,
         patchStatus,
     } = store;
 
-    const transaction = useTransactionStore(state => state.transactions.find(t => t.id === transactionId));
+    const transaction = useTransactionStore(selectSelectedTransaction);
     const { showDashboardScreen } = useAppStore(s => s.actions);
 
     // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
@@ -124,7 +121,7 @@ export const useReviewScreen = () => {
     const handleMainNavigationInput = (input: string, key: Key): void => {
         // Handle Shift+R for reject all
         if (key.shift && input.toLowerCase() === 'r') {
-            if (approvedFilesCount > 0 && transactionId) {
+            if (approvedFilesCount > 0 && transaction) {
                 rejectAllFiles();
             }
             return;

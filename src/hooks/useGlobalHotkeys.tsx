@@ -1,14 +1,14 @@
 import { useApp, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
-import { MAIN_SCREENS_FOR_QUIT, SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
+import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
 
 export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
     const { exit } = useApp();
     const { currentScreen } = useAppStore(s => ({
         currentScreen: s.currentScreen,
     }));
-    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const { navigateBack } = useAppStore(s => s.actions);
     const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
         activeOverlay: s.activeOverlay,
         setActiveOverlay: s.actions.setActiveOverlay,
@@ -46,11 +46,10 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
         if (input.toLowerCase() === 'q') {
             if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
                 exit();
-            } else if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
-                showDashboardScreen();
             }
-        } else if (key.escape && (SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
-            showDashboardScreen();
+            navigateBack();
+        } else if (key.escape) {
+            navigateBack();
         }
     }, { isActive });
 };

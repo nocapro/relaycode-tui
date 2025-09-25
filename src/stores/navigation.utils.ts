@@ -11,6 +11,24 @@ export const moveIndex = (
     return Math.min(listSize - 1, currentIndex + 1);
 };
 
+export const findNextPath = (currentPath: string, visiblePaths: string[]): string => {
+    const currentIndex = visiblePaths.indexOf(currentPath);
+    if (currentIndex < visiblePaths.length - 1) {
+        return visiblePaths[currentIndex + 1]!;
+    }
+    return currentPath;
+};
+
+export const findPrevPath = (currentPath: string, visiblePaths: string[]): string => {
+    const currentIndex = visiblePaths.indexOf(currentPath);
+    if (currentIndex > 0) {
+        return visiblePaths[currentIndex - 1]!;
+    }
+    return currentPath;
+};
+
+export const getParentPath = (path: string): string | null => path.includes('/') ? path.split('/')[0]! : null;
+
 export const getVisibleItemPaths = (
     transactions: Transaction[],
     expandedIds: Set<string>,

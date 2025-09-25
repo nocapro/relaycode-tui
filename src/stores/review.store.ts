@@ -36,9 +36,10 @@ interface ReviewState {
         moveSelectionUp: () => void;
         moveSelectionDown: () => void;
         expandDiff: () => void;
-        toggleBodyView: (
-            view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>
-        ) => void;
+        toggleBodyView: (view: Extract<
+            ReviewBodyView,
+            'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+        >) => void;
         setBodyView: (view: ReviewBodyView) => void;
         approve: () => void;
         startApplySimulation: (scenario: 'success' | 'failure') => void;
@@ -121,7 +122,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             }
         },
         startApplySimulation: async (scenario) => {
-            const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            const { showReviewProcessingScreen } = useAppStore.getState().actions;
             const { updateApplyStep, addApplySubstep } = get().actions;
             set({ applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)) });
             showReviewProcessingScreen();
@@ -138,7 +139,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                     addApplySubstep(update.payload.parentId, update.payload.substep);
                 }
             }
-            showReviewScreen();
+            // Transition back to review screen is handled by the processing screen component or a separate flow
+            // For this simulation, we'll assume it transitions back, but the action itself doesn't need to do it.
+            // This avoids a direct dependency from the store to app-level navigation.
         },
         tryRepairFile: () => {
             const selectedTransactionId = useViewStore.getState().selectedTransactionId;

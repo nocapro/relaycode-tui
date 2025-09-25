@@ -9,7 +9,7 @@ export const useGitCommitScreen = () => {
     const { commit } = useCommitStore(s => s.actions);
     const { showDashboardScreen } = useAppStore(s => s.actions);
 
-    useInput((input, key) => {
+    useInput((_, key) => {
         if (isCommitting) return;
 
         if (key.return) {

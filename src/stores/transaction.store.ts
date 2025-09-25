@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { TransactionService } from '../services/transaction.service';
-import type { Transaction, TransactionStatus, FileReviewStatus } from '../types/domain.types';
+import { useViewStore } from './view.store';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
 
 export type { Transaction };
 
@@ -12,7 +13,7 @@ interface TransactionState {
     };
 }
 
-export const useTransactionStore = create<TransactionState>((set, get) => ({
+export const useTransactionStore = create<TransactionState>((set) => ({
     transactions: [],
     actions: {
         loadTransactions: () => {
@@ -35,12 +36,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 export const selectTransactionsByStatus = (status: TransactionStatus) => (state: TransactionState) =>
     state.transactions.filter(tx => tx.status === status);
 
-/** Selects statistics for the review screen for a given transaction. */
-export const selectReviewStats = (transactionId: string | null) => (state: TransactionState) => {
-    // This selector is now dependent on the review store.
-    // It's better to compute these stats inside the useReviewScreen hook
-    // where both transaction data and review state are available.
-    // We will select the transaction here and the hook will do the rest.
-    const transaction = state.transactions.find(t => t.id === transactionId);
-    return { transaction };
+/** Selects the transaction currently targeted by the view store. */
+export const selectSelectedTransaction = (state: TransactionState): Transaction | undefined => {
+    const { selectedTransactionId } = useViewStore.getState();
+    return state.transactions.find(t => t.id === selectedTransactionId);
 };

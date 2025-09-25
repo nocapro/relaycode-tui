@@ -29,7 +29,9 @@ Please analyze all failed files and provide a complete, corrected response.`;
 
 const generateHandoffPrompt = (
     transaction: Transaction,
-    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>,
+    fileReviewStates: Map<
+        string, { status: FileReviewStatus; error?: string }
+    >,
 ): string => {
     const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
     const failedFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'FAILED');
@@ -107,7 +109,9 @@ async function* runApplySimulation(scenario: 'success' | 'failure'): AsyncGenera
     }
 }
 
-const prepareTransactionForReview = (transaction: Transaction): {
+const prepareTransactionForReview = (
+    transaction: Transaction,
+): {
     patchStatus: PatchStatus;
     fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
 } => {
@@ -149,7 +153,7 @@ Please provide a corrected patch that addresses the error.`;
 };
 
 const tryRepairFile = (file: FileItem, error?: string): FileItem => {
-    const repairPrompt = generateSingleFileRepairPrompt(file, error);
+    generateSingleFileRepairPrompt(file, error);
     // In a real app: clipboardy.writeSync(repairPrompt)
     // eslint-disable-next-line no-console
     console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);

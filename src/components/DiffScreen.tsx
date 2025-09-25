@@ -1,6 +1,5 @@
-import React from 'react';
 import { Box, Text } from 'ink';
-import { VIEW_CONSTANTS } from '../constants/view.constants';
+import { UI_CONFIG } from '../config/ui.config';
 
 interface DiffScreenProps {
     filePath: string;
@@ -9,8 +8,8 @@ interface DiffScreenProps {
 }
 const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
     const lines = diffContent.split('\n');
-    const COLLAPSE_THRESHOLD = VIEW_CONSTANTS.DIFF_COLLAPSE_THRESHOLD;
-    const COLLAPSE_SHOW_LINES = VIEW_CONSTANTS.DIFF_COLLAPSE_SHOW_LINES;
+    const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
+    const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
 
     const renderContent = () => {
         if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Text, useApp, useInput } from 'ink';
 import { useInitStore } from '../stores/init.store';
 import { useAppStore } from '../stores/app.store';

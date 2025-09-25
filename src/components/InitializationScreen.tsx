@@ -1,4 +1,3 @@
-import React from 'react';
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import type { Task } from '../stores/init.store';

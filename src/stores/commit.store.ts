@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { Transaction } from '../types/domain.types';
 import { CommitService } from '../services/commit.service';
 import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
 
@@ -12,7 +11,7 @@ interface CommitState {
     }
 }
 
-export const useCommitStore = create<CommitState>((set, get) => ({
+export const useCommitStore = create<CommitState>((set) => ({
     finalCommitMessage: '',
     isCommitting: false,
     actions: {
