@@ -36,9 +36,14 @@ export const getVisibleItemPaths = (
     const paths: string[] = [];
     for (const tx of transactions) {
         paths.push(tx.id);
-        if (expandedIds.has(tx.id) && tx.files) {
-            for (const file of tx.files) {
-                paths.push(`${tx.id}/${file.id}`);
+        if (expandedIds.has(tx.id)) {
+            paths.push(`${tx.id}/message`);
+            paths.push(`${tx.id}/prompt`);
+            paths.push(`${tx.id}/reasoning`);
+            if (tx.files) {
+                for (const file of tx.files) {
+                    paths.push(`${tx.id}/file/${file.id}`);
+                }
             }
         }
     }

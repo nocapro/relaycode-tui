@@ -161,7 +161,9 @@ const tryRepairFile = (file: FileItem, error?: string): FileItem => {
     return file;
 };
 
-const runBulkReapply = async (failedFiles: FileItem[]): Promise<{ id: string; status: FileReviewStatus; error?: string }[]> => {
+const runBulkReapply = async (
+    failedFiles: FileItem[],
+): Promise<{ id: string; status: FileReviewStatus; error?: string }[]> => {
     await sleep(1500); // Simulate re-apply
 
     // Mock a mixed result

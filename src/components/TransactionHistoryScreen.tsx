@@ -1,11 +1,36 @@
+import { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
 import { UI_CONFIG } from '../config/ui.config';
 
 // --- Sub-components ---
+
+const ContentRow = ({ title, content, isSelected, isExpanded, isLoading }: {
+    title: string;
+    content: string;
+    isSelected: boolean;
+    isExpanded: boolean;
+    isLoading: boolean;
+}) => {
+    const icon = isExpanded ? '▾' : '▸';
+    return (
+        <Box flexDirection="column" paddingLeft={6}>
+            <Text color={isSelected ? 'cyan' : undefined}>
+                {isSelected ? '> ' : '  '}{icon} {title}
+            </Text>
+            {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+            {isExpanded && !isLoading && (
+                <Box paddingLeft={8} flexDirection="column">
+                    {(content || '').split('\n').map((line, i) => <Text key={i}>{line || ' '}</Text>)}
+                </Box>
+            )}
+        </Box>
+    );
+};
 
 const DiffPreview = ({ diff }: { diff: string }) => {
     const lines = diff.split('\n');
@@ -26,7 +51,12 @@ const DiffPreview = ({ diff }: { diff: string }) => {
     );
 };
 
-const FileRow = ({ file, isSelected, isExpanded }: { file: FileItem, isSelected: boolean, isExpanded: boolean }) => {
+const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
+    file: FileItem;
+    isSelected: boolean;
+    isExpanded: boolean;
+    isLoading: boolean;
+}) => {
     const icon = isExpanded ? '▾' : '▸';
     const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
     
@@ -36,7 +66,8 @@ const FileRow = ({ file, isSelected, isExpanded }: { file: FileItem, isSelected:
                 {isSelected ? '> ' : '  '}
                 {icon} {typeMap[file.type]} {file.path}
             </Text>
-            {isExpanded && <DiffPreview diff={file.diff} />}
+            {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+            {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
         </Box>
     );
 };
@@ -46,20 +77,25 @@ const TransactionRow = ({
     isSelected,
     isExpanded,
     isSelectedForAction,
+    hasSelection,
 }: {
-    tx: Transaction,
-    isSelected: boolean,
-    isExpanded: boolean,
-    isSelectedForAction: boolean,
+    tx: Transaction;
+    isSelected: boolean;
+    isExpanded: boolean;
+    isSelectedForAction: boolean;
+    hasSelection: boolean;
 }) => {
     const icon = isExpanded ? '▾' : '▸';
     const statusMap = {
         COMMITTED: <Text color="green">✓ Committed</Text>,
         HANDOFF: <Text color="magenta">→ Handoff</Text>,
         REVERTED: <Text color="gray">↩ Reverted</Text>,
+        APPLIED: <Text color="blue">✓ Applied</Text>,
+        PENDING: <Text color="yellow">? Pending</Text>,
+        FAILED: <Text color="red">✗ Failed</Text>,
     };
     const date = new Date(tx.timestamp).toISOString().split('T')[0];
-    const selectionIndicator = isSelectedForAction ? '[x]' : '[ ]';
+    const selectionIndicator = isSelectedForAction ? '[x] ' : '[ ] ';
     
     const statusDisplay = statusMap[tx.status as keyof typeof statusMap] || tx.status;
 
@@ -67,7 +103,8 @@ const TransactionRow = ({
         <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
             <Text color={isSelected ? 'cyan' : undefined}>
                 {isSelected ? '> ' : '  '}
-                {selectionIndicator} {icon} {statusDisplay} · {tx.hash} · {date} ·{' '}
+                {hasSelection && selectionIndicator}
+                {icon} {statusDisplay} · {tx.hash} · {date} ·{' '}
                 {tx.message}
             </Text>
             {isExpanded && (
@@ -108,12 +145,17 @@ const TransactionHistoryScreen = () => {
         selectedForAction,
         selectedItemPath,
         expandedIds,
+        loadingPaths,
         actions,
         transactions,
-        pathsInViewSet,
+        itemsInView,
         filterStatus,
         showingStatus,
+        statsStatus,
+        hasSelection,
     } = useTransactionHistoryScreen({ reservedRows: UI_CONFIG.history.reservedRows });
+
+    const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
 
     const renderFooter = () => {
         if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
@@ -138,44 +180,67 @@ const TransactionHistoryScreen = () => {
                 ) : (
                     <Text>{filterStatus}</Text>
                 )}
-                <Text> · {showingStatus} ({transactions.length} txns)</Text>
+                <Text> · {showingStatus}</Text>
+                {statsStatus && <Text> · {statsStatus}</Text>}
             </Box>
 
             <Box flexDirection="column" marginY={1}>
                 {mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
 
-                {mode === 'LIST' && transactions.map((tx: Transaction) => {
-                    const isTxSelected = selectedItemPath.startsWith(tx.id);
-                    const isTxExpanded = expandedIds.has(tx.id);
-                    const isSelectedForAction = selectedForAction.has(tx.id);
+                {mode === 'LIST' && itemsInView.map(path => {
+                    const txId = path.split('/')[0]!;
+                    const tx = transactionsById.get(txId);
+                    if (!tx) return <Text key={path}>Error: Missing TX {txId}</Text>;
 
-                    const showTxRow = pathsInViewSet.has(tx.id);
+                    // Is a transaction row
+                    if (path === tx.id) {
+                        return (
+                            <TransactionRow
+                                key={path}
+                                tx={tx}
+                                isSelected={selectedItemPath === path}
+                                isExpanded={expandedIds.has(path)}
+                                isSelectedForAction={selectedForAction.has(tx.id)}
+                                hasSelection={hasSelection}
+                            />
+                        );
+                    }
+
+                    // Is a child row
+                    const itemType = path.split('/')[1]!;
+                    const isSelected = selectedItemPath === path;
+                    const isExpanded = expandedIds.has(path);
+                    const isLoading = loadingPaths.has(path);
+
+                    if (itemType === 'file') {
+                        const fileId = path.split('/')[2]!;
+                        const file = tx.files?.find(f => f.id === fileId);
+                        if (!file) return null;
+                        return (
+                            <FileRow
+                                key={path} file={file} isSelected={isSelected}
+                                isExpanded={isExpanded} isLoading={isLoading}
+                            />
+                        );
+                    }
+
+                    const contentMap = {
+                        message: { title: 'Commit Message', content: tx.message || '' },
+                        prompt: { title: 'Prompt', content: tx.prompt || '' },
+                        reasoning: { title: 'Reasoning', content: tx.reasoning || '' },
+                    };
+
+                    const item = contentMap[itemType as keyof typeof contentMap];
+                    if (!item) return null;
 
                     return (
-                        <Box flexDirection="column" key={tx.id}>
-                            {showTxRow && (
-                                <TransactionRow
-                                    tx={tx}
-                                    isSelected={isTxSelected && !selectedItemPath.includes('/')}
-                                    isExpanded={isTxExpanded}
-                                    isSelectedForAction={isSelectedForAction}
-                                />
-                            )}
-                            {isTxExpanded && tx.files?.map((file: FileItem) => {
-                                if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
-                                const filePath = `${tx.id}/${file.id}`;
-                                const isFileSelected = selectedItemPath === filePath;
-                                const isFileExpanded = expandedIds.has(filePath);
-                                return (
-                                    <FileRow
-                                        key={file.id}
-                                        file={file}
-                                        isSelected={isFileSelected}
-                                        isExpanded={isFileExpanded}
-                                    />
-                                );
-                            })}
-                        </Box>
+                        <ContentRow
+                            key={path}
+                            {...item}
+                            isSelected={isSelected}
+                            isExpanded={isExpanded}
+                            isLoading={isLoading}
+                        />
                     );
                 })}
             </Box>

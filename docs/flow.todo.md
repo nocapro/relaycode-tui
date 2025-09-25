@@ -75,9 +75,9 @@ update review screen
 
 - add arrow down up navigation for bulk repair action option item
 
-===
+=== DONE
 
-update transaction history screen
+1. update transaction history screen
 
 - should also can drilling prompt, reasoning, full commit message
 
@@ -88,7 +88,13 @@ update transaction history screen
 
 - we need loading indicator spinner while user drilling loads something like load diffs etc
 
-===
+
+3. dont forget to add to debug menu for any new screen state
+
+4. dont forget to update readme if you have updated design
+
+
+=== DONE
 
 - should streamline the esc and quit behaviour accross screen for consistency
 

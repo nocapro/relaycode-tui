@@ -25,7 +25,7 @@ Upon launching `relay log`, the user is presented with a clean, compact, and rev
 ```
  ▲ relaycode transaction history
  ──────────────────────────────────────────────────────────────────────────────
-  Filter: (none) · Showing 1-10 of 42 transactions
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
 
  > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
    ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
@@ -38,42 +38,67 @@ Upon launching `relay log`, the user is presented with a clean, compact, and rev
  (↑↓) Nav · (→) Expand · (Spc) Select · (Ent) Details · (F)ilter · (C)opy · (B)ulk
 ```
 
-#### **State 2.2: Level 1 Drill-Down - The File List**
+#### **State 2.2: Level 1 Drill-Down - The Content Overview**
 
-Pressing `(→)` on the selected transaction expands it in-place, revealing key statistics and a list of all files that were modified. The icon changes to `▾` and the footer updates to include the `(←) Collapse` action.
+Pressing `(→)` on the selected transaction expands it in-place, revealing its core components: Commit Message, Prompt, Reasoning, and Files. The icon changes to `▾` and the footer updates to include the `(←) Collapse` action.
 
 ```
  ▲ relaycode transaction history
  ──────────────────────────────────────────────────────────────────────────────
-  Filter: (none) · Showing 1-10 of 42 transactions
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
 
  > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
-       Stats: 3 Files · +25 lines, -8 lines
-       Files:
-         ▸ [MOD] src/core/transaction.ts
-         ▸ [MOD] src/utils/logger.ts
-         ▸ [DEL] src/utils/old-helper.ts
+       ▸ Commit Message
+       ▸ Prompt
+       ▸ Reasoning
+       ▸ Files (3)
 
    ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
    ▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI
    ...
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (←) Collapse · (→) Expand Files · (Ent) Details · (F)ilter · (C)opy
+ (↑↓) Nav · (←) Collapse · (→) Expand · (Ent) Details · (F)ilter · (C)opy
 ```
 
-#### **State 2.3: Level 2 Drill-Down - The In-place Diff Preview**
+#### **State 2.3: Level 2 Drill-Down - In-place Content Preview**
 
-With the transaction expanded, the user can navigate `(↓)` to a specific file and press `(→)` again. This performs a second-level expansion, showing a truncated preview of that file's diff directly within the list.
+With the transaction expanded, the user can navigate `(↓)` to a content item like `Reasoning` and press `(→)` again. This performs a second-level expansion, showing the full text content directly within the list.
 
 ```
  ▲ relaycode transaction history
  ──────────────────────────────────────────────────────────────────────────────
-  Filter: (none) · Showing 1-10 of 42 transactions
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
 
  > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
-       Stats: 3 Files · +25 lines, -8 lines
-       Files:
+       ▸ Commit Message
+       ▸ Prompt
+       ▾ Reasoning
+           1. Identified a potential uncaught exception in the `restoreSnapshot`
+              function if a file operation fails midway through a loop...
+           2. Wrapped the file restoration loop in a `Promise.all` for
+              robustness and comprehensive error collection.
+       ▸ Files (3)
+
+   ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+   ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (←→) Collapse/Expand · (Ent) Details · (F)ilter · (C)opy
+```
+
+#### **State 2.4: Level 3 Drill-Down - The In-place Diff Preview**
+
+By navigating to and expanding the `Files` item, the user can then select a specific file and press `(→)` again. This performs a third-level expansion, showing a truncated preview of that file's diff directly within the list.
+
+```
+ ▲ relaycode transaction history
+ ──────────────────────────────────────────────────────────────────────────────
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+ > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+       ...
+       ▾ Files (3)
          ▾ [MOD] src/core/transaction.ts
                --- a/src/core/transaction.ts
                +++ b/src/core/transaction.ts
@@ -95,7 +120,7 @@ With the transaction expanded, the user can navigate `(↓)` to a specific file 
 *(Page Break)*
 ---
 
-#### **State 2.4: Filtering Mode - Querying the History**
+#### **State 2.5: Filtering Mode - Querying the History**
 
 From any browsing state, pressing `(F)` shifts focus to the filter bar. The transaction list updates in real-time as the user constructs their query. The footer shows context-specific actions.
 
@@ -116,7 +141,7 @@ After pressing `(Enter)`, the filter is applied, the status bar is updated, and 
 ```
  ▲ relaycode transaction history
  ──────────────────────────────────────────────────────────────────────────────
-  Filter: logger.ts status:committed · Showing 2 of 42 transactions
+  Filter: logger.ts status:committed · Showing 2 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
 
  > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
    ▸ ✓ Committed · 1a2b3c4d · 2023-10-22 · feat: introduce structured logging
@@ -124,7 +149,7 @@ After pressing `(Enter)`, the filter is applied, the status bar is updated, and 
  (↑↓) Nav · (→) Expand · (Ent) Details · (F)ilter · (C)opy · (B)ulk Actions
 ```
 
-#### **State 2.5: Advanced Copy Mode - Aggregating Data for Export**
+#### **State 2.6: Advanced Copy Mode - Aggregating Data for Export**
 
 After selecting one or more transactions with `(Space)`, pressing `(C)` transforms the entire screen into a powerful, two-panel data aggregation tool. The user can select multiple transactions *and* multiple data fields to create a custom report.
 
@@ -174,7 +199,7 @@ feat: implement new dashboard UI
 2. Designed a high-density layout to show system status and recent history.
 ```
 
-#### **State 2.6: Bulk Actions Mode - Managing History**
+#### **State 2.7: Bulk Actions Mode - Managing History**
 
 Multi-selecting items with `(Space)` and then pressing `(B)` brings up a modal for performing operations on the entire selection. This is for powerful, state-changing actions.
 

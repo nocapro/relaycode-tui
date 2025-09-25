@@ -5,12 +5,13 @@ import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
+import type { TransactionStatus } from '../types/domain.types';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
 import { useViewport } from './useViewport';
 
 export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: number }) => {
     const store = useHistoryStore();
-    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, actions } = store;
+    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
     const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
     const transactions = useTransactionStore(s => s.transactions);
 
@@ -95,6 +96,25 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
     const filterStatusText = filterQuery ? filterQuery : '(none)';
     const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
     
+    const hasSelection = selectedForAction.size > 0;
+
+    const statsStatus = useMemo(() => {
+        const stats = transactions.reduce((acc, tx) => {
+            acc[tx.status] = (acc[tx.status] || 0) + 1;
+            return acc;
+        }, {} as Record<TransactionStatus, number>);
+        
+        const parts = [];
+        if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
+        if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
+        if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
+        if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
+        if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
+        if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
+
+        return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
+    }, [transactions]);
+
     return {
         mode,
         filterQuery,
@@ -105,10 +125,13 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
         transactions,
         viewOffset,
         itemsInView,
+        loadingPaths,
         transactionsInView,
         pathsInViewSet,
         filterStatus: filterStatusText,
         showingStatus: showingStatusText,
+        statsStatus,
+        hasSelection,
         visibleItemPaths,
     };
 };

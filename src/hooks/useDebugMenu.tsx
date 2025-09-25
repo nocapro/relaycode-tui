@@ -165,16 +165,23 @@ const useDebugMenuActions = () => {
             },
         },
         {
-            title: 'History: L1 Drilldown',
+            title: 'History: L1 Drilldown (Content)',
             action: () => {
-                historyActions.prepareDebugState('l1-drill');
+                historyActions.prepareDebugState('l1-drill-content');
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
-            title: 'History: L2 Drilldown (Diff)',
+            title: 'History: L2 Drilldown (Reasoning)',
             action: () => {
-                historyActions.prepareDebugState('l2-drill');
+                historyActions.prepareDebugState('l2-drill-reasoning');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: L2 Drilldown (File Diff)',
+            action: () => {
+                historyActions.prepareDebugState('l2-drill-diff');
                 appActions.showTransactionHistoryScreen();
             },
         },

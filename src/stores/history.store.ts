@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
 import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath } from './navigation.utils';
+import { sleep } from '../utils';
 
 export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
  
@@ -11,19 +12,20 @@ interface HistoryState {
     mode: HistoryViewMode;
     selectedItemPath: string;
     expandedIds: Set<string>;
+    loadingPaths: Set<string>;
     filterQuery: string;
     selectedForAction: Set<string>;
     actions: {
         load: (initialState?: Partial<HistoryStateData>) => void;
         navigateDown: () => void;
         navigateUp: () => void;
-        expandOrDrillDown: () => void;
+        expandOrDrillDown: () => Promise<void>;
         collapseOrBubbleUp: () => void;
         toggleSelection: () => void;
         setMode: (mode: HistoryViewMode) => void;
         setFilterQuery: (query: string) => void;
         applyFilter: () => void;
-        prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+        prepareDebugState: (stateName: 'l1-drill-content' | 'l2-drill-reasoning' | 'l2-drill-diff' | 'filter' | 'copy' | 'bulk') => void;
     };
 }
 
@@ -31,6 +33,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     mode: 'LIST',
     selectedItemPath: '',
     expandedIds: new Set(),
+    loadingPaths: new Set(),
     filterQuery: '',
     selectedForAction: new Set(),
     actions: {
@@ -40,6 +43,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                 selectedItemPath: transactions[0]?.id || '',
                 mode: 'LIST',
                 expandedIds: new Set(),
+                loadingPaths: new Set(),
                 selectedForAction: new Set(),
                 filterQuery: '',
                 ...initialState,
@@ -57,19 +61,34 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
             set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
         },
-        expandOrDrillDown: () => set(state => {
-            const { selectedItemPath, expandedIds } = state;
-            const newExpandedIds = new Set(expandedIds);
-            if (!newExpandedIds.has(selectedItemPath)) {
-                newExpandedIds.add(selectedItemPath);
+        expandOrDrillDown: async () => {
+            const { selectedItemPath, expandedIds } = get();
+            if (expandedIds.has(selectedItemPath)) return;
+
+            // Files and content items with potentially large data can show a loading state
+            const isLoadable = selectedItemPath.includes('/file/') ||
+                               selectedItemPath.includes('/prompt') ||
+                               selectedItemPath.includes('/reasoning');
+
+            if (isLoadable) {
+                set(state => ({ loadingPaths: new Set(state.loadingPaths).add(selectedItemPath) }));
+                await sleep(250); // Simulate loading
+                set(state => {
+                    const newLoadingPaths = new Set(state.loadingPaths);
+                    newLoadingPaths.delete(selectedItemPath);
+                    const newExpandedIds = new Set(state.expandedIds).add(selectedItemPath);
+                    return { loadingPaths: newLoadingPaths, expandedIds: newExpandedIds };
+                });
+            } else { // For transactions or simple items, expand immediately
+                set(state => ({ expandedIds: new Set(state.expandedIds).add(selectedItemPath) }));
             }
-            return { expandedIds: newExpandedIds };
-        }),
+        },
         collapseOrBubbleUp: () => set(state => {
             const { selectedItemPath, expandedIds } = state;
             const newExpandedIds = new Set(expandedIds);
             if (newExpandedIds.has(selectedItemPath)) {
                 newExpandedIds.delete(selectedItemPath);
+                // Recursively collapse children
                 for (const id of newExpandedIds) {
                     if (id.startsWith(`${selectedItemPath}/`)) {
                         newExpandedIds.delete(id);
@@ -79,13 +98,13 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             }
             const parentId = getParentPath(selectedItemPath);
             if (parentId) {
-                return { selectedItemPath: parentId || '' };
+                return { selectedItemPath: parentId };
             }
             return {};
         }),
         toggleSelection: () => set(state => {
             const { selectedItemPath, selectedForAction } = state;
-            const txId = selectedItemPath.split('/')[0];
+            const txId = getParentPath(selectedItemPath) || selectedItemPath;
             if (!txId) return {};
             const newSelection = new Set(selectedForAction);
             if (newSelection.has(txId)) {
@@ -103,11 +122,14 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         prepareDebugState: (stateName) => {
             const { actions } = get();
             switch (stateName) {
-                case 'l1-drill':
+                case 'l1-drill-content':
                     actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
                     break;
-                case 'l2-drill':
-                    actions.load({ expandedIds: new Set(['3', '3/3-1']), selectedItemPath: '3/3-1' });
+                case 'l2-drill-reasoning':
+                    actions.load({ expandedIds: new Set(['3', '3/reasoning']), selectedItemPath: '3/reasoning' });
+                    break;
+                case 'l2-drill-diff':
+                    actions.load({ expandedIds: new Set(['3', '3/file/3-1']), selectedItemPath: '3/file/3-1' });
                     break;
                 case 'filter':
                     actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:COMMITTED' });

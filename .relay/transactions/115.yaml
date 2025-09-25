@@ -1,0 +1,1194 @@
+uuid: f191ddc2-4a0b-478e-af85-d621b19a7122
+projectId: relaycode-tui
+createdAt: '2025-09-25T03:03:07.049Z'
+gitCommitMsg: >-
+  docs(history): Update docs and debug menu for hierarchical view
+
+
+  Aligns the project's documentation and developer debug tooling with the new
+  hierarchical transaction history screen.
+
+
+  - Updates `transaction-history-screen.readme.md` with new screenshots,
+  interaction flows, and descriptions for multi-level content drilldown. - Adds
+  new states to the debug menu for quickly accessing different drilldown levels
+  (e.g., content view, reasoning view, file diff view). - Enhances the history
+  store's `prepareDebugState` to support these new developer scenarios.
+promptSummary: >-
+  Update documentation and debug menu to align with the new, hierarchical
+  transaction history screen. This includes adding new debug states, enhancing
+  the debug menu with more specific options for different drilldown levels, and
+  overhauling the README to accurately reflect the updated UI and interaction
+  model.
+reasoning:
+  - >-
+    Excellent, I will now execute Part 3 of the plan, which aligns the
+    documentation and developer debug menu with the new hierarchical interface.
+  - >-
+    First, I'll update the history store to support new debug states. This
+    involves modifying the `prepareDebugState` action to handle specific
+    scenarios like viewing a transaction with its content items expanded or
+    drilling down into the reasoning text.
+  - >-
+    Next, I'll enhance the debug menu by adding new, more descriptive entries.
+    These new options will allow developers to instantly jump to the newly
+    implemented views in the history screen, such as the content-level
+    drilldown, making testing and validation more efficient.
+  - >-
+    Finally, I will overhaul the `transaction-history-screen.readme.md`
+    documentation. This involves updating all screenshots and descriptive text
+    to accurately reflect the new multi-level drilldown capabilities, the
+    updated header with statistics, and the refined user interaction model. This
+    ensures the design documentation remains a precise source of truth for the
+    screen's behavior.
+  - '### Debugging and State Management Alignment'
+  - '### Documentation Update'
+  - ▲ relaycode transaction history
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - '-  Filter: (none) · Showing 1-10 of 42 transactions'
+  - '+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev'
+  - '> ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling'
+  - '▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic'
+  - '▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI'
+  - '▸ ↩ Reverted  · b2c9e04d · 2023-10-26 · style: update button component'
+  - '▸ ✗ Reverted  · 9c2e1a05 · 2023-10-25 · docs: update readme with TUI spec'
+  - ...
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - >-
+    (↑↓) Nav · (→) Expand · (Spc) Select · (Ent) Details · (F)ilter · (C)opy ·
+    (B)ulk
+  - ▲ relaycode transaction history
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - '-  Filter: (none) · Showing 1-10 of 42 transactions'
+  - '+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev'
+  - '> ▾ ✓ Committed · e4a7c112 · fix: add missing error handling'
+  - '-       Stats: 3 Files · +25 lines, -8 lines'
+  - '-       Files:'
+  - '-         ▸ [MOD] src/core/transaction.ts'
+  - '-         ▸ [MOD] src/utils/logger.ts'
+  - '-         ▸ [DEL] src/utils/old-helper.ts'
+  - +       ▸ Commit Message
+  - +       ▸ Prompt
+  - +       ▸ Reasoning
+  - +       ▸ Files (3)
+  - '▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic'
+  - '▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI'
+  - ...
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - >-
+    - (↑↓) Nav · (←) Collapse · (→) Expand Files · (Ent) Details · (F)ilter ·
+    (C)opy
+  - + (↑↓) Nav · (←) Collapse · (→) Expand · (Ent) Details · (F)ilter · (C)opy
+  - ▲ relaycode transaction history
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - '-  Filter: (none) · Showing 1-10 of 42 transactions'
+  - '+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev'
+  - '> ▾ ✓ Committed · e4a7c112 · fix: add missing error handling'
+  - '-       Stats: 3 Files · +25 lines, -8 lines'
+  - '-       Files:'
+  - '-         ▾ [MOD] src/core/transaction.ts'
+  - '-               --- a/src/core/transaction.ts'
+  - '-               +++ b/src/core/transaction.ts'
+  - '-               @@ -45,7 +45,9 @@'
+  - '-               -    for (const [filePath, content] of entries) {'
+  - >-
+    -               +    const restoreErrors: { path: string, error: unknown }[]
+    = [];
+  - '-               ... 4 lines hidden ...'
+  - '-         ▸ [MOD] src/utils/logger.ts'
+  - '-         ▸ [DEL] src/utils/old-helper.ts'
+  - +       ▸ Commit Message
+  - +       ▸ Prompt
+  - +       ▾ Reasoning
+  - >-
+    +           1. Identified a potential uncaught exception in the
+    `restoreSnapshot`
+  - +              function if a file operation fails midway through a loop...
+  - +           2. Wrapped the file restoration loop in a `Promise.all` for
+  - +              robustness and comprehensive error collection.
+  - +       ▸ Files (3)
+  - '▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic'
+  - ...
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - + (↑↓) Nav · (←→) Collapse/Expand · (Ent) Details · (F)ilter · (C)opy
+  - +
+  - + ▲ relaycode transaction history
+  - >-
+    +
+    ──────────────────────────────────────────────────────────────────────────────
+  - '+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev'
+  - +
+  - '+ > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling'
+  - +       ...
+  - +       ▾ Files (3)
+  - +         ▾ [MOD] src/core/transaction.ts
+  - +               --- a/src/core/transaction.ts
+  - +               +++ b/src/core/transaction.ts
+  - +               @@ -45,7 +45,9 @@
+  - +               -    for (const [filePath, content] of entries) {
+  - >-
+    +               +    const restoreErrors: { path: string, error: unknown }[]
+    = [];
+  - +               ... 4 lines hidden ...
+  - +         ▸ [MOD] src/utils/logger.ts
+  - +         ▸ [DEL] src/utils/old-helper.ts
+  - +
+  - >-
+    +   ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard
+    logic
+  - +   ...
+  - +
+  - >-
+    +
+    ──────────────────────────────────────────────────────────────────────────────
+  - >-
+    (↑↓) Nav File/Tx · (←→) Collapse/Expand · (Ent) Full Diff · (X)pand Full
+    Diff
+  - >-
+    After pressing `(Enter)`, the filter is applied, the status bar is updated,
+    and control returns to the (now much shorter) transaction list.
+  - '-'
+  - +
+  - '-#### **State 2.5: Advanced Copy Mode - Aggregating Data for Export**'
+  - '+#### **State 2.6: Advanced Copy Mode - Aggregating Data for Export**'
+  - >-
+    After selecting one or more transactions with `(Space)`, pressing `(C)`
+    transforms the entire screen into a powerful, a two-panel data aggregation
+    tool. The user can select multiple transactions *and* multiple data fields
+    to create a custom report.
+  - '@@ -190,7 +224,7 @@'
+  - 2. Designed a high-density layout to show system status and recent history.
+operations:
+  - type: write
+    path: src/stores/history.store.ts
+    content: >
+      --- src/stores/history.store.ts
+
+      +++ src/stores/history.store.ts
+
+      @@ -1,6 +1,7 @@
+       import { create } from 'zustand';
+       import { useTransactionStore } from './transaction.store';
+       import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath } from './navigation.utils';
+      +import { sleep } from '../utils';
+       
+       export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
+        
+      @@ -11,24 +12,26 @@
+           mode: HistoryViewMode;
+           selectedItemPath: string;
+           expandedIds: Set<string>;
+      +    loadingPaths: Set<string>;
+           filterQuery: string;
+           selectedForAction: Set<string>;
+           actions: {
+               load: (initialState?: Partial<HistoryStateData>) => void;
+               navigateDown: () => void;
+               navigateUp: () => void;
+      -        expandOrDrillDown: () => void;
+
+      +        expandOrDrillDown: () => Promise<void>;
+               collapseOrBubbleUp: () => void;
+               toggleSelection: () => void;
+               setMode: (mode: HistoryViewMode) => void;
+               setFilterQuery: (query: string) => void;
+               applyFilter: () => void;
+      -        prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter'
+      | 'copy' | 'bulk') => void;
+
+      +        prepareDebugState: (stateName: 'l1-drill-content' |
+      'l2-drill-reasoning' | 'l2-drill-diff' | 'filter' | 'copy' | 'bulk') =>
+      void;
+           };
+       }
+       
+       export const useHistoryStore = create<HistoryState>((set, get) => ({
+           mode: 'LIST',
+           selectedItemPath: '',
+           expandedIds: new Set(),
+      +    loadingPaths: new Set(),
+           filterQuery: '',
+           selectedForAction: new Set(),
+           actions: {
+      @@ -38,6 +41,7 @@
+                       selectedItemPath: transactions[0]?.id || '',
+                       mode: 'LIST',
+                       expandedIds: new Set(),
+      +                loadingPaths: new Set(),
+                       selectedForAction: new Set(),
+                       filterQuery: '',
+                       ...initialState,
+      @@ -54,29 +58,42 @@
+                   const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                   set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+               },
+      -        expandOrDrillDown: () => set(state => {
+
+      -            const { selectedItemPath, expandedIds } = state;
+
+      -            const newExpandedIds = new Set(expandedIds);
+
+      -            if (!newExpandedIds.has(selectedItemPath)) {
+
+      -                newExpandedIds.add(selectedItemPath);
+
+      +        expandOrDrillDown: async () => {
+
+      +            const { selectedItemPath, expandedIds } = get();
+
+      +            if (expandedIds.has(selectedItemPath)) return;
+
+      +
+
+      +            // Files and content items with potentially large data can
+      show a loading state
+
+      +            const isLoadable = selectedItemPath.includes('/file/') ||
+
+      +                               selectedItemPath.includes('/prompt') ||
+
+      +                               selectedItemPath.includes('/reasoning');
+
+      +
+
+      +            if (isLoadable) {
+
+      +                set(state => ({ loadingPaths: new
+      Set(state.loadingPaths).add(selectedItemPath) }));
+
+      +                await sleep(250); // Simulate loading
+
+      +                set(state => {
+
+      +                    const newLoadingPaths = new Set(state.loadingPaths);
+
+      +                    newLoadingPaths.delete(selectedItemPath);
+
+      +                    const newExpandedIds = new
+      Set(state.expandedIds).add(selectedItemPath);
+
+      +                    return { loadingPaths: newLoadingPaths, expandedIds:
+      newExpandedIds };
+
+      +                });
+
+      +            } else { // For transactions or simple items, expand
+      immediately
+
+      +                set(state => ({ expandedIds: new
+      Set(state.expandedIds).add(selectedItemPath) }));
+                   }
+      -            return { expandedIds: newExpandedIds };
+
+      -        }),
+
+      +        },
+               collapseOrBubbleUp: () => set(state => {
+                   const { selectedItemPath, expandedIds } = state;
+                   const newExpandedIds = new Set(expandedIds);
+                   if (newExpandedIds.has(selectedItemPath)) {
+                       newExpandedIds.delete(selectedItemPath);
+      +                // Recursively collapse children
+                       for (const id of newExpandedIds) {
+                           if (id.startsWith(`${selectedItemPath}/`)) {
+                               newExpandedIds.delete(id);
+                           }
+                       }
+                       return { expandedIds: newExpandedIds };
+                   }
+                   const parentId = getParentPath(selectedItemPath);
+                   if (parentId) {
+      -                return { selectedItemPath: parentId || '' };
+
+      +                return { selectedItemPath: parentId };
+                   }
+                   return {};
+               }),
+               toggleSelection: () => set(state => {
+                   const { selectedItemPath, selectedForAction } = state;
+      -            const txId = selectedItemPath.split('/')[0];
+
+      +            const txId = getParentPath(selectedItemPath) ||
+      selectedItemPath;
+                   if (!txId) return {};
+                   const newSelection = new Set(selectedForAction);
+                   if (newSelection.has(txId)) {
+      @@ -93,12 +110,15 @@
+               prepareDebugState: (stateName) => {
+                   const { actions } = get();
+                   switch (stateName) {
+      -                case 'l1-drill':
+
+      +                case 'l1-drill-content':
+                           actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
+                           break;
+      -                case 'l2-drill':
+
+      -                    actions.load({ expandedIds: new Set(['3', '3/3-1']),
+      selectedItemPath: '3/3-1' });
+
+      +                case 'l2-drill-reasoning':
+
+      +                    actions.load({ expandedIds: new Set(['3',
+      '3/reasoning']), selectedItemPath: '3/reasoning' });
+                           break;
+      +                case 'l2-drill-diff':
+
+      +                    actions.load({ expandedIds: new Set(['3',
+      '3/file/3-1']), selectedItemPath: '3/file/3-1' });
+
+      +                    break;
+                       case 'filter':
+                           actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:COMMITTED' });
+                           break;
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -201,24 +201,31 @@
+                   },
+               },
+               {
+      -            title: 'History: L1 Drilldown',
+      -            action: () => {
+      -                historyActions.prepareDebugState('l1-drill');
+      -                appActions.showTransactionHistoryScreen();
+      -            },
+      -        },
+      -        {
+      -            title: 'History: L2 Drilldown (Diff)',
+      -            action: () => {
+      -                historyActions.prepareDebugState('l2-drill');
+      +            title: 'History: L1 Drilldown (Content)',
+      +            action: () => {
+      +                historyActions.prepareDebugState('l1-drill-content');
+      +                appActions.showTransactionHistoryScreen();
+      +            },
+      +        },
+      +        {
+      +            title: 'History: L2 Drilldown (Reasoning)',
+      +            action: () => {
+      +                historyActions.prepareDebugState('l2-drill-reasoning');
+      +                appActions.showTransactionHistoryScreen();
+      +            },
+      +        },
+      +        {
+      +            title: 'History: L2 Drilldown (File Diff)',
+      +            action: () => {
+      +                historyActions.prepareDebugState('l2-drill-diff');
+                       appActions.showTransactionHistoryScreen();
+                   },
+               },
+               {
+                   title: 'History: Filter Mode',
+                   action: () => {
+                       historyActions.prepareDebugState('filter');
+                       appActions.showTransactionHistoryScreen();
+    patchStrategy: standard-diff
+  - type: write
+    path: docs/relaycode-tui/transaction-history-screen.readme.md
+    content: |-
+      --- docs/relaycode-tui/transaction-history-screen.readme.md
+      +++ docs/relaycode-tui/transaction-history-screen.readme.md
+      @@ -26,76 +26,110 @@
+       
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: '-#### **State 2.2: Level 1 Drill-Down - The File List**'
+    content: >-
+      +#### **State 2.2: Level 1 Drill-Down - The Content Overview**
+       
+      -Pressing `(→)` on the selected transaction expands it in-place, revealing
+      key statistics and a list of all files that were modified. The icon
+      changes to `▾` and the footer updates to include the `(←) Collapse`
+      action.
+
+      +Pressing `(→)` on the selected transaction expands it in-place, revealing
+      its core components: Commit Message, Prompt, Reasoning, and Files. The
+      icon changes to `▾` and the footer updates to include the `(←) Collapse`
+      action.
+       
+       
+    patchStrategy: replace
+  - type: write
+    path: '-#### **State 2.3: Level 2 Drill-Down - The In-place Diff Preview**'
+    content: >-
+      +#### **State 2.3: Level 2 Drill-Down - In-place Content Preview**
+       
+      -With the transaction expanded, the user can navigate `(↓)` to a specific
+      file and press `(→)` again. This performs a second-level expansion,
+      showing a truncated preview of that file's diff directly within the list.
+
+      +With the transaction expanded, the user can navigate `(↓)` to a content
+      item like `Reasoning` and press `(→)` again. This performs a second-level
+      expansion, showing the full text content directly within the list.
+       
+       
+    patchStrategy: replace
+  - type: write
+    path: +
+    content: >-
+      +#### **State 2.4: Level 3 Drill-Down - The In-place Diff Preview**
+
+      +
+
+      +By navigating to and expanding the `Files` item, the user can then select
+      a specific file and press `(→)` again. This performs a third-level
+      expansion, showing a truncated preview of that file's diff directly within
+      the list.
+
+      +
+
+      +
+    patchStrategy: replace
+  - type: write
+    path: '---'
+    content: |2-
+       *(Page Break)*
+       ---
+       
+      -#### **State 2.4: Filtering Mode - Querying the History**
+      +#### **State 2.5: Filtering Mode - Querying the History**
+       
+       From any browsing state, pressing `(F)` shifts focus to the filter bar. The transaction list updates in real-time as the user constructs their query. The footer shows context-specific actions.
+       
+      @@ -125,7 +159,7 @@
+        (Enter) Apply Filter & Return      (Esc) Cancel
+       
+    patchStrategy: replace
+  - type: write
+    path: ▲ relaycode transaction history
+    content: |2-
+        ──────────────────────────────────────────────────────────────────────────────
+      @@ -137,7 +171,7 @@
+        (↑↓) Nav · (→) Expand · (Ent) Details · (F)ilter · (C)opy · (B)ulk Actions
+       
+    patchStrategy: replace
+  - type: write
+    path: '-#### **State 2.6: Bulk Actions Mode - Managing History**'
+    content: |-
+      +#### **State 2.7: Bulk Actions Mode - Managing History**
+       
+       Multi-selecting items with `(Space)` and then pressing `(B)` brings up a modal for performing operations on the entire selection. This is for powerful, state-changing actions.
+       
+    patchStrategy: replace
+snapshot:
+  '-#### **State 2.2: Level 1 Drill-Down - The File List**': null
+  '-#### **State 2.3: Level 2 Drill-Down - The In-place Diff Preview**': null
+  +: null
+  '---': null
+  ▲ relaycode transaction history: null
+  '-#### **State 2.6: Bulk Actions Mode - Managing History**': null
+  src/stores/history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath }
+    from './navigation.utils';
+
+    import { sleep } from '../utils';
+
+
+    export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
+     
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<HistoryState, 'actions'>;
+
+
+    interface HistoryState {
+        mode: HistoryViewMode;
+        selectedItemPath: string;
+        expandedIds: Set<string>;
+        loadingPaths: Set<string>;
+        filterQuery: string;
+        selectedForAction: Set<string>;
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            expandOrDrillDown: () => Promise<void>;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+        };
+    }
+
+
+    export const useHistoryStore = create<HistoryState>((set, get) => ({
+        mode: 'LIST',
+        selectedItemPath: '',
+        expandedIds: new Set(),
+        loadingPaths: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        actions: {
+            load: (initialState) => {
+                const { transactions } = useTransactionStore.getState();
+                set({
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: 'LIST',
+                    expandedIds: new Set(),
+                    loadingPaths: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findPrevPath(selectedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+            },
+            expandOrDrillDown: async () => {
+                const { selectedItemPath, expandedIds } = get();
+                if (expandedIds.has(selectedItemPath)) return;
+
+                // Files and content items with potentially large data can show a loading state
+                const isLoadable = selectedItemPath.includes('/file/') ||
+                                   selectedItemPath.includes('/prompt') ||
+                                   selectedItemPath.includes('/reasoning');
+
+                if (isLoadable) {
+                    set(state => ({ loadingPaths: new Set(state.loadingPaths).add(selectedItemPath) }));
+                    await sleep(250); // Simulate loading
+                    set(state => {
+                        const newLoadingPaths = new Set(state.loadingPaths);
+                        newLoadingPaths.delete(selectedItemPath);
+                        const newExpandedIds = new Set(state.expandedIds).add(selectedItemPath);
+                        return { loadingPaths: newLoadingPaths, expandedIds: newExpandedIds };
+                    });
+                } else { // For transactions or simple items, expand immediately
+                    set(state => ({ expandedIds: new Set(state.expandedIds).add(selectedItemPath) }));
+                }
+            },
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.delete(selectedItemPath);
+                    // Recursively collapse children
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+                    return { expandedIds: newExpandedIds };
+                }
+                const parentId = getParentPath(selectedItemPath);
+                if (parentId) {
+                    return { selectedItemPath: parentId };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = getParentPath(selectedItemPath) || selectedItemPath;
+                if (!txId) return {};
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                set({ mode: 'LIST' });
+            },
+            prepareDebugState: (stateName) => {
+                const { actions } = get();
+                switch (stateName) {
+                    case 'l1-drill':
+                        actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
+                        break;
+                    case 'l2-drill':
+                        actions.load({ expandedIds: new Set(['3', '3/3-1']), selectedItemPath: '3/3-1' });
+                        break;
+                    case 'filter':
+                        actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:COMMITTED' });
+                        break;
+                    case 'copy':
+                        actions.load({ selectedForAction: new Set(['3', '6']) });
+                        break;
+                    case 'bulk':
+                        actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['3', '6']) });
+                        break;
+                }
+            },
+        },
+    }));
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => {
+                    reviewActions.load('2'); // Use tx '2' which has scripts
+                    appActions.showReviewProcessingScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    useViewStore.getState().actions.setActiveOverlay('none');
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay('none');
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+  docs/relaycode-tui/transaction-history-screen.readme.md: >
+    # TRANSACTION-HISTORY-SCREEN.README.MD
+
+
+    ## Relaycode TUI: The Stateful Transaction History Screen
+
+
+    This document specifies the final design and behavior of the stateful
+    Transaction History screen, the command center for a project's AI-driven
+    development history. Triggered by `relay log`, this screen transforms a
+    simple log into a powerful, interactive database explorer.
+
+
+    ### 1. Core Philosophy
+
+
+    The transaction history is the project's institutional memory. This screen
+    is engineered to make that memory **discoverable, drillable, queryable, and
+    actionable**.
+
+
+    -   **Discoverable & Drillable:** The log is an interactive outline. Users
+    get a high-level overview and then progressively disclose more detail
+    *in-place* using familiar arrow key navigation, minimizing context
+    switching.
+
+    -   **Queryable:** A powerful, live-filtering system allows users to
+    instantly find specific transactions based on content, status, file paths,
+    or dates.
+
+    -   **Actionable:** The screen provides sophisticated tools for bulk data
+    extraction (Copy Mode) and history management (Bulk Actions), turning
+    insight into action.
+
+
+    ---
+
+
+    ### 2. The Interaction Journey: A Walkthrough
+
+
+    The power of the screen is best understood by following a user's workflow
+    from browsing to deep analysis and action.
+
+
+    #### **State 2.1: Default View - The 10,000-Foot Overview**
+
+
+    Upon launching `relay log`, the user is presented with a clean, compact, and
+    reverse-chronological list of all transactions. Each entry is a single line,
+    prefixed with `▸` to indicate it can be expanded.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: (none) · Showing 1-10 of 42 transactions
+
+     > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+       ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI
+       ▸ ↩ Reverted  · b2c9e04d · 2023-10-26 · style: update button component
+       ▸ ✗ Reverted  · 9c2e1a05 · 2023-10-25 · docs: update readme with TUI spec
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (→) Expand · (Spc) Select · (Ent) Details · (F)ilter · (C)opy · (B)ulk
+    ```
+
+
+    #### **State 2.2: Level 1 Drill-Down - The File List**
+
+
+    Pressing `(→)` on the selected transaction expands it in-place, revealing
+    key statistics and a list of all files that were modified. The icon changes
+    to `▾` and the footer updates to include the `(←) Collapse` action.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: (none) · Showing 1-10 of 42 transactions
+
+     > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+           Stats: 3 Files · +25 lines, -8 lines
+           Files:
+             ▸ [MOD] src/core/transaction.ts
+             ▸ [MOD] src/utils/logger.ts
+             ▸ [DEL] src/utils/old-helper.ts
+
+       ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (←) Collapse · (→) Expand Files · (Ent) Details · (F)ilter · (C)opy
+    ```
+
+
+    #### **State 2.3: Level 2 Drill-Down - The In-place Diff Preview**
+
+
+    With the transaction expanded, the user can navigate `(↓)` to a specific
+    file and press `(→)` again. This performs a second-level expansion, showing
+    a truncated preview of that file's diff directly within the list.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: (none) · Showing 1-10 of 42 transactions
+
+     > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+           Stats: 3 Files · +25 lines, -8 lines
+           Files:
+             ▾ [MOD] src/core/transaction.ts
+                   --- a/src/core/transaction.ts
+                   +++ b/src/core/transaction.ts
+                   @@ -45,7 +45,9 @@
+                   -    for (const [filePath, content] of entries) {
+                   +    const restoreErrors: { path: string, error: unknown }[] = [];
+                   ... 4 lines hidden ...
+             ▸ [MOD] src/utils/logger.ts
+             ▸ [DEL] src/utils/old-helper.ts
+
+       ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav File/Tx · (←→) Collapse/Expand · (Ent) Full Diff · (X)pand Full Diff
+    ```
+
+
+    ---
+
+    *(Page Break)*
+
+    ---
+
+
+    #### **State 2.4: Filtering Mode - Querying the History**
+
+
+    From any browsing state, pressing `(F)` shifts focus to the filter bar. The
+    transaction list updates in real-time as the user constructs their query.
+    The footer shows context-specific actions.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: logger.ts status:committed ▸ |
+
+     > ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+       ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+       ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (Enter) Apply Filter & Return      (Esc) Cancel
+    ```
+
+    After pressing `(Enter)`, the filter is applied, the status bar is updated,
+    and control returns to the (now much shorter) transaction list.
+
+
+    ```
+     ▲ relaycode transaction history
+     ──────────────────────────────────────────────────────────────────────────────
+      Filter: logger.ts status:committed · Showing 2 of 42 transactions
+
+     > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+       ▸ ✓ Committed · 1a2b3c4d · 2023-10-22 · feat: introduce structured logging
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (→) Expand · (Ent) Details · (F)ilter · (C)opy · (B)ulk Actions
+    ```
+
+
+    #### **State 2.5: Advanced Copy Mode - Aggregating Data for Export**
+
+
+    After selecting one or more transactions with `(Space)`, pressing `(C)`
+    transforms the entire screen into a powerful, two-panel data aggregation
+    tool. The user can select multiple transactions *and* multiple data fields
+    to create a custom report.
+
+
+    ```
+     ▲ relaycode history · copy mode
+     ──────────────────────────────────────────────────────────────────────────────
+     [x] ✓ e4a7c112 · fix: add missing error handling
+     [ ] ✓ 4b9d8f03 · refactor: simplify clipboard logic
+     [x] → 8a3f21b8 · feat: implement new dashboard UI
+     ...
+     ──────────────────────────────────────────────────────────────────────────────
+     Select data to copy from 2 transactions:
+
+     [x] (M) Git Messages         [ ] (P) Prompts          [x] (R) Reasonings
+     [ ] (D) Diffs                [ ] (U) UUIDs            [ ] (Y) Full YAML
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav Panels · (←→) Nav Items · (Spc) Toggle · (Enter) Copy · (C)opy/Exit
+    ```
+
+    Pressing `(Enter)` aggregates the selected data (`Git Messages` and
+    `Reasonings` from two transactions) and places it on the clipboard,
+    providing instant feedback.
+
+
+    ```
+     ──────────────────────────────────────────────────────────────────────────────
+     ✓ Copied Messages & Reasonings to clipboard.
+     ──────────────────────────────────────────────────────────────────────────────
+    ```
+
+    **Example Clipboard Output:**
+
+    ```
+
+    --- TRANSACTION e4a7c112 ---
+
+
+    [Git Message]
+
+    fix: add missing error handling
+
+    - Added try/catch to restoreSnapshot to prevent crashes on partial reverts.
+
+
+    [Reasoning]
+
+    1. Identified a potential uncaught exception in the restoreSnapshot
+    function.
+
+    2. Wrapped the file restoration loop in a Promise.all for robustness.
+
+
+    --- TRANSACTION 8a3f21b8 ---
+
+
+    [Git Message]
+
+    feat: implement new dashboard UI
+
+    - Creates a new stateful dashboard screen for the 'watch' command.
+
+
+    [Reasoning]
+
+    1. The goal was to provide a more application-like feel for the watch
+    command.
+
+    2. Designed a high-density layout to show system status and recent history.
+
+    ```
+
+
+    #### **State 2.6: Bulk Actions Mode - Managing History**
+
+
+    Multi-selecting items with `(Space)` and then pressing `(B)` brings up a
+    modal for performing operations on the entire selection. This is for
+    powerful, state-changing actions.
+
+
+    ```
+     ▲ relaycode history · bulk actions
+     ──────────────────────────────────────────────────────────────────────────────
+     [x] ✓ e4a7c112 · fix: add missing error handling
+     [ ] ✓ 4b9d8f03 · refactor: simplify clipboard logic
+     [x] → 8a3f21b8 · feat: implement new dashboard UI
+     ...
+     ──────────────────────────────────────────────────────────────────────────────
+      PERFORM BULK ACTION ON 2 SELECTED ITEMS
+
+      This action is often irreversible. Are you sure?
+
+      (1) Revert Selected Transactions
+      (2) Mark as 'Git Committed'
+      (3) Delete Selected Transactions (from Relaycode history)
+      (Esc) Cancel
+
+     ──────────────────────────────────────────────────────────────────────────────
+     Choose an option [1-3, Esc]:
+    ```
+
+    This comprehensive design ensures the Transaction History screen is an
+    indispensable tool for managing the entire lifecycle of AI-assisted changes,
+    providing unparalleled efficiency and control.
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: pending
+id: 115
