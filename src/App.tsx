@@ -12,24 +12,17 @@ import TransactionHistoryScreen from './components/TransactionHistoryScreen';
 import DebugMenu from './components/DebugMenu'; 
 import GlobalHelpScreen from './components/GlobalHelpScreen';
 import CopyScreen from './components/CopyScreen';
-import { useUIStore } from './stores/ui.store';
+import { useViewStore } from './stores/view.store';
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
 
 const App = () => {
     const currentScreen = useAppStore(state => state.currentScreen);
-    const activeOverlay = useUIStore(s => s.activeOverlay);
+    const activeOverlay = useViewStore(s => s.activeOverlay);
     const isOverlayOpen = activeOverlay !== 'none';
 
     // Global hotkeys are active if no modal-like component is open
     const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
     useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
-
-    useEffect(() => {
-        // Clear the terminal when the screen changes to ensure a clean view.
-        // This is especially important when transitioning from the splash screen.
-        // eslint-disable-next-line no-console
-        console.clear();
-    }, [currentScreen, activeOverlay]);
 
     const renderMainScreen = () => {
         if (currentScreen === 'splash') return <SplashScreen />;

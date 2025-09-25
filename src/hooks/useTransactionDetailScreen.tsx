@@ -1,17 +1,17 @@
-import { useInput } from 'ink';
-import { useUIStore } from '../stores/ui.store';
+import { useInput, type Key } from 'ink';
+import { useDetailStore } from '../stores/detail.store';
+import { useViewStore } from '../stores/view.store';
 import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useMemo } from 'react';
-import { useCopyStore, type CopyItem } from '../stores/copy.store';
-import { CopyService } from '../services/copy.service';
+import { useCopyStore } from '../stores/copy.store';
 
 export const useTransactionDetailScreen = () => {
     const { showDashboardScreen } = useAppStore(s => s.actions);
-    const store = useUIStore();
+    const store = useDetailStore();
+    const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
     const {
-        selectedTransactionId,
-        detail_bodyView: bodyView,
+        bodyView,
     } = store;
 
     const transaction = useTransactionStore(s => s.transactions.find(tx => tx.id === selectedTransactionId));
@@ -19,32 +19,28 @@ export const useTransactionDetailScreen = () => {
 
     const {
         // Main nav
-        detail_navigateUp: navigateUp,
-        detail_navigateDown: navigateDown,
-        detail_handleEnterOrRight: handleEnterOrRight,
-        detail_handleEscapeOrLeft: handleEscapeOrLeft,
-        detail_toggleRevertConfirm: toggleRevertConfirm,
+        navigateUp,
+        navigateDown,
+        handleEnterOrRight,
+        handleEscapeOrLeft,
+        toggleRevertConfirm,
         // Revert modal nav
-        detail_confirmRevert: confirmRevert,
+        confirmRevert,
     } = store.actions;
 
     const openCopyMode = () => {
         if (!transaction) return;
-        const { detail_selectedFileIndex: selectedFileIndex } = store;
+        const { selectedFileIndex } = store;
         const selectedFile = files[selectedFileIndex];
-        const title = `Select data to copy from transaction ${transaction.hash}:`;
-        const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
-        useCopyStore.getState().actions.open(title, items);
+        useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
     };
 
-    useInput((input, key) => {
-        if (bodyView === 'REVERT_CONFIRM') {
-            if (key.escape) toggleRevertConfirm();
-            if (key.return) confirmRevert();
-            return;
-        }
+    const handleRevertConfirmInput = (_input: string, key: Key): void => {
+        if (key.escape) toggleRevertConfirm();
+        if (key.return) confirmRevert();
+    };
 
-        // Main view input
+    const handleMainInput = (input: string, key: Key): void => {
         if (input.toLowerCase() === 'q') {
             showDashboardScreen();
         }
@@ -59,15 +55,22 @@ export const useTransactionDetailScreen = () => {
         if (key.downArrow) navigateDown();
         if (key.return || key.rightArrow) handleEnterOrRight();
         if (key.escape || key.leftArrow) handleEscapeOrLeft();
+    };
+
+    useInput((input: string, key: Key) => {
+        if (bodyView === 'REVERT_CONFIRM') {
+            return handleRevertConfirmInput(input, key);
+        }
+        return handleMainInput(input, key);
     });
 
     return {
         transaction,
         files,
-        navigatorFocus: store.detail_navigatorFocus,
-        expandedSection: store.detail_expandedSection,
-        selectedFileIndex: store.detail_selectedFileIndex,
-        bodyView: store.detail_bodyView,
+        navigatorFocus: store.navigatorFocus,
+        expandedSection: store.expandedSection,
+        selectedFileIndex: store.selectedFileIndex,
+        bodyView: store.bodyView,
         actions: {
             showDashboardScreen,
         },

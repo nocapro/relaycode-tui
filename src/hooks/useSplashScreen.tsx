@@ -4,7 +4,7 @@ import { useAppStore } from '../stores/app.store';
 
 export const useSplashScreen = () => {
     const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState(5);
+    const [countdown, setCountdown] = useState(3);
 
     const handleSkip = () => {
         showInitScreen();

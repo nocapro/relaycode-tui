@@ -1,0 +1,288 @@
+import { create } from 'zustand';
+import { useAppStore } from './app.store';
+import { useTransactionStore } from './transaction.store';
+import { useViewStore } from './view.store';
+import { ReviewService } from '../services/review.service';
+import { moveIndex } from './navigation.utils';
+import type { FileReviewStatus } from '../types/domain.types';
+
+export interface ApplyStep {
+    id: string;
+    title: string;
+    status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+    details?: string;
+    substeps?: ApplyStep[];
+    duration?: number;
+}
+export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff' | 'none';
+export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+export type ApplyUpdate =
+    | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+    | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };
+
+export const initialApplySteps: ApplyStep[] = [
+    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+];
+
+interface ReviewState {
+    patchStatus: PatchStatus;
+    applySteps: ApplyStep[];
+    selectedItemIndex: number;
+    bodyView: ReviewBodyView;
+    isDiffExpanded: boolean;
+    reasoningScrollIndex: number;
+    scriptErrorIndex: number;
+    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+
+    actions: {
+        load: (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => void;
+        moveSelectionUp: () => void;
+        moveSelectionDown: () => void;
+        expandDiff: () => void;
+        toggleBodyView: (
+            view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>
+        ) => void;
+        setBodyView: (view: ReviewBodyView) => void;
+        approve: () => void;
+        startApplySimulation: (scenario: 'success' | 'failure') => void;
+        tryRepairFile: () => void;
+        showBulkRepair: () => void;
+        executeBulkRepairOption: (option: number) => Promise<void>;
+        confirmHandoff: () => void;
+        scrollReasoningUp: () => void;
+        scrollReasoningDown: () => void;
+        navigateScriptErrorUp: () => void;
+        navigateScriptErrorDown: () => void;
+        updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+        addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+        updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string) => void;
+        toggleFileApproval: (fileId: string) => void;
+        rejectAllFiles: () => void;
+    };
+}
+
+export const useReviewStore = create<ReviewState>((set, get) => ({
+    patchStatus: 'SUCCESS',
+    applySteps: initialApplySteps,
+    selectedItemIndex: 0,
+    bodyView: 'none',
+    isDiffExpanded: false,
+    reasoningScrollIndex: 0,
+    scriptErrorIndex: 0,
+    fileReviewStates: new Map(),
+
+    actions: {
+        load: (transactionId, initialState) => {
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction) return;
+            
+            const { patchStatus, fileReviewStates } = ReviewService.prepareTransactionForReview(transaction);
+
+            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+            set({
+                patchStatus,
+                fileReviewStates,
+                selectedItemIndex: 0,
+                bodyView: initialState?.bodyView ?? 'none',
+                isDiffExpanded: false,
+                reasoningScrollIndex: 0,
+                scriptErrorIndex: 0,
+                applySteps: JSON.parse(JSON.stringify(initialApplySteps)),
+            });
+        },
+        moveSelectionUp: () => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx) return {};
+            const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+            return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
+        }),
+        moveSelectionDown: () => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx) return {};
+            const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+            return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
+        }),
+        toggleBodyView: (view) => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            const files = tx?.files || [];
+            if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+            return {
+                bodyView: state.bodyView === view ? 'none' : view,
+                isDiffExpanded: false,
+            };
+        }),
+        setBodyView: (view) => set({ bodyView: view }),
+        expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+        approve: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (selectedTransactionId) {
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                useAppStore.getState().actions.showDashboardScreen();
+            }
+        },
+        startApplySimulation: async (scenario) => {
+            const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            const { updateApplyStep, addApplySubstep } = get().actions;
+            set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
+            showReviewProcessingScreen();
+            const simulationGenerator = ReviewService.runApplySimulation(scenario);
+            for await (const update of simulationGenerator) {
+                if (update.type === 'UPDATE_STEP') {
+                    updateApplyStep(
+                        update.payload.id,
+                        update.payload.status,
+                        update.payload.duration,
+                        update.payload.details,
+                    );
+                } else if (update.type === 'ADD_SUBSTEP') {
+                    addApplySubstep(update.payload.parentId, update.payload.substep);
+                }
+            }
+            showReviewScreen();
+        },
+        tryRepairFile: () => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const { selectedItemIndex, fileReviewStates } = get();
+            if (!selectedTransactionId) return;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            const file = tx?.files?.[selectedItemIndex];
+            if (!file) return;
+
+            const { status, error } = fileReviewStates.get(file.id) || {};
+            if (status !== 'FAILED') return;
+            
+            ReviewService.tryRepairFile(file, error);
+            get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+        },
+        showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+        executeBulkRepairOption: async (option) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            if (!tx?.files) return;
+
+            const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+            if (failedFiles.length === 0) {
+                set({ bodyView: 'none' });
+                return;
+            }
+
+            switch (option) {
+                case 1:
+                    ReviewService.generateBulkRepairPrompt(failedFiles);
+                    set({ bodyView: 'none' });
+                    break;
+                case 2: {
+                    set({ bodyView: 'none' });
+                    failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                    const results = await ReviewService.runBulkReapply(failedFiles);
+                    results.forEach(result =>
+                        get().actions.updateFileReviewStatus(
+                            result.id, result.status, result.error,
+                        ),
+                    );
+                    break;
+                }
+                case 3:
+                    get().actions.setBodyView('confirm_handoff');
+                    break;
+                case 4:
+                    failedFiles.forEach(file => {
+                        get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                    });
+                    set({ bodyView: 'none' });
+                    break;
+                default:
+                    set({ bodyView: 'none' });
+            }
+        },
+        confirmHandoff: () => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx?.files) return;
+            const { fileReviewStates } = get();
+            ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+            ReviewService.performHandoff(tx.hash);
+        },
+        scrollReasoningUp: () => set(state => ({ reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1) })),
+        scrollReasoningDown: () => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx?.reasoning) return {};
+            const maxLines = tx.reasoning.split('\n').length;
+            return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+        }),
+        navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+        navigateScriptErrorDown: () => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx?.scripts || !tx?.files) return {};
+            const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+            if (selectedScript?.output) {
+                const errorLines = selectedScript.output
+                    .split('\n')
+                    .filter(line => line.includes('Error') || line.includes('Warning'));
+                return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+            }
+            return {};
+        }),
+        updateApplyStep: (id, status, duration, details) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === id) {
+                        const newStep = { ...s, status };
+                        if (duration !== undefined) newStep.duration = duration;
+                        if (details !== undefined) newStep.details = details;
+                        return newStep;
+                    }
+                    return s;
+                }),
+            }));
+        },
+        addApplySubstep: (parentId, substep) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId) {
+                        const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
+        updateFileReviewStatus: (fileId, status, error) => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                newStates.set(fileId, { status, error });
+                return { fileReviewStates: newStates };
+            });
+        },
+        toggleFileApproval: (fileId) => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                const current = newStates.get(fileId);
+                if (current) {
+                    const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                    newStates.set(fileId, { status: newStatus, error: undefined });
+                }
+                return { fileReviewStates: newStates };
+            });
+        },
+        rejectAllFiles: () => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                for (const [fileId, reviewState] of newStates.entries()) {
+                    if (reviewState.status === 'APPROVED') {
+                        newStates.set(fileId, { status: 'REJECTED', error: undefined });
+                    }
+                }
+                return { fileReviewStates: newStates };
+            });
+        },
+    },
+}));

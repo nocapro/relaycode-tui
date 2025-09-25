@@ -1,74 +1,73 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useInput } from 'ink';
-import { useUIStore } from '../stores/ui.store';
+import { useMemo } from 'react';
+import { useInput, type Key } from 'ink';
+import { useHistoryStore } from '../stores/history.store';
 import { useAppStore } from '../stores/app.store';
-import { useStdoutDimensions } from '../utils';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useCopyStore } from '../stores/copy.store';
-import { CopyService } from '../services/copy.service';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
+import { useViewport } from './useViewport';
 
 export const useTransactionHistoryScreen = () => {
-    const [columns, rows] = useStdoutDimensions();
-    const store = useUIStore();
+    const store = useHistoryStore();
+    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, actions } = store;
     const { showDashboardScreen } = useAppStore(s => s.actions);
     const transactions = useTransactionStore(s => s.transactions);
 
-    const [viewOffset, setViewOffset] = useState(0);
-
     const visibleItemPaths = useMemo(
-        () => getVisibleItemPaths(transactions, store.history_expandedIds),
-        [transactions, store.history_expandedIds],
+        () => getVisibleItemPaths(transactions, expandedIds),
+        [transactions, expandedIds],
     );
-    const selectedIndex = visibleItemPaths.indexOf(store.history_selectedItemPath);
+    const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
 
     const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
-    const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
-
-    useEffect(() => {
-        if (selectedIndex >= 0 && selectedIndex < viewOffset) {
-            setViewOffset(selectedIndex);
-        } else if (selectedIndex >= viewOffset + viewportHeight) {
-            setViewOffset(selectedIndex - viewportHeight + 1);
-        }
-    }, [selectedIndex, viewOffset, viewportHeight]);
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        padding: NON_CONTENT_HEIGHT,
+    });
 
     const openCopyMode = () => {
-        const { history_selectedForAction: selectedForAction } = store;
         const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
 
         if (transactionsToCopy.length === 0) return;
-        const title = `Select data to copy from ${transactionsToCopy.length} transactions:`;
-        const items = CopyService.getCopyItemsForHistory(transactionsToCopy);
-        useCopyStore.getState().actions.open(title, items);
+        useCopyStore.getState().actions.openForHistory(transactionsToCopy);
     };
 
-    useInput((input, key) => {
-        if (store.history_mode === 'FILTER') {
-            if (key.escape) store.actions.history_setMode('LIST');
-            if (key.return) store.actions.history_applyFilter();
-            return;
-        }
-        if (store.history_mode === 'BULK_ACTIONS') {
-            if (key.escape) store.actions.history_setMode('LIST');
-            // Add number handlers...
-            return;
-        }
+    const handleFilterInput = (_input: string, key: Key): void => {
+        if (key.escape) actions.setMode('LIST');
+        if (key.return) actions.applyFilter();
+    };
 
-        // LIST mode inputs
-        if (key.upArrow) store.actions.history_navigateUp();
-        if (key.downArrow) store.actions.history_navigateDown();
-        if (key.rightArrow) store.actions.history_expandOrDrillDown();
-        if (key.leftArrow) store.actions.history_collapseOrBubbleUp();
-        if (input === ' ') store.actions.history_toggleSelection();
+    const handleBulkActionsInput = (_input: string, key: Key): void => {
+        if (key.escape) actions.setMode('LIST');
+        // Add number handlers...
+    };
 
-        if (input.toLowerCase() === 'f') store.actions.history_setMode('FILTER');
-        if (input.toLowerCase() === 'c' && store.history_selectedForAction.size > 0) openCopyMode();
-        if (input.toLowerCase() === 'b' && store.history_selectedForAction.size > 0) store.actions.history_setMode('BULK_ACTIONS');
+    const handleListInput = (input: string, key: Key): void => {
+        if (key.upArrow) actions.navigateUp();
+        if (key.downArrow) actions.navigateDown();
+        if (key.rightArrow) actions.expandOrDrillDown();
+        if (key.leftArrow) actions.collapseOrBubbleUp();
+        if (input === ' ') actions.toggleSelection();
+
+        if (input.toLowerCase() === 'f') actions.setMode('FILTER');
+        if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode('BULK_ACTIONS');
         
         if (key.escape || input.toLowerCase() === 'q') {
             showDashboardScreen();
         }
+    };
+
+    useInput((input: string, key: Key) => {
+        if (mode === 'FILTER') {
+            handleFilterInput(input, key);
+            return;
+        }
+        if (mode === 'BULK_ACTIONS') {
+            handleBulkActionsInput(input, key);
+            return;
+        }
+        handleListInput(input, key);
     });
 
     const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
@@ -79,19 +78,23 @@ export const useTransactionHistoryScreen = () => {
     );
     const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
 
-    const filterStatus = store.history_filterQuery ? store.history_filterQuery : '(none)';
-    const showingStatus = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
+    const filterStatusText = filterQuery ? filterQuery : '(none)';
+    const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
     
     return {
-        ...store,
+        mode,
+        filterQuery,
+        selectedForAction,
+        selectedItemPath,
+        expandedIds,
+        actions,
         transactions,
         viewOffset,
         itemsInView,
         transactionsInView,
         pathsInViewSet,
-        filterStatus,
-        showingStatus,
+        filterStatus: filterStatusText,
+        showingStatus: showingStatusText,
         visibleItemPaths,
-        width: columns,
     };
 };

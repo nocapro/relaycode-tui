@@ -1,0 +1,301 @@
+uuid: e44d371d-5b32-4d05-b1a9-b68b77626920
+projectId: relaycode-tui
+createdAt: '2025-09-25T01:30:48.237Z'
+gitCommitMsg: >-
+  fix: resolve blank screen on navigation and reduce startup delay
+
+  - Removes a `useEffect` in `App.tsx` that was causing a race condition between
+  `console.clear()` and Ink's renderer, resulting in blank screens, particularly
+  when using the debug menu. - Adds a one-time `console.clear()` to `index.tsx`
+  to ensure the application starts on a clean terminal without interfering with
+  subsequent screen transitions. - Reduces the splash screen countdown from 5 to
+  3 seconds to improve the perceived startup time.
+promptSummary: >-
+  The user reported a startup delay and blank screens when navigating from the
+  debug menu. I've identified the causes and am applying fixes.
+reasoning:
+  - >-
+    I've analyzed the issues you're facing. The startup delay is due to an
+    intentional 5-second countdown on the splash screen, which I'll reduce. The
+    more critical issue of blank screens, especially when using the debug menu,
+    is caused by a `console.clear()` call inside a React `useEffect` hook in
+    `App.tsx`. This call is racing with Ink's asynchronous rendering process,
+    clearing the screen before the new content can be drawn.
+  - 'My solution involves three steps:'
+  - >-
+    1.  Reduce the splash screen countdown to make the application feel more
+    responsive at startup.
+  - >-
+    2.  Remove the problematic `useEffect` from `App.tsx` to prevent the race
+    condition that causes blank screens.
+  - >-
+    3.  Add a one-time `console.clear()` to the application's entry point
+    (`index.tsx`) to ensure the TUI starts on a clean screen without interfering
+    with subsequent updates.
+  - 'Here are the changes:'
+  - >-
+    First, I'll shorten the splash screen's countdown to reduce the perceived
+    startup delay.
+  - >-
+    Next, I'll remove the `useEffect` from `App.tsx`. This is the core fix for
+    the blank screen issue, as it stops the imperative `console.clear()` from
+    interfering with Ink's rendering lifecycle.
+  - >-
+    Finally, to ensure the application starts with a clean interface, I'll add
+    the `console.clear()` call to the main entry point, `index.tsx`, where it
+    will only run once.
+  - >-
+    These adjustments will resolve the rendering bug and improve the startup
+    experience.
+operations:
+  - type: write
+    path: src/hooks/useSplashScreen.tsx
+    content: |+
+      --- src/hooks/useSplashScreen.tsx
+      +++ src/hooks/useSplashScreen.tsx
+      @@ -5,7 +5,7 @@
+       
+       export const useSplashScreen = () => {
+           const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+      -    const [countdown, setCountdown] = useState(5);
+      +    const [countdown, setCountdown] = useState(3);
+       
+           const handleSkip = () => {
+               showInitScreen();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/App.tsx
+    content: >+
+      --- src/App.tsx
+
+      +++ src/App.tsx
+
+      @@ -14,13 +14,6 @@
+           // Global hotkeys are active if no modal-like component is open
+           const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
+           useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+      -
+
+      -    useEffect(() => {
+
+      -        // Clear the terminal when the screen changes to ensure a clean
+      view.
+
+      -        // This is especially important when transitioning from the
+      splash screen.
+
+      -        // eslint-disable-next-line no-console
+
+      -        console.clear();
+
+      -    }, [currentScreen, activeOverlay]);
+       
+           const renderMainScreen = () => {
+               if (currentScreen === 'splash') return <SplashScreen />;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: index.tsx
+    content: |+
+      --- index.tsx
+      +++ index.tsx
+      @@ -48,6 +48,8 @@
+       
+           // Check if we're running in an interactive terminal
+           if (process.stdin.isTTY && process.stdout.isTTY) {
+      +        // eslint-disable-next-line no-console
+      +        console.clear();
+               render(<App />);
+           } else {
+               process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useSplashScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState(5);
+
+        const handleSkip = () => {
+            showInitScreen();
+        };
+
+        useInput(() => {
+            handleSkip();
+        });
+
+        useEffect(() => {
+            if (countdown === 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen]);
+
+        return { countdown };
+    };
+  src/App.tsx: >-
+    import React, { useEffect } from 'react';
+
+    import { Box, useInput } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import GlobalHelpScreen from './components/GlobalHelpScreen';
+
+    import CopyScreen from './components/CopyScreen';
+
+    import { useViewStore } from './stores/view.store';
+
+    import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+        const activeOverlay = useViewStore(s => s.activeOverlay);
+        const isOverlayOpen = activeOverlay !== 'none';
+
+        // Global hotkeys are active if no modal-like component is open
+        const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
+        useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+        useEffect(() => {
+            // Clear the terminal when the screen changes to ensure a clean view.
+            // This is especially important when transitioning from the splash screen.
+            // eslint-disable-next-line no-console
+            console.clear();
+        }, [currentScreen, activeOverlay]);
+
+        const renderMainScreen = () => {
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isOverlayOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                {activeOverlay === 'help' && <GlobalHelpScreen />}
+                {activeOverlay === 'copy' && <CopyScreen />}
+                {activeOverlay === 'debug' && <DebugMenu />}
+            </>
+        );
+    };
+
+
+    export default App;
+  index.tsx: |-
+    import React from 'react';
+    import { render } from 'ink';
+    import App from './src/App';
+    import { useAppStore } from './src/stores/app.store';
+    import { useDetailStore } from './src/stores/detail.store';
+    import { useHistoryStore } from './src/stores/history.store';
+    import { useReviewStore } from './src/stores/review.store';
+    import { useTransactionStore } from './src/stores/transaction.store';
+    import { useCommitStore } from './src/stores/commit.store';
+
+    const main = () => {
+        // Initialize stores
+        useTransactionStore.getState().actions.loadTransactions();
+        const args = process.argv.slice(2);
+
+        if (args[0] === 'debug-screen' && args[1]) {
+            const screenName = args[1].replace(/\.tsx$/, '');
+            const { actions: appActions } = useAppStore.getState();
+
+            switch (screenName) {
+                case 'DashboardScreen':
+                    appActions.showDashboardScreen();
+                    break;
+                case 'GitCommitScreen':
+                    useCommitStore.getState().actions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    break;
+                case 'ReviewProcessingScreen':
+                    useReviewStore.getState().actions.load('1');
+                    appActions.showReviewProcessingScreen();
+                    break;
+                case 'ReviewScreen':
+                    useReviewStore.getState().actions.load('1');
+                    appActions.showReviewScreen();
+                    break;
+                case 'TransactionDetailScreen':
+                    useDetailStore.getState().actions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    break;
+                case 'TransactionHistoryScreen':
+                    useHistoryStore.getState().actions.load();
+                    appActions.showTransactionHistoryScreen();
+                    break;
+                case 'InitializationScreen':
+                     appActions.showInitScreen();
+                     break;
+                case 'SplashScreen':
+                     appActions.showSplashScreen();
+                     break;
+                default:
+                    process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                    process.exit(1);
+            }
+        }
+
+        // Check if we're running in an interactive terminal
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+            render(<App />);
+        } else {
+            process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+            process.exit(1);
+        }
+    };
+
+    main();
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 105

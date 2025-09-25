@@ -80,7 +80,6 @@ const DashboardScreen = () => {
         isProcessing,
         viewOffset,
         viewportHeight,
-        width,
         transactionsToConfirm,
     } = useDashboardScreen();
 
@@ -130,7 +129,7 @@ const DashboardScreen = () => {
     return (
         <Box flexDirection="column" height="100%">
             <Text color="cyan">▲ relaycode dashboard</Text>
-            <Separator width={width} />
+            <Separator />
             <Box marginY={1}>
                 {renderStatusBar()}
             </Box>
@@ -138,7 +137,7 @@ const DashboardScreen = () => {
             {isModal && (
                 <>
                     <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                    <Separator width={width} />
+                    <Separator />
                 </>
             )}
             
@@ -156,7 +155,7 @@ const DashboardScreen = () => {
                 })}
             </Box>
 
-            <Box marginTop={1}><Separator width={width} /></Box>
+            <Box marginTop={1}><Separator /></Box>
             {renderFooter()}
         </Box>
     );

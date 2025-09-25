@@ -3,16 +3,20 @@ import { Box, Text } from 'ink';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
-import { useStdoutDimensions } from '../utils';
 import type { ScriptResult, FileItem } from '../types/domain.types';
 import { useReviewScreen } from '../hooks/useReviewScreen';
 
 // --- Sub-components ---
 
-const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean }) => {
+const FileItemRow = ({ file, isSelected, reviewStatus, reviewError }: {
+    file: FileItem;
+    isSelected: boolean;
+    reviewStatus: string;
+    reviewError?: string;
+}) => {
     let icon;
     let iconColor;
-    switch (file.reviewStatus) {
+    switch (reviewStatus) {
         case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
         case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
         case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
@@ -24,18 +28,18 @@ const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean
     const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
     const prefix = isSelected ? '> ' : '  ';
 
-    if (file.reviewStatus === 'FAILED') {
+    if (reviewStatus === 'FAILED') {
         return (
             <Box>
                 <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
                     {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
-                    <Text color="red">    ({file.reviewError})</Text>
+                    <Text color="red">    ({reviewError})</Text>
                 </Text>
             </Box>
         );
     }
 
-    if (file.reviewStatus === 'AWAITING') {
+    if (reviewStatus === 'AWAITING') {
         return (
             <Box>
                 <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
@@ -46,7 +50,7 @@ const FileItemRow = ({ file, isSelected }: { file: FileItem, isSelected: boolean
         );
     }
 
-    if (file.reviewStatus === 'RE_APPLYING') {
+    if (reviewStatus === 'RE_APPLYING') {
         return (
              <Box>
                 <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
@@ -103,18 +107,17 @@ const ReviewScreen = () => {
         files,
         scripts = [],
         patchStatus,
-        review_selectedItemIndex: selectedItemIndex,
-        review_bodyView: bodyView,
-        review_isDiffExpanded: isDiffExpanded,
-        review_reasoningScrollIndex: reasoningScrollIndex,
-        review_scriptErrorIndex: scriptErrorIndex,
+        selectedItemIndex,
+        bodyView,
+        isDiffExpanded,
+        reasoningScrollIndex,
+        scriptErrorIndex,
+        fileReviewStates,
         numFiles,
         approvedFilesCount,
         approvedLinesAdded,
         approvedLinesRemoved,
     } = useReviewScreen();
-
-    const [width] = useStdoutDimensions();
 
     if (!transaction) {
         return <Text>Loading review...</Text>;
@@ -213,7 +216,7 @@ const ReviewScreen = () => {
         }
 
         if (bodyView === 'bulk_repair') {
-            const failedFiles = files.filter((f: FileItem) => f.reviewStatus === 'FAILED');
+            const failedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'FAILED');
             const repairOptions = [
                 '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
                 '(2) Bulk Change Strategy & Re-apply',
@@ -274,17 +277,18 @@ const ReviewScreen = () => {
         const actions = ['(↑↓) Nav'];
 
         const isFileSelected = selectedItemIndex < numFiles;
-        const hasFailedFiles = files.some((f: FileItem) => f.reviewStatus === 'FAILED');
+        const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
         
         if (isFileSelected) {
             const selectedFile = files[selectedItemIndex];
-            if (selectedFile && selectedFile.reviewStatus !== 'FAILED') {
+            const fileState = selectedFile ? fileReviewStates.get(selectedFile.id) : undefined;
+            if (selectedFile && fileState?.status !== 'FAILED') {
                 actions.push('(Spc) Toggle');
             }
             actions.push('(D)iff');
             
             // Add repair options for failed files
-            if (selectedFile && selectedFile.reviewStatus === 'FAILED') {
+            if (selectedFile && fileState?.status === 'FAILED') {
                 actions.push('(T)ry Repair');
             }
         } else { // script selected
@@ -304,7 +308,7 @@ const ReviewScreen = () => {
             actions.push('(A)pprove');
         }
 
-        if (files.some((f: FileItem) => f.reviewStatus === 'APPROVED' || f.reviewStatus === 'FAILED')) {
+        if (Array.from(fileReviewStates.values()).some(s => s.status === 'APPROVED' || s.status === 'FAILED')) {
             actions.push('(Shift+R) Reject All');
         }
         actions.push('(Q)uit');
@@ -316,7 +320,7 @@ const ReviewScreen = () => {
         <Box flexDirection="column">
             {/* Header */}
             <Text color="cyan">▲ relaycode review</Text>
-            <Separator width={width} />
+            <Separator />
             
             {/* Navigator Section */}
             <Box flexDirection="column" marginY={1}>
@@ -340,7 +344,7 @@ const ReviewScreen = () => {
                 </Box>
             </Box>
 
-            <Separator width={width}/>
+            <Separator />
 
             {/* Script Results (if any) */}
             {scripts.length > 0 && (
@@ -355,23 +359,26 @@ const ReviewScreen = () => {
                             />
                         ))}
                     </Box>
-                    <Separator width={width}/>
+                    <Separator />
                 </>
             )}
 
             {/* Files Section */}
             <Box flexDirection="column" marginY={1}>
                 <Text bold>FILES</Text>
-                {files.map((file: FileItem, index: number) => (
-                    <FileItemRow
+                {files.map((file: FileItem, index: number) => {
+                    const reviewState = fileReviewStates.get(file.id);
+                    return (<FileItemRow
                         key={file.id}
                         file={file}
                         isSelected={selectedItemIndex === index}
-                    />
-                ))}
+                        reviewStatus={reviewState?.status || 'AWAITING'}
+                        reviewError={reviewState?.error}
+                    />);
+                })}
             </Box>
             
-            <Separator width={width}/>
+            <Separator />
             
             {/* Body Viewport */}
             {bodyView !== 'none' && (
@@ -379,7 +386,7 @@ const ReviewScreen = () => {
                     <Box marginY={1}>
                         {renderBody()}
                     </Box>
-                    <Separator width={width} />
+                    <Separator />
                 </>
             )}
 

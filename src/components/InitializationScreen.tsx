@@ -1,9 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { Task } from '../types/view.types';
 import Separator from './Separator';
+import type { Task } from '../stores/init.store';
 import { useInitializationScreen } from '../hooks/useInitializationScreen';
-import { useStdoutDimensions } from '../utils';
 
 const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
 	let symbol: React.ReactNode;
@@ -38,7 +37,6 @@ const InitializationScreen = () => {
         projectId,
         footerText,
     } = useInitializationScreen();
-    const [width] = useStdoutDimensions();
 
     const renderAnalyze = () => (
         <Box flexDirection="column">
@@ -122,9 +120,9 @@ const InitializationScreen = () => {
     return (
         <Box flexDirection="column">
             <Text color="cyan">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
-            <Separator width={width} />
+            <Separator />
             <Box marginY={1}>{renderPhase()}</Box>
-            <Separator width={width} />
+            <Separator />
             {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
         </Box>
     );

@@ -2,10 +2,11 @@ import React from 'react';
 import { render } from 'ink';
 import App from './src/App';
 import { useAppStore } from './src/stores/app.store';
-import { useUIStore } from './src/stores/ui.store';
+import { useDetailStore } from './src/stores/detail.store';
+import { useHistoryStore } from './src/stores/history.store';
+import { useReviewStore } from './src/stores/review.store';
 import { useTransactionStore } from './src/stores/transaction.store';
 import { useCommitStore } from './src/stores/commit.store';
-import { ReviewService } from './src/services/review.service';
 
 const main = () => {
     // Initialize stores
@@ -25,19 +26,19 @@ const main = () => {
                 appActions.showGitCommitScreen();
                 break;
             case 'ReviewProcessingScreen':
-                ReviewService.loadTransactionForReview('1');
+                useReviewStore.getState().actions.load('1');
                 appActions.showReviewProcessingScreen();
                 break;
             case 'ReviewScreen':
-                ReviewService.loadTransactionForReview('1');
+                useReviewStore.getState().actions.load('1');
                 appActions.showReviewScreen();
                 break;
             case 'TransactionDetailScreen':
-                useUIStore.getState().actions.detail_load('3');
+                useDetailStore.getState().actions.load('3');
                 appActions.showTransactionDetailScreen();
                 break;
             case 'TransactionHistoryScreen':
-                useUIStore.getState().actions.history_load();
+                useHistoryStore.getState().actions.load();
                 appActions.showTransactionHistoryScreen();
                 break;
             case 'InitializationScreen':
@@ -54,6 +55,8 @@ const main = () => {
 
     // Check if we're running in an interactive terminal
     if (process.stdin.isTTY && process.stdout.isTTY) {
+        // eslint-disable-next-line no-console
+        console.clear();
         render(<App />);
     } else {
         process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');

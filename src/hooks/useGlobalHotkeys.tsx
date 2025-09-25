@@ -1,6 +1,6 @@
 import { useApp, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
-import { useUIStore } from '../stores/ui.store';
+import { useViewStore } from '../stores/view.store';
 
 const MAIN_SCREENS_FOR_QUIT: string[] = ['dashboard', 'init'];
 
@@ -9,7 +9,7 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
     const { currentScreen } = useAppStore(s => ({
         currentScreen: s.currentScreen,
     }));
-    const { activeOverlay, setActiveOverlay } = useUIStore(s => ({
+    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
         activeOverlay: s.activeOverlay,
         setActiveOverlay: s.actions.setActiveOverlay,
     }));

@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
-import { useUIStore } from '../stores/ui.store';
+import { useViewStore } from '../stores/view.store';
+import { useDashboardStore } from '../stores/dashboard.store';
+import { useReviewStore } from '../stores/review.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useHistoryStore } from '../stores/history.store';
 import { useInitStore } from '../stores/init.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
 import { COPYABLE_ITEMS } from '../types/copy.types';
 import { CopyService } from '../services/copy.service';
-import { ReviewService } from '../services/review.service';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import type { Transaction } from '../types/domain.types';
@@ -18,7 +21,10 @@ const useDebugMenuActions = () => {
     const { actions: appActions } = useAppStore();
     const { actions: initActions } = useInitStore();
     const { actions: commitActions } = useCommitStore();
-    const { actions: uiActions } = useUIStore();
+    const { actions: dashboardActions } = useDashboardStore();
+    const { actions: reviewActions } = useReviewStore();
+    const { actions: detailActions } = useDetailStore();
+    const { actions: historyActions } = useHistoryStore();
 
     const menuItems: MenuItem[] = [
         {
@@ -49,57 +55,57 @@ const useDebugMenuActions = () => {
         {
             title: 'Dashboard: Listening',
             action: () => {
-                uiActions.dashboard_setStatus('LISTENING');
+                dashboardActions.setStatus('LISTENING');
                 appActions.showDashboardScreen();
             },
         },
         {
             title: 'Dashboard: Confirm Approve',
             action: () => {
-                uiActions.dashboard_startApproveAll();
+                dashboardActions.startApproveAll();
                 appActions.showDashboardScreen();
             },
         },
         {
             title: 'Dashboard: Approving',
             action: () => {
-                uiActions.dashboard_setStatus('APPROVING');
+                dashboardActions.setStatus('APPROVING');
                 appActions.showDashboardScreen();
             },
         },
         {
             title: 'Review: Partial Failure (Default)',
             action: () => {
-                ReviewService.loadTransactionForReview('1');
+                reviewActions.load('1');
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review: Success',
             action: () => {
-                ReviewService.loadTransactionForReview('2');
+                reviewActions.load('2');
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review: Diff View',
             action: () => {
-                ReviewService.loadTransactionForReview('1');
-                uiActions.review_setBodyView('diff');
+                reviewActions.load('1');
+                reviewActions.setBodyView('diff');
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review: Reasoning View',
             action: () => {
-                ReviewService.loadTransactionForReview('1', { bodyView: 'reasoning' });
+                reviewActions.load('1', { bodyView: 'reasoning' });
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review: Copy Mode',
             action: () => {
-                ReviewService.loadTransactionForReview('1');
+                reviewActions.load('1');
                 appActions.showReviewScreen();
                 const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
                 if (!tx) return;
@@ -115,29 +121,29 @@ const useDebugMenuActions = () => {
         {
             title: 'Review: Script Output',
             action: () => {
-                ReviewService.loadTransactionForReview('2');
+                reviewActions.load('2');
                 appActions.showReviewScreen();
-                uiActions.review_setBodyView('script_output');
+                reviewActions.setBodyView('script_output');
             },
         },
         {
             title: 'Review: Bulk Repair',
             action: () => {
-                ReviewService.loadTransactionForReview('1', { bodyView: 'bulk_repair' });
+                reviewActions.load('1', { bodyView: 'bulk_repair' });
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review: Handoff Confirm',
             action: () => {
-                ReviewService.loadTransactionForReview('1', { bodyView: 'confirm_handoff' });
+                reviewActions.load('1', { bodyView: 'confirm_handoff' });
                 appActions.showReviewScreen();
             },
         },
         {
             title: 'Review Processing',
             action: () => {
-                ReviewService.loadTransactionForReview('2'); // Use tx '2' which has scripts
+                reviewActions.load('2'); // Use tx '2' which has scripts
                 appActions.showReviewProcessingScreen();
             },
         },
@@ -152,42 +158,42 @@ const useDebugMenuActions = () => {
             title: 'Transaction Detail Screen',
             action: () => {
                 // The dashboard store has transactions, we'll just pick one.
-                uiActions.detail_load('3'); // 'feat: implement new dashboard UI'
+                detailActions.load('3'); // 'feat: implement new dashboard UI'
                 appActions.showTransactionDetailScreen();
             },
         },
         {
             title: 'Transaction History Screen',
             action: () => {
-                uiActions.history_load();
+                historyActions.load();
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: L1 Drilldown',
             action: () => {
-                uiActions.history_prepareDebugState('l1-drill');
+                historyActions.prepareDebugState('l1-drill');
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: L2 Drilldown (Diff)',
             action: () => {
-                uiActions.history_prepareDebugState('l2-drill');
+                historyActions.prepareDebugState('l2-drill');
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: Filter Mode',
             action: () => {
-                uiActions.history_prepareDebugState('filter');
+                historyActions.prepareDebugState('filter');
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: Copy Mode',
             action: () => {
-                uiActions.history_prepareDebugState('copy');
+                historyActions.prepareDebugState('copy');
                 appActions.showTransactionHistoryScreen();
                 const allTxs = useTransactionStore.getState().transactions;
                 // The 'copy' debug state sets selectedForAction to ['3', '6']. We'll use that directly.
@@ -218,12 +224,12 @@ export const useDebugMenu = () => {
             const item = menuItems[selectedIndex];
             if (item) {
                 item.action();
-                useUIStore.getState().actions.setActiveOverlay('none');
+                useViewStore.getState().actions.setActiveOverlay('none');
             }
             return;
         }
         if (key.escape) {
-            useUIStore.getState().actions.setActiveOverlay('none');
+            useViewStore.getState().actions.setActiveOverlay('none');
             return;
         }
 

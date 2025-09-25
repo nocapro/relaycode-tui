@@ -2,11 +2,11 @@ import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useCopyStore } from '../stores/copy.store';
 import Separator from './Separator';
-import { useUIStore } from '../stores/ui.store';
+import { useViewStore } from '../stores/view.store';
 import { useStdoutDimensions } from '../utils';
 
 const CopyScreen = () => {
-    const activeOverlay = useUIStore(s => s.activeOverlay);
+    const activeOverlay = useViewStore(s => s.activeOverlay);
     const {
         title, items, selectedIndex, selectedIds, lastCopiedMessage,
         actions,

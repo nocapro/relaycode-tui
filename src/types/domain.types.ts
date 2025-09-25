@@ -24,9 +24,6 @@ export interface FileItem {
     linesRemoved: number;
     type: FileChangeType;
     strategy?: 'replace' | 'standard-diff';
-    // Review-specific, optional properties
-    reviewStatus?: FileReviewStatus;
-    reviewError?: string;
 }
 
 /** The lifecycle status of a transaction. */

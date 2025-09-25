@@ -2,11 +2,9 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import { useSplashScreen } from '../hooks/useSplashScreen';
-import { useStdoutDimensions } from '../utils';
 
 const SplashScreen = () => {
     const { countdown } = useSplashScreen();
-    const [width] = useStdoutDimensions();
     const logo = `
          ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
          ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
@@ -16,7 +14,7 @@ const SplashScreen = () => {
     return (
         <Box flexDirection="column">
             <Text color="cyan">▲ relaycode</Text>
-            <Separator width={width} />
+            <Separator />
             <Text color="cyan">{logo}</Text>
             <Box flexDirection="column" alignItems="center">
                 <Text italic>A zero-friction, AI-native patch engine.</Text>
@@ -42,13 +40,13 @@ const SplashScreen = () => {
                 </Box>
             </Box>
             
-            <Box marginTop={1}><Separator width={width} /></Box>
+            <Box marginTop={1}><Separator /></Box>
             <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
             <Text>web app with repo-wide visual context, history, and rollback.</Text>
             <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
-            <Separator width={width} />
+            <Separator />
             <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
-            <Separator width={width} />
+            <Separator />
             <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
         </Box>
     );

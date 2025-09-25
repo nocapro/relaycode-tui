@@ -1,19 +1,17 @@
-import { useUIStore } from '../stores/ui.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
-import type { ApplyStep, ApplyUpdate, ReviewBodyView } from '../types/view.types';
-import type { FileItem } from '../types/domain.types';
+import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
+import type { Transaction, FileItem, FileReviewStatus } from '../types/domain.types';
 
-const generateBulkRepairPrompt = (files: FileItem[]): string => {
-    const failedFiles = files.filter(f => f.reviewStatus === 'FAILED');
+const generateBulkRepairPrompt = (failedFiles: FileItem[]): string => {
     return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
 
 IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
 
 ${failedFiles.map(file => `--- FILE: ${file.path} ---
 Strategy: ${file.strategy}
-Error: ${file.reviewError}
+Error: Hunk #1 failed to apply // This is a mock error
 
 ORIGINAL CONTENT:
 ---
@@ -30,31 +28,29 @@ Please analyze all failed files and provide a complete, corrected response.`;
 };
 
 const generateHandoffPrompt = (
-    hash: string,
-    message: string,
-    reasoning: string,
-    files: FileItem[],
+    transaction: Transaction,
+    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>,
 ): string => {
-    const successfulFiles = files.filter(f => f.reviewStatus === 'APPROVED');
-    const failedFiles = files.filter(f => f.reviewStatus === 'FAILED');
+    const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+    const failedFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'FAILED');
 
     return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
 
-The full plan for this transaction is detailed in the YAML file located at: .relay/transactions/${hash}.yml. Please use this file as your primary source of truth for the overall goal.
+The full plan for this transaction is detailed in the YAML file located at: .relay/transactions/${transaction.hash}.yml. Please use this file as your primary source of truth for the overall goal.
 
 Here is the current status of the transaction:
 
 --- TRANSACTION SUMMARY ---
-Goal: ${message}
+Goal: ${transaction.message}
 Reasoning:
-${reasoning}
+${transaction.reasoning || ''}
 
 --- CURRENT FILE STATUS ---
 SUCCESSFUL CHANGES (already applied, no action needed):
 ${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || '  (None)'}
 
 FAILED CHANGES (these are the files you need to fix):
-${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${f.reviewError})`).join('\n')}
+${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${fileReviewStates.get(f.id)?.error})`).join('\n')}
 
 Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.`;
 };
@@ -111,35 +107,32 @@ async function* runApplySimulation(scenario: 'success' | 'failure'): AsyncGenera
     }
 }
 
-const loadTransactionForReview = (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => {
-    const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-    if (!transaction) return;
-
+const prepareTransactionForReview = (transaction: Transaction): {
+    patchStatus: PatchStatus;
+    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+} => {
     // This simulates the backend determining which files failed or succeeded and sets it ONCE on load.
     // For this demo, tx '1' is the failure case, any other is success.
     const isFailureCase = transaction.id === '1';
-    const { updateFileReviewStatus } = useTransactionStore.getState().actions;
+    const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
 
     (transaction.files || []).forEach((file, index) => {
         if (isFailureCase) {
             const isFailedFile = index > 0;
-            updateFileReviewStatus(
-                transactionId,
-                file.id,
-                isFailedFile ? 'FAILED' : 'APPROVED',
-                isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined,
-            );
+            const status = isFailedFile ? 'FAILED' : 'APPROVED';
+            const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+            fileReviewStates.set(file.id, { status, error });
         } else {
-            updateFileReviewStatus(transactionId, file.id, 'APPROVED');
+            fileReviewStates.set(file.id, { status: 'APPROVED' });
         }
     });
-    useUIStore.getState().actions.review_load(transactionId, initialState);
+    return { patchStatus: isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS', fileReviewStates };
 };
 
-const generateSingleFileRepairPrompt = (file: FileItem): string => {
+const generateSingleFileRepairPrompt = (file: FileItem, error?: string): string => {
     return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
 
-Error: ${file.reviewError}
+Error: ${error || 'Unknown error'}
 Strategy: ${file.strategy}
 
 ORIGINAL CONTENT:
@@ -155,41 +148,36 @@ ${file.diff || '// ... failed diff would be here ...'}
 Please provide a corrected patch that addresses the error.`;
 };
 
-const tryRepairFile = (file: FileItem): FileItem => {
-    const repairPrompt = generateSingleFileRepairPrompt(file);
+const tryRepairFile = (file: FileItem, error?: string): FileItem => {
+    const repairPrompt = generateSingleFileRepairPrompt(file, error);
     // In a real app: clipboardy.writeSync(repairPrompt)
     // eslint-disable-next-line no-console
     console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
 
-    // Mock: return the updated file
-    return { ...file, reviewStatus: 'APPROVED' as const, reviewError: undefined, linesAdded: 5, linesRemoved: 2 };
+    return file;
 };
 
-const runBulkReapply = async (files: FileItem[]): Promise<FileItem[]> => {
-    const failedFileIds = new Set(files.filter(f => f.reviewStatus === 'FAILED').map(f => f.id));
-    if (failedFileIds.size === 0) {
-        return files;
-    }
-
+const runBulkReapply = async (failedFiles: FileItem[]): Promise<{ id: string; status: FileReviewStatus; error?: string }[]> => {
     await sleep(1500); // Simulate re-apply
 
     // Mock a mixed result
     let first = true;
-    return files.map(file => {
-        if (failedFileIds.has(file.id)) {
-            if (first) {
-                first = false;
-                // The file coming in already has the 'RE_APPLYING' status from the store action
-                return { ...file, reviewStatus: 'APPROVED' as const, strategy: 'replace' as const, reviewError: undefined, linesAdded: 9, linesRemoved: 2 };
-            }
-            return { ...file, reviewStatus: 'FAILED' as const, reviewError: "'replace' failed: markers not found" };
+    return failedFiles.map(file => {
+        if (first) {
+            first = false;
+            return { id: file.id, status: 'APPROVED' as const };
+        } else {
+            return {
+                id: file.id,
+                status: 'FAILED' as const,
+                error: "'replace' failed: markers not found",
+            };
         }
-        return file;
     });
 };
 
 export const ReviewService = {
-    loadTransactionForReview,
+    prepareTransactionForReview,
     generateBulkRepairPrompt,
     generateHandoffPrompt,
     performHandoff,

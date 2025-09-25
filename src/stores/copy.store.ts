@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { moveIndex } from './navigation.utils';
-import { useUIStore } from './ui.store';
+import { useViewStore } from './view.store';
+import { CopyService } from '../services/copy.service';
 import type { CopyItem } from '../types/copy.types';
+import type { Transaction, FileItem } from '../types/domain.types';
 
 export type { CopyItem };
 
@@ -16,6 +18,9 @@ interface CopyState {
     actions: {
         open: (title: string, items: CopyItem[], onClose?: () => void) => void;
         close: () => void;
+        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+        openForHistory: (transactions: Transaction[]) => void;
         navigateUp: () => void;
         navigateDown: () => void;
         toggleSelection: () => void;
@@ -35,7 +40,7 @@ export const useCopyStore = create<CopyState>((set, get) => ({
     actions: {
         open: (title, items, onClose) => {
             const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
-            useUIStore.getState().actions.setActiveOverlay('copy');
+            useViewStore.getState().actions.setActiveOverlay('copy');
             set({
                 title,
                 items,
@@ -46,9 +51,27 @@ export const useCopyStore = create<CopyState>((set, get) => ({
             });
         },
         close: () => {
-            useUIStore.getState().actions.setActiveOverlay('none');
+            useViewStore.getState().actions.setActiveOverlay('none');
             get().onClose?.();
             set({ items: [], onClose: undefined });
+        },
+        openForReview: (transaction, files, selectedFile) => {
+            const { actions } = get();
+            const title = 'Select data to copy from review:';
+            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+            actions.open(title, items);
+        },
+        openForDetail: (transaction, selectedFile) => {
+            const { actions } = get();
+            const title = `Select data to copy from transaction ${transaction.hash}:`;
+            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+            actions.open(title, items);
+        },
+        openForHistory: (transactions) => {
+            const { actions } = get();
+            const title = `Select data to copy from ${transactions.length} transactions:`;
+            const items = CopyService.getCopyItemsForHistory(transactions);
+            actions.open(title, items);
         },
         navigateUp: () => set(state => ({
             selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),

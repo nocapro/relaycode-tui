@@ -1,36 +1,39 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useInput } from 'ink';
-import { useUIStore } from '../stores/ui.store';
+import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
-import { useStdoutDimensions } from '../utils';
-import { ReviewService } from '../services/review.service';
+import { useReviewStore } from '../stores/review.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useHistoryStore } from '../stores/history.store';
+import { useViewport } from './useViewport';
 
 export const useDashboardScreen = () => {
-    const [columns, rows] = useStdoutDimensions();
-    const [viewOffset, setViewOffset] = useState(0);
     const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
-    const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
     const {
-        dashboard_status: status,
-        dashboard_selectedTransactionIndex: selectedTransactionIndex,
-    } = useUIStore();
+        status,
+        selectedTransactionIndex,
+    } = useDashboardStore();
     const transactions = useTransactionStore(s => s.transactions);
     const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
     const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
 
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex: selectedTransactionIndex,
+        padding: NON_EVENT_STREAM_HEIGHT,
+    });
+
     const {
-        dashboard_togglePause,
-        dashboard_moveSelectionUp,
-        dashboard_moveSelectionDown,
-        dashboard_startApproveAll,
-        dashboard_confirmAction,
-        dashboard_cancelAction,
-    } = useUIStore(s => s.actions);
+        togglePause,
+        moveSelectionUp,
+        moveSelectionDown,
+        startApproveAll,
+        confirmAction,
+        cancelAction,
+    } = useDashboardStore(s => s.actions);
     const appActions = useAppStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
-    const uiActions = useUIStore(s => s.actions);
 
     const pendingApprovals = pendingTransactions.length;
     const pendingCommits = appliedTransactions.length;
@@ -38,46 +41,38 @@ export const useDashboardScreen = () => {
     const isModal = status === 'CONFIRM_APPROVE';
     const isProcessing = status === 'APPROVING';
 
-    useEffect(() => {
-        if (selectedTransactionIndex < viewOffset) {
-            setViewOffset(selectedTransactionIndex);
-        } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {
-            setViewOffset(selectedTransactionIndex - viewportHeight + 1);
-        }
-    }, [selectedTransactionIndex, viewOffset, viewportHeight]);
-
     useInput((input, key) => {
         if (isModal) {
-            if (key.return) dashboard_confirmAction();
-            if (key.escape) dashboard_cancelAction();
+            if (key.return) confirmAction();
+            if (key.escape) cancelAction();
             return;
         }
 
         if (isProcessing) return; // No input while processing
 
-        if (key.upArrow) dashboard_moveSelectionUp();
-        if (key.downArrow) dashboard_moveSelectionDown();
+        if (key.upArrow) moveSelectionUp();
+        if (key.downArrow) moveSelectionDown();
         
         if (key.return) {
             const selectedTx = transactions[selectedTransactionIndex];
             if (selectedTx?.status === 'PENDING') {
                 // For PENDING transactions, we still go to the review screen.
-                ReviewService.loadTransactionForReview(selectedTx.id);
+                useReviewStore.getState().actions.load(selectedTx.id);
                 appActions.showReviewScreen();
             } else if (selectedTx) {
-                uiActions.detail_load(selectedTx.id);
+                useDetailStore.getState().actions.load(selectedTx.id);
                 appActions.showTransactionDetailScreen();
             }
         }
         
-        if (input.toLowerCase() === 'p') dashboard_togglePause();
-        if (input.toLowerCase() === 'a' && pendingApprovals > 0) dashboard_startApproveAll();
+        if (input.toLowerCase() === 'p') togglePause();
+        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
         if (input.toLowerCase() === 'c' && pendingCommits > 0) {
             commitActions.prepareCommitScreen();
             appActions.showGitCommitScreen();
         }
         if (input.toLowerCase() === 'l') {
-            uiActions.history_load();
+            useHistoryStore.getState().actions.load();
             appActions.showTransactionHistoryScreen();
         }
     });
@@ -94,6 +89,5 @@ export const useDashboardScreen = () => {
         viewOffset,
         viewportHeight,
         transactionsToConfirm,
-        width: columns,
     };
 };

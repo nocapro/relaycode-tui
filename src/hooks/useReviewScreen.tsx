@@ -1,138 +1,137 @@
 import { useMemo } from 'react';
-import { useInput, useApp } from 'ink';
-import { useUIStore } from '../stores/ui.store';
+import { useInput, useApp, type Key } from 'ink';
+import { useReviewStore } from '../stores/review.store';
+import { useViewStore } from '../stores/view.store';
 import { useAppStore } from '../stores/app.store';
 import { useCopyStore } from '../stores/copy.store';
-import { CopyService } from '../services/copy.service';
-import { useTransactionStore, selectReviewStats } from '../stores/transaction.store';
+import { useTransactionStore } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
 
 export const useReviewScreen = () => {
     const { exit } = useApp();
-    const store = useUIStore();
+    const store = useReviewStore();
+    const transactionId = useViewStore(s => s.selectedTransactionId);
     const {
-        selectedTransactionId: transactionId,
-        review_selectedItemIndex: selectedItemIndex,
-        review_bodyView: bodyView,
-        review_patchStatus: patchStatus,
+        selectedItemIndex,
+        bodyView,
+        patchStatus,
     } = store;
 
     const transaction = useTransactionStore(state => state.transactions.find(t => t.id === transactionId));
-    const transactionActions = useTransactionStore(state => state.actions);
-    const reviewStats = useTransactionStore(selectReviewStats(transactionId));
     const { showDashboardScreen } = useAppStore(s => s.actions);
 
     // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
     const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
+    const fileReviewStates = useReviewStore(s => s.fileReviewStates);
+
+    const reviewStats = useMemo(() => {
+        const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+        return {
+            numFiles: files.length,
+            approvedFilesCount: approvedFiles.length,
+            approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+            approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+        };
+    }, [files, fileReviewStates]);
+
+    const { numFiles, approvedFilesCount } = reviewStats;
 
     const scripts = transaction?.scripts || [];
 
     const {
-        review_moveSelectionUp: moveSelectionUp,
-        review_moveSelectionDown: moveSelectionDown,
-        review_expandDiff: expandDiff,
-        review_toggleBodyView: toggleBodyView,
-        review_setBodyView: setBodyView,
-        review_startApplySimulation: startApplySimulation,
-        review_approve: approve,
-        review_tryRepairFile: tryRepairFile,
-        review_showBulkRepair: showBulkRepair,
-        review_executeBulkRepairOption: executeBulkRepairOption,
-        review_confirmHandoff: confirmHandoff,
-        review_scrollReasoningUp: scrollReasoningUp,
-        review_scrollReasoningDown: scrollReasoningDown,
-        review_navigateScriptErrorUp: navigateScriptErrorUp,
-        review_navigateScriptErrorDown: navigateScriptErrorDown,
+        moveSelectionUp,
+        moveSelectionDown,
+        expandDiff,
+        toggleBodyView,
+        setBodyView,
+        startApplySimulation,
+        approve,
+        tryRepairFile,
+        showBulkRepair,
+        executeBulkRepairOption,
+        confirmHandoff,
+        scrollReasoningUp,
+        scrollReasoningDown,
+        navigateScriptErrorUp,
+        navigateScriptErrorDown,
+        toggleFileApproval,
+        rejectAllFiles,
     } = store.actions;
 
     const openCopyMode = () => {
         if (!transaction) return;
-        const title = 'Select data to copy from review:';
         const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
-        const items = CopyService.getCopyItemsForReview(transaction, transaction.files || [], selectedFile);
-        useCopyStore.getState().actions.open(title, items);
+        useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
     };
 
-    useInput((input, key) => {
-        // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
-        if (input === '1') {
+    // --- Input Handlers ---
+
+    const handleGlobalInput = (input: string, key: Key): boolean => {
+        if (input === '1') { // For demo purposes
             startApplySimulation('success');
-            return;
+            return true;
         }
-        if (input === '2') {
-            // The store's default is failure, but to re-trigger the processing screen
+        if (input === '2') { // For demo purposes
             startApplySimulation('failure');
-            return;
+            return true;
         }
-
-        if (input.toLowerCase() === 'q') exit();
-
-        // Handle Escape key - context-sensitive behavior
+        if (input.toLowerCase() === 'q') {
+            exit();
+            return true;
+        }
         if (key.escape) {
             if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
-                toggleBodyView(bodyView); // Close modal
+                toggleBodyView(bodyView);
             } else if (bodyView !== 'none') {
                 setBodyView('none');
             } else {
                 showDashboardScreen();
             }
-            return;
+            return true;
         }
+        return false;
+    };
 
-        // Handoff Confirmation
-        if (bodyView === 'confirm_handoff') {
-            if (key.return) {
-                confirmHandoff();
+    const handleHandoffConfirmInput = (_input: string, key: Key): void => {
+        if (key.return) confirmHandoff();
+    };
+
+    const handleBulkRepairInput = (input: string) => {
+        if (input >= '1' && input <= '4') {
+            executeBulkRepairOption(parseInt(input));
+        }
+    };
+
+    const handleReasoningInput = (input: string, key: Key): void => {
+        if (key.upArrow) scrollReasoningUp();
+        if (key.downArrow) scrollReasoningDown();
+        if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+    };
+
+    const handleScriptOutputInput = (input: string, key: Key): void => {
+        if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+        if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+        if (key.return) toggleBodyView('script_output');
+        if (input.toLowerCase() === 'c') {
+            const scriptIndex = selectedItemIndex - numFiles;
+            const selectedScript = scripts[scriptIndex];
+            if (selectedScript) {
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
             }
-            return;
         }
+    };
 
-        // Bulk Repair Navigation
-        if (bodyView === 'bulk_repair') {
-            if (input >= '1' && input <= '4') {
-                executeBulkRepairOption(parseInt(input));
-            }
-            return;
-        }
+    const handleDiffInput = (input: string) => {
+        if (input.toLowerCase() === 'x') expandDiff();
+        if (input.toLowerCase() === 'd') toggleBodyView('diff');
+    };
 
-        // Reasoning Scroll Navigation
-        if (bodyView === 'reasoning') {
-            if (key.upArrow) scrollReasoningUp();
-            if (key.downArrow) scrollReasoningDown();
-            if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
-            return;
-        }
-
-        // Script Output Navigation
-        if (bodyView === 'script_output') {
-            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
-            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-            if (key.return) toggleBodyView('script_output');
-            if (input.toLowerCase() === 'c') {
-                // Copy script output
-                const scriptIndex = selectedItemIndex - reviewStats.numFiles;
-                const selectedScript = scripts[scriptIndex];
-                if (selectedScript) {
-                    // eslint-disable-next-line no-console
-                    console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
-                }
-            }
-            return;
-        }
-
-        // Diff View Navigation
-        if (bodyView === 'diff') {
-            if (input.toLowerCase() === 'x') expandDiff();
-            if (input.toLowerCase() === 'd') toggleBodyView('diff');
-            return;
-        }
-
+    const handleMainNavigationInput = (input: string, key: Key): void => {
         // Handle Shift+R for reject all
         if (key.shift && input.toLowerCase() === 'r') {
-            if (reviewStats.approvedFilesCount > 0) {
-                if (transactionId) {
-                    transactionActions.rejectAllFiles(transactionId);
-                }
+            if (approvedFilesCount > 0 && transactionId) {
+                rejectAllFiles();
             }
             return;
         }
@@ -140,32 +139,32 @@ export const useReviewScreen = () => {
         // Main View Navigation
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
-
         if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
 
         if (input === ' ') {
-            if (selectedItemIndex < reviewStats.numFiles) {
+            if (selectedItemIndex < numFiles) {
                 const file = files[selectedItemIndex];
-                if (file && file.reviewStatus !== 'FAILED' && transactionId) {
-                    transactionActions.toggleFileApproval(transactionId, file.id);
+                const fileState = file ? fileReviewStates.get(file.id) : undefined;
+                if (file && fileState && fileState.status !== 'FAILED') {
+                    toggleFileApproval(file.id);
                 }
             }
         }
 
         if (input.toLowerCase() === 'd') {
-            if (selectedItemIndex < reviewStats.numFiles) {
+            if (selectedItemIndex < numFiles) {
                 toggleBodyView('diff');
             }
         }
 
         if (key.return) { // Enter key
-             if (selectedItemIndex >= reviewStats.numFiles) { // It's a script
+            if (selectedItemIndex >= numFiles) { // It's a script
                 toggleBodyView('script_output');
             }
         }
 
         if (input.toLowerCase() === 'a') {
-            if (reviewStats.approvedFilesCount > 0) {
+            if (approvedFilesCount > 0) {
                 approve();
                 showDashboardScreen();
             }
@@ -175,30 +174,39 @@ export const useReviewScreen = () => {
             openCopyMode();
         }
 
-        // Handle T for single repair and Shift+T for bulk repair
         if (input.toLowerCase() === 't') {
             if (key.shift) { // Bulk repair
-                const hasFailedFiles = files.some(f => f.reviewStatus === 'FAILED');
-                if (hasFailedFiles) {
-                    showBulkRepair();
-                }
+                const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+                if (hasFailedFiles) showBulkRepair();
             } else {
-                if (selectedItemIndex < reviewStats.numFiles) {
+                if (selectedItemIndex < numFiles) {
                     const file = files[selectedItemIndex];
-                    if (file && file.reviewStatus === 'FAILED') {
-                        tryRepairFile();
-                    }
+                    const fileState = file ? fileReviewStates.get(file.id) : undefined;
+                    if (file && fileState?.status === 'FAILED') tryRepairFile();
                 }
             }
         }
+    };
 
-        if (input.toLowerCase() === 'q') {
-            showDashboardScreen();
+    useInput((input: string, key: Key) => {
+        if (handleGlobalInput(input, key)) {
+            return;
+        }
+
+        switch (bodyView) {
+            case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
+            case 'bulk_repair': return handleBulkRepairInput(input);
+            case 'reasoning': return handleReasoningInput(input, key);
+            case 'script_output': return handleScriptOutputInput(input, key);
+            case 'diff': return handleDiffInput(input);
+            default: return handleMainNavigationInput(input, key);
         }
     });
 
     return {
         ...store,
+        fileReviewStates,
+        selectedItemIndex,
         transaction,
         files,
         scripts,

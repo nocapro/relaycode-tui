@@ -103,40 +103,39 @@ const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: n
 
 const TransactionHistoryScreen = () => {
     const {
-        history_mode,
-        history_filterQuery,
-        history_selectedForAction,
-        history_selectedItemPath,
-        history_expandedIds,
+        mode,
+        filterQuery,
+        selectedForAction,
+        selectedItemPath,
+        expandedIds,
         actions,
         transactions,
         itemsInView,
         pathsInViewSet,
         filterStatus,
         showingStatus,
-        width,
     } = useTransactionHistoryScreen();
 
     const renderFooter = () => {
-        if (history_mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
-        if (history_mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
+        if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
+        if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
         
-        const actions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
-        if (history_selectedForAction.size > 0) {
-            actions.push('(C)opy', '(B)ulk');
+        const footerActions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
+        if (selectedForAction.size > 0) {
+            footerActions.push('(C)opy', '(B)ulk');
         }
-        return <Text>{actions.join(' · ')}</Text>;
+        return <Text>{footerActions.join(' · ')}</Text>;
     };
 
     return (
         <Box flexDirection="column">
             <Text color="cyan">▲ relaycode transaction history</Text>
-            <Separator width={width} />
+            <Separator />
 
             <Box>
                 <Text>Filter: </Text>
-                {history_mode === 'FILTER' ? (
-                    <TextInput value={history_filterQuery} onChange={actions.history_setFilterQuery} />
+                {mode === 'FILTER' ? (
+                    <TextInput value={filterQuery} onChange={actions.setFilterQuery} />
                 ) : (
                     <Text>{filterStatus}</Text>
                 )}
@@ -144,12 +143,12 @@ const TransactionHistoryScreen = () => {
             </Box>
 
             <Box flexDirection="column" marginY={1}>
-                {history_mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={history_selectedForAction.size} />}
+                {mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
 
-                {history_mode === 'LIST' && transactions.map((tx: Transaction) => {
-                    const isTxSelected = history_selectedItemPath.startsWith(tx.id);
-                    const isTxExpanded = history_expandedIds.has(tx.id);
-                    const isSelectedForAction = history_selectedForAction.has(tx.id);
+                {mode === 'LIST' && transactions.map((tx: Transaction) => {
+                    const isTxSelected = selectedItemPath.startsWith(tx.id);
+                    const isTxExpanded = expandedIds.has(tx.id);
+                    const isSelectedForAction = selectedForAction.has(tx.id);
 
                     const showTxRow = pathsInViewSet.has(tx.id);
 
@@ -158,7 +157,7 @@ const TransactionHistoryScreen = () => {
                             {showTxRow && (
                                 <TransactionRow
                                     tx={tx}
-                                    isSelected={isTxSelected && !history_selectedItemPath.includes('/')}
+                                    isSelected={isTxSelected && !selectedItemPath.includes('/')}
                                     isExpanded={isTxExpanded}
                                     isSelectedForAction={isSelectedForAction}
                                 />
@@ -166,8 +165,8 @@ const TransactionHistoryScreen = () => {
                             {isTxExpanded && tx.files?.map((file: FileItem) => {
                                 if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
                                 const filePath = `${tx.id}/${file.id}`;
-                                const isFileSelected = history_selectedItemPath === filePath;
-                                const isFileExpanded = history_expandedIds.has(filePath);
+                                const isFileSelected = selectedItemPath === filePath;
+                                const isFileExpanded = expandedIds.has(filePath);
                                 return (
                                     <FileRow
                                         key={file.id}
@@ -182,7 +181,7 @@ const TransactionHistoryScreen = () => {
                 })}
             </Box>
 
-            <Separator width={width} />
+            <Separator />
             {renderFooter()}
         </Box>
     );
