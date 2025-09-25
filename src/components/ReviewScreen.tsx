@@ -2,16 +2,16 @@ import { Box, Text } from 'ink';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
-import type { ScriptResult, FileItem } from '../types/domain.types';
+import type { ScriptResult, FileItem, FileChangeType } from '../types/domain.types';
 import { useReviewScreen } from '../hooks/useReviewScreen';
 
 // --- Sub-components ---
 
-const FileItemRow = ({ file, isSelected, reviewStatus, reviewError }: {
+const FileItemRow = ({ file, reviewStatus, reviewError, isFocused }: {
     file: FileItem;
-    isSelected: boolean;
     reviewStatus: string;
     reviewError?: string;
+    isFocused: boolean;
 }) => {
     let icon;
     let iconColor;
@@ -23,14 +23,24 @@ const FileItemRow = ({ file, isSelected, reviewStatus, reviewError }: {
         case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
     }
 
-    const diffStats = `(+${file.linesAdded}/-${file.linesRemoved})`;
+    const typeColor = (type: FileChangeType) => {
+        switch (type) {
+            case 'ADD': return 'green';
+            case 'DEL': return 'red';
+            case 'REN': return 'yellow';
+            default: return 'white';
+        }
+    };
+
+    const diffStats = <Text>(+<Text color="green">{file.linesAdded}</Text>/-<Text color="red">{file.linesRemoved}</Text>)</Text>;
     const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
-    const prefix = isSelected ? '> ' : '  ';
+    const prefix = isFocused ? '> ' : '  ';
+    const colorProps = isFocused ? { bold: true, color: 'cyan' } : {};
 
     if (reviewStatus === 'FAILED') {
         return (
             <Box>
-                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                <Text {...colorProps}>
                     {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
                     <Text color="red">    ({reviewError})</Text>
                 </Text>
@@ -41,7 +51,7 @@ const FileItemRow = ({ file, isSelected, reviewStatus, reviewError }: {
     if (reviewStatus === 'AWAITING') {
         return (
             <Box>
-                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                <Text {...colorProps}>
                     {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
                     <Text color="yellow">    (Bulk re-apply prompt copied!)</Text>
                 </Text>
@@ -52,7 +62,7 @@ const FileItemRow = ({ file, isSelected, reviewStatus, reviewError }: {
     if (reviewStatus === 'RE_APPLYING') {
         return (
              <Box>
-                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                <Text {...colorProps}>
                     {prefix}<Text color={iconColor}>{icon} RE-APPLYING... {file.path}</Text>
                     <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
                 </Text>
@@ -62,8 +72,10 @@ const FileItemRow = ({ file, isSelected, reviewStatus, reviewError }: {
 
     return (
         <Box>
-            <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
-                {prefix}<Text color={iconColor}>{icon}</Text> MOD {file.path} {diffStats} [{strategy}]
+            <Text {...colorProps}>
+                {prefix}<Text color={iconColor}>{icon}</Text> {file.type}{' '}
+                <Text color={typeColor(file.type)}>{file.path}</Text>{' '}
+                {diffStats} [{strategy}]
             </Text>
         </Box>
     );
@@ -114,8 +126,10 @@ const ReviewScreen = () => {
         fileReviewStates,
         numFiles,
         approvedFilesCount,
-        approvedLinesAdded,
-        approvedLinesRemoved,
+        totalLinesAdded,
+        totalLinesRemoved,
+        selectedBulkRepairOptionIndex,
+        navigableItems,
     } = useReviewScreen();
 
     if (!transaction) {
@@ -127,12 +141,13 @@ const ReviewScreen = () => {
         if (bodyView === 'none') return null;
 
         if (bodyView === 'reasoning') {
-            const reasoningLinesCount = (reasoning || '').split('\n').length;
+            const reasoningText = reasoning || '';
+            const reasoningLinesCount = reasoningText.split('\n').length;
             const visibleLinesCount = 10;
             return (
                 <Box flexDirection="column">
                     <ReasonScreen
-                        reasoning={reasoning}
+                        reasoning={reasoningText}
                         scrollIndex={reasoningScrollIndex}
                         visibleLinesCount={visibleLinesCount}
                     />
@@ -147,7 +162,8 @@ const ReviewScreen = () => {
         }
         
         if (bodyView === 'diff') {
-            const selectedFile = files[selectedItemIndex];
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
             if (!selectedFile) return null;
             return (
                 <DiffScreen
@@ -159,8 +175,12 @@ const ReviewScreen = () => {
         }
 
         if (bodyView === 'script_output') {
-             const scriptIndex = selectedItemIndex - numFiles;
-             const selectedScript = scripts[scriptIndex];
+             const currentItem = navigableItems[selectedItemIndex];
+             const scriptItems = navigableItems.filter((i): i is { type: 'script'; id: string } => i.type === 'script');
+             const scriptIndex = currentItem?.type === 'script'
+                ? scriptItems.findIndex(i => i.id === currentItem.id)
+                : -1;
+             const selectedScript = scripts[scriptIndex] || null;
              if (!selectedScript) return null;
              
              const outputLines = selectedScript.output.split('\n');
@@ -239,8 +259,8 @@ const ReviewScreen = () => {
 
                     <Box flexDirection="column">
                         {repairOptions.map((opt, i) => (
-                            <Text key={i}>
-                                {i === 0 ? '> ' : '  '}
+                            <Text key={i} color={selectedBulkRepairOptionIndex === i ? 'cyan' : undefined}>
+                                {selectedBulkRepairOptionIndex === i ? '> ' : '  '}
                                 {opt}
                             </Text>
                         ))}
@@ -275,13 +295,13 @@ const ReviewScreen = () => {
         // Main footer
         const actions = ['(↑↓) Nav'];
 
-        const isFileSelected = selectedItemIndex < numFiles;
+        const currentItem = navigableItems[selectedItemIndex];
         const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
         
-        if (isFileSelected) {
-            const selectedFile = files[selectedItemIndex];
-            const fileState = selectedFile ? fileReviewStates.get(selectedFile.id) : undefined;
-            if (selectedFile && fileState?.status !== 'FAILED') {
+        if (currentItem?.type === 'file') {
+            const selectedFile = files.find(f => f.id === currentItem.id);
+            const fileState = fileReviewStates.get(currentItem.id);
+            if (fileState?.status !== 'FAILED') {
                 actions.push('(Spc) Toggle');
             }
             actions.push('(D)iff');
@@ -290,12 +310,16 @@ const ReviewScreen = () => {
             if (selectedFile && fileState?.status === 'FAILED') {
                 actions.push('(T)ry Repair');
             }
-        } else { // script selected
+        } else if (currentItem?.type === 'script') {
             actions.push('(Ent) Expand Details');
+        } else { // Prompt or Reasoning
+            actions.push('(Ent) Expand');
         }
 
-        actions.push('(R)easoning');
-        
+        if (currentItem?.type !== 'reasoning') {
+            actions.push('(R)easoning');
+        }
+
         // Add bulk repair if there are failed files
         if (hasFailedFiles) {
             actions.push('(Shift+T) Bulk Repair');
@@ -326,17 +350,19 @@ const ReviewScreen = () => {
                 <Box flexDirection="column">
                     <Text>{hash} · {message}</Text>
                     <Text>
-                        (<Text color="green">+{approvedLinesAdded}</Text>/<Text color="red">-{approvedLinesRemoved}</Text>) · {approvedFilesCount}/{numFiles} Files
+                        (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>) · {numFiles} Files · {approvedFilesCount}/{numFiles} Approved
                         {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
                         {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
                     </Text>
                 </Box>
 
                 <Box flexDirection="column" marginTop={1}>
-                    <Text>
+                    <Text color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' : undefined}>
+                        {navigableItems[selectedItemIndex]?.type === 'prompt' ? '> ' : '  '}
                         (P)rompt ▸ {(prompt || '').substring(0, 60)}...
                     </Text>
-                    <Text>
+                    <Text color={navigableItems[selectedItemIndex]?.type === 'reasoning' ? 'cyan' : undefined}>
+                        {navigableItems[selectedItemIndex]?.type === 'reasoning' ? '> ' : '  '}
                         (R)easoning ({(reasoning || '').split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
                         {((reasoning || '').split('\n')[0] ?? '').substring(0, 50)}...
                     </Text>
@@ -346,16 +372,27 @@ const ReviewScreen = () => {
             <Separator />
 
             {/* Script Results (if any) */}
-            {scripts.length > 0 && (
+            {scripts.length > 0 && navigableItems.some(i => i.type === 'script') && (
                 <>
                     <Box flexDirection="column" marginY={1}>
-                        {scripts.map((script: ScriptResult, index: number) => (
-                            <ScriptItemRow
-                                key={script.command}
-                                script={script}
-                                isSelected={selectedItemIndex === numFiles + index}
-                                isExpanded={bodyView === 'script_output' && selectedItemIndex === numFiles + index}
-                            />
+                        {scripts.map((script: ScriptResult) => (
+                            (() => {
+                                const navItemIndex = navigableItems.findIndex(i => {
+                                    if (i.type === 'script') {
+                                        return i.id === script.command;
+                                    }
+                                    return false;
+                                });
+                                const isSelected = selectedItemIndex === navItemIndex;
+                                return (
+                                    <ScriptItemRow
+                                        key={script.command}
+                                        script={script}
+                                        isSelected={isSelected}
+                                        isExpanded={bodyView === 'script_output' && isSelected}
+                                    />
+                                );
+                            })()
                         ))}
                     </Box>
                     <Separator />
@@ -365,15 +402,24 @@ const ReviewScreen = () => {
             {/* Files Section */}
             <Box flexDirection="column" marginY={1}>
                 <Text bold>FILES</Text>
-                {files.map((file: FileItem, index: number) => {
+                {files.map((file: FileItem) => {
+                    const navItemIndex = navigableItems.findIndex(i => {
+                        if (i.type === 'file') {
+                            return i.id === file.id;
+                        }
+                        return false;
+                    });
+                    const isFocused = selectedItemIndex === navItemIndex;
                     const reviewState = fileReviewStates.get(file.id);
-                    return (<FileItemRow
-                        key={file.id}
-                        file={file}
-                        isSelected={selectedItemIndex === index}
-                        reviewStatus={reviewState?.status || 'AWAITING'}
-                        reviewError={reviewState?.error}
-                    />);
+                    return (
+                        <FileItemRow
+                            key={file.id}
+                            file={file}
+                            isFocused={isFocused}
+                            reviewStatus={reviewState?.status || 'AWAITING'}
+                            reviewError={reviewState?.error}
+                        />
+                    );
                 })}
             </Box>
             

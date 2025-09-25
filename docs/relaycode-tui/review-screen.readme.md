@@ -34,7 +34,7 @@ This state appears after a partial failure during the live application phase. Th
  ▲ relaycode review
  ──────────────────────────────────────────────────────────────────────────────
   e4a7c112 · refactor: rename core utility function
-  (+18/-5) · 1/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+  (+18/-5) · 3 Files · 1/3 Approved · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
 
  (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
  (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
@@ -45,7 +45,7 @@ This state appears after a partial failure during the live application phase. Th
    [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Shift+R) Reject All · (Esc) Back
+ (↑↓) Nav · (D)iff · (Ent) Expand · (T)ry Repair · (Shift+T) Bulk Repair · (Shift+R) Reject All
 ```
 -   **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`. The footer presents both single-file `(T)` and `(Shift+T)` bulk repair options.
 
@@ -61,7 +61,7 @@ The user decides one of the successful changes is undesirable and rejects it.
  ▲ relaycode review
  ──────────────────────────────────────────────────────────────────────────────
   e4a7c112 · refactor: rename core utility function
-  (0/0) · 0/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
+  (+18/-5) · 3 Files · 0/3 Approved · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
 
  (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
  (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
@@ -72,7 +72,7 @@ The user decides one of the successful changes is undesirable and rejects it.
    [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (D)iff · (Shift+R) Reject All · (Esc) Back
+ (↑↓) Nav · (Spc) Toggle · (D)iff · (Shift+R) Reject All
 ```
 -   **Behavior:** The UI instantly recalculates. The file icon changes to `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect the new reality. The footer updates as there are no longer any approved files to commit.
 
@@ -86,7 +86,7 @@ This is the state after a fully successful patch application.
  ▲ relaycode review
  ──────────────────────────────────────────────────────────────────────────────
   4b9d8f03 · refactor: simplify clipboard logic
-  (+22/-11) · 2 Files · 3.9s
+  (+22/-11) · 2 Files · 2/2 Approved · 3.9s
 
  (P)rompt ▸ Simplify the clipboard logic using an external library...
  (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
@@ -113,7 +113,7 @@ This is the state after a fully successful patch application.
  ▲ relaycode review
  ──────────────────────────────────────────────────────────────────────────────
   4b9d8f03 · refactor: simplify clipboard logic
-  (+22/-11) · 2 Files · 3.9s
+  (+22/-11) · 2 Files · 2/2 Approved · 3.9s
 
  (P)rompt ▸ Simplify the clipboard logic using an external library...
  (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
@@ -190,7 +190,7 @@ This is the state after a fully successful patch application.
   (Esc) Cancel
 
  ──────────────────────────────────────────────────────────────────────────────
- Choose an option [1-4, Esc]:
+ (↑↓) Nav · (Enter) Select · [1-4, Esc] Hotkeys
 ```
 -   **Behavior:** A blocking modal appears, presenting four distinct repair strategies that will apply to all failed files simultaneously.
 
@@ -289,7 +289,7 @@ The re-application finishes with one success and one failure.
  ▲ relaycode review
  ──────────────────────────────────────────────────────────────────────────────
   e4a7c112 · refactor: rename core utility function
-  (+27/-7) · 2/3 Files · 0.6s · PATCH FAILED
+  (+27/-7) · 3 Files · 2/3 Approved · PATCH FAILED
 
  ... (Navigator) ...
  ──────────────────────────────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ The re-application finishes with one success and one failure.
    [!] FAILED src/commands/apply.ts   ('replace' failed: markers not found)
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (T)ry Repair · (C)opy · (Ent) Confirm & Commit
+ (↑↓) Nav · (Spc) Toggle · (T)ry Repair · (C)opy · (A)pprove Approved
 ```
 
 ---

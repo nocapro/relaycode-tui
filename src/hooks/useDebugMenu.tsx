@@ -129,6 +129,13 @@ const useDebugMenuActions = () => {
             },
         },
         {
+            title: 'Review: Bulk Repair (Navigable)',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                appActions.showReviewScreen();
+            },
+        },
+        {
             title: 'Review: Handoff Confirm',
             action: () => {
                 reviewActions.load('1', { bodyView: 'confirm_handoff' });

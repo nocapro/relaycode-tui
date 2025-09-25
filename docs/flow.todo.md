@@ -61,9 +61,9 @@ dashboard screen:
 
 - just like transaction history screen, event stream item should also have drilling arrow left right feature to see useful stats, files, also actions can be take by user. only one event stream item can be expanded
 
-===
+=== DONE
 
-update review screen
+1. update review screen
 
 - we need more colors
 
@@ -74,6 +74,11 @@ update review screen
 - header stats should be the total aggregation, not individual item
 
 - add arrow down up navigation for bulk repair action option item
+
+
+3. dont forget to add to debug menu for any new screen state
+
+4. dont forget to update readme if you have updated design
 
 === DONE
 

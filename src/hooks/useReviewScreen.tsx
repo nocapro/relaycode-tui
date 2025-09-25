@@ -6,16 +6,30 @@ import { useCopyStore } from '../stores/copy.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
 
+type NavigableItem =
+    | { type: 'prompt' }
+    | { type: 'reasoning' }
+    | { type: 'script'; id: string }
+    | { type: 'file'; id: string };
+
 export const useReviewScreen = () => {
     const store = useReviewStore();
     const {
         selectedItemIndex,
         bodyView,
         patchStatus,
+        selectedBulkRepairOptionIndex,
     } = store;
 
     const transaction = useTransactionStore(selectSelectedTransaction);
     const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const navigableItems = useMemo((): NavigableItem[] => {
+        if (!transaction) return [];
+        const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
+        const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
+        return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+    }, [transaction]);
 
     // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
     const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
@@ -24,14 +38,17 @@ export const useReviewScreen = () => {
     const reviewStats = useMemo(() => {
         const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
         return {
+            totalFiles: files.length,
+            totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
+            totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
             numFiles: files.length,
             approvedFilesCount: approvedFiles.length,
-            approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
-            approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
         };
     }, [files, fileReviewStates]);
 
-    const { numFiles, approvedFilesCount } = reviewStats;
+    const { approvedFilesCount } = reviewStats;
+
+    const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
 
     const scripts = transaction?.scripts || [];
 
@@ -53,11 +70,14 @@ export const useReviewScreen = () => {
         navigateScriptErrorDown,
         toggleFileApproval,
         rejectAllFiles,
+        navigateBulkRepairUp,
+        navigateBulkRepairDown,
     } = store.actions;
 
     const openCopyMode = () => {
         if (!transaction) return;
-        const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+        const currentItem = navigableItems[selectedItemIndex];
+        const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
         useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
     };
 
@@ -87,7 +107,14 @@ export const useReviewScreen = () => {
         if (key.return) confirmHandoff();
     };
 
-    const handleBulkRepairInput = (input: string) => {
+    const handleBulkRepairInput = (input: string, key: Key): void => {
+        if (key.upArrow) navigateBulkRepairUp();
+        if (key.downArrow) navigateBulkRepairDown();
+        if (key.return) {
+            executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
+            return;
+        }
+
         if (input >= '1' && input <= '4') {
             executeBulkRepairOption(parseInt(input));
         }
@@ -103,9 +130,9 @@ export const useReviewScreen = () => {
         if (input.toLowerCase() === 'j') navigateScriptErrorDown();
         if (input.toLowerCase() === 'k') navigateScriptErrorUp();
         if (key.return) toggleBodyView('script_output');
-        if (input.toLowerCase() === 'c') {
-            const scriptIndex = selectedItemIndex - numFiles;
-            const selectedScript = scripts[scriptIndex];
+        if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
             if (selectedScript) {
                 // eslint-disable-next-line no-console
                 console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
@@ -128,28 +155,34 @@ export const useReviewScreen = () => {
         }
 
         // Main View Navigation
-        if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
-        if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+        if (key.upArrow) moveSelectionUp(navigableItems.length);
+        if (key.downArrow) moveSelectionDown(navigableItems.length);
+
+        const currentItem = navigableItems[selectedItemIndex];
 
         if (input === ' ') {
-            if (selectedItemIndex < numFiles) {
-                const file = files[selectedItemIndex];
-                const fileState = file ? fileReviewStates.get(file.id) : undefined;
-                if (file && fileState && fileState.status !== 'FAILED') {
-                    toggleFileApproval(file.id);
+            if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState && fileState.status !== 'FAILED') {
+                    toggleFileApproval(currentItem.id);
                 }
             }
         }
 
-        if (input.toLowerCase() === 'd') {
-            if (selectedItemIndex < numFiles) {
-                toggleBodyView('diff');
-            }
+        if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+            toggleBodyView('diff');
+        }
+
+        if (input.toLowerCase() === 'r') {
+            toggleBodyView('reasoning');
         }
 
         if (key.return) { // Enter key
-            if (selectedItemIndex >= numFiles) { // It's a script
+            if (currentItem?.type === 'file') {
+                toggleBodyView('diff');
+            } else if (currentItem?.type === 'reasoning') {
+                toggleBodyView('reasoning');
+            } else if (currentItem?.type === 'script') {
                 toggleBodyView('script_output');
             }
         }
@@ -170,10 +203,9 @@ export const useReviewScreen = () => {
                 const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
                 if (hasFailedFiles) showBulkRepair();
             } else {
-                if (selectedItemIndex < numFiles) {
-                    const file = files[selectedItemIndex];
-                    const fileState = file ? fileReviewStates.get(file.id) : undefined;
-                    if (file && fileState?.status === 'FAILED') tryRepairFile();
+                if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
                 }
             }
         }
@@ -186,7 +218,7 @@ export const useReviewScreen = () => {
 
         switch (bodyView) {
             case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
-            case 'bulk_repair': return handleBulkRepairInput(input);
+            case 'bulk_repair': return handleBulkRepairInput(input, key);
             case 'reasoning': return handleReasoningInput(input, key);
             case 'script_output': return handleScriptOutputInput(input, key);
             case 'diff': return handleDiffInput(input);
@@ -202,6 +234,9 @@ export const useReviewScreen = () => {
         files,
         scripts,
         patchStatus,
+        navigableItems,
+        isFileSelected,
+        selectedBulkRepairOptionIndex,
         ...reviewStats,
     };
 };

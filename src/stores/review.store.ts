@@ -31,10 +31,12 @@ interface ReviewState {
     scriptErrorIndex: number;
     fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
 
+    selectedBulkRepairOptionIndex: number;
+
     actions: {
-        load: (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => void;
-        moveSelectionUp: () => void;
-        moveSelectionDown: () => void;
+        load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+        moveSelectionUp: (listSize: number) => void;
+        moveSelectionDown: (listSize: number) => void;
         expandDiff: () => void;
         toggleBodyView: (view: Extract<
             ReviewBodyView,
@@ -43,7 +45,7 @@ interface ReviewState {
         setBodyView: (view: ReviewBodyView) => void;
         approve: () => void;
         startApplySimulation: (scenario: 'success' | 'failure') => void;
-        tryRepairFile: () => void;
+        tryRepairFile: (fileId: string) => void;
         showBulkRepair: () => void;
         executeBulkRepairOption: (option: number) => Promise<void>;
         confirmHandoff: () => void;
@@ -56,6 +58,8 @@ interface ReviewState {
         updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string) => void;
         toggleFileApproval: (fileId: string) => void;
         rejectAllFiles: () => void;
+        navigateBulkRepairUp: () => void;
+        navigateBulkRepairDown: () => void;
     };
 }
 
@@ -68,6 +72,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     reasoningScrollIndex: 0,
     scriptErrorIndex: 0,
     fileReviewStates: new Map(),
+    selectedBulkRepairOptionIndex: 0,
 
     actions: {
         load: (transactionId, initialState) => {
@@ -86,20 +91,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 reasoningScrollIndex: 0,
                 scriptErrorIndex: 0,
                 applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                selectedBulkRepairOptionIndex: 0,
+                ...initialState,
             });
         },
-        moveSelectionUp: () => set(state => {
-            const transactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            if (!tx) return {};
-            const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+        moveSelectionUp: (listSize) => set(state => {
             return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
         }),
-        moveSelectionDown: () => set(state => {
-            const transactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            if (!tx) return {};
-            const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+        moveSelectionDown: (listSize) => set(state => {
             return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
         }),
         toggleBodyView: (view) => set(state => {
@@ -143,12 +142,12 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             // For this simulation, we'll assume it transitions back, but the action itself doesn't need to do it.
             // This avoids a direct dependency from the store to app-level navigation.
         },
-        tryRepairFile: () => {
+        tryRepairFile: (fileId) => {
             const selectedTransactionId = useViewStore.getState().selectedTransactionId;
-            const { selectedItemIndex, fileReviewStates } = get();
+            const { fileReviewStates } = get();
             if (!selectedTransactionId) return;
             const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
-            const file = tx?.files?.[selectedItemIndex];
+            const file = tx?.files?.find(f => f.id === fileId);
             if (!file) return;
 
             const { status, error } = fileReviewStates.get(file.id) || {};
@@ -281,5 +280,11 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 return { fileReviewStates: newStates };
             });
         },
+        navigateBulkRepairUp: () => set(state => ({
+            selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'up', 4),
+        })),
+        navigateBulkRepairDown: () => set(state => ({
+            selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'down', 4),
+        })),
     },
 }));
