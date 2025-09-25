@@ -101,11 +101,11 @@ const useDebugMenuActions = () => {
             action: () => {
                 ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
-                const { selectedTransactionId, review_selectedItemIndex: selectedItemIndex } = useUIStore.getState();
-                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
                 if (!tx) return;
-                const selectedFile = tx.files && selectedItemIndex < tx.files.length
-                    ? tx.files[selectedItemIndex]
+                // On load, selected index is 0, so we can assume the first file.
+                const selectedFile = tx.files && tx.files.length > 0
+                    ? tx.files[0]
                     : undefined;
                 const items = CopyService.getCopyItemsForReview(tx, tx.files || [], selectedFile);
                 useCopyStore.getState().actions.open(
@@ -136,7 +136,10 @@ const useDebugMenuActions = () => {
         },
         {
             title: 'Review Processing',
-            action: () => appActions.showReviewProcessingScreen(),
+            action: () => {
+                ReviewService.loadTransactionForReview('2'); // Use tx '2' which has scripts
+                appActions.showReviewProcessingScreen();
+            },
         },
         {
             title: 'Git Commit Screen',
@@ -186,11 +189,9 @@ const useDebugMenuActions = () => {
             action: () => {
                 uiActions.history_prepareDebugState('copy');
                 appActions.showTransactionHistoryScreen();
-                const { history_selectedForAction: selectedForAction } = useUIStore.getState();
                 const allTxs = useTransactionStore.getState().transactions;
-                const txsToCopy = allTxs.filter((tx: Transaction) =>
-                    selectedForAction.has(tx.id),
-                );
+                // The 'copy' debug state sets selectedForAction to ['3', '6']. We'll use that directly.
+                const txsToCopy = allTxs.filter((tx: Transaction) => ['3', '6'].includes(tx.id));
                 const items = CopyService.getCopyItemsForHistory(txsToCopy);
                 useCopyStore.getState().actions.open(
                     `Select data to copy from ${txsToCopy.length} transactions:`, items);

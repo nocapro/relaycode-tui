@@ -58,6 +58,95 @@ tsconfig.json
 
 # Files
 
+## File: src/components/DiffScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+interface DiffScreenProps {
+    filePath: string;
+    diffContent: string;
+    isExpanded: boolean;
+}
+
+const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
+    const lines = diffContent.split('\n');
+    const COLLAPSE_THRESHOLD = 20;
+    const COLLAPSE_SHOW_LINES = 8;
+
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
+        }
+        return lines.map((line, i) => renderLine(line, i));
+    };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (line.startsWith('+')) color = 'green';
+        if (line.startsWith('-')) color = 'red';
+        if (line.startsWith('@@')) color = 'cyan';
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>DIFF: {filePath}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DiffScreen;
+```
+
+## File: src/hooks/useSplashScreen.tsx
+```typescript
+import { useState, useEffect } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState(5);
+
+    const handleSkip = () => {
+        showInitScreen();
+    };
+
+    useInput(() => {
+        handleSkip();
+    });
+
+    useEffect(() => {
+        if (countdown === 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
+
+    return { countdown };
+};
+```
+
 ## File: src/stores/ui.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -582,364 +671,6 @@ export const useUIStore = create<UIState>((set, get) => ({
 }));
 ```
 
-## File: src/components/CopyScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text, useInput } from 'ink';
-import { useCopyStore } from '../stores/copy.store';
-import Separator from './Separator';
-import { useUIStore } from '../stores/ui.store';
-import { useStdoutDimensions } from '../utils';
-
-const CopyScreen = () => {
-    const activeOverlay = useUIStore(s => s.activeOverlay);
-    const {
-        title, items, selectedIndex, selectedIds, lastCopiedMessage,
-        actions,
-    } = useCopyStore(state => ({ ...state, actions: state.actions }));
-
-    useInput((input, key) => {
-        if (key.escape) {
-            actions.close();
-            return;
-        }
-        if (key.upArrow) {
-            actions.navigateUp();
-            return;
-        }
-        if (key.downArrow) {
-            actions.navigateDown();
-            return;
-        }
-        if (input === ' ') {
-            actions.toggleSelection();
-            return;
-        }
-        if (key.return) {
-            actions.executeCopy();
-            return;
-        }
-        
-        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
-        if(item) {
-            actions.toggleSelectionById(item.id);
-        }
-    }, { isActive: activeOverlay === 'copy' });
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box 
-            width="100%"
-            height="100%"
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-        >
-            <Box 
-                flexDirection="column" 
-                borderStyle="round" 
-                borderColor="yellow" 
-                paddingX={2}
-                width="80%"
-            >
-                <Text bold color="yellow">▲ relaycode · copy mode</Text>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                <Box flexDirection="column" marginY={1}>
-                    <Text>{title}</Text>
-                    <Box flexDirection="column" marginTop={1}>
-                        {items.map((item, index) => {
-                            const isSelected = index === selectedIndex;
-                            const isChecked = selectedIds.has(item.id);
-                            return (
-                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
-                                    {isSelected ? '> ' : '  '}
-                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                </Box>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <Text>(↑↓) Nav · (Spc/Hotkey) Toggle · (Enter) Copy · (Esc) Close</Text>
-            </Box>
-        </Box>
-    );
-};
-
-export default CopyScreen;
-```
-
-## File: src/components/DiffScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-
-interface DiffScreenProps {
-    filePath: string;
-    diffContent: string;
-    isExpanded: boolean;
-}
-
-const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
-    const lines = diffContent.split('\n');
-    const COLLAPSE_THRESHOLD = 20;
-    const COLLAPSE_SHOW_LINES = 8;
-
-    const renderContent = () => {
-        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
-            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
-            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
-            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
-
-            return (
-                <>
-                    {topLines.map((line, i) => renderLine(line, i))}
-                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
-                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
-                </>
-            );
-        }
-        return lines.map((line, i) => renderLine(line, i));
-    };
-
-    const renderLine = (line: string, key: number) => {
-        let color = 'white';
-        if (line.startsWith('+')) color = 'green';
-        if (line.startsWith('-')) color = 'red';
-        if (line.startsWith('@@')) color = 'cyan';
-        return <Text key={key} color={color}>{line}</Text>;
-    };
-
-    return (
-        <Box flexDirection="column">
-            <Text>DIFF: {filePath}</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {renderContent()}
-            </Box>
-        </Box>
-    );
-};
-
-export default DiffScreen;
-```
-
-## File: src/hooks/useGlobalHotkeys.tsx
-```typescript
-import { useApp, useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { useUIStore } from '../stores/ui.store';
-
-const MAIN_SCREENS_FOR_QUIT: string[] = ['dashboard', 'init'];
-
-export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
-    const { exit } = useApp();
-    const { currentScreen } = useAppStore(s => ({
-        currentScreen: s.currentScreen,
-    }));
-    const { activeOverlay, setActiveOverlay } = useUIStore(s => ({
-        activeOverlay: s.activeOverlay,
-        setActiveOverlay: s.actions.setActiveOverlay,
-    }));
-
-    useInput((input, key) => {
-        // Debug Menu toggle is the highest priority global key
-        if (key.ctrl && input === 'b') {
-            setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
-            return;
-        }
-
-        // If debug menu is open, it has its own input handler, so we stop here.
-        if (activeOverlay === 'debug') {
-            return;
-        }
-
-        // Help screen takes precedence over other keys
-        if (activeOverlay === 'help') {
-            if (key.escape || input === '?') {
-                setActiveOverlay('none');
-            }
-            return;
-        }
-
-        // --- Global hotkeys when no modal/overlay is open ---
-        
-        // Open Help
-        if (input === '?') {
-            setActiveOverlay('help');
-            return;
-        }
-        
-        // Quit from main screens
-        if (input.toLowerCase() === 'q' && MAIN_SCREENS_FOR_QUIT.includes(currentScreen)) {
-            exit();
-        }
-    }, { isActive });
-};
-```
-
-## File: src/hooks/useSplashScreen.tsx
-```typescript
-import { useState, useEffect } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-
-export const useSplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState(5);
-
-    const handleSkip = () => {
-        showInitScreen();
-    };
-
-    useInput(() => {
-        handleSkip();
-    });
-
-    useEffect(() => {
-        if (countdown === 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
-
-    return { countdown };
-};
-```
-
-## File: src/stores/copy.store.ts
-```typescript
-import { create } from 'zustand';
-import { moveIndex } from './navigation.utils';
-import { useUIStore } from './ui.store';
-import type { CopyItem } from '../types/copy.types';
-
-export type { CopyItem };
-
-interface CopyState {
-    title: string;
-    items: CopyItem[];
-    selectedIndex: number;
-    selectedIds: Set<string>;
-    lastCopiedMessage: string | null;
-    onClose?: () => void;
-
-    actions: {
-        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
-        close: () => void;
-        navigateUp: () => void;
-        navigateDown: () => void;
-        toggleSelection: () => void;
-        toggleSelectionById: (id: string) => void;
-        executeCopy: () => void;
-    };
-}
-
-export const useCopyStore = create<CopyState>((set, get) => ({
-    title: '',
-    items: [],
-    selectedIndex: 0,
-    selectedIds: new Set(),
-    lastCopiedMessage: null,
-    onClose: undefined,
-
-    actions: {
-        open: (title, items, onClose) => {
-            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
-            useUIStore.getState().actions.setActiveOverlay('copy');
-            set({
-                title,
-                items,
-                selectedIndex: 0,
-                selectedIds: defaultSelectedIds,
-                lastCopiedMessage: null,
-                onClose,
-            });
-        },
-        close: () => {
-            useUIStore.getState().actions.setActiveOverlay('none');
-            get().onClose?.();
-            set({ items: [], onClose: undefined });
-        },
-        navigateUp: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
-        })),
-        navigateDown: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
-        })),
-        toggleSelection: () => set(state => {
-            const currentItem = state.items[state.selectedIndex];
-            if (!currentItem) return {};
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(currentItem.id)) {
-                newSelectedIds.delete(currentItem.id);
-            } else {
-                newSelectedIds.add(currentItem.id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        toggleSelectionById: (id: string) => set(state => {
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(id)) {
-                newSelectedIds.delete(id);
-            } else {
-                newSelectedIds.add(id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        executeCopy: () => {
-            const { items, selectedIds } = get();
-            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
-            if (itemsToCopy.length === 0) return;
-
-            const content = itemsToCopy.map(item => `--- ${item.label} ---\n${item.getData()}`).join('\n\n');
-            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
-            set({ lastCopiedMessage: message });
-        },
-    },
-}));
-```
-
-## File: src/stores/navigation.utils.ts
-```typescript
-import type { Transaction } from '../types/domain.types';
-
-export const moveIndex = (
-    currentIndex: number,
-    direction: 'up' | 'down',
-    listSize: number,
-): number => {
-    if (direction === 'up') {
-        return Math.max(0, currentIndex - 1);
-    }
-    return Math.min(listSize - 1, currentIndex + 1);
-};
-
-export const getVisibleItemPaths = (
-    transactions: Transaction[],
-    expandedIds: Set<string>,
-): string[] => {
-    const paths: string[] = [];
-    for (const tx of transactions) {
-        paths.push(tx.id);
-        if (expandedIds.has(tx.id) && tx.files) {
-            for (const file of tx.files) {
-                paths.push(`${tx.id}/${file.id}`);
-            }
-        }
-    }
-    return paths;
-};
-```
-
 ## File: src/types/debug.types.ts
 ```typescript
 export interface MenuItem {
@@ -1208,6 +939,94 @@ export default [
 }
 ```
 
+## File: src/components/CopyScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text, useInput } from 'ink';
+import { useCopyStore } from '../stores/copy.store';
+import Separator from './Separator';
+import { useUIStore } from '../stores/ui.store';
+import { useStdoutDimensions } from '../utils';
+
+const CopyScreen = () => {
+    const activeOverlay = useUIStore(s => s.activeOverlay);
+    const {
+        title, items, selectedIndex, selectedIds, lastCopiedMessage,
+        actions,
+    } = useCopyStore(state => ({ ...state, actions: state.actions }));
+
+    useInput((input, key) => {
+        if (key.escape) {
+            actions.close();
+            return;
+        }
+        if (key.upArrow) {
+            actions.navigateUp();
+            return;
+        }
+        if (key.downArrow) {
+            actions.navigateDown();
+            return;
+        }
+        if (input === ' ') {
+            actions.toggleSelection();
+            return;
+        }
+        if (key.return) {
+            actions.executeCopy();
+            return;
+        }
+        
+        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
+        if(item) {
+            actions.toggleSelectionById(item.id);
+        }
+    }, { isActive: activeOverlay === 'copy' });
+    const [width] = useStdoutDimensions();
+
+    return (
+        <Box 
+            width="100%"
+            height="100%"
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+        >
+            <Box 
+                flexDirection="column" 
+                borderStyle="round" 
+                borderColor="yellow" 
+                paddingX={2}
+                width="80%"
+            >
+                <Text bold color="yellow">▲ relaycode · copy mode</Text>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                <Box flexDirection="column" marginY={1}>
+                    <Text>{title}</Text>
+                    <Box flexDirection="column" marginTop={1}>
+                        {items.map((item, index) => {
+                            const isSelected = index === selectedIndex;
+                            const isChecked = selectedIds.has(item.id);
+                            return (
+                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
+                                    {isSelected ? '> ' : '  '}
+                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                </Box>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+                <Text>(↑↓) Nav · (Spc/Hotkey) Toggle · (Enter) Copy · (Esc) Close</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default CopyScreen;
+```
+
 ## File: src/components/GlobalHelpScreen.tsx
 ```typescript
 import React from 'react';
@@ -1265,6 +1084,245 @@ const GlobalHelpScreen = () => {
 export default GlobalHelpScreen;
 ```
 
+## File: src/hooks/useGlobalHotkeys.tsx
+```typescript
+import { useApp, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useUIStore } from '../stores/ui.store';
+
+const MAIN_SCREENS_FOR_QUIT: string[] = ['dashboard', 'init'];
+
+export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+    const { exit } = useApp();
+    const { currentScreen } = useAppStore(s => ({
+        currentScreen: s.currentScreen,
+    }));
+    const { activeOverlay, setActiveOverlay } = useUIStore(s => ({
+        activeOverlay: s.activeOverlay,
+        setActiveOverlay: s.actions.setActiveOverlay,
+    }));
+
+    useInput((input, key) => {
+        // Debug Menu toggle is the highest priority global key
+        if (key.ctrl && input === 'b') {
+            setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+            return;
+        }
+
+        // If debug menu is open, it has its own input handler, so we stop here.
+        if (activeOverlay === 'debug') {
+            return;
+        }
+
+        // Help screen takes precedence over other keys
+        if (activeOverlay === 'help') {
+            if (key.escape || input === '?') {
+                setActiveOverlay('none');
+            }
+            return;
+        }
+
+        // --- Global hotkeys when no modal/overlay is open ---
+        
+        // Open Help
+        if (input === '?') {
+            setActiveOverlay('help');
+            return;
+        }
+        
+        // Quit from main screens
+        if (input.toLowerCase() === 'q' && MAIN_SCREENS_FOR_QUIT.includes(currentScreen)) {
+            exit();
+        }
+    }, { isActive });
+};
+```
+
+## File: src/stores/copy.store.ts
+```typescript
+import { create } from 'zustand';
+import { moveIndex } from './navigation.utils';
+import { useUIStore } from './ui.store';
+import type { CopyItem } from '../types/copy.types';
+
+export type { CopyItem };
+
+interface CopyState {
+    title: string;
+    items: CopyItem[];
+    selectedIndex: number;
+    selectedIds: Set<string>;
+    lastCopiedMessage: string | null;
+    onClose?: () => void;
+
+    actions: {
+        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+        close: () => void;
+        navigateUp: () => void;
+        navigateDown: () => void;
+        toggleSelection: () => void;
+        toggleSelectionById: (id: string) => void;
+        executeCopy: () => void;
+    };
+}
+
+export const useCopyStore = create<CopyState>((set, get) => ({
+    title: '',
+    items: [],
+    selectedIndex: 0,
+    selectedIds: new Set(),
+    lastCopiedMessage: null,
+    onClose: undefined,
+
+    actions: {
+        open: (title, items, onClose) => {
+            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+            useUIStore.getState().actions.setActiveOverlay('copy');
+            set({
+                title,
+                items,
+                selectedIndex: 0,
+                selectedIds: defaultSelectedIds,
+                lastCopiedMessage: null,
+                onClose,
+            });
+        },
+        close: () => {
+            useUIStore.getState().actions.setActiveOverlay('none');
+            get().onClose?.();
+            set({ items: [], onClose: undefined });
+        },
+        navigateUp: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
+        })),
+        navigateDown: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+        })),
+        toggleSelection: () => set(state => {
+            const currentItem = state.items[state.selectedIndex];
+            if (!currentItem) return {};
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(currentItem.id)) {
+                newSelectedIds.delete(currentItem.id);
+            } else {
+                newSelectedIds.add(currentItem.id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        toggleSelectionById: (id: string) => set(state => {
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(id)) {
+                newSelectedIds.delete(id);
+            } else {
+                newSelectedIds.add(id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        executeCopy: () => {
+            const { items, selectedIds } = get();
+            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+            if (itemsToCopy.length === 0) return;
+
+            const content = itemsToCopy.map(item => `--- ${item.label} ---\n${item.getData()}`).join('\n\n');
+            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+            // eslint-disable-next-line no-console
+            console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            set({ lastCopiedMessage: message });
+        },
+    },
+}));
+```
+
+## File: src/stores/navigation.utils.ts
+```typescript
+import type { Transaction } from '../types/domain.types';
+
+export const moveIndex = (
+    currentIndex: number,
+    direction: 'up' | 'down',
+    listSize: number,
+): number => {
+    if (direction === 'up') {
+        return Math.max(0, currentIndex - 1);
+    }
+    return Math.min(listSize - 1, currentIndex + 1);
+};
+
+export const getVisibleItemPaths = (
+    transactions: Transaction[],
+    expandedIds: Set<string>,
+): string[] => {
+    const paths: string[] = [];
+    for (const tx of transactions) {
+        paths.push(tx.id);
+        if (expandedIds.has(tx.id) && tx.files) {
+            for (const file of tx.files) {
+                paths.push(`${tx.id}/${file.id}`);
+            }
+        }
+    }
+    return paths;
+};
+```
+
+## File: src/utils.ts
+```typescript
+import { useState, useEffect } from 'react';
+
+// Utility for simulation
+export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export const useStdoutDimensions = (): [number, number] => {
+    const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
+
+    useEffect(() => {
+        const updateDimensions = () => {
+            setDimensions({
+                columns: process.stdout.columns || 80,
+                rows: process.stdout.rows || 24,
+            });
+        };
+
+        updateDimensions();
+        process.stdout.on('resize', updateDimensions);
+
+        return () => {
+            process.stdout.off('resize', updateDimensions);
+        };
+    }, []);
+
+    return [dimensions.columns, dimensions.rows];
+};
+```
+
+## File: src/components/ReasonScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+
+interface ReasonScreenProps {
+    reasoning: string,
+    scrollIndex?: number,
+    visibleLinesCount?: number, // if not provided, all lines are shown
+}
+
+const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonScreenProps) => {
+    const lines = reasoning.split('\n');
+    const visibleLines = visibleLinesCount ? lines.slice(scrollIndex, scrollIndex + visibleLinesCount) : lines;
+
+    return (
+        <Box flexDirection="column">
+            <Text>REASONING</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {visibleLines.map((line, index) => <Text key={index}>{line}</Text>)}
+            </Box>
+        </Box>
+    );
+};
+
+export default ReasonScreen;
+```
+
 ## File: src/hooks/useGitCommitScreen.tsx
 ```typescript
 import { useInput } from 'ink';
@@ -1317,34 +1375,96 @@ export const DashboardService = {
 };
 ```
 
-## File: src/utils.ts
+## File: src/services/init.service.ts
 ```typescript
-import { useState, useEffect } from 'react';
+import { useInitStore } from '../stores/init.store';
+import type { Task } from '../types/view.types';
+import { sleep } from '../utils';
 
-// Utility for simulation
-export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const initialAnalyzeTasks: Task[] = [
+    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
+    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
+    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
+];
 
-export const useStdoutDimensions = (): [number, number] => {
-    const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
+const initialConfigureTasks: Task[] = [
+    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
+    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
+    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
+];
 
-    useEffect(() => {
-        const updateDimensions = () => {
-            setDimensions({
-                columns: process.stdout.columns || 80,
-                rows: process.stdout.rows || 24,
-            });
-        };
+const runInitializationProcess = async () => {
+    const { actions } = useInitStore.getState();
+    actions.resetInit();
+    actions.setTasks(initialAnalyzeTasks, initialConfigureTasks);
 
-        updateDimensions();
-        process.stdout.on('resize', updateDimensions);
+    actions.setPhase('ANALYZE');
+    for (const task of initialAnalyzeTasks) {
+        actions.updateAnalyzeTask(task.id, 'active');
+        await sleep(800);
+        actions.updateAnalyzeTask(task.id, 'done');
+    }
+    actions.setAnalysisResults('relaycode (from package.json)', true);
+    await sleep(500);
 
-        return () => {
-            process.stdout.off('resize', updateDimensions);
-        };
-    }, []);
+    actions.setPhase('CONFIGURE');
+    const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+    for (const task of configTasksUntilInteractive) {
+        actions.updateConfigureTask(task.id, 'active');
+        await sleep(800);
+        actions.updateConfigureTask(task.id, 'done');
+    }
+    await sleep(500);
 
-    return [dimensions.columns, dimensions.rows];
+    actions.setPhase('INTERACTIVE');
 };
+
+const resumeInitializationProcess = async () => {
+    const { actions } = useInitStore.getState();
+    
+    actions.setPhase('CONFIGURE');
+    const lastTask = initialConfigureTasks[2];
+    if (lastTask) {
+        actions.updateConfigureTask(lastTask.id, 'active');
+        await sleep(800);
+        actions.updateConfigureTask(lastTask.id, 'done');
+        await sleep(500);
+
+        actions.setPhase('FINALIZE');
+    }
+};
+
+export const InitService = {
+    runInitializationProcess,
+    resumeInitializationProcess,
+};
+```
+
+## File: src/types/copy.types.ts
+```typescript
+export interface CopyItem {
+    id: string;
+    key: string;
+    label: string;
+    getData: () => string;
+    isDefaultSelected?: boolean;
+}
+
+export const COPYABLE_ITEMS = {
+    UUID: 'UUID',
+    MESSAGE: 'Git Message',
+    PROMPT: 'Prompt',
+    REASONING: 'Reasoning',
+    FILE_DIFF: 'Diff for',
+    ALL_DIFFS: 'All Diffs',
+    FULL_YAML: 'Full YAML representation',
+    // For multi-selection contexts
+    MESSAGES: 'Git Messages',
+    PROMPTS: 'Prompts',
+    REASONINGS: 'Reasonings',
+    DIFFS: 'Diffs',
+    UUIDS: 'UUIDs',
+} as const;
 ```
 
 ## File: src/components/GitCommitScreen.tsx
@@ -1397,34 +1517,6 @@ const GitCommitScreen = () => {
 };
 
 export default GitCommitScreen;
-```
-
-## File: src/components/ReasonScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-
-interface ReasonScreenProps {
-    reasoning: string,
-    scrollIndex?: number,
-    visibleLinesCount?: number, // if not provided, all lines are shown
-}
-
-const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonScreenProps) => {
-    const lines = reasoning.split('\n');
-    const visibleLines = visibleLinesCount ? lines.slice(scrollIndex, scrollIndex + visibleLinesCount) : lines;
-
-    return (
-        <Box flexDirection="column">
-            <Text>REASONING</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {visibleLines.map((line, index) => <Text key={index}>{line}</Text>)}
-            </Box>
-        </Box>
-    );
-};
-
-export default ReasonScreen;
 ```
 
 ## File: src/components/ReviewProcessingScreen.tsx
@@ -1630,68 +1722,113 @@ export const useDashboardScreen = () => {
 };
 ```
 
-## File: src/services/init.service.ts
+## File: src/hooks/useInitializationScreen.tsx
 ```typescript
+import React, { useEffect } from 'react';
+import { Text, useApp, useInput } from 'ink';
 import { useInitStore } from '../stores/init.store';
-import type { Task } from '../types/view.types';
+import { useAppStore } from '../stores/app.store';
+import { InitService } from '../services/init.service';
+
+export const useInitializationScreen = () => {
+    const phase = useInitStore(s => s.phase);
+    const interactiveChoice = useInitStore(s => s.interactiveChoice);
+    const actions = useInitStore(s => s.actions);
+    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+    const { exit } = useApp();
+
+    useInput((input, key) => {
+        if (phase === 'INTERACTIVE') {
+            if (key.return) {
+                actions.setInteractiveChoice('ignore');
+            } else if (input.toLowerCase() === 's') {
+                actions.setInteractiveChoice('share');
+            }
+        }
+        if (phase === 'FINALIZE') {
+            if (input.toLowerCase() === 'w') {
+                showDashboardScreen();
+            }
+        }
+    });
+
+    useEffect(() => {
+        InitService.runInitializationProcess();
+    }, []);
+
+    useEffect(() => {
+        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+            InitService.resumeInitializationProcess();
+        }
+    }, [interactiveChoice, phase]);
+
+    const {
+        analyzeTasks,
+        configureTasks,
+        projectId,
+    } = useInitStore();
+
+    let footerText;
+    switch (phase) {
+        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+    }
+
+    return {
+        phase,
+        analyzeTasks,
+        configureTasks,
+        interactiveChoice,
+        projectId,
+        footerText,
+    };
+};
+```
+
+## File: src/services/commit.service.ts
+```typescript
+import type { Transaction } from '../types/domain.types';
 import { sleep } from '../utils';
+import { useTransactionStore } from '../stores/transaction.store';
 
-const initialAnalyzeTasks: Task[] = [
-    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
-    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
-    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
-];
-
-const initialConfigureTasks: Task[] = [
-    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
-    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
-    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
-];
-
-const runInitializationProcess = async () => {
-    const { actions } = useInitStore.getState();
-    actions.resetInit();
-    actions.setTasks(initialAnalyzeTasks, initialConfigureTasks);
-
-    actions.setPhase('ANALYZE');
-    for (const task of initialAnalyzeTasks) {
-        actions.updateAnalyzeTask(task.id, 'active');
-        await sleep(800);
-        actions.updateAnalyzeTask(task.id, 'done');
+const generateCommitMessage = (transactions: Transaction[]): string => {
+    if (transactions.length === 0) {
+        return '';
     }
-    actions.setAnalysisResults('relaycode (from package.json)', true);
-    await sleep(500);
+    // Using a more complex aggregation for better demo, based on the readme
+    const title = 'feat: implement new dashboard and clipboard logic';
+    const bodyPoints = [
+        '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+        '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+    ];
 
-    actions.setPhase('CONFIGURE');
-    const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
-    for (const task of configTasksUntilInteractive) {
-        actions.updateConfigureTask(task.id, 'active');
-        await sleep(800);
-        actions.updateConfigureTask(task.id, 'done');
+    if (transactions.length === 1 && transactions[0]) {
+        return transactions[0].message;
     }
-    await sleep(500);
 
-    actions.setPhase('INTERACTIVE');
+    return `${title}\n\n${bodyPoints.join('\n\n')}`;
 };
 
-const resumeInitializationProcess = async () => {
-    const { actions } = useInitStore.getState();
-    
-    actions.setPhase('CONFIGURE');
-    const lastTask = initialConfigureTasks[2];
-    if (lastTask) {
-        actions.updateConfigureTask(lastTask.id, 'active');
-        await sleep(800);
-        actions.updateConfigureTask(lastTask.id, 'done');
-        await sleep(500);
+const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
+    // In a real app, this would run git commands.
+    // For simulation, we'll just update the transaction store.
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
 
-        actions.setPhase('FINALIZE');
-    }
+    const txIds = transactionsToCommit.map(tx => tx.id);
+
+    // A bit of simulation
+    await sleep(500);
+
+    txIds.forEach(id => {
+        updateTransactionStatus(id, 'COMMITTED');
+    });
 };
 
-export const InitService = {
-    runInitializationProcess,
-    resumeInitializationProcess,
+export const CommitService = {
+    generateCommitMessage,
+    commit,
 };
 ```
 
@@ -1803,204 +1940,6 @@ export const selectReviewStats = (transactionId: string | null) => (state: Trans
         approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
     };
 };
-```
-
-## File: src/types/copy.types.ts
-```typescript
-export interface CopyItem {
-    id: string;
-    key: string;
-    label: string;
-    getData: () => string;
-    isDefaultSelected?: boolean;
-}
-
-export const COPYABLE_ITEMS = {
-    UUID: 'UUID',
-    MESSAGE: 'Git Message',
-    PROMPT: 'Prompt',
-    REASONING: 'Reasoning',
-    FILE_DIFF: 'Diff for',
-    ALL_DIFFS: 'All Diffs',
-    FULL_YAML: 'Full YAML representation',
-    // For multi-selection contexts
-    MESSAGES: 'Git Messages',
-    PROMPTS: 'Prompts',
-    REASONINGS: 'Reasonings',
-    DIFFS: 'Diffs',
-    UUIDS: 'UUIDs',
-} as const;
-```
-
-## File: src/hooks/useInitializationScreen.tsx
-```typescript
-import React, { useEffect } from 'react';
-import { Text, useApp, useInput } from 'ink';
-import { useInitStore } from '../stores/init.store';
-import { useAppStore } from '../stores/app.store';
-import { InitService } from '../services/init.service';
-
-export const useInitializationScreen = () => {
-    const phase = useInitStore(s => s.phase);
-    const interactiveChoice = useInitStore(s => s.interactiveChoice);
-    const actions = useInitStore(s => s.actions);
-    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
-    const { exit } = useApp();
-
-    useInput((input, key) => {
-        if (phase === 'INTERACTIVE') {
-            if (key.return) {
-                actions.setInteractiveChoice('ignore');
-            } else if (input.toLowerCase() === 's') {
-                actions.setInteractiveChoice('share');
-            }
-        }
-        if (phase === 'FINALIZE') {
-            if (input.toLowerCase() === 'w') {
-                showDashboardScreen();
-            }
-        }
-    });
-
-    useEffect(() => {
-        InitService.runInitializationProcess();
-    }, []);
-
-    useEffect(() => {
-        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
-            InitService.resumeInitializationProcess();
-        }
-    }, [interactiveChoice, phase]);
-
-    const {
-        analyzeTasks,
-        configureTasks,
-        projectId,
-    } = useInitStore();
-
-    let footerText;
-    switch (phase) {
-        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
-        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
-        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
-        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
-    }
-
-    return {
-        phase,
-        analyzeTasks,
-        configureTasks,
-        interactiveChoice,
-        projectId,
-        footerText,
-    };
-};
-```
-
-## File: src/services/commit.service.ts
-```typescript
-import type { Transaction } from '../types/domain.types';
-import { sleep } from '../utils';
-import { useTransactionStore } from '../stores/transaction.store';
-
-const generateCommitMessage = (transactions: Transaction[]): string => {
-    if (transactions.length === 0) {
-        return '';
-    }
-    // Using a more complex aggregation for better demo, based on the readme
-    const title = 'feat: implement new dashboard and clipboard logic';
-    const bodyPoints = [
-        '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
-        '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
-    ];
-
-    if (transactions.length === 1 && transactions[0]) {
-        return transactions[0].message;
-    }
-
-    return `${title}\n\n${bodyPoints.join('\n\n')}`;
-};
-
-const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
-    // In a real app, this would run git commands.
-    // For simulation, we'll just update the transaction store.
-    const { updateTransactionStatus } = useTransactionStore.getState().actions;
-
-    const txIds = transactionsToCommit.map(tx => tx.id);
-
-    // A bit of simulation
-    await sleep(500);
-
-    txIds.forEach(id => {
-        updateTransactionStatus(id, 'COMMITTED');
-    });
-};
-
-export const CommitService = {
-    generateCommitMessage,
-    commit,
-};
-```
-
-## File: src/components/SplashScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useSplashScreen } from '../hooks/useSplashScreen';
-import { useStdoutDimensions } from '../utils';
-
-const SplashScreen = () => {
-    const { countdown } = useSplashScreen();
-    const [width] = useStdoutDimensions();
-    const logo = `
-         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
-         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
-         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
-`;
-
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode</Text>
-            <Separator width={width} />
-            <Text color="cyan">{logo}</Text>
-            <Box flexDirection="column" alignItems="center">
-                <Text italic>A zero-friction, AI-native patch engine.</Text>
-                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
-            </Box>
-            
-            <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
-                <Box flexDirection="column" width="45%">
-                    <Text>Version 1.1.5</Text>
-                    <Text>─────────────────────────</Text>
-                    <Text>relaycode</Text>
-                    <Text>relaycode-core</Text>
-                    <Text>apply-multi-diff</Text>
-                    <Text>konro</Text>
-                </Box>
-                 <Box flexDirection="column" width="45%">
-                    <Text>Build Timestamps</Text>
-                    <Text>─────────────────────────</Text>
-                    <Text>2025-09-20 13:58:05</Text>
-                    <Text>2025-09-20 10:59:05</Text>
-                    <Text>(versioned)</Text>
-                    <Text>(versioned)</Text>
-                </Box>
-            </Box>
-            
-            <Box marginTop={1}><Separator width={width} /></Box>
-            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
-            <Text>web app with repo-wide visual context, history, and rollback.</Text>
-            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
-            <Separator width={width} />
-            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
-            <Separator width={width} />
-            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
-        </Box>
-    );
-};
-
-export default SplashScreen;
 ```
 
 ## File: src/data/mocks.ts
@@ -2145,6 +2084,182 @@ export const CopyService = {
     getCopyItemsForDetail,
     getCopyItemsForHistory,
 };
+```
+
+## File: src/components/SplashScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useSplashScreen } from '../hooks/useSplashScreen';
+import { useStdoutDimensions } from '../utils';
+
+const SplashScreen = () => {
+    const { countdown } = useSplashScreen();
+    const [width] = useStdoutDimensions();
+    const logo = `
+         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+`;
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode</Text>
+            <Separator width={width} />
+            <Text color="cyan">{logo}</Text>
+            <Box flexDirection="column" alignItems="center">
+                <Text italic>A zero-friction, AI-native patch engine.</Text>
+                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+            </Box>
+            
+            <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                <Box flexDirection="column" width="45%">
+                    <Text>Version 1.1.5</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>relaycode</Text>
+                    <Text>relaycode-core</Text>
+                    <Text>apply-multi-diff</Text>
+                    <Text>konro</Text>
+                </Box>
+                 <Box flexDirection="column" width="45%">
+                    <Text>Build Timestamps</Text>
+                    <Text>─────────────────────────</Text>
+                    <Text>2025-09-20 13:58:05</Text>
+                    <Text>2025-09-20 10:59:05</Text>
+                    <Text>(versioned)</Text>
+                    <Text>(versioned)</Text>
+                </Box>
+            </Box>
+            
+            <Box marginTop={1}><Separator width={width} /></Box>
+            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+            <Text>web app with repo-wide visual context, history, and rollback.</Text>
+            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+            <Separator width={width} />
+            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+            <Separator width={width} />
+            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
+        </Box>
+    );
+};
+
+export default SplashScreen;
+```
+
+## File: src/services/transaction.service.ts
+```typescript
+import { createMockTransactions } from '../data/mocks';
+import type { Transaction } from '../types/domain.types';
+
+const revertTransaction = (transactionId: string) => {
+    // In a real app, this would perform the revert operation (e.g., API call).
+    // The state update is now handled by the calling store.
+    // This is a no-op for the simulation, we just need the id.
+};
+
+export const TransactionService = {
+    revertTransaction,
+    getAllTransactions: (): Transaction[] => createMockTransactions(),
+};
+```
+
+## File: src/stores/init.store.ts
+```typescript
+import { create } from 'zustand';
+import type { Task, TaskStatus, InitPhase, GitignoreChoice } from '../types/view.types';
+
+// Store Interface
+export type { Task };
+interface InitState {
+    phase: InitPhase;
+    analyzeTasks: Task[];
+    projectId: string | null;
+    gitignoreFound: boolean | null;
+    configureTasks: Task[];
+    interactiveChoice: GitignoreChoice | null;
+
+    actions: {
+        setPhase: (_phase: InitPhase) => void;
+        setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+        updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
+        setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
+        updateConfigureTask: (_id: string, _status: TaskStatus) => void;
+        setInteractiveChoice: (_choice: GitignoreChoice) => void;
+        resetInit: () => void;
+    };
+}
+
+// Create the store
+export const useInitStore = create<InitState>((set) => ({
+    phase: 'ANALYZE',
+    analyzeTasks: [],
+    projectId: null,
+    gitignoreFound: null,
+    configureTasks: [],
+    interactiveChoice: null,
+
+    actions: {
+        setPhase: (phase) => set({ phase }),
+        setTasks: (analyzeTasks, configureTasks) => set({
+            analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
+            configureTasks: JSON.parse(JSON.stringify(configureTasks)),
+        }),
+        updateAnalyzeTask: (id, status) => set(state => ({
+            analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+        })),
+        setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+        updateConfigureTask: (id, status) => set(state => ({
+            configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+        })),
+        setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+        resetInit: () => set({
+            phase: 'ANALYZE',
+            analyzeTasks: [],
+            projectId: null,
+            gitignoreFound: null,
+            configureTasks: [],
+            interactiveChoice: null,
+        }),
+    },
+}));
+```
+
+## File: package.json
+```json
+{
+  "name": "relaycode-tui",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.tsx",
+    "dev": "bun run --watch index.tsx",
+    "debug-screen": "bun run index.tsx debug-screen",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "clipboardy": "^4.0.0",
+    "ink": "^6.3.1",
+    "ink-select-input": "^4.2.2",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.1.1",
+    "zustand": "^4.5.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.19.17",
+    "@types/react": "^18.3.24",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript": "^5.9.2"
+  }
+}
 ```
 
 ## File: src/hooks/useTransactionDetailScreen.tsx
@@ -2430,23 +2545,6 @@ export const ReviewService = {
 };
 ```
 
-## File: src/services/transaction.service.ts
-```typescript
-import { createMockTransactions } from '../data/mocks';
-import type { Transaction } from '../types/domain.types';
-
-const revertTransaction = (transactionId: string) => {
-    // In a real app, this would perform the revert operation (e.g., API call).
-    // The state update is now handled by the calling store.
-    // This is a no-op for the simulation, we just need the id.
-};
-
-export const TransactionService = {
-    revertTransaction,
-    getAllTransactions: (): Transaction[] => createMockTransactions(),
-};
-```
-
 ## File: src/stores/commit.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -2480,104 +2578,6 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         },
     },
 }));
-```
-
-## File: src/stores/init.store.ts
-```typescript
-import { create } from 'zustand';
-import type { Task, TaskStatus, InitPhase, GitignoreChoice } from '../types/view.types';
-
-// Store Interface
-export type { Task };
-interface InitState {
-    phase: InitPhase;
-    analyzeTasks: Task[];
-    projectId: string | null;
-    gitignoreFound: boolean | null;
-    configureTasks: Task[];
-    interactiveChoice: GitignoreChoice | null;
-
-    actions: {
-        setPhase: (_phase: InitPhase) => void;
-        setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
-        updateAnalyzeTask: (_id: string, _status: TaskStatus) => void;
-        setAnalysisResults: (_projectId: string, _gitignoreFound: boolean) => void;
-        updateConfigureTask: (_id: string, _status: TaskStatus) => void;
-        setInteractiveChoice: (_choice: GitignoreChoice) => void;
-        resetInit: () => void;
-    };
-}
-
-// Create the store
-export const useInitStore = create<InitState>((set) => ({
-    phase: 'ANALYZE',
-    analyzeTasks: [],
-    projectId: null,
-    gitignoreFound: null,
-    configureTasks: [],
-    interactiveChoice: null,
-
-    actions: {
-        setPhase: (phase) => set({ phase }),
-        setTasks: (analyzeTasks, configureTasks) => set({
-            analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
-            configureTasks: JSON.parse(JSON.stringify(configureTasks)),
-        }),
-        updateAnalyzeTask: (id, status) => set(state => ({
-            analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
-        })),
-        setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
-        updateConfigureTask: (id, status) => set(state => ({
-            configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
-        })),
-        setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
-        resetInit: () => set({
-            phase: 'ANALYZE',
-            analyzeTasks: [],
-            projectId: null,
-            gitignoreFound: null,
-            configureTasks: [],
-            interactiveChoice: null,
-        }),
-    },
-}));
-```
-
-## File: package.json
-```json
-{
-  "name": "relaycode-tui",
-  "module": "index.tsx",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "start": "bun run index.tsx",
-    "dev": "bun run --watch index.tsx",
-    "debug-screen": "bun run index.tsx debug-screen",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
-  },
-  "dependencies": {
-    "clipboardy": "^4.0.0",
-    "ink": "^6.3.1",
-    "ink-select-input": "^4.2.2",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "react": "^19.1.1",
-    "zustand": "^4.5.7"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^20.19.17",
-    "@types/react": "^18.3.24",
-    "@typescript-eslint/eslint-plugin": "^8.44.0",
-    "@typescript-eslint/parser": "^8.44.0",
-    "eslint": "^9.36.0",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "typescript": "^5.9.2"
-  }
-}
 ```
 
 ## File: src/components/InitializationScreen.tsx
@@ -2831,7 +2831,7 @@ export const useReviewScreen = () => {
             if (key.return) toggleBodyView('script_output');
             if (input.toLowerCase() === 'c') {
                 // Copy script output
-                const scriptIndex = selectedItemIndex - numFiles;
+                const scriptIndex = selectedItemIndex - reviewStats.numFiles;
                 const selectedScript = scripts[scriptIndex];
                 if (selectedScript) {
                     // eslint-disable-next-line no-console
@@ -2865,7 +2865,7 @@ export const useReviewScreen = () => {
         if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
 
         if (input === ' ') {
-            if (selectedItemIndex < numFiles) {
+            if (selectedItemIndex < reviewStats.numFiles) {
                 const file = files[selectedItemIndex];
                 if (file && file.reviewStatus !== 'FAILED' && transactionId) {
                     transactionActions.toggleFileApproval(transactionId, file.id);
@@ -2874,13 +2874,13 @@ export const useReviewScreen = () => {
         }
 
         if (input.toLowerCase() === 'd') {
-            if (selectedItemIndex < numFiles) {
+            if (selectedItemIndex < reviewStats.numFiles) {
                 toggleBodyView('diff');
             }
         }
 
         if (key.return) { // Enter key
-             if (selectedItemIndex >= numFiles) { // It's a script
+             if (selectedItemIndex >= reviewStats.numFiles) { // It's a script
                 toggleBodyView('script_output');
             }
         }
@@ -2904,7 +2904,7 @@ export const useReviewScreen = () => {
                     showBulkRepair();
                 }
             } else {
-                if (selectedItemIndex < numFiles) {
+                if (selectedItemIndex < reviewStats.numFiles) {
                     const file = files[selectedItemIndex];
                     if (file && file.reviewStatus === 'FAILED') {
                         tryRepairFile();
