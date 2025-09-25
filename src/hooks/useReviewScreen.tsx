@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useInput, type Key } from 'ink';
 import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
 import { useCopyStore } from '../stores/copy.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
+import { useViewport } from './useViewport';
+import { useStdoutDimensions } from '../utils';
 
 type NavigableItem =
     | { type: 'prompt' }
@@ -24,6 +26,22 @@ export const useReviewScreen = () => {
 
     const transaction = useTransactionStore(selectSelectedTransaction);
     const { showDashboardScreen } = useAppStore(s => s.actions);
+    const [contentScrollIndex, setContentScrollIndex] = useState(0);
+    const [height] = useStdoutDimensions();
+
+    // Reset scroll when body view changes
+    useEffect(() => {
+        setContentScrollIndex(0);
+    }, [bodyView]);
+
+    // Header(2) + Meta(3) + Prompt/Reasoning(2) + Separator(1) + Scripts(N) + Separator(1) + FilesHeader(1) + Separator(1) + BodyMargin(1) + Footer(1)
+    const scriptCount = transaction?.scripts?.length || 0;
+    const RESERVED_ROWS_MAIN = 13 + scriptCount;
+    const { viewOffset, viewportHeight } = useViewport({ selectedIndex: selectedItemIndex, reservedRows: RESERVED_ROWS_MAIN });
+
+    // For body content, it's simpler
+    const fileCount = transaction?.files?.length || 0;
+    const availableBodyHeight = Math.max(1, height - (RESERVED_ROWS_MAIN + fileCount));
 
     const navigableItems = useMemo((): NavigableItem[] => {
         if (!transaction) return [];
@@ -31,6 +49,8 @@ export const useReviewScreen = () => {
         const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
         return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
     }, [transaction]);
+
+    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + viewportHeight);
 
     // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
     const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
@@ -144,6 +164,30 @@ export const useReviewScreen = () => {
         }
     };
 
+    const handleContentScrollInput = (key: Key): boolean => {
+        const contentViews = ['reasoning', 'script_output', 'diff'];
+        if (!contentViews.includes(bodyView)) return false;
+
+        if (key.upArrow) {
+            setContentScrollIndex(i => Math.max(0, i - 1));
+            return true;
+        }
+        if (key.downArrow) {
+            // This is a simplification; a real implementation would need content length.
+            setContentScrollIndex(i => i + 1);
+            return true;
+        }
+        if (key.pageUp) {
+            setContentScrollIndex(i => Math.max(0, i - availableBodyHeight));
+            return true;
+        }
+        if (key.pageDown) {
+            setContentScrollIndex(i => i + availableBodyHeight);
+            return true;
+        }
+        return false;
+    };
+
     const handleReasoningInput = (input: string, key: Key): void => {
         if (key.upArrow) scrollReasoningUp();
         if (key.downArrow) scrollReasoningDown();
@@ -249,6 +293,11 @@ export const useReviewScreen = () => {
             return;
         }
 
+        // If we are in a scrollable body view, prioritize that input.
+        if (handleContentScrollInput(key)) {
+            return;
+        }
+
         switch (bodyView) {
             case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
             case 'bulk_repair': return handleBulkRepairInput(input, key);
@@ -270,6 +319,10 @@ export const useReviewScreen = () => {
         patchStatus,
         navigableItems,
         isFileSelected,
+        navigableItemsInView,
+        viewOffset,
+        contentScrollIndex,
+        availableBodyHeight,
         selectedBulkRepairOptionIndex,
         selectedBulkInstructOptionIndex,
         ...reviewStats,

@@ -24,6 +24,8 @@ interface CopyState {
         openForHistory: (transactions: Transaction[]) => void;
         navigateUp: () => void;
         navigateDown: () => void;
+        navigatePageUp: (viewportHeight: number) => void;
+        navigatePageDown: (viewportHeight: number) => void;
         toggleSelection: () => void;
         toggleSelectionById: (id: string) => void;
         executeCopy: () => void;
@@ -79,6 +81,12 @@ export const useCopyStore = create<CopyState>((set, get) => ({
         })),
         navigateDown: () => set(state => ({
             selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+        })),
+        navigatePageUp: (viewportHeight: number) => set(state => ({
+            selectedIndex: Math.max(0, state.selectedIndex - viewportHeight),
+        })),
+        navigatePageDown: (viewportHeight: number) => set(state => ({
+            selectedIndex: Math.min(state.items.length - 1, state.selectedIndex + viewportHeight),
         })),
         toggleSelection: () => set(state => {
             const currentItem = state.items[state.selectedIndex];

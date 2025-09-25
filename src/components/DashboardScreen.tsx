@@ -73,7 +73,9 @@ const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction:
     
     const content = (
         <Text>
-            {time} {expandIcon} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
+            {time} {expandIcon} {icon} {statusText}{' '}
+            <Text color="gray">{transaction.hash}</Text>
+            {' '}· {messageNode}
         </Text>
     );
 

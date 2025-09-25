@@ -134,6 +134,10 @@ const ReviewScreen = () => {
         selectedBulkRepairOptionIndex,
         selectedBulkInstructOptionIndex,
         navigableItems,
+        navigableItemsInView,
+        viewOffset,
+        contentScrollIndex,
+        availableBodyHeight,
         hasRejectedFiles,
     } = useReviewScreen();
 
@@ -153,8 +157,8 @@ const ReviewScreen = () => {
                 <Box flexDirection="column">
                     <ReasonScreen
                         reasoning={reasoningText}
-                        scrollIndex={reasoningScrollIndex}
-                        visibleLinesCount={visibleLinesCount}
+                        scrollIndex={contentScrollIndex}
+                        visibleLinesCount={availableBodyHeight}
                     />
                     {reasoningLinesCount > visibleLinesCount && (
                         <Text color="gray">
@@ -175,6 +179,8 @@ const ReviewScreen = () => {
                     filePath={selectedFile.path}
                     diffContent={selectedFile.diff}
                     isExpanded={isDiffExpanded}
+                    scrollIndex={contentScrollIndex}
+                    maxHeight={availableBodyHeight}
                 />
             );
         }
@@ -195,7 +201,9 @@ const ReviewScreen = () => {
              
              return (
                 <Box flexDirection="column">
-                    <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                    <Text>
+                        {selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`
+                    </Text>
                     <Box marginTop={1} flexDirection="column">
                         {outputLines.map((line: string, index: number) => {
                             const isError = line.includes('Error');
@@ -410,7 +418,10 @@ const ReviewScreen = () => {
                 <Box flexDirection="column">
                     <Text>{hash} · {message}</Text>
                     <Text>
-                        (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>) · {numFiles} Files · {approvedFilesCount}/{numFiles} Approved
+                        (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>
+                        ) · {numFiles} Files · ({approvedFilesCount}/{numFiles} Appr)
+                        · Showing {viewOffset + 1}-
+                        {Math.min(viewOffset + navigableItemsInView.length, navigableItems.length)} of {navigableItems.length}
                         {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
                         {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
                     </Text>
@@ -432,50 +443,36 @@ const ReviewScreen = () => {
             <Separator />
 
             {/* Script Results (if any) */}
-            {scripts.length > 0 && navigableItems.some(i => i.type === 'script') && (
+            {scripts.length > 0 && navigableItemsInView.some(i => i.type === 'script') && (
                 <>
                     <Box flexDirection="column" marginY={1}>
-                        {scripts.map((script: ScriptResult) => (
-                            (() => {
-                                const navItemIndex = navigableItems.findIndex(i => {
-                                    if (i.type === 'script') {
-                                        return i.id === script.command;
-                                    }
-                                    return false;
-                                });
-                                const isSelected = selectedItemIndex === navItemIndex;
-                                return (
-                                    <ScriptItemRow
-                                        key={script.command}
-                                        script={script}
-                                        isSelected={isSelected}
-                                        isExpanded={bodyView === 'script_output' && isSelected}
-                                    />
-                                );
-                            })()
-                        ))}
+                        {scripts.map((script: ScriptResult) => {
+                            const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'script' && i.id === script.command);
+                            if (itemInViewIndex === -1) return null; // Only render if visible
+                            
+                            const isSelected = selectedItemIndex === viewOffset + itemInViewIndex;
+                            return (
+                                <ScriptItemRow key={script.command} script={script} isSelected={isSelected} isExpanded={bodyView === 'script_output' && isSelected} />
+                            );
+                        })}
                     </Box>
                     <Separator />
                 </>
             )}
-
+            
             {/* Files Section */}
             <Box flexDirection="column" marginY={1}>
                 <Text bold>FILES</Text>
                 {files.map((file: FileItem) => {
-                    const navItemIndex = navigableItems.findIndex(i => {
-                        if (i.type === 'file') {
-                            return i.id === file.id;
-                        }
-                        return false;
-                    });
-                    const isFocused = selectedItemIndex === navItemIndex;
+                    const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'file' && i.id === file.id);
+                    if (itemInViewIndex === -1) return null; // Only render if visible
+
+                    const isFocused = selectedItemIndex === viewOffset + itemInViewIndex;
                     const reviewState = fileReviewStates.get(file.id);
+                    
                     return (
                         <FileItemRow
-                            key={file.id}
-                            file={file}
-                            isFocused={isFocused}
+                            key={file.id} file={file} isFocused={isFocused}
                             reviewStatus={reviewState?.status || 'AWAITING'}
                             reviewError={reviewState?.error}
                             reviewDetails={reviewState?.details}

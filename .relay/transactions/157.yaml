@@ -1,0 +1,197 @@
+uuid: c4086d4e-b8d9-4828-98e6-7b2432d56a05
+projectId: relaycode-tui
+createdAt: '2025-09-25T23:04:33.570Z'
+gitCommitMsg: >-
+  fix(ui): prevent MaxListenersExceededWarning for resize events
+
+  Refactored the `useStdoutDimensions` hook to use a singleton listener pattern.
+  Previously, each component using the hook would attach its own 'resize' event
+  listener to `process.stdout`, leading to a `MaxListenersExceededWarning` when
+  many such components were mounted.
+
+  This change introduces a module-level pub/sub system. A single 'resize'
+  listener is now attached to `process.stdout`. The `useStdoutDimensions` hook
+  subscribes to this central notifier, ensuring that only one listener is active
+  regardless of how many components consume the hook. This resolves the warning
+  and improves performance.
+promptSummary: >-
+  I am seeing a MaxListenersExceededWarning for 'resize' events on WriteStream.
+  I suspect it is related to how stdout dimensions are being handled.
+reasoning:
+  - >-
+    Based on the `MaxListenersExceededWarning` in your logs, it appears multiple
+    `resize` event listeners are being added to `process.stdout`. This is likely
+    because the `useStdoutDimensions` hook is used in many components, and each
+    instance attaches its own listener.
+  - >-
+    To fix this, I will refactor `useStdoutDimensions` in `src/utils.ts` to use
+    a singleton pattern for the event listener. A single listener will be
+    attached at the module level. The hook will then use a simple pub/sub
+    mechanism to allow multiple components to subscribe to dimension changes
+    without adding more listeners to `process.stdout`. This will resolve the
+    warning and make the dimension handling more efficient.
+operations:
+  - type: write
+    path: src/utils.ts
+    content: >+
+      --- src/utils.ts
+
+      +++ src/utils.ts
+
+      @@ -1,28 +1,52 @@
+       import { useState, useEffect } from 'react';
+       
+       // Utility for simulation
+       export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+       
+      +type Dimensions = { columns: number; rows: number };
+
+      +const subscribers = new Set<(dims: Dimensions) => void>();
+
+      +let currentDimensions: Dimensions = {
+
+      +    columns: process.stdout.columns || 80,
+
+      +    rows: process.stdout.rows || 24,
+
+      +};
+
+      +
+
+      +let listenerAttached = false;
+
+      +
+
+      +const updateAndNotify = () => {
+
+      +    const newDimensions = {
+
+      +        columns: process.stdout.columns || 80,
+
+      +        rows: process.stdout.rows || 24,
+
+      +    };
+
+      +
+
+      +    if (newDimensions.columns !== currentDimensions.columns ||
+      newDimensions.rows !== currentDimensions.rows) {
+
+      +        currentDimensions = newDimensions;
+
+      +        subscribers.forEach(subscriber => subscriber(currentDimensions));
+
+      +    }
+
+      +};
+
+      +
+
+      +if (!listenerAttached) {
+
+      +    process.stdout.on('resize', updateAndNotify);
+
+      +    listenerAttached = true;
+
+      +}
+
+      +
+       export const useStdoutDimensions = (): [number, number] => {
+      -    const [dimensions, setDimensions] = useState({ columns: 80, rows: 24
+      });
+
+      +    const [dimensions, setDimensions] = useState(currentDimensions);
+       
+           useEffect(() => {
+      -        const updateDimensions = () => {
+
+      -            setDimensions({
+
+      +        const subscriber = (newDims: Dimensions) =>
+      setDimensions(newDims);
+
+      +        subscribers.add(subscriber);
+
+      +
+
+      +        // On mount, check if dimensions are stale and update if needed
+      for this hook instance.
+
+      +        setDimensions(dims => {
+
+      +            const latestDims = {
+                       columns: process.stdout.columns || 80,
+                       rows: process.stdout.rows || 24,
+      -            });
+
+      -        };
+
+      -
+
+      -        updateDimensions();
+
+      -        process.stdout.on('resize', updateDimensions);
+
+      +            };
+
+      +            if (latestDims.columns !== dims.columns || latestDims.rows
+      !== dims.rows) {
+
+      +                return latestDims;
+
+      +            }
+
+      +            return dims;
+
+      +        });
+       
+               return () => {
+      -            process.stdout.off('resize', updateDimensions);
+
+      +            subscribers.delete(subscriber);
+               };
+           }, []);
+       
+           return [dimensions.columns, dimensions.rows];
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/utils.ts: >-
+    import { useState, useEffect } from 'react';
+
+
+    // Utility for simulation
+
+    export const sleep = (ms: number) => new Promise(resolve =>
+    setTimeout(resolve, ms));
+
+
+    export const useStdoutDimensions = (): [number, number] => {
+        const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
+
+        useEffect(() => {
+            const updateDimensions = () => {
+                setDimensions({
+                    columns: process.stdout.columns || 80,
+                    rows: process.stdout.rows || 24,
+                });
+            };
+
+            updateDimensions();
+            process.stdout.on('resize', updateDimensions);
+
+            return () => {
+                process.stdout.off('resize', updateDimensions);
+            };
+        }, []);
+
+        return [dimensions.columns, dimensions.rows];
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 157

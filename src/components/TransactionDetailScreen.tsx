@@ -38,7 +38,7 @@ const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
 const TransactionDetailScreen = () => {
     const {
         transaction, files,
-        focusedItemPath, expandedItemPaths, bodyView,
+        focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
     } = useTransactionDetailScreen();
 
     if (!transaction) {
@@ -73,11 +73,13 @@ const TransactionDetailScreen = () => {
                         {files.map((file) => {
                              const fileId = `FILES/${file.id}`;
                              const isFileSelected = focusedItemPath === fileId;
-                             const stats = file.type === 'DEL' ? '' : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                             const stats = file.type === 'DEL'
+                                ? ''
+                                : ` (+${file.linesAdded}/-${file.linesRemoved})`;
                              return (
                                 <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
                                     {isFileSelected ? '> ' : '  '}
-                                    {`${getFileChangeTypeIcon(file.type)} ${file.path}${stats}`}
+                                    {getFileChangeTypeIcon(file.type)} {file.path}{stats}
                                 </Text>
                             );
                         })}
@@ -95,13 +97,18 @@ const TransactionDetailScreen = () => {
             return (
                 <Box flexDirection="column">
                     <Text>PROMPT</Text>
-                    <Box marginTop={1}><Text>{transaction.prompt}</Text></Box>
+                    <Box marginTop={1} flexDirection="column">
+                        {(transaction.prompt || '').split('\n')
+                            .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
+                            .map((line, i) => <Text key={i}>{line}</Text>)
+                        }
+                    </Box>
                 </Box>
             );
         }
         if (bodyView === 'REASONING') {
             if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
-            return <ReasonScreen reasoning={transaction.reasoning} />;
+            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={availableBodyHeight} />;
         }
         if (bodyView === 'FILES_LIST') {
              return <Text color="gray">(Select a file and press → to view the diff)</Text>;
@@ -110,7 +117,7 @@ const TransactionDetailScreen = () => {
             const fileId = focusedItemPath.split('/')[1];
             const file = files.find(f => f.id === fileId);
             if (!file) return null;
-            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} />;
+            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={availableBodyHeight} />;
         }
         return null;
     };

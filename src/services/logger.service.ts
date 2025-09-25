@@ -1,6 +1,6 @@
 import { useLogStore } from '../stores/log.store';
 
-let simulatorInterval: NodeJS.Timeout | null = null;
+let simulatorInterval: ReturnType<typeof setInterval> | null = null;
 
 const mockClipboardContents = [
     'feat(dashboard): implement new UI components',

@@ -51,6 +51,14 @@ export const useDebugLogScreen = () => {
             setSelectedIndex(i => moveIndex(i, 'down', filteredLogs.length));
             return;
         }
+        if (key.pageUp) {
+            setSelectedIndex(i => Math.max(0, i - viewportHeight));
+            return;
+        }
+        if (key.pageDown) {
+            setSelectedIndex(i => Math.min(filteredLogs.length - 1, i + viewportHeight));
+            return;
+        }
         if (input.toLowerCase() === 'c') {
             clearLogs();
             setFilterQuery('');
@@ -79,5 +87,6 @@ export const useDebugLogScreen = () => {
         mode,
         filterQuery,
         setFilterQuery,
+        viewOffset,
     };
 };

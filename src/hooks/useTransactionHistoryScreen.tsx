@@ -56,6 +56,8 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
         if (key.downArrow) actions.navigateDown();
         if (key.rightArrow) actions.expandOrDrillDown();
         if (key.leftArrow) actions.collapseOrBubbleUp();
+        if (key.pageUp) actions.navigatePageUp(viewportHeight);
+        if (key.pageDown) actions.navigatePageDown(viewportHeight);
         if (input === ' ') actions.toggleSelection();
         if (key.return) {
             const txId = selectedItemPath.split('/')[0];

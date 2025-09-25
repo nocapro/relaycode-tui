@@ -45,7 +45,7 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
     // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
     const numColumns = Math.min(
         actions.length,
-        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth)))
+        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth))),
     );
     
     const itemsPerColumn = Math.ceil(actions.length / numColumns);

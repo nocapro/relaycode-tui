@@ -48,6 +48,7 @@ const DebugLogScreen = () => {
         mode,
         filterQuery,
         setFilterQuery,
+        viewOffset,
     } = useDebugLogScreen();
     const [width] = useStdoutDimensions();
 
@@ -63,10 +64,11 @@ const DebugLogScreen = () => {
             ) : (
                 <Text color="gray">{filterQuery || '(none)'}</Text>
             )}
-            <Box flexGrow={1} />
+            <Box flexGrow={1} /> 
             <Text>
-                Showing {filteredLogCount} of {logCount} entries
-            </Text>
+                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
+                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
+            </Text> 
         </Box>
     );
 
@@ -74,7 +76,7 @@ const DebugLogScreen = () => {
         mode === 'FILTER'
             ? [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }]
             : [
-                  { key: '↑↓', label: 'Scroll' },
+                  { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
                   { key: 'F', label: 'Filter' },
                   { key: 'C', label: 'Clear' },
                   { key: 'Esc/Ctrl+L', label: 'Close' },
@@ -96,7 +98,7 @@ const DebugLogScreen = () => {
                     <LogEntryRow
                         key={`${entry.timestamp}-${index}`}
                         entry={entry}
-                        isSelected={selectedIndex === index}
+                        isSelected={selectedIndex === index + viewOffset}
                     />
                 ))}
                 {logCount > 0 && filteredLogCount === 0 && (

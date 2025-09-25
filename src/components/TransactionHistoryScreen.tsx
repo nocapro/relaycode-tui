@@ -165,7 +165,7 @@ const TransactionHistoryScreen = () => {
         
         const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
         const footerActions: ActionItem[] = [
-            { key: '↑↓', label: 'Nav' },
+            { key: '↑↓/PgUp/PgDn', label: 'Nav' },
             { key: '→', label: 'Expand' },
             { key: '←', label: 'Collapse' },
             { key: 'Spc', label: 'Select' },

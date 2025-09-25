@@ -5,8 +5,10 @@ interface DiffScreenProps {
     filePath: string;
     diffContent: string;
     isExpanded: boolean;
+    scrollIndex?: number;
+    maxHeight?: number;
 }
-const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
+const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHeight }: DiffScreenProps) => {
     const lines = diffContent.split('\n');
     const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
     const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
@@ -24,6 +26,11 @@ const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
                     {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
                 </>
             );
+        }
+        // Handle vertical scrolling for expanded view
+        if (isExpanded && maxHeight) {
+            const visibleLines = lines.slice(scrollIndex, scrollIndex + maxHeight);
+            return visibleLines.map((line, i) => renderLine(line, scrollIndex + i));
         }
         return lines.map((line, i) => renderLine(line, i));
     };

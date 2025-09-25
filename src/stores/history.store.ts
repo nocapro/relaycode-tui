@@ -19,6 +19,8 @@ interface HistoryState {
         load: (initialState?: Partial<HistoryStateData>) => void;
         navigateDown: () => void;
         navigateUp: () => void;
+        navigatePageUp: (viewportHeight: number) => void;
+        navigatePageDown: (viewportHeight: number) => void;
         expandOrDrillDown: () => Promise<void>;
         collapseOrBubbleUp: () => void;
         toggleSelection: () => void;
@@ -60,6 +62,28 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             const { transactions } = useTransactionStore.getState();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
             set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+        },
+        navigatePageUp: (viewportHeight: number) => {
+            const { expandedIds, selectedItemPath } = get();
+            const { transactions } = useTransactionStore.getState();
+            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+            const currentIndex = visibleItems.indexOf(selectedItemPath);
+            if (currentIndex === -1) return;
+
+            const newIndex = Math.max(0, currentIndex - viewportHeight);
+            set({ selectedItemPath: visibleItems[newIndex]! });
+        },
+        navigatePageDown: (viewportHeight: number) => {
+            const { expandedIds, selectedItemPath } = get();
+            const { transactions } = useTransactionStore.getState();
+            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+            const currentIndex = visibleItems.indexOf(selectedItemPath);
+            if (currentIndex === -1) return;
+
+            const newIndex = Math.min(visibleItems.length - 1, currentIndex + viewportHeight);
+            set({ selectedItemPath: visibleItems[newIndex]! });
         },
         expandOrDrillDown: async () => {
             const { selectedItemPath, expandedIds } = get();

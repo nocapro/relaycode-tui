@@ -29,6 +29,7 @@ src/
   data/
     mocks.ts
   hooks/
+    useCopyScreen.tsx
     useDashboardScreen.tsx
     useDebugLogScreen.tsx
     useDebugMenu.tsx
@@ -80,6 +81,77 @@ tsconfig.json
 
 # Files
 
+## File: src/hooks/useCopyScreen.tsx
+```typescript
+import { useInput } from 'ink';
+import { useCopyStore } from '../stores/copy.store';
+import { useViewStore } from '../stores/view.store';
+import { useViewport } from './useViewport';
+
+// Header, separator, title, margin, separator, status, footer
+const RESERVED_ROWS = 8;
+
+export const useCopyScreen = () => {
+    const activeOverlay = useViewStore(s => s.activeOverlay);
+    const {
+        title, items, selectedIndex, selectedIds, lastCopiedMessage,
+        actions,
+    } = useCopyStore(state => ({ ...state, actions: state.actions }));
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        reservedRows: RESERVED_ROWS,
+    });
+
+    useInput((input, key) => {
+        if (key.escape) {
+            actions.close();
+            return;
+        }
+        if (key.upArrow) {
+            actions.navigateUp();
+            return;
+        }
+        if (key.downArrow) {
+            actions.navigateDown();
+            return;
+        }
+        if (key.pageUp) {
+            actions.navigatePageUp(viewportHeight);
+            return;
+        }
+        if (key.pageDown) {
+            actions.navigatePageDown(viewportHeight);
+            return;
+        }
+        if (input === ' ') {
+            actions.toggleSelection();
+            return;
+        }
+        if (key.return) {
+            actions.executeCopy();
+            return;
+        }
+        
+        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
+        if(item) {
+            actions.toggleSelectionById(item.id);
+        }
+    }, { isActive: activeOverlay === 'copy' });
+
+    const itemsInView = items.slice(viewOffset, viewOffset + viewportHeight);
+
+    return {
+        title,
+        itemsInView,
+        selectedIndex,
+        selectedIds,
+        lastCopiedMessage,
+        viewOffset,
+    };
+};
+```
+
 ## File: src/components/ActionFooter.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -129,7 +201,7 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
     // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
     const numColumns = Math.min(
         actions.length,
-        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth)))
+        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth))),
     );
     
     const itemsPerColumn = Math.ceil(actions.length / numColumns);
@@ -162,85 +234,6 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
 };
 
 export default ActionFooter;
-```
-
-## File: src/components/DebugLogScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import ActionFooter from './ActionFooter';
-import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
-import type { LogEntry } from '../types/log.types';
-import { useStdoutDimensions } from '../utils';
-
-const LogLevelColors = {
-    DEBUG: 'gray',
-    INFO: 'white',
-    WARN: 'yellow',
-    ERROR: 'red',
-};
-
-const LogLevelTag = {
-    DEBUG: { color: 'white', backgroundColor: 'gray' },
-    INFO: { color: 'black', backgroundColor: 'cyan' },
-    WARN: { color: 'black', backgroundColor: 'yellow' },
-    ERROR: { color: 'white', backgroundColor: 'red' },
-};
-
-const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
-    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
-    const color = LogLevelColors[entry.level];
-    const tagColors = LogLevelTag[entry.level];
-
-    return (
-        <Text color={color}>
-            {isSelected ? '> ' : '  '}
-            <Text color="gray">{time}</Text>
-            {' '}
-            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
-                {' '}{entry.level.padEnd(5, ' ')}{' '}
-            </Text>
-            {' '}
-            {entry.message}
-        </Text>
-    );
-};
-
-const DebugLogScreen = () => {
-    const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            height="100%"
-            paddingX={2}
-            paddingY={1}
-        >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
-            <Separator width={width - 4} />
-            <Box flexDirection="column" flexGrow={1} marginY={1}>
-                {logsInView.map((entry, index) => (
-                    <LogEntryRow
-                        key={`${entry.timestamp}-${index}`}
-                        entry={entry}
-                        isSelected={selectedIndex === index}
-                    />
-                ))}
-                {logCount === 0 && <Text color="gray">No log entries yet. Waiting for system activity...</Text>}
-            </Box>
-            <Separator width={width - 4} />
-            <ActionFooter actions={[
-                { key: '↑↓', label: 'Scroll' },
-                { key: 'C', label: 'Clear' },
-                { key: 'Esc/Ctrl+L', label: 'Close' },
-            ]}/>
-        </Box>
-    );
-};
-
-export default DebugLogScreen;
 ```
 
 ## File: src/constants/detail.constants.ts
@@ -299,64 +292,6 @@ export const INITIAL_APPLY_STEPS: ApplyStep[] = [
 ];
 ```
 
-## File: src/hooks/useDebugLogScreen.tsx
-```typescript
-import { useState, useEffect } from 'react';
-import { useInput } from 'ink';
-import { useLogStore } from '../stores/log.store';
-import { useViewStore } from '../stores/view.store';
-import { useViewport } from './useViewport';
-import { LoggerService } from '../services/logger.service';
-import { moveIndex } from '../stores/navigation.utils';
-
-export const useDebugLogScreen = () => {
-    const logs = useLogStore(s => s.logs);
-    const clearLogs = useLogStore(s => s.actions.clearLogs);
-    const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
-
-    const [selectedIndex, setSelectedIndex] = useState(0);
-
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex,
-        reservedRows: 6, // Header, borders, footer
-    });
-
-    useInput((input, key) => {
-        if (key.escape) {
-            setActiveOverlay('none');
-            return;
-        }
-        if (key.upArrow) {
-            setSelectedIndex(i => moveIndex(i, 'up', logs.length));
-            return;
-        }
-        if (key.downArrow) {
-            setSelectedIndex(i => moveIndex(i, 'down', logs.length));
-            return;
-        }
-        if (input.toLowerCase() === 'c') {
-            clearLogs();
-            setSelectedIndex(0);
-        }
-    });
-
-    useEffect(() => {
-        LoggerService.startSimulator();
-        return () => {
-            LoggerService.stopSimulator();
-        };
-    }, []);
-
-    const logsInView = logs.slice(viewOffset, viewOffset + viewportHeight);
-
-    return {
-        logsInView,
-        logCount: logs.length,
-        selectedIndex,
-    };
-};
-```
-
 ## File: src/services/fs.service.ts
 ```typescript
 import { sleep } from '../utils';
@@ -383,56 +318,6 @@ function helloWorld() {
 
 export const FileSystemService = {
     readFileContent,
-};
-```
-
-## File: src/services/logger.service.ts
-```typescript
-import { useLogStore } from '../stores/log.store';
-
-let simulatorInterval: NodeJS.Timeout | null = null;
-
-const startSimulator = () => {
-    if (simulatorInterval) return;
-
-    // Initial burst of logs to populate the view
-    LoggerService.info('Log simulator started.');
-    LoggerService.debug('Initializing clipboard watcher...');
-    setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
-
-    simulatorInterval = setInterval(() => {
-        const random = Math.random();
-        if (random < 0.6) {
-            LoggerService.debug('Clipboard watcher polling...');
-        } else if (random < 0.8) {
-            LoggerService.debug('No clipboard change detected.');
-        } else {
-            LoggerService.info('Clipboard content changed.');
-        }
-    }, 2000);
-};
-
-const stopSimulator = () => {
-    if (simulatorInterval) {
-        clearInterval(simulatorInterval);
-        simulatorInterval = null;
-        LoggerService.info('Log simulator stopped.');
-    }
-};
-
-const debug = (message: string) => useLogStore.getState().actions.addLog('DEBUG', message);
-const info = (message: string) => useLogStore.getState().actions.addLog('INFO', message);
-const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
-const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
-
-
-export const LoggerService = {
-    debug,
-    info,
-    warn,
-    error,
-    startSimulator,
-    stopSimulator,
 };
 ```
 
@@ -505,6 +390,127 @@ export interface LogEntry {
     level: LogLevel;
     message: string;
 }
+```
+
+## File: src/components/DebugLogScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import Separator from './Separator';
+import ActionFooter from './ActionFooter';
+import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+import type { LogEntry } from '../types/log.types';
+import { useStdoutDimensions } from '../utils';
+
+const LogLevelColors = {
+    DEBUG: 'gray',
+    INFO: 'white',
+    WARN: 'yellow',
+    ERROR: 'red',
+};
+
+const LogLevelTag = {
+    DEBUG: { color: 'white', backgroundColor: 'gray' },
+    INFO: { color: 'black', backgroundColor: 'cyan' },
+    WARN: { color: 'black', backgroundColor: 'yellow' },
+    ERROR: { color: 'white', backgroundColor: 'red' },
+};
+
+const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
+    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+    const color = LogLevelColors[entry.level];
+    const tagColors = LogLevelTag[entry.level];
+
+    return (
+        <Text color={color}>
+            {isSelected ? '> ' : '  '}
+            <Text color="gray">{time}</Text>
+            {' '}
+            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
+                {' '}{entry.level.padEnd(5, ' ')}{' '}
+            </Text>
+            {' '}
+            {entry.message}
+        </Text>
+    );
+};
+
+const DebugLogScreen = () => {
+    const {
+        logsInView,
+        logCount,
+        filteredLogCount,
+        selectedIndex,
+        mode,
+        filterQuery,
+        setFilterQuery,
+        viewOffset,
+    } = useDebugLogScreen();
+    const [width] = useStdoutDimensions();
+
+    const renderFilter = () => (
+        <Box>
+            <Text>Filter: </Text>
+            {mode === 'FILTER' ? (
+                <TextInput
+                    value={filterQuery}
+                    onChange={setFilterQuery}
+                    placeholder="Type to filter log messages..."
+                />
+            ) : (
+                <Text color="gray">{filterQuery || '(none)'}</Text>
+            )}
+            <Box flexGrow={1} /> 
+            <Text>
+                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
+                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
+            </Text> 
+        </Box>
+    );
+
+    const footerActions =
+        mode === 'FILTER'
+            ? [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }]
+            : [
+                  { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+                  { key: 'F', label: 'Filter' },
+                  { key: 'C', label: 'Clear' },
+                  { key: 'Esc/Ctrl+L', label: 'Close' },
+              ];
+
+    return (
+        <Box
+            flexDirection="column"
+            width="100%"
+            height="100%"
+            paddingX={2}
+            paddingY={1}
+        >
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+            <Separator width={width - 4} />
+            <Box marginY={1}>{renderFilter()}</Box>
+            <Box flexDirection="column" flexGrow={1}>
+                {logsInView.map((entry, index) => (
+                    <LogEntryRow
+                        key={`${entry.timestamp}-${index}`}
+                        entry={entry}
+                        isSelected={selectedIndex === index + viewOffset}
+                    />
+                ))}
+                {logCount > 0 && filteredLogCount === 0 && (
+                    <Text color="gray">No logs match your filter.</Text>
+                )}
+                {logCount === 0 && (
+                    <Text color="gray">No log entries yet. Waiting for system activity...</Text>
+                )}
+            </Box>
+            <Separator width={width - 4} />
+            <ActionFooter actions={footerActions} />
+        </Box>
+    );
+};
+
+export default DebugLogScreen;
 ```
 
 ## File: src/config/ui.config.ts
@@ -587,6 +593,102 @@ export const COPYABLE_ITEMS = {
 } as const;
 ```
 
+## File: src/hooks/useDebugLogScreen.tsx
+```typescript
+import { useState, useEffect, useMemo } from 'react';
+import { useInput } from 'ink';
+import { useLogStore } from '../stores/log.store';
+import { useViewStore } from '../stores/view.store';
+import { useViewport } from './useViewport';
+import { LoggerService } from '../services/logger.service';
+import { moveIndex } from '../stores/navigation.utils';
+
+export const useDebugLogScreen = () => {
+    const logs = useLogStore(s => s.logs);
+    const clearLogs = useLogStore(s => s.actions.clearLogs);
+    const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
+
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [mode, setMode] = useState<'LIST' | 'FILTER'>('LIST');
+    const [filterQuery, setFilterQuery] = useState('');
+
+    const filteredLogs = useMemo(() => logs.filter(log =>
+        log.message.toLowerCase().includes(filterQuery.toLowerCase()),
+    ), [logs, filterQuery]);
+
+    // Reset index if it's out of bounds after filtering
+    useEffect(() => {
+        if (selectedIndex >= filteredLogs.length) {
+            setSelectedIndex(Math.max(0, filteredLogs.length - 1));
+        }
+    }, [filteredLogs.length, selectedIndex]);
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        reservedRows: 8, // Header, borders, footer, filter line
+    });
+
+    useInput((input, key) => {
+        if (mode === 'FILTER') {
+            if (key.escape || key.return) {
+                setMode('LIST');
+            }
+            return;
+        }
+
+        if (key.escape) {
+            setActiveOverlay('none');
+            return;
+        }
+        if (key.upArrow) {
+            setSelectedIndex(i => moveIndex(i, 'up', filteredLogs.length));
+            return;
+        }
+        if (key.downArrow) {
+            setSelectedIndex(i => moveIndex(i, 'down', filteredLogs.length));
+            return;
+        }
+        if (key.pageUp) {
+            setSelectedIndex(i => Math.max(0, i - viewportHeight));
+            return;
+        }
+        if (key.pageDown) {
+            setSelectedIndex(i => Math.min(filteredLogs.length - 1, i + viewportHeight));
+            return;
+        }
+        if (input.toLowerCase() === 'c') {
+            clearLogs();
+            setFilterQuery('');
+            setSelectedIndex(0);
+            return;
+        }
+        if (input.toLowerCase() === 'f') {
+            setMode('FILTER');
+        }
+    });
+
+    useEffect(() => {
+        LoggerService.startSimulator();
+        return () => {
+            LoggerService.stopSimulator();
+        };
+    }, []);
+
+    const logsInView = filteredLogs.slice(viewOffset, viewOffset + viewportHeight);
+
+    return {
+        logsInView,
+        logCount: logs.length,
+        filteredLogCount: filteredLogs.length,
+        selectedIndex,
+        mode,
+        filterQuery,
+        setFilterQuery,
+        viewOffset,
+    };
+};
+```
+
 ## File: src/hooks/useViewport.ts
 ```typescript
 import { useState, useEffect } from 'react';
@@ -638,6 +740,69 @@ const getTransactionYamlPath = (transactionHash: string): string => {
 export const EditorService = {
     openFileInEditor,
     getTransactionYamlPath,
+};
+```
+
+## File: src/services/logger.service.ts
+```typescript
+import { useLogStore } from '../stores/log.store';
+
+let simulatorInterval: ReturnType<typeof setInterval> | null = null;
+
+const mockClipboardContents = [
+    'feat(dashboard): implement new UI components',
+    'const clipboardy = require(\'clipboardy\');',
+    'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890 100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import React from \'react\';',
+    'All changes have been applied successfully. You can now commit them.',
+    '{\n  "id": "123",\n  "status": "PENDING"\n}',
+    'Can you refactor this to use a switch statement?',
+];
+let currentClipboardIndex = 0;
+
+const startSimulator = () => {
+    if (simulatorInterval) return;
+
+    // Initial burst of logs to populate the view
+    LoggerService.info('Log simulator started.');
+    LoggerService.debug('Initializing clipboard watcher...');
+    setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
+
+    simulatorInterval = setInterval(() => {
+        const random = Math.random();
+        if (random < 0.6) {
+            LoggerService.debug('Clipboard watcher polling...');
+        } else if (random < 0.8) {
+            LoggerService.debug('No clipboard change detected.');
+        } else {
+            const newContent = mockClipboardContents[currentClipboardIndex]!;
+            currentClipboardIndex = (currentClipboardIndex + 1) % mockClipboardContents.length;
+            const excerpt = newContent.replace(/\n/g, ' ').substring(0, 50).trim();
+            LoggerService.info(`Clipboard content changed. Excerpt: "${excerpt}..."`);
+        }
+    }, 2000);
+};
+
+const stopSimulator = () => {
+    if (simulatorInterval) {
+        clearInterval(simulatorInterval);
+        simulatorInterval = null;
+        LoggerService.info('Log simulator stopped.');
+    }
+};
+
+const debug = (message: string) => useLogStore.getState().actions.addLog('DEBUG', message);
+const info = (message: string) => useLogStore.getState().actions.addLog('INFO', message);
+const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
+const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
+
+
+export const LoggerService = {
+    debug,
+    info,
+    warn,
+    error,
+    startSimulator,
+    stopSimulator,
 };
 ```
 
@@ -731,22 +896,53 @@ import { useState, useEffect } from 'react';
 // Utility for simulation
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+type Dimensions = { columns: number; rows: number };
+const subscribers = new Set<(dims: Dimensions) => void>();
+let currentDimensions: Dimensions = {
+    columns: process.stdout.columns || 80,
+    rows: process.stdout.rows || 24,
+};
+
+let listenerAttached = false;
+
+const updateAndNotify = () => {
+    const newDimensions = {
+        columns: process.stdout.columns || 80,
+        rows: process.stdout.rows || 24,
+    };
+
+    if (newDimensions.columns !== currentDimensions.columns || newDimensions.rows !== currentDimensions.rows) {
+        currentDimensions = newDimensions;
+        subscribers.forEach(subscriber => subscriber(currentDimensions));
+    }
+};
+
+if (!listenerAttached) {
+    process.stdout.on('resize', updateAndNotify);
+    listenerAttached = true;
+}
+
 export const useStdoutDimensions = (): [number, number] => {
-    const [dimensions, setDimensions] = useState({ columns: 80, rows: 24 });
+    const [dimensions, setDimensions] = useState(currentDimensions);
 
     useEffect(() => {
-        const updateDimensions = () => {
-            setDimensions({
+        const subscriber = (newDims: Dimensions) => setDimensions(newDims);
+        subscribers.add(subscriber);
+
+        // On mount, check if dimensions are stale and update if needed for this hook instance.
+        setDimensions(dims => {
+            const latestDims = {
                 columns: process.stdout.columns || 80,
                 rows: process.stdout.rows || 24,
-            });
-        };
-
-        updateDimensions();
-        process.stdout.on('resize', updateDimensions);
+            };
+            if (latestDims.columns !== dims.columns || latestDims.rows !== dims.rows) {
+                return latestDims;
+            }
+            return dims;
+        });
 
         return () => {
-            process.stdout.off('resize', updateDimensions);
+            subscribers.delete(subscriber);
         };
     }, []);
 
@@ -916,8 +1112,10 @@ interface DiffScreenProps {
     filePath: string;
     diffContent: string;
     isExpanded: boolean;
+    scrollIndex?: number;
+    maxHeight?: number;
 }
-const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
+const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHeight }: DiffScreenProps) => {
     const lines = diffContent.split('\n');
     const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
     const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
@@ -935,6 +1133,11 @@ const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
                     {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
                 </>
             );
+        }
+        // Handle vertical scrolling for expanded view
+        if (isExpanded && maxHeight) {
+            const visibleLines = lines.slice(scrollIndex, scrollIndex + maxHeight);
+            return visibleLines.map((line, i) => renderLine(line, scrollIndex + i));
         }
         return lines.map((line, i) => renderLine(line, i));
     };
@@ -983,6 +1186,8 @@ interface HistoryState {
         load: (initialState?: Partial<HistoryStateData>) => void;
         navigateDown: () => void;
         navigateUp: () => void;
+        navigatePageUp: (viewportHeight: number) => void;
+        navigatePageDown: (viewportHeight: number) => void;
         expandOrDrillDown: () => Promise<void>;
         collapseOrBubbleUp: () => void;
         toggleSelection: () => void;
@@ -1024,6 +1229,28 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             const { transactions } = useTransactionStore.getState();
             const visibleItems = getVisibleItemPaths(transactions, expandedIds);
             set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+        },
+        navigatePageUp: (viewportHeight: number) => {
+            const { expandedIds, selectedItemPath } = get();
+            const { transactions } = useTransactionStore.getState();
+            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+            const currentIndex = visibleItems.indexOf(selectedItemPath);
+            if (currentIndex === -1) return;
+
+            const newIndex = Math.max(0, currentIndex - viewportHeight);
+            set({ selectedItemPath: visibleItems[newIndex]! });
+        },
+        navigatePageDown: (viewportHeight: number) => {
+            const { expandedIds, selectedItemPath } = get();
+            const { transactions } = useTransactionStore.getState();
+            const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+            const currentIndex = visibleItems.indexOf(selectedItemPath);
+            if (currentIndex === -1) return;
+
+            const newIndex = Math.min(visibleItems.length - 1, currentIndex + viewportHeight);
+            set({ selectedItemPath: visibleItems[newIndex]! });
         },
         expandOrDrillDown: async () => {
             const { selectedItemPath, expandedIds } = get();
@@ -1293,47 +1520,21 @@ export const getVisibleItemPaths = (
 
 ## File: src/components/CopyScreen.tsx
 ```typescript
-import { Box, Text, useInput } from 'ink';
-import { useCopyStore } from '../stores/copy.store';
+import { Box, Text } from 'ink';
 import Separator from './Separator';
-import { useViewStore } from '../stores/view.store';
 import { useStdoutDimensions } from '../utils';
 import ActionFooter from './ActionFooter';
+import { useCopyScreen } from '../hooks/useCopyScreen';
 
 const CopyScreen = () => {
-    const activeOverlay = useViewStore(s => s.activeOverlay);
     const {
-        title, items, selectedIndex, selectedIds, lastCopiedMessage,
-        actions,
-    } = useCopyStore(state => ({ ...state, actions: state.actions }));
-
-    useInput((input, key) => {
-        if (key.escape) {
-            actions.close();
-            return;
-        }
-        if (key.upArrow) {
-            actions.navigateUp();
-            return;
-        }
-        if (key.downArrow) {
-            actions.navigateDown();
-            return;
-        }
-        if (input === ' ') {
-            actions.toggleSelection();
-            return;
-        }
-        if (key.return) {
-            actions.executeCopy();
-            return;
-        }
-        
-        const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
-        if(item) {
-            actions.toggleSelectionById(item.id);
-        }
-    }, { isActive: activeOverlay === 'copy' });
+        title,
+        itemsInView,
+        selectedIndex,
+        selectedIds,
+        lastCopiedMessage,
+        viewOffset,
+    } = useCopyScreen();
     const [width] = useStdoutDimensions();
 
     return (
@@ -1356,8 +1557,8 @@ const CopyScreen = () => {
                 <Box flexDirection="column" marginY={1}>
                     <Text>{title}</Text>
                     <Box flexDirection="column" marginTop={1}>
-                        {items.map((item, index) => {
-                            const isSelected = index === selectedIndex;
+                        {itemsInView.map((item, index) => {
+                            const isSelected = (index + viewOffset) === selectedIndex;
                             const isChecked = selectedIds.has(item.id);
                             return (
                                 <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
@@ -1371,7 +1572,7 @@ const CopyScreen = () => {
                 <Separator width={Math.floor(width * 0.8) - 4} />
                 {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
                 <ActionFooter actions={[
-                    { key: '↑↓', label: 'Nav' },
+                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
                     { key: 'Spc/Hotkey', label: 'Toggle' },
                     { key: 'Enter', label: 'Copy' },
                     { key: 'Esc', label: 'Close' },
@@ -1567,6 +1768,8 @@ interface CopyState {
         openForHistory: (transactions: Transaction[]) => void;
         navigateUp: () => void;
         navigateDown: () => void;
+        navigatePageUp: (viewportHeight: number) => void;
+        navigatePageDown: (viewportHeight: number) => void;
         toggleSelection: () => void;
         toggleSelectionById: (id: string) => void;
         executeCopy: () => void;
@@ -1622,6 +1825,12 @@ export const useCopyStore = create<CopyState>((set, get) => ({
         })),
         navigateDown: () => set(state => ({
             selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+        })),
+        navigatePageUp: (viewportHeight: number) => set(state => ({
+            selectedIndex: Math.max(0, state.selectedIndex - viewportHeight),
+        })),
+        navigatePageDown: (viewportHeight: number) => set(state => ({
+            selectedIndex: Math.min(state.items.length - 1, state.selectedIndex + viewportHeight),
         })),
         toggleSelection: () => set(state => {
             const currentItem = state.items[state.selectedIndex];
@@ -2841,65 +3050,16 @@ const InitializationScreen = () => {
 export default InitializationScreen;
 ```
 
-## File: src/components/DebugMenu.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useDebugMenu } from '../hooks/useDebugMenu';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
-
-const getKeyForIndex = (index: number): string => {
-    if (index < 9) {
-        return (index + 1).toString();
-    }
-    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
-};
-
-const DebugMenu = () => {
-    const { selectedIndex, menuItems } = useDebugMenu();
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            paddingX={2}
-            paddingY={1}
-        >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
-            <Separator width={width - 4} />
-            <Box flexDirection="column" marginY={1}>
-                {menuItems.map((item, index) => (
-                    <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
-                        {selectedIndex === index ? '> ' : '  '}
-                        ({getKeyForIndex(index)}) {item.title}
-                    </Text>
-                ))}
-            </Box>
-            <Separator width={width - 4} />
-            <ActionFooter actions={[
-                { key: '↑↓', label: 'Nav' },
-                { key: '1-9,a-z', label: 'Jump' },
-                { key: 'Enter', label: 'Select' },
-                { key: 'Esc/Ctrl+B', label: 'Close' },
-            ]}/>
-        </Box>
-    );
-};
-
-export default DebugMenu;
-```
-
 ## File: src/hooks/useTransactionDetailScreen.tsx
 ```typescript
 import { useInput, type Key } from 'ink';
 import { useDetailStore } from '../stores/detail.store';
 import { useViewStore } from '../stores/view.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useCopyStore } from '../stores/copy.store';
 import { EditorService } from '../services/editor.service';
+import { useStdoutDimensions } from '../utils';
 
 export const useTransactionDetailScreen = () => {
     const store = useDetailStore();
@@ -2914,6 +3074,16 @@ export const useTransactionDetailScreen = () => {
         toggleRevertConfirm,
         confirmRevert,
     } = store.actions;
+    const [contentScrollIndex, setContentScrollIndex] = useState(0);
+    const [, height] = useStdoutDimensions();
+
+    // Reset scroll when body view changes
+    useEffect(() => {
+        setContentScrollIndex(0);
+    }, [store.bodyView]);
+
+    // Header(2) + Meta(4) + Navigator(3+) + Separator(1) + BodyMargin(1) + Separator(1) + Footer(1)
+    const availableBodyHeight = Math.max(1, height - 13 - (transaction?.files?.length || 0));
 
     const openCopyMode = () => {
         if (!transaction) return;
@@ -2928,6 +3098,37 @@ export const useTransactionDetailScreen = () => {
             if (key.escape) toggleRevertConfirm();
             if (key.return) confirmRevert();
             return;
+        }
+        
+        // --- Content Scrolling ---
+        if (store.bodyView === 'PROMPT' || store.bodyView === 'REASONING' || store.bodyView === 'DIFF_VIEW') {
+             let contentLines = 0;
+            if (store.bodyView === 'PROMPT') {
+                contentLines = (transaction?.prompt || '').split('\n').length;
+            } else if (store.bodyView === 'REASONING') {
+                contentLines = (transaction?.reasoning || '').split('\n').length;
+            } else if (store.bodyView === 'DIFF_VIEW') {
+                const fileId = store.focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                contentLines = (file?.diff || '').split('\n').length;
+            }
+            
+            if (key.upArrow) {
+                setContentScrollIndex(i => Math.max(0, i - 1));
+                return;
+            }
+            if (key.downArrow) {
+                setContentScrollIndex(i => Math.min(Math.max(0, contentLines - availableBodyHeight), i + 1));
+                return;
+            }
+            if (key.pageUp) {
+                setContentScrollIndex(i => Math.max(0, i - availableBodyHeight));
+                return;
+            }
+            if (key.pageDown) {
+                setContentScrollIndex(i => Math.min(Math.max(0, contentLines - availableBodyHeight), i + availableBodyHeight));
+                return;
+            }
         }
 
         // --- Main Input ---
@@ -2952,10 +3153,15 @@ export const useTransactionDetailScreen = () => {
             }
         }
 
-        if (key.upArrow) navigateUp();
-        if (key.downArrow) navigateDown();
-        if (key.return || key.rightArrow) expandOrDrillDown();
-        if (key.escape || key.leftArrow) collapseOrBubbleUp();
+        // Navigator movement only if not scrolling content
+        if (store.bodyView !== 'PROMPT' && store.bodyView !== 'REASONING' && store.bodyView !== 'DIFF_VIEW') {
+            if (key.upArrow) navigateUp();
+            if (key.downArrow) navigateDown();
+        }
+        if (key.rightArrow) expandOrDrillDown();
+        if (key.leftArrow) collapseOrBubbleUp();
+        if (key.return) expandOrDrillDown();
+        if (key.escape) collapseOrBubbleUp();
     }, { isActive: useViewStore.getState().activeOverlay === 'none' }); // Prevent input when copy overlay is open
 
     return {
@@ -2964,6 +3170,8 @@ export const useTransactionDetailScreen = () => {
         focusedItemPath: store.focusedItemPath,
         expandedItemPaths: store.expandedItemPaths,
         bodyView: store.bodyView,
+        contentScrollIndex,
+        availableBodyHeight,
     };
 };
 ```
@@ -3243,6 +3451,66 @@ export const useAppStore = create<AppState>((set, get) => ({
 }));
 ```
 
+## File: src/components/DebugMenu.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useDebugMenu } from '../hooks/useDebugMenu';
+import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
+
+const getKeyForIndex = (index: number): string => {
+    if (index < 9) {
+        return (index + 1).toString();
+    }
+    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+};
+
+const DebugMenu = () => {
+    const { selectedIndex, menuItems, viewOffset, totalItems } = useDebugMenu();
+    const [width] = useStdoutDimensions();
+
+    return (
+        <Box
+            flexDirection="column"
+            width="100%"
+            paddingX={2}
+            paddingY={1}
+        >
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
+            <Separator width={width - 4} />
+            <Box flexDirection="column" marginY={1}>
+                {menuItems.map((item, index) => {
+                    const absoluteIndex = index + viewOffset;
+                    return (
+                        <Text key={item.title} color={selectedIndex === absoluteIndex ? 'cyan' : undefined}>
+                            {selectedIndex === absoluteIndex ? '> ' : '  '}
+                            ({getKeyForIndex(absoluteIndex)}) {item.title}
+                        </Text>
+                    );
+                })}
+            </Box>
+            <Separator width={width - 4} />
+            <Box>
+                <ActionFooter actions={[
+                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                    { key: '1-9,a-z', label: 'Jump' },
+                    { key: 'Enter', label: 'Select' },
+                    { key: 'Esc/Ctrl+B', label: 'Close' },
+                ]}/>
+                <Box flexGrow={1} />
+                <Text>
+                    {Math.min(viewOffset + 1, totalItems)}-
+                    {Math.min(viewOffset + menuItems.length, totalItems)} of {totalItems}
+                </Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default DebugMenu;
+```
+
 ## File: index.tsx
 ```typescript
 import { render } from 'ink';
@@ -3324,13 +3592,15 @@ main();
 
 ## File: src/hooks/useReviewScreen.tsx
 ```typescript
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useInput, type Key } from 'ink';
 import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
 import { useCopyStore } from '../stores/copy.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
+import { useViewport } from './useViewport';
+import { useStdoutDimensions } from '../utils';
 
 type NavigableItem =
     | { type: 'prompt' }
@@ -3350,6 +3620,22 @@ export const useReviewScreen = () => {
 
     const transaction = useTransactionStore(selectSelectedTransaction);
     const { showDashboardScreen } = useAppStore(s => s.actions);
+    const [contentScrollIndex, setContentScrollIndex] = useState(0);
+    const [height] = useStdoutDimensions();
+
+    // Reset scroll when body view changes
+    useEffect(() => {
+        setContentScrollIndex(0);
+    }, [bodyView]);
+
+    // Header(2) + Meta(3) + Prompt/Reasoning(2) + Separator(1) + Scripts(N) + Separator(1) + FilesHeader(1) + Separator(1) + BodyMargin(1) + Footer(1)
+    const scriptCount = transaction?.scripts?.length || 0;
+    const RESERVED_ROWS_MAIN = 13 + scriptCount;
+    const { viewOffset, viewportHeight } = useViewport({ selectedIndex: selectedItemIndex, reservedRows: RESERVED_ROWS_MAIN });
+
+    // For body content, it's simpler
+    const fileCount = transaction?.files?.length || 0;
+    const availableBodyHeight = Math.max(1, height - (RESERVED_ROWS_MAIN + fileCount));
 
     const navigableItems = useMemo((): NavigableItem[] => {
         if (!transaction) return [];
@@ -3357,6 +3643,8 @@ export const useReviewScreen = () => {
         const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
         return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
     }, [transaction]);
+
+    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + viewportHeight);
 
     // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
     const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
@@ -3470,6 +3758,30 @@ export const useReviewScreen = () => {
         }
     };
 
+    const handleContentScrollInput = (key: Key): boolean => {
+        const contentViews = ['reasoning', 'script_output', 'diff'];
+        if (!contentViews.includes(bodyView)) return false;
+
+        if (key.upArrow) {
+            setContentScrollIndex(i => Math.max(0, i - 1));
+            return true;
+        }
+        if (key.downArrow) {
+            // This is a simplification; a real implementation would need content length.
+            setContentScrollIndex(i => i + 1);
+            return true;
+        }
+        if (key.pageUp) {
+            setContentScrollIndex(i => Math.max(0, i - availableBodyHeight));
+            return true;
+        }
+        if (key.pageDown) {
+            setContentScrollIndex(i => i + availableBodyHeight);
+            return true;
+        }
+        return false;
+    };
+
     const handleReasoningInput = (input: string, key: Key): void => {
         if (key.upArrow) scrollReasoningUp();
         if (key.downArrow) scrollReasoningDown();
@@ -3575,6 +3887,11 @@ export const useReviewScreen = () => {
             return;
         }
 
+        // If we are in a scrollable body view, prioritize that input.
+        if (handleContentScrollInput(key)) {
+            return;
+        }
+
         switch (bodyView) {
             case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
             case 'bulk_repair': return handleBulkRepairInput(input, key);
@@ -3596,6 +3913,10 @@ export const useReviewScreen = () => {
         patchStatus,
         navigableItems,
         isFileSelected,
+        navigableItemsInView,
+        viewOffset,
+        contentScrollIndex,
+        availableBodyHeight,
         selectedBulkRepairOptionIndex,
         selectedBulkInstructOptionIndex,
         ...reviewStats,
@@ -3646,7 +3967,7 @@ const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
 const TransactionDetailScreen = () => {
     const {
         transaction, files,
-        focusedItemPath, expandedItemPaths, bodyView,
+        focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
     } = useTransactionDetailScreen();
 
     if (!transaction) {
@@ -3681,11 +4002,13 @@ const TransactionDetailScreen = () => {
                         {files.map((file) => {
                              const fileId = `FILES/${file.id}`;
                              const isFileSelected = focusedItemPath === fileId;
-                             const stats = file.type === 'DEL' ? '' : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                             const stats = file.type === 'DEL'
+                                ? ''
+                                : ` (+${file.linesAdded}/-${file.linesRemoved})`;
                              return (
                                 <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
                                     {isFileSelected ? '> ' : '  '}
-                                    {`${getFileChangeTypeIcon(file.type)} ${file.path}${stats}`}
+                                    {getFileChangeTypeIcon(file.type)} {file.path}{stats}
                                 </Text>
                             );
                         })}
@@ -3703,13 +4026,18 @@ const TransactionDetailScreen = () => {
             return (
                 <Box flexDirection="column">
                     <Text>PROMPT</Text>
-                    <Box marginTop={1}><Text>{transaction.prompt}</Text></Box>
+                    <Box marginTop={1} flexDirection="column">
+                        {(transaction.prompt || '').split('\n')
+                            .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
+                            .map((line, i) => <Text key={i}>{line}</Text>)
+                        }
+                    </Box>
                 </Box>
             );
         }
         if (bodyView === 'REASONING') {
             if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
-            return <ReasonScreen reasoning={transaction.reasoning} />;
+            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={availableBodyHeight} />;
         }
         if (bodyView === 'FILES_LIST') {
              return <Text color="gray">(Select a file and press → to view the diff)</Text>;
@@ -3718,7 +4046,7 @@ const TransactionDetailScreen = () => {
             const fileId = focusedItemPath.split('/')[1];
             const file = files.find(f => f.id === fileId);
             if (!file) return null;
-            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} />;
+            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={availableBodyHeight} />;
         }
         return null;
     };
@@ -3987,7 +4315,7 @@ const TransactionHistoryScreen = () => {
         
         const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
         const footerActions: ActionItem[] = [
-            { key: '↑↓', label: 'Nav' },
+            { key: '↑↓/PgUp/PgDn', label: 'Nav' },
             { key: '→', label: 'Expand' },
             { key: '←', label: 'Collapse' },
             { key: 'Spc', label: 'Select' },
@@ -4148,6 +4476,8 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
         if (key.downArrow) actions.navigateDown();
         if (key.rightArrow) actions.expandOrDrillDown();
         if (key.leftArrow) actions.collapseOrBubbleUp();
+        if (key.pageUp) actions.navigatePageUp(viewportHeight);
+        if (key.pageDown) actions.navigatePageDown(viewportHeight);
         if (input === ' ') actions.toggleSelection();
         if (key.return) {
             const txId = selectedItemPath.split('/')[0];
@@ -4443,6 +4773,10 @@ const ReviewScreen = () => {
         selectedBulkRepairOptionIndex,
         selectedBulkInstructOptionIndex,
         navigableItems,
+        navigableItemsInView,
+        viewOffset,
+        contentScrollIndex,
+        availableBodyHeight,
         hasRejectedFiles,
     } = useReviewScreen();
 
@@ -4462,8 +4796,8 @@ const ReviewScreen = () => {
                 <Box flexDirection="column">
                     <ReasonScreen
                         reasoning={reasoningText}
-                        scrollIndex={reasoningScrollIndex}
-                        visibleLinesCount={visibleLinesCount}
+                        scrollIndex={contentScrollIndex}
+                        visibleLinesCount={availableBodyHeight}
                     />
                     {reasoningLinesCount > visibleLinesCount && (
                         <Text color="gray">
@@ -4484,6 +4818,8 @@ const ReviewScreen = () => {
                     filePath={selectedFile.path}
                     diffContent={selectedFile.diff}
                     isExpanded={isDiffExpanded}
+                    scrollIndex={contentScrollIndex}
+                    maxHeight={availableBodyHeight}
                 />
             );
         }
@@ -4504,7 +4840,9 @@ const ReviewScreen = () => {
              
              return (
                 <Box flexDirection="column">
-                    <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                    <Text>
+                        {selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`
+                    </Text>
                     <Box marginTop={1} flexDirection="column">
                         {outputLines.map((line: string, index: number) => {
                             const isError = line.includes('Error');
@@ -4719,7 +5057,10 @@ const ReviewScreen = () => {
                 <Box flexDirection="column">
                     <Text>{hash} · {message}</Text>
                     <Text>
-                        (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>) · {numFiles} Files · {approvedFilesCount}/{numFiles} Approved
+                        (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>
+                        ) · {numFiles} Files · ({approvedFilesCount}/{numFiles} Appr)
+                        · Showing {viewOffset + 1}-
+                        {Math.min(viewOffset + navigableItemsInView.length, navigableItems.length)} of {navigableItems.length}
                         {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
                         {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
                     </Text>
@@ -4741,50 +5082,36 @@ const ReviewScreen = () => {
             <Separator />
 
             {/* Script Results (if any) */}
-            {scripts.length > 0 && navigableItems.some(i => i.type === 'script') && (
+            {scripts.length > 0 && navigableItemsInView.some(i => i.type === 'script') && (
                 <>
                     <Box flexDirection="column" marginY={1}>
-                        {scripts.map((script: ScriptResult) => (
-                            (() => {
-                                const navItemIndex = navigableItems.findIndex(i => {
-                                    if (i.type === 'script') {
-                                        return i.id === script.command;
-                                    }
-                                    return false;
-                                });
-                                const isSelected = selectedItemIndex === navItemIndex;
-                                return (
-                                    <ScriptItemRow
-                                        key={script.command}
-                                        script={script}
-                                        isSelected={isSelected}
-                                        isExpanded={bodyView === 'script_output' && isSelected}
-                                    />
-                                );
-                            })()
-                        ))}
+                        {scripts.map((script: ScriptResult) => {
+                            const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'script' && i.id === script.command);
+                            if (itemInViewIndex === -1) return null; // Only render if visible
+                            
+                            const isSelected = selectedItemIndex === viewOffset + itemInViewIndex;
+                            return (
+                                <ScriptItemRow key={script.command} script={script} isSelected={isSelected} isExpanded={bodyView === 'script_output' && isSelected} />
+                            );
+                        })}
                     </Box>
                     <Separator />
                 </>
             )}
-
+            
             {/* Files Section */}
             <Box flexDirection="column" marginY={1}>
                 <Text bold>FILES</Text>
                 {files.map((file: FileItem) => {
-                    const navItemIndex = navigableItems.findIndex(i => {
-                        if (i.type === 'file') {
-                            return i.id === file.id;
-                        }
-                        return false;
-                    });
-                    const isFocused = selectedItemIndex === navItemIndex;
+                    const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'file' && i.id === file.id);
+                    if (itemInViewIndex === -1) return null; // Only render if visible
+
+                    const isFocused = selectedItemIndex === viewOffset + itemInViewIndex;
                     const reviewState = fileReviewStates.get(file.id);
+                    
                     return (
                         <FileItemRow
-                            key={file.id}
-                            file={file}
-                            isFocused={isFocused}
+                            key={file.id} file={file} isFocused={isFocused}
                             reviewStatus={reviewState?.status || 'AWAITING'}
                             reviewError={reviewState?.error}
                             reviewDetails={reviewState?.details}
@@ -4972,7 +5299,9 @@ const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction:
     
     const content = (
         <Text>
-            {time} {expandIcon} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
+            {time} {expandIcon} {icon} {statusText}{' '}
+            <Text color="gray">{transaction.hash}</Text>
+            {' '}· {messageNode}
         </Text>
     );
 
@@ -5126,6 +5455,7 @@ import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
+import { useViewport } from './useViewport';
 export type { MenuItem } from '../types/debug.types';
 
 const useDebugMenuActions = () => {
@@ -5390,6 +5720,11 @@ const useDebugMenuActions = () => {
 export const useDebugMenu = () => {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const { menuItems } = useDebugMenuActions();
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        reservedRows: 6, // Header, 2 separators, footer
+    });
     
     useInput((input, key) => {
         if (key.upArrow) {
@@ -5398,6 +5733,14 @@ export const useDebugMenu = () => {
         }
         if (key.downArrow) {
             setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+            return;
+        }
+        if (key.pageUp) {
+            setSelectedIndex(i => Math.max(0, i - viewportHeight));
+            return;
+        }
+        if (key.pageDown) {
+            setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
             return;
         }
         if (key.return) {
@@ -5429,9 +5772,13 @@ export const useDebugMenu = () => {
         }
     });
 
+    const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
     return {
         selectedIndex,
-        menuItems,
+        menuItems: menuItemsInView,
+        viewOffset,
+        totalItems: menuItems.length,
     };
 };
 ```

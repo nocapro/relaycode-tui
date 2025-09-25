@@ -12,6 +12,7 @@ import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
+import { useViewport } from './useViewport';
 export type { MenuItem } from '../types/debug.types';
 
 const useDebugMenuActions = () => {
@@ -276,6 +277,11 @@ const useDebugMenuActions = () => {
 export const useDebugMenu = () => {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const { menuItems } = useDebugMenuActions();
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        reservedRows: 6, // Header, 2 separators, footer
+    });
     
     useInput((input, key) => {
         if (key.upArrow) {
@@ -284,6 +290,14 @@ export const useDebugMenu = () => {
         }
         if (key.downArrow) {
             setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+            return;
+        }
+        if (key.pageUp) {
+            setSelectedIndex(i => Math.max(0, i - viewportHeight));
+            return;
+        }
+        if (key.pageDown) {
+            setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
             return;
         }
         if (key.return) {
@@ -315,8 +329,12 @@ export const useDebugMenu = () => {
         }
     });
 
+    const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
     return {
         selectedIndex,
-        menuItems,
+        menuItems: menuItemsInView,
+        viewOffset,
+        totalItems: menuItems.length,
     };
 };
