@@ -30,11 +30,11 @@ Please analyze all failed files and provide a complete, corrected response.`;
 const generateHandoffPrompt = (
     transaction: Transaction,
     fileReviewStates: Map<
-        string, { status: FileReviewStatus; error?: string }
+        string, { status: FileReviewStatus; error?: string; details?: string }
     >,
 ): string => {
     const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
-    const failedFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'FAILED');
+    const failedFiles = (transaction.files || []).filter(f => ['FAILED', 'REJECTED'].includes(fileReviewStates.get(f.id)?.status || ''));
 
     return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
 
@@ -153,12 +153,44 @@ Please provide a corrected patch that addresses the error.`;
 };
 
 const tryRepairFile = (file: FileItem, error?: string): FileItem => {
-    generateSingleFileRepairPrompt(file, error);
+    const repairPrompt = generateSingleFileRepairPrompt(file, error);
     // In a real app: clipboardy.writeSync(repairPrompt)
     // eslint-disable-next-line no-console
-    console.log(`[CLIPBOARD] Copied repair prompt for: ${file.path}`);
+    console.log(`[CLIPBOARD MOCK] Copied repair prompt for: ${file.path}`, repairPrompt);
 
     return file;
+};
+
+const generateSingleFileInstructPrompt = (file: FileItem, transaction: Transaction): string => {
+    return `The user REJECTED the last proposed change for the file \`${file.path}\`.
+
+The original high-level goal was:
+---
+${transaction.prompt || transaction.message}
+---
+
+The rejected change was:
+---
+${file.diff || '// ... rejected diff would be here ...'}
+---
+
+Please provide an alternative solution for \`${file.path}\` that still accomplishes the original goal.
+The response MUST be a complete, corrected patch for this file.`;
+};
+
+const tryInstructFile = (file: FileItem, transaction: Transaction): void => {
+    const instructPrompt = generateSingleFileInstructPrompt(file, transaction);
+    // In a real app: clipboardy.writeSync(instructPrompt)
+    // eslint-disable-next-line no-console
+    console.log(`[CLIPBOARD MOCK] Copied instruction prompt for: ${file.path}`, instructPrompt);
+};
+
+const generateBulkInstructPrompt = (rejectedFiles: FileItem[], transaction: Transaction): string => {
+    // Mock implementation for demo. In a real scenario, this would generate a more complex prompt.
+    const fileList = rejectedFiles.map(f => `- ${f.path}`).join('\n');
+    // eslint-disable-next-line no-console
+    console.log(`[CLIPBOARD] Copied bulk instruction prompt for ${rejectedFiles.length} files.`);
+    return `The user has rejected changes in multiple files for the goal: "${transaction.message}".\n\nThe rejected files are:\n${fileList}\n\nPlease provide an alternative patch for all of them.`;
 };
 
 const runBulkReapply = async (
@@ -185,10 +217,13 @@ const runBulkReapply = async (
 export const ReviewService = {
     prepareTransactionForReview,
     generateBulkRepairPrompt,
+    generateBulkInstructPrompt,
     generateHandoffPrompt,
     performHandoff,
     runApplySimulation,
     generateSingleFileRepairPrompt,
     tryRepairFile,
+    generateSingleFileInstructPrompt,
+    tryInstructFile,
     runBulkReapply,
 };

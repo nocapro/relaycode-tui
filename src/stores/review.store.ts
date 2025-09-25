@@ -15,7 +15,7 @@ export interface ApplyStep {
     substeps?: ApplyStep[];
     duration?: number;
 }
-export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff' | 'none';
+export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff' | 'bulk_instruct' | 'none';
 export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
 export type ApplyUpdate =
     | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
@@ -29,9 +29,10 @@ interface ReviewState {
     isDiffExpanded: boolean;
     reasoningScrollIndex: number;
     scriptErrorIndex: number;
-    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
 
     selectedBulkRepairOptionIndex: number;
+    selectedBulkInstructOptionIndex: number;
 
     actions: {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
@@ -39,7 +40,7 @@ interface ReviewState {
         moveSelectionDown: (listSize: number) => void;
         expandDiff: () => void;
         toggleBodyView: (view: Extract<
-            ReviewBodyView,
+            ReviewBodyView, 'bulk_instruct' |
             'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
         >) => void;
         setBodyView: (view: ReviewBodyView) => void;
@@ -48,6 +49,9 @@ interface ReviewState {
         tryRepairFile: (fileId: string) => void;
         showBulkRepair: () => void;
         executeBulkRepairOption: (option: number) => Promise<void>;
+        tryInstruct: (fileId: string) => void;
+        showBulkInstruct: () => void;
+        executeBulkInstructOption: (option: number) => Promise<void>;
         confirmHandoff: () => void;
         scrollReasoningUp: () => void;
         scrollReasoningDown: () => void;
@@ -55,11 +59,13 @@ interface ReviewState {
         navigateScriptErrorDown: () => void;
         updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
         addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
-        updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string) => void;
+        updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
         toggleFileApproval: (fileId: string) => void;
         rejectAllFiles: () => void;
         navigateBulkRepairUp: () => void;
         navigateBulkRepairDown: () => void;
+        navigateBulkInstructUp: () => void;
+        navigateBulkInstructDown: () => void;
     };
 }
 
@@ -73,6 +79,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     scriptErrorIndex: 0,
     fileReviewStates: new Map(),
     selectedBulkRepairOptionIndex: 0,
+    selectedBulkInstructOptionIndex: 0,
 
     actions: {
         load: (transactionId, initialState) => {
@@ -92,6 +99,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 scriptErrorIndex: 0,
                 applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
                 selectedBulkRepairOptionIndex: 0,
+                selectedBulkInstructOptionIndex: 0,
                 ...initialState,
             });
         },
@@ -156,6 +164,51 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             ReviewService.tryRepairFile(file, error);
             get().actions.updateFileReviewStatus(file.id, 'AWAITING');
         },
+        tryInstruct: (fileId) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const { fileReviewStates } = get();
+            if (!selectedTransactionId) return;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            const file = tx?.files?.find(f => f.id === fileId);
+            if (!tx || !file) return;
+
+            const { status } = fileReviewStates.get(file.id) || {};
+            if (status !== 'REJECTED') return;
+            
+            ReviewService.tryInstructFile(file, tx);
+            get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+        },
+        showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+        executeBulkInstructOption: async (option) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            if (!tx?.files) return;
+
+            const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
+            if (rejectedFiles.length === 0) {
+                set({ bodyView: 'none' });
+                return;
+            }
+
+            switch (option) {
+                case 1:
+                    ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                    set({ bodyView: 'none' });
+                    break;
+                case 2:
+                    get().actions.setBodyView('confirm_handoff');
+                    break;
+                case 3:
+                    rejectedFiles.forEach(file => {
+                        get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                    });
+                    set({ bodyView: 'none' });
+                    break;
+                default:
+                    set({ bodyView: 'none' });
+            }
+        },
+
         showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
         executeBulkRepairOption: async (option) => {
             const selectedTransactionId = useViewStore.getState().selectedTransactionId;
@@ -251,10 +304,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 }),
             }));
         },
-        updateFileReviewStatus: (fileId, status, error) => {
+        updateFileReviewStatus: (fileId, status, error, details) => {
             set(state => {
                 const newStates = new Map(state.fileReviewStates);
-                newStates.set(fileId, { status, error });
+                newStates.set(fileId, { status, error, details });
                 return { fileReviewStates: newStates };
             });
         },
@@ -264,7 +317,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 const current = newStates.get(fileId);
                 if (current) {
                     const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
-                    newStates.set(fileId, { status: newStatus, error: undefined });
+                    newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
                 }
                 return { fileReviewStates: newStates };
             });
@@ -274,7 +327,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 const newStates = new Map(state.fileReviewStates);
                 for (const [fileId, reviewState] of newStates.entries()) {
                     if (reviewState.status === 'APPROVED') {
-                        newStates.set(fileId, { status: 'REJECTED', error: undefined });
+                        newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
                     }
                 }
                 return { fileReviewStates: newStates };
@@ -285,6 +338,12 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         })),
         navigateBulkRepairDown: () => set(state => ({
             selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'down', 4),
+        })),
+        navigateBulkInstructUp: () => set(state => ({
+            selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'up', 4),
+        })),
+        navigateBulkInstructDown: () => set(state => ({
+            selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'down', 4),
         })),
     },
 }));

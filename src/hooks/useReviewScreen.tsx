@@ -19,6 +19,7 @@ export const useReviewScreen = () => {
         bodyView,
         patchStatus,
         selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
     } = store;
 
     const transaction = useTransactionStore(selectSelectedTransaction);
@@ -46,6 +47,11 @@ export const useReviewScreen = () => {
         };
     }, [files, fileReviewStates]);
 
+    const hasRejectedFiles = useMemo(() => {
+        if (!fileReviewStates) return false;
+        return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
+    }, [fileReviewStates]);
+
     const { approvedFilesCount } = reviewStats;
 
     const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
@@ -61,8 +67,11 @@ export const useReviewScreen = () => {
         startApplySimulation,
         approve,
         tryRepairFile,
+        tryInstruct,
         showBulkRepair,
+        showBulkInstruct,
         executeBulkRepairOption,
+        executeBulkInstructOption,
         confirmHandoff,
         scrollReasoningUp,
         scrollReasoningDown,
@@ -72,6 +81,8 @@ export const useReviewScreen = () => {
         rejectAllFiles,
         navigateBulkRepairUp,
         navigateBulkRepairDown,
+        navigateBulkInstructUp,
+        navigateBulkInstructDown,
     } = store.actions;
 
     const openCopyMode = () => {
@@ -93,7 +104,7 @@ export const useReviewScreen = () => {
         // The 'q' (quit/back) is now handled by the global hotkey hook.
 
         if (key.escape) {
-            if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
+            if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff' || bodyView === 'bulk_instruct') {
                 toggleBodyView(bodyView);
             } else if (bodyView !== 'none') {
                 setBodyView('none');
@@ -117,6 +128,19 @@ export const useReviewScreen = () => {
 
         if (input >= '1' && input <= '4') {
             executeBulkRepairOption(parseInt(input));
+        }
+    };
+    
+    const handleBulkInstructInput = (input: string, key: Key): void => {
+        if (key.upArrow) navigateBulkInstructUp();
+        if (key.downArrow) navigateBulkInstructDown();
+        if (key.return) {
+            executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
+            return;
+        }
+
+        if (input >= '1' && input <= '3') {
+            executeBulkInstructOption(parseInt(input));
         }
     };
 
@@ -199,13 +223,22 @@ export const useReviewScreen = () => {
         }
 
         if (input.toLowerCase() === 't') {
-            if (key.shift) { // Bulk repair
+            if (key.shift) {
                 const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
                 if (hasFailedFiles) showBulkRepair();
-            } else {
-                if (currentItem?.type === 'file') {
-                    const fileState = fileReviewStates.get(currentItem.id);
-                    if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+            } else if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+            }
+        }
+
+        if (input.toLowerCase() === 'i') {
+            if (key.shift) {
+                if (hasRejectedFiles) showBulkInstruct();
+            } else if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState?.status === 'REJECTED') {
+                    tryInstruct(currentItem.id);
                 }
             }
         }
@@ -219,6 +252,7 @@ export const useReviewScreen = () => {
         switch (bodyView) {
             case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
             case 'bulk_repair': return handleBulkRepairInput(input, key);
+            case 'bulk_instruct': return handleBulkInstructInput(input, key);
             case 'reasoning': return handleReasoningInput(input, key);
             case 'script_output': return handleScriptOutputInput(input, key);
             case 'diff': return handleDiffInput(input);
@@ -237,6 +271,8 @@ export const useReviewScreen = () => {
         navigableItems,
         isFileSelected,
         selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
         ...reviewStats,
+        hasRejectedFiles,
     };
 };

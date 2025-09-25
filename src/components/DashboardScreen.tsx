@@ -154,9 +154,12 @@ const DashboardScreen = () => {
 			? <Text>(<Text color="cyan" bold>P</Text>)resume</Text>
 			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
 		return (
-            <Text color="gray">
-                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>→</Text>/Ent) View · (<Text color="cyan" bold>←</Text>) Collapse · (<Text color="cyan" bold>L</Text>)og · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
-            </Text>
+            <Box>
+                <Text color="gray">(<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>→</Text>/Ent) View · </Text>
+                <Text color="gray">(<Text color="cyan" bold>←</Text>) Collapse · (<Text color="cyan" bold>L</Text>)og · </Text>
+                <Text color="gray">(<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit · </Text>
+                <Text color="gray">{pauseAction} · (<Text color="cyan" bold>Q</Text>)uit</Text>
+            </Box>
         );
     };
     

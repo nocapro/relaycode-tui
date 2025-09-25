@@ -45,11 +45,15 @@ responsive view of action buttons like
 
 should aware of terminal widht so know when to render as horizontal spread and vertical spread
 
-===
+=== DONE
 
 review screen
 
-on certain file patch failed user has options to repair or bulk repair.. I want on certain file patch rejected user should has options to `something` or bulk `something` so they can also get another clipboard to paste to llm and relaycode waiting for new patch for that particular.
+1. on certain file patch failed user has options to repair or bulk repair.. I want on certain file patch rejected user should has options to `something` or bulk `something` so they can also get another clipboard to paste to llm and relaycode waiting for new patch for that particular.
+
+2. dont forget to add to debug menu for any new screen state
+
+3. dont forget to update readme if you have updated design
 
 === DONE
 

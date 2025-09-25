@@ -7,10 +7,11 @@ import { useReviewScreen } from '../hooks/useReviewScreen';
 
 // --- Sub-components ---
 
-const FileItemRow = ({ file, reviewStatus, reviewError, isFocused }: {
+const FileItemRow = ({ file, reviewStatus, reviewError, reviewDetails, isFocused }: {
     file: FileItem;
     reviewStatus: string;
     reviewError?: string;
+    reviewDetails?: string;
     isFocused: boolean;
 }) => {
     let icon;
@@ -53,7 +54,7 @@ const FileItemRow = ({ file, reviewStatus, reviewError, isFocused }: {
             <Box>
                 <Text {...colorProps}>
                     {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
-                    <Text color="yellow">    (Bulk re-apply prompt copied!)</Text>
+                    <Text color="yellow">    ({reviewDetails})</Text>
                 </Text>
             </Box>
         );
@@ -129,7 +130,9 @@ const ReviewScreen = () => {
         totalLinesAdded,
         totalLinesRemoved,
         selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
         navigableItems,
+        hasRejectedFiles,
     } = useReviewScreen();
 
     if (!transaction) {
@@ -269,6 +272,37 @@ const ReviewScreen = () => {
             );
         }
 
+        if (bodyView === 'bulk_instruct') {
+            const rejectedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'REJECTED');
+            const instructOptions = [
+                '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
+                '(2) Handoff to External Agent',
+                '(3) Bulk Un-reject All Files (revert to original)',
+                '(4) Cancel',
+            ];
+
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>BULK INSTRUCTION ACTION</Text>
+
+                    <Box flexDirection="column">
+                        <Text>The following {rejectedFiles.length} files were rejected:</Text>
+                        {rejectedFiles.map((file: FileItem) => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                    </Box>
+                    <Box flexDirection="column" marginTop={1}>
+                        {instructOptions.map((opt, i) => (
+                            <Text key={i} color={selectedBulkInstructOptionIndex === i ? 'cyan' : undefined}>
+                                {selectedBulkInstructOptionIndex === i ? '> ' : '  '}
+                                {opt}
+                            </Text>
+                        ))}
+                    </Box>
+                </Box>
+            );
+        }
+
         return null;
     };
 
@@ -288,6 +322,9 @@ const ReviewScreen = () => {
         if (bodyView === 'bulk_repair') {
             return <Text>Choose an option [1-4, Esc]:</Text>;
         }
+        if (bodyView === 'bulk_instruct') {
+            return <Text>Choose an option [1-4, Esc]:</Text>;
+        }
         if (bodyView === 'confirm_handoff') {
             return <Text>(Enter) Confirm Handoff      (Esc) Cancel</Text>;
         }
@@ -296,7 +333,6 @@ const ReviewScreen = () => {
         const actions = ['(↑↓) Nav'];
 
         const currentItem = navigableItems[selectedItemIndex];
-        const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
         
         if (currentItem?.type === 'file') {
             const selectedFile = files.find(f => f.id === currentItem.id);
@@ -310,6 +346,9 @@ const ReviewScreen = () => {
             if (selectedFile && fileState?.status === 'FAILED') {
                 actions.push('(T)ry Repair');
             }
+            if (selectedFile && fileState?.status === 'REJECTED') {
+                actions.push('(I)nstruct');
+            }
         } else if (currentItem?.type === 'script') {
             actions.push('(Ent) Expand Details');
         } else { // Prompt or Reasoning
@@ -321,8 +360,13 @@ const ReviewScreen = () => {
         }
 
         // Add bulk repair if there are failed files
+        const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
         if (hasFailedFiles) {
             actions.push('(Shift+T) Bulk Repair');
+        }
+        // Add bulk instruct if there are rejected files
+        if (hasRejectedFiles) {
+            actions.push('(Shift+I) Bulk Instruct');
         }
         
         actions.push('(C)opy');
@@ -418,6 +462,7 @@ const ReviewScreen = () => {
                             isFocused={isFocused}
                             reviewStatus={reviewState?.status || 'AWAITING'}
                             reviewError={reviewState?.error}
+                            reviewDetails={reviewState?.details}
                         />
                     );
                 })}

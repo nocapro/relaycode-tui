@@ -136,6 +136,17 @@ const useDebugMenuActions = () => {
             },
         },
         {
+            title: 'Review: Bulk Instruct',
+            action: () => {
+                reviewActions.load('2'); // Load success case
+                // Reject some files to enable the workflow
+                reviewActions.toggleFileApproval('2-1');
+                reviewActions.toggleFileApproval('2-2');
+                reviewActions.showBulkInstruct();
+                appActions.showReviewScreen();
+            },
+        },
+        {
             title: 'Review: Handoff Confirm',
             action: () => {
                 reviewActions.load('1', { bodyView: 'confirm_handoff' });
