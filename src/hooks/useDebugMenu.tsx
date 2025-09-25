@@ -1,30 +1,24 @@
 import { useState } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
-import { useDashboardStore } from '../stores/dashboard.store';
+import { useUIStore } from '../stores/ui.store';
 import { useInitStore } from '../stores/init.store';
 import { useCommitStore } from '../stores/commit.store';
-import { useTransactionDetailStore } from '../stores/transaction-detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import { COPYABLE_ITEMS } from '../types/copy.types';
 import { CopyService } from '../services/copy.service';
-import { useTransactionHistoryStore } from '../stores/transaction-history.store';
 import { ReviewService } from '../services/review.service';
-import { useReviewStore } from '../stores/review.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import type { Transaction } from '../types/domain.types';
 import { moveIndex } from '../stores/navigation.utils';
 export type { MenuItem } from '../types/debug.types';
 
-export const useDebugMenu = () => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const appActions = useAppStore(s => s.actions);
-    const dashboardActions = useDashboardStore(s => s.actions);
-    const initActions = useInitStore(s => s.actions);
-    const commitActions = useCommitStore(s => s.actions);
-    const detailActions = useTransactionDetailStore(s => s.actions);
-    const historyActions = useTransactionHistoryStore(s => s.actions);
+const useDebugMenuActions = () => {
+    const { actions: appActions } = useAppStore();
+    const { actions: initActions } = useInitStore();
+    const { actions: commitActions } = useCommitStore();
+    const { actions: uiActions } = useUIStore();
 
     const menuItems: MenuItem[] = [
         {
@@ -55,21 +49,21 @@ export const useDebugMenu = () => {
         {
             title: 'Dashboard: Listening',
             action: () => {
-                dashboardActions.setStatus('LISTENING');
+                uiActions.dashboard_setStatus('LISTENING');
                 appActions.showDashboardScreen();
             },
         },
         {
             title: 'Dashboard: Confirm Approve',
             action: () => {
-                dashboardActions.setStatus('CONFIRM_APPROVE');
+                uiActions.dashboard_startApproveAll();
                 appActions.showDashboardScreen();
             },
         },
         {
             title: 'Dashboard: Approving',
             action: () => {
-                dashboardActions.setStatus('APPROVING');
+                uiActions.dashboard_setStatus('APPROVING');
                 appActions.showDashboardScreen();
             },
         },
@@ -91,7 +85,7 @@ export const useDebugMenu = () => {
             title: 'Review: Diff View',
             action: () => {
                 ReviewService.loadTransactionForReview('1');
-                useReviewStore.getState().actions.setBodyView('diff');
+                uiActions.review_setBodyView('diff');
                 appActions.showReviewScreen();
             },
         },
@@ -107,8 +101,8 @@ export const useDebugMenu = () => {
             action: () => {
                 ReviewService.loadTransactionForReview('1');
                 appActions.showReviewScreen();
-                const { transactionId, selectedItemIndex } = useReviewStore.getState();
-                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                const { selectedTransactionId, review_selectedItemIndex: selectedItemIndex } = useUIStore.getState();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
                 if (!tx) return;
                 const selectedFile = tx.files && selectedItemIndex < tx.files.length
                     ? tx.files[selectedItemIndex]
@@ -123,7 +117,7 @@ export const useDebugMenu = () => {
             action: () => {
                 ReviewService.loadTransactionForReview('2');
                 appActions.showReviewScreen();
-                useReviewStore.getState().actions.setBodyView('script_output');
+                uiActions.review_setBodyView('script_output');
             },
         },
         {
@@ -155,44 +149,44 @@ export const useDebugMenu = () => {
             title: 'Transaction Detail Screen',
             action: () => {
                 // The dashboard store has transactions, we'll just pick one.
-                detailActions.loadTransaction('3'); // 'feat: implement new dashboard UI'
+                uiActions.detail_load('3'); // 'feat: implement new dashboard UI'
                 appActions.showTransactionDetailScreen();
             },
         },
         {
             title: 'Transaction History Screen',
             action: () => {
-                historyActions.load();
+                uiActions.history_load();
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: L1 Drilldown',
             action: () => {
-                historyActions.prepareDebugState('l1-drill');
+                uiActions.history_prepareDebugState('l1-drill');
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: L2 Drilldown (Diff)',
             action: () => {
-                historyActions.prepareDebugState('l2-drill');
+                uiActions.history_prepareDebugState('l2-drill');
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: Filter Mode',
             action: () => {
-                historyActions.prepareDebugState('filter');
+                uiActions.history_prepareDebugState('filter');
                 appActions.showTransactionHistoryScreen();
             },
         },
         {
             title: 'History: Copy Mode',
             action: () => {
-                historyActions.prepareDebugState('copy');
+                uiActions.history_prepareDebugState('copy');
                 appActions.showTransactionHistoryScreen();
-                const { selectedForAction } = useTransactionHistoryStore.getState();
+                const { history_selectedForAction: selectedForAction } = useUIStore.getState();
                 const allTxs = useTransactionStore.getState().transactions;
                 const txsToCopy = allTxs.filter((tx: Transaction) =>
                     selectedForAction.has(tx.id),
@@ -203,7 +197,13 @@ export const useDebugMenu = () => {
             },
         },
     ];
+    return { menuItems, appActions };
+};
 
+export const useDebugMenu = () => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const { menuItems, appActions } = useDebugMenuActions();
+    
     useInput((input, key) => {
         if (key.upArrow) {
             setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
@@ -217,12 +217,12 @@ export const useDebugMenu = () => {
             const item = menuItems[selectedIndex];
             if (item) {
                 item.action();
-                appActions.toggleDebugMenu();
+                useUIStore.getState().actions.setActiveOverlay('none');
             }
             return;
         }
         if (key.escape) {
-            appActions.toggleDebugMenu();
+            useUIStore.getState().actions.setActiveOverlay('none');
             return;
         }
 

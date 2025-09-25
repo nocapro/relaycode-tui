@@ -3,6 +3,7 @@ import { Box, Text } from 'ink';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
+import { useStdoutDimensions } from '../utils';
 import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
 import type { FileChangeType } from '../types/domain.types';
 
@@ -39,6 +40,7 @@ const TransactionDetailScreen = () => {
         transaction, files,
         navigatorFocus, expandedSection, selectedFileIndex, bodyView,
     } = useTransactionDetailScreen();
+    const [width] = useStdoutDimensions();
 
     if (!transaction) {
         return <Text>Loading transaction...</Text>;
@@ -139,7 +141,7 @@ const TransactionDetailScreen = () => {
         <Box flexDirection="column">
             {/* Header */}
             <Text>▲ relaycode transaction details</Text>
-            <Separator />
+            <Separator width={width} />
             
             {/* Modal takeover for Revert */}
             {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
@@ -157,14 +159,14 @@ const TransactionDetailScreen = () => {
                 {/* Navigator Part B */}
                 {renderNavigator()}
                 
-                <Separator />
+                <Separator width={width} />
                 
                 {/* Body */}
                 <Box marginY={1}>
                     {renderBody()}
                 </Box>
                 
-                <Separator />
+                <Separator width={width} />
             </Box>
             
             {/* Footer */}

@@ -1,55 +1,49 @@
-import { useMemo, useDebugValue } from 'react';
+import { useMemo } from 'react';
 import { useInput, useApp } from 'ink';
-import { useReviewStore } from '../stores/review.store';
+import { useUIStore } from '../stores/ui.store';
 import { useAppStore } from '../stores/app.store';
-import { useTransactionStore } from '../stores/transaction.store';
-import { useCopyStore, type CopyItem } from '../stores/copy.store';
+import { useCopyStore } from '../stores/copy.store';
 import { CopyService } from '../services/copy.service';
+import { useTransactionStore, selectReviewStats } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
 
 export const useReviewScreen = () => {
     const { exit } = useApp();
-    const store = useReviewStore();
-    const { transactionId, fileReviewStates } = store;
-    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === transactionId));
-    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const store = useUIStore();
     const {
-        selectedItemIndex, bodyView,
+        selectedTransactionId: transactionId,
+        review_selectedItemIndex: selectedItemIndex,
+        review_bodyView: bodyView,
+        review_patchStatus: patchStatus,
     } = store;
 
-    const files: FileItem[] = useMemo(() => {
-        if (!transaction?.files) return [];
-        return transaction.files.map(file => ({
-            ...file,
-            reviewStatus: fileReviewStates[file.id]?.status || 'AWAITING',
-            reviewError: fileReviewStates[file.id]?.error,
-        }));
-    }, [transaction, fileReviewStates]);
+    const transaction = useTransactionStore(state => state.transactions.find(t => t.id === transactionId));
+    const transactionActions = useTransactionStore(state => state.actions);
+    const reviewStats = useTransactionStore(selectReviewStats(transactionId));
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
+    const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
 
     const scripts = transaction?.scripts || [];
-    const patchStatus = store.patchStatus;
 
     const {
-        moveSelectionUp, moveSelectionDown, toggleFileApproval, expandDiff,
-        toggleBodyView, setBodyView,
-        startApplySimulation, rejectAllFiles, approve,
-        tryRepairFile, showBulkRepair, executeBulkRepairOption, confirmHandoff,
-        scrollReasoningUp, scrollReasoningDown, navigateScriptErrorUp, navigateScriptErrorDown,
+        review_moveSelectionUp: moveSelectionUp,
+        review_moveSelectionDown: moveSelectionDown,
+        review_expandDiff: expandDiff,
+        review_toggleBodyView: toggleBodyView,
+        review_setBodyView: setBodyView,
+        review_startApplySimulation: startApplySimulation,
+        review_approve: approve,
+        review_tryRepairFile: tryRepairFile,
+        review_showBulkRepair: showBulkRepair,
+        review_executeBulkRepairOption: executeBulkRepairOption,
+        review_confirmHandoff: confirmHandoff,
+        review_scrollReasoningUp: scrollReasoningUp,
+        review_scrollReasoningDown: scrollReasoningDown,
+        review_navigateScriptErrorUp: navigateScriptErrorUp,
+        review_navigateScriptErrorDown: navigateScriptErrorDown,
     } = store.actions;
-    const {
-        numFiles,
-        approvedFilesCount,
-        approvedLinesAdded,
-        approvedLinesRemoved,
-    } = useMemo(() => {
-        const approvedFiles = files.filter((f: FileItem) => f.reviewStatus === 'APPROVED');
-        return {
-            numFiles: files.length,
-            approvedFilesCount: approvedFiles.length,
-            approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
-            approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
-        };
-    }, [files]);
 
     const openCopyMode = () => {
         if (!transaction) return;
@@ -116,7 +110,7 @@ export const useReviewScreen = () => {
             if (key.return) toggleBodyView('script_output');
             if (input.toLowerCase() === 'c') {
                 // Copy script output
-                const scriptIndex = selectedItemIndex - numFiles;
+                const scriptIndex = selectedItemIndex - reviewStats.numFiles;
                 const selectedScript = scripts[scriptIndex];
                 if (selectedScript) {
                     // eslint-disable-next-line no-console
@@ -135,8 +129,10 @@ export const useReviewScreen = () => {
 
         // Handle Shift+R for reject all
         if (key.shift && input.toLowerCase() === 'r') {
-            if (approvedFilesCount > 0) {
-                rejectAllFiles();
+            if (reviewStats.approvedFilesCount > 0) {
+                if (transactionId) {
+                    transactionActions.rejectAllFiles(transactionId);
+                }
             }
             return;
         }
@@ -148,28 +144,28 @@ export const useReviewScreen = () => {
         if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
 
         if (input === ' ') {
-            if (selectedItemIndex < numFiles) {
+            if (selectedItemIndex < reviewStats.numFiles) {
                 const file = files[selectedItemIndex];
-                if (file && file.reviewStatus !== 'FAILED') {
-                    toggleFileApproval();
+                if (file && file.reviewStatus !== 'FAILED' && transactionId) {
+                    transactionActions.toggleFileApproval(transactionId, file.id);
                 }
             }
         }
 
         if (input.toLowerCase() === 'd') {
-            if (selectedItemIndex < numFiles) {
+            if (selectedItemIndex < reviewStats.numFiles) {
                 toggleBodyView('diff');
             }
         }
 
         if (key.return) { // Enter key
-             if (selectedItemIndex >= numFiles) { // It's a script
+             if (selectedItemIndex >= reviewStats.numFiles) { // It's a script
                 toggleBodyView('script_output');
             }
         }
 
         if (input.toLowerCase() === 'a') {
-            if (approvedFilesCount > 0) {
+            if (reviewStats.approvedFilesCount > 0) {
                 approve();
                 showDashboardScreen();
             }
@@ -187,7 +183,7 @@ export const useReviewScreen = () => {
                     showBulkRepair();
                 }
             } else {
-                if (selectedItemIndex < numFiles) {
+                if (selectedItemIndex < reviewStats.numFiles) {
                     const file = files[selectedItemIndex];
                     if (file && file.reviewStatus === 'FAILED') {
                         tryRepairFile();
@@ -207,9 +203,6 @@ export const useReviewScreen = () => {
         files,
         scripts,
         patchStatus,
-        numFiles,
-        approvedFilesCount,
-        approvedLinesAdded,
-        approvedLinesRemoved,
+        ...reviewStats,
     };
 };

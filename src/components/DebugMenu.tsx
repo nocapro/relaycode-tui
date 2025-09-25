@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import { useDebugMenu, type MenuItem } from '../hooks/useDebugMenu';
+import { useStdoutDimensions } from '../utils';
 
 const getKeyForIndex = (index: number): string => {
     if (index < 9) {
@@ -12,6 +13,7 @@ const getKeyForIndex = (index: number): string => {
 
 const DebugMenu = () => {
     const { selectedIndex, menuItems } = useDebugMenu();
+    const [width] = useStdoutDimensions();
 
     return (
         <Box
@@ -22,7 +24,7 @@ const DebugMenu = () => {
             paddingX={2}
         >
             <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
-            <Separator />
+            <Separator width={width - 4} />
             <Box flexDirection="column" marginY={1}>
                 {menuItems.map((item, index) => (
                     <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
@@ -31,7 +33,7 @@ const DebugMenu = () => {
                     </Text>
                 ))}
             </Box>
-            <Separator />
+            <Separator width={width - 4} />
             <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc / Ctrl+B) Close</Text>
         </Box>
     );

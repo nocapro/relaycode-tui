@@ -1,10 +1,8 @@
 import React from 'react';
 import {Text} from 'ink';
-import { useStdoutDimensions } from '../utils';
 
-const Separator = () => {
-	const [columns] = useStdoutDimensions();
-	return <Text>{'─'.repeat(columns || 80)}</Text>;
+const Separator = ({ width }: { width: number }) => {
+	return <Text>{'─'.repeat(width)}</Text>;
 };
 
 export default Separator;

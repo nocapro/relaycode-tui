@@ -12,19 +12,16 @@ import TransactionHistoryScreen from './components/TransactionHistoryScreen';
 import DebugMenu from './components/DebugMenu'; 
 import GlobalHelpScreen from './components/GlobalHelpScreen';
 import CopyScreen from './components/CopyScreen';
-import { useCopyStore } from './stores/copy.store';
+import { useUIStore } from './stores/ui.store';
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
 
 const App = () => {
-    const { currentScreen, isDebugMenuOpen, isHelpOpen } = useAppStore(state => ({
-        currentScreen: state.currentScreen,
-        isDebugMenuOpen: state.isDebugMenuOpen,
-        isHelpOpen: state.isHelpOpen,
-    }));
-    const isCopyModeOpen = useCopyStore(s => s.isOpen);
+    const currentScreen = useAppStore(state => state.currentScreen);
+    const activeOverlay = useUIStore(s => s.activeOverlay);
+    const isOverlayOpen = activeOverlay !== 'none';
 
     // Global hotkeys are active if no modal-like component is open
-    const areGlobalHotkeysActive = !isCopyModeOpen;
+    const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
     useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
 
     useEffect(() => {
@@ -32,10 +29,9 @@ const App = () => {
         // This is especially important when transitioning from the splash screen.
         // eslint-disable-next-line no-console
         console.clear();
-    }, [currentScreen, isDebugMenuOpen, isCopyModeOpen, isHelpOpen]);
+    }, [currentScreen, activeOverlay]);
 
     const renderMainScreen = () => {
-        if (isDebugMenuOpen) return <DebugMenu />;
         if (currentScreen === 'splash') return <SplashScreen />;
         if (currentScreen === 'init') return <InitializationScreen />;
         if (currentScreen === 'dashboard') return <DashboardScreen />;
@@ -47,8 +43,6 @@ const App = () => {
         return null;
     };
 
-    const isOverlayOpen = isCopyModeOpen || isHelpOpen;
-
     return (
         <>
             <Box
@@ -59,8 +53,9 @@ const App = () => {
             >
                 {renderMainScreen()}
             </Box>
-            {isHelpOpen && <GlobalHelpScreen />}
-            <CopyScreen />
+            {activeOverlay === 'help' && <GlobalHelpScreen />}
+            {activeOverlay === 'copy' && <CopyScreen />}
+            {activeOverlay === 'debug' && <DebugMenu />}
         </>
     );
 };

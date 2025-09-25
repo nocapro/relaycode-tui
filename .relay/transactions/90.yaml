@@ -1,0 +1,1375 @@
+uuid: c25cfb3f-b827-4a00-bb6f-998f4ed782e4
+projectId: relaycode-tui
+createdAt: '2025-09-24T15:26:10.811Z'
+gitCommitMsg: >-
+  refactor(hooks): Align hooks with centralized UI store
+
+  This commit executes the hook and logic refactoring phase of the state
+  management overhaul.
+
+  - Centralizes the `getVisibleItemPaths` function into `navigation.utils.ts` to
+  remove code duplication from `useTransactionHistoryScreen`. - Updates
+  `ui.store.ts` to use the new centralized utility and corrects outdated debug
+  state data. - Removes dangling imports and unused code from `useDebugMenu`,
+  `useReviewScreen`, and `dashboard.service` that were referencing the
+  now-deleted `dashboard.store`. - Simplifies `useTransactionHistoryScreen` by
+  removing its local copy of the navigation helper.
+
+  These changes make the hooks cleaner, more consistent, and correctly aligned
+  with the single `ui.store` pattern, further improving data integrity and
+  maintainability.
+promptSummary: >-
+  The user requested to execute Part 3 of a radical DRYness refactor plan, which
+  involves refactoring hooks and logic to align with a new centralized state
+  management architecture.
+reasoning:
+  - >-
+    This phase of the refactoring focuses on the hooks and logic, aligning them
+    with the centralized state management architecture established in the
+    previous steps. The primary goals are to eliminate redundant logic, fix
+    inconsistencies from store consolidation, and streamline how hooks interact
+    with the state stores.
+  - '### 1. Centralize Navigation Logic'
+  - >-
+    To eliminate redundant code, I'll move the `getVisibleItemPaths` helper
+    function from the `useTransactionHistoryScreen` hook into
+    `navigation.utils.ts`, making it a single, reusable utility. This function
+    is crucial for calculating which items are visible in the history screen's
+    tree view.
+  - '### 2. Update Central UI Store'
+  - >-
+    Now that `getVisibleItemPaths` has a new home, I'll update `ui.store.ts` to
+    import it from `navigation.utils.ts` instead of the now-deleted
+    `transaction-history.store.ts`. I will also correct some outdated paths and
+    values in the debug helper states within this store to ensure they align
+    with the application's data format.
+  - '### 3. Refactor Hooks'
+  - >-
+    With the utility logic centralized, I can now refactor the hooks to be
+    simpler and more consistent.
+  - >-
+    First, `useTransactionHistoryScreen.tsx` will be updated to import and use
+    the new shared `getVisibleItemPaths` function, removing its local, redundant
+    implementation.
+  - >-
+    Next, I'll clean up several files by removing unused imports and hook calls
+    that were left over from before the store consolidation. This improves code
+    clarity and removes dependencies on deleted files.
+operations:
+  - type: write
+    path: src/stores/navigation.utils.ts
+    content: |+
+      --- src/stores/navigation.utils.ts
+      +++ src/stores/navigation.utils.ts
+      @@ -1,3 +1,5 @@
+      +import type { Transaction } from '../types/domain.types';
+      +
+       export const moveIndex = (
+           currentIndex: number,
+           direction: 'up' | 'down',
+      @@ -8,3 +10,21 @@
+           }
+           return Math.min(listSize - 1, currentIndex + 1);
+       };
+      +
+      +export const getVisibleItemPaths = (
+      +    transactions: Transaction[],
+      +    expandedIds: Set<string>,
+      +): string[] => {
+      +    const paths: string[] = [];
+      +    for (const tx of transactions) {
+      +        paths.push(tx.id);
+      +        if (expandedIds.has(tx.id) && tx.files) {
+      +            for (const file of tx.files) {
+      +                paths.push(`${tx.id}/${file.id}`);
+      +            }
+      +        }
+      +    }
+      +    return paths;
+      +};
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/ui.store.ts
+    content: >+
+      --- src/stores/ui.store.ts
+
+      +++ src/stores/ui.store.ts
+
+      @@ -3,8 +3,7 @@
+       import { DashboardService } from '../services/dashboard.service';
+       import { ReviewService } from '../services/review.service';
+       import { TransactionService } from '../services/transaction.service';
+      -import { moveIndex } from './navigation.utils';
+
+      -import { getVisibleItemPaths as history_getVisibleItemPaths } from
+      './transaction-history.store';
+
+      +import { moveIndex, getVisibleItemPaths as history_getVisibleItemPaths }
+      from './navigation.utils';
+       import type { FileItem, ScriptResult } from '../types/domain.types';
+       import type {
+           DashboardStatus,
+      @@ -536,10 +535,10 @@
+                           actions.history_load({ history_expandedIds: new Set(['3']), history_selectedItemPath: '3' });
+                           break;
+                       case 'l2-drill':
+      -                    actions.history_load({ history_expandedIds: new
+      Set(['3', '3-1']), history_selectedItemPath: '3-1' });
+
+      +                    actions.history_load({ history_expandedIds: new
+      Set(['3', '3/3-1']), history_selectedItemPath: '3/3-1' });
+                           break;
+                       case 'filter':
+      -                    actions.history_load({ history_mode: 'FILTER',
+      history_filterQuery: 'logger.ts status:committed' });
+
+      +                    actions.history_load({ history_mode: 'FILTER',
+      history_filterQuery: 'logger.ts status:COMMITTED' });
+                           break;
+                       case 'copy':
+                           actions.history_load({ history_selectedForAction: new Set(['3', '6']) });
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionHistoryScreen.tsx
+    content: >+
+      --- src/hooks/useTransactionHistoryScreen.tsx
+
+      +++ src/hooks/useTransactionHistoryScreen.tsx
+
+      @@ -4,24 +4,11 @@
+       import { useAppStore } from '../stores/app.store';
+       import { useStdoutDimensions } from '../utils';
+       import { useTransactionStore } from '../stores/transaction.store';
+      -import { useCopyStore, type CopyItem } from '../stores/copy.store';
+
+      +import { useCopyStore } from '../stores/copy.store';
+       import { CopyService } from '../services/copy.service';
+      +import { getVisibleItemPaths } from '../stores/navigation.utils';
+       
+       export const useTransactionHistoryScreen = () => {
+      -    // This helper needs to be here to avoid circular dependency since
+      the store itself is gone.
+
+      -    const getVisibleItemPaths = (transactions, expandedIds) => {
+
+      -        const paths = [];
+
+      -        for (const tx of transactions) {
+
+      -            paths.push(tx.id);
+
+      -            if (expandedIds.has(tx.id) && tx.files) {
+
+      -                for (const file of tx.files) {
+
+      -                    paths.push(`${tx.id}/${file.id}`);
+
+      -                }
+
+      -            }
+
+      -        }
+
+      -        return paths;
+
+      -    };
+
+      -
+           const [, rows] = useStdoutDimensions();
+           const store = useUIStore();
+           const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/dashboard.service.ts
+    content: |+
+      --- src/services/dashboard.service.ts
+      +++ src/services/dashboard.service.ts
+      @@ -1,4 +1,3 @@
+      -import { useDashboardStore } from '../stores/dashboard.store';
+       import { sleep } from '../utils';
+       import { useTransactionStore } from '../stores/transaction.store';
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: |+
+      --- src/hooks/useReviewScreen.tsx
+      +++ src/hooks/useReviewScreen.tsx
+      @@ -1,8 +1,8 @@
+      -import { useMemo, useDebugValue } from 'react';
+      +import { useMemo } from 'react';
+       import { useInput, useApp } from 'ink';
+       import { useUIStore } from '../stores/ui.store';
+       import { useAppStore } from '../stores/app.store';
+      -import { useCopyStore, type CopyItem } from '../stores/copy.store';
+      +import { useCopyStore } from '../stores/copy.store';
+       import { CopyService } from '../services/copy.service';
+       import type { FileItem } from '../types/domain.types';
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -1,7 +1,6 @@
+       import { useState } from 'react';
+       import { useInput } from 'ink';
+       import { useAppStore } from '../stores/app.store';
+      -import { useDashboardStore } from '../stores/dashboard.store';
+       import { useUIStore } from '../stores/ui.store';
+       import { useInitStore } from '../stores/init.store';
+       import { useCommitStore } from '../stores/commit.store';
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/navigation.utils.ts: |-
+    export const moveIndex = (
+        currentIndex: number,
+        direction: 'up' | 'down',
+        listSize: number,
+    ): number => {
+        if (direction === 'up') {
+            return Math.max(0, currentIndex - 1);
+        }
+        return Math.min(listSize - 1, currentIndex + 1);
+    };
+  src/hooks/useTransactionHistoryScreen.tsx: |-
+    import { useState, useMemo, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useUIStore } from '../stores/ui.store';
+    import { useAppStore } from '../stores/app.store';
+    import { useStdoutDimensions } from '../utils';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { useCopyStore, type CopyItem } from '../stores/copy.store';
+    import { CopyService } from '../services/copy.service';
+
+    export const useTransactionHistoryScreen = () => {
+        // This helper needs to be here to avoid circular dependency since the store itself is gone.
+        const getVisibleItemPaths = (transactions, expandedIds) => {
+            const paths = [];
+            for (const tx of transactions) {
+                paths.push(tx.id);
+                if (expandedIds.has(tx.id) && tx.files) {
+                    for (const file of tx.files) {
+                        paths.push(`${tx.id}/${file.id}`);
+                    }
+                }
+            }
+            return paths;
+        };
+
+        const [, rows] = useStdoutDimensions();
+        const store = useUIStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+        const allTransactions = useTransactionStore(s => s.transactions);
+
+        const [viewOffset, setViewOffset] = useState(0);
+
+        const visibleItemPaths = useMemo(() => getVisibleItemPaths(allTransactions, store.history_expandedIds), [allTransactions, store.history_expandedIds]);
+        const selectedIndex = visibleItemPaths.indexOf(store.history_selectedItemPath);
+
+        const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+        const viewportHeight = Math.max(1, rows - NON_CONTENT_HEIGHT);
+
+        useEffect(() => {
+            if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+                setViewOffset(selectedIndex);
+            } else if (selectedIndex >= viewOffset + viewportHeight) {
+                setViewOffset(selectedIndex - viewportHeight + 1);
+            }
+        }, [selectedIndex, viewOffset, viewportHeight]);
+
+        const openCopyMode = () => {
+            const { history_selectedForAction: selectedForAction } = store;
+            const transactionsToCopy = allTransactions.filter(tx => selectedForAction.has(tx.id));
+
+            if (transactionsToCopy.length === 0) return;
+            const title = `Select data to copy from ${transactionsToCopy.length} transactions:`;
+            const items = CopyService.getCopyItemsForHistory(transactionsToCopy);
+            useCopyStore.getState().actions.open(title, items);
+        };
+
+        useInput((input, key) => {
+            if (store.history_mode === 'FILTER') {
+                if (key.escape) store.actions.history_setMode('LIST');
+                if (key.return) store.actions.history_applyFilter();
+                return;
+            }
+            if (store.history_mode === 'BULK_ACTIONS') {
+                if (key.escape) store.actions.history_setMode('LIST');
+                // Add number handlers...
+                return;
+            }
+
+            // LIST mode inputs
+            if (key.upArrow) store.actions.history_navigateUp();
+            if (key.downArrow) store.actions.history_navigateDown();
+            if (key.rightArrow) store.actions.history_expandOrDrillDown();
+            if (key.leftArrow) store.actions.history_collapseOrBubbleUp();
+            if (input === ' ') store.actions.history_toggleSelection();
+
+            if (input.toLowerCase() === 'f') store.actions.history_setMode('FILTER');
+            if (input.toLowerCase() === 'c' && store.history_selectedForAction.size > 0) openCopyMode();
+            if (input.toLowerCase() === 'b' && store.history_selectedForAction.size > 0) store.actions.history_setMode('BULK_ACTIONS');
+            
+            if (key.escape || input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+        const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+        const transactionsInView = useMemo(
+            () => allTransactions.filter(tx => txIdsInView.has(tx.id)),
+            [allTransactions, txIdsInView],
+        );
+        const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+        const filterStatus = store.history_filterQuery ? store.history_filterQuery : '(none)';
+        const showingStatus = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
+        
+        return {
+            store: { ...store, actions: store.actions }, // pass store for now
+            transactions: allTransactions,
+            viewOffset,
+            itemsInView,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus,
+            showingStatus,
+            visibleItemPaths,
+        };
+    };
+  src/services/dashboard.service.ts: |-
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { sleep } from '../utils';
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    const approveAll = async () => {
+        // Find pending transactions and mark them as in-progress
+        const pendingTxIds: string[] = [];
+        const { updateTransactionStatus } = useTransactionStore.getState().actions;
+        useTransactionStore.getState().transactions.forEach(tx => {
+            if (tx.status === 'PENDING') {
+                pendingTxIds.push(tx.id);
+                updateTransactionStatus(tx.id, 'IN-PROGRESS');
+            }
+        });
+
+        await sleep(2000); // Simulate approval process
+
+        // Mark them as applied
+        pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+    };
+
+    export const DashboardService = {
+        approveAll,
+    };
+  src/stores/ui.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useAppStore } from './app.store';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { moveIndex } from './navigation.utils';
+
+    import { getVisibleItemPaths as history_getVisibleItemPaths } from
+    './transaction-history.store';
+
+    import type { FileItem, ScriptResult } from '../types/domain.types';
+
+    import type {
+        DashboardStatus,
+        ApplyStep,
+        ReviewBodyView,
+        PatchStatus,
+        NavigatorSection,
+        DetailBodyView,
+        HistoryViewMode,
+    } from '../types/view.types';
+
+
+    export const review_initialApplySteps: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+
+    // Omit 'actions' from state type for partial updates
+
+    type UIStateData = Omit<UIState, 'actions'>;
+
+
+    interface UIState {
+        // --- Global State ---
+        selectedTransactionId: string | null;
+
+        // --- Dashboard State ---
+        dashboard_status: DashboardStatus;
+        dashboard_previousStatus: DashboardStatus;
+        dashboard_selectedTransactionIndex: number;
+
+        // --- Review State ---
+        review_patchStatus: PatchStatus;
+        review_applySteps: ApplyStep[];
+        review_selectedItemIndex: number; // Can be file or script
+        review_bodyView: ReviewBodyView;
+        review_isDiffExpanded: boolean;
+        review_reasoningScrollIndex: number;
+        review_scriptErrorIndex: number;
+
+        // --- Transaction Detail State ---
+        detail_navigatorFocus: NavigatorSection | 'FILES_LIST';
+        detail_expandedSection: NavigatorSection | null;
+        detail_selectedFileIndex: number;
+        detail_bodyView: DetailBodyView;
+
+        // --- Transaction History State ---
+        history_mode: HistoryViewMode;
+        history_selectedItemPath: string; // e.g. "tx-1" or "tx-1/file-2"
+        history_expandedIds: Set<string>; // holds ids of expanded items
+        history_filterQuery: string;
+        history_selectedForAction: Set<string>; // set of transaction IDs
+
+        // --- Actions ---
+        actions: {
+            // --- Dashboard Actions ---
+            dashboard_togglePause: () => void;
+            dashboard_moveSelectionUp: () => void;
+            dashboard_moveSelectionDown: () => void;
+            dashboard_startApproveAll: () => void;
+            dashboard_confirmAction: () => Promise<void>;
+            dashboard_cancelAction: () => void;
+            dashboard_setStatus: (status: DashboardStatus) => void; // For debug menu
+
+            // --- Review Actions ---
+            review_load: (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => void;
+            review_moveSelectionUp: () => void;
+            review_moveSelectionDown: () => void;
+            review_expandDiff: () => void;
+            review_toggleBodyView: (view: Extract<ReviewBodyView, 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'>) => void;
+            review_setBodyView: (view: ReviewBodyView) => void;
+            review_approve: () => void;
+            review_startApplySimulation: (scenario: 'success' | 'failure') => void;
+            review_tryRepairFile: () => void;
+            review_showBulkRepair: () => void;
+            review_executeBulkRepairOption: (option: number) => Promise<void>;
+            review_confirmHandoff: () => void;
+            review_scrollReasoningUp: () => void;
+            review_scrollReasoningDown: () => void;
+            review_navigateScriptErrorUp: () => void;
+            review_navigateScriptErrorDown: () => void;
+            review_updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+            review_addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+
+            // --- Transaction Detail Actions ---
+            detail_load: (transactionId: string) => void;
+            detail_navigateUp: () => void;
+            detail_navigateDown: () => void;
+            detail_handleEnterOrRight: () => void;
+            detail_handleEscapeOrLeft: () => void;
+            detail_toggleRevertConfirm: () => void;
+            detail_confirmRevert: () => void;
+
+            // --- Transaction History Actions ---
+            history_load: (initialState?: Partial<UIStateData>) => void;
+            history_navigateDown: () => void;
+            history_navigateUp: () => void;
+            history_expandOrDrillDown: () => void;
+            history_collapseOrBubbleUp: () => void;
+            history_toggleSelection: () => void;
+            history_setMode: (mode: HistoryViewMode) => void;
+            history_setFilterQuery: (query: string) => void;
+            history_applyFilter: () => void;
+            history_prepareDebugState: (stateName: 'l1-drill' | 'l2-drill' | 'filter' | 'copy' | 'bulk') => void;
+        };
+    }
+
+
+    export const useUIStore = create<UIState>((set, get) => ({
+        // --- Global ---
+        selectedTransactionId: null,
+
+        // --- Dashboard ---
+        dashboard_status: 'LISTENING',
+        dashboard_previousStatus: 'LISTENING',
+        dashboard_selectedTransactionIndex: 0,
+
+        // --- Review ---
+        review_patchStatus: 'SUCCESS',
+        review_applySteps: review_initialApplySteps,
+        review_selectedItemIndex: 0,
+        review_bodyView: 'none',
+        review_isDiffExpanded: false,
+        review_reasoningScrollIndex: 0,
+        review_scriptErrorIndex: 0,
+
+        // --- Detail ---
+        detail_navigatorFocus: 'PROMPT',
+        detail_expandedSection: null,
+        detail_selectedFileIndex: 0,
+        detail_bodyView: 'NONE',
+
+        // --- History ---
+        history_mode: 'LIST',
+        history_selectedItemPath: '',
+        history_expandedIds: new Set(),
+        history_filterQuery: '',
+        history_selectedForAction: new Set(),
+
+        actions: {
+            // --- Dashboard Actions ---
+            dashboard_togglePause: () => set(state => ({
+                dashboard_status: state.dashboard_status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            dashboard_moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { dashboard_selectedTransactionIndex: moveIndex(state.dashboard_selectedTransactionIndex, 'up', transactions.length) };
+            }),
+            dashboard_moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { dashboard_selectedTransactionIndex: moveIndex(state.dashboard_selectedTransactionIndex, 'down', transactions.length) };
+            }),
+            dashboard_startApproveAll: () => set(state => ({
+                dashboard_status: 'CONFIRM_APPROVE',
+                dashboard_previousStatus: state.dashboard_status,
+            })),
+            dashboard_cancelAction: () => set(state => ({ dashboard_status: state.dashboard_previousStatus })),
+            dashboard_setStatus: (status) => set({ dashboard_status: status }),
+            dashboard_confirmAction: async () => {
+                const { dashboard_status, dashboard_previousStatus } = get();
+                if (dashboard_status === 'CONFIRM_APPROVE') {
+                    set({ dashboard_status: 'APPROVING' });
+                    await DashboardService.approveAll();
+                    set({ dashboard_status: dashboard_previousStatus });
+                }
+            },
+
+            // --- Review Actions ---
+            review_load: (transactionId, initialState) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+                const isFailureCase = transaction.id === '1';
+                const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+                set({
+                    selectedTransactionId: transaction.id,
+                    review_patchStatus: patchStatus,
+                    review_selectedItemIndex: 0,
+                    review_bodyView: initialState?.bodyView ?? 'none',
+                    review_isDiffExpanded: false,
+                    review_reasoningScrollIndex: 0,
+                    review_scriptErrorIndex: 0,
+                    review_applySteps: JSON.parse(JSON.stringify(review_initialApplySteps)),
+                });
+            },
+            review_moveSelectionUp: () => set(state => {
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === state.selectedTransactionId);
+                if (!tx) return {};
+                const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+                return { review_selectedItemIndex: moveIndex(state.review_selectedItemIndex, 'up', listSize) };
+            }),
+            review_moveSelectionDown: () => set(state => {
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === state.selectedTransactionId);
+                if (!tx) return {};
+                const listSize = (tx.files?.length || 0) + (tx.scripts?.length || 0);
+                return { review_selectedItemIndex: moveIndex(state.review_selectedItemIndex, 'down', listSize) };
+            }),
+            review_toggleBodyView: (view) => set(state => {
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === state.selectedTransactionId);
+                const files = tx?.files || [];
+                if (view === 'diff' && state.review_selectedItemIndex >= files.length) return {};
+                return {
+                    review_bodyView: state.review_bodyView === view ? 'none' : view,
+                    review_isDiffExpanded: false,
+                };
+            }),
+            review_setBodyView: (view) => set({ review_bodyView: view }),
+            review_expandDiff: () => set(state => ({ review_isDiffExpanded: !state.review_isDiffExpanded })),
+            review_approve: () => {
+                const { selectedTransactionId } = get();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            review_startApplySimulation: async (scenario) => {
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                const { review_updateApplyStep, review_addApplySubstep } = get().actions;
+                set({ review_applySteps: JSON.parse(JSON.stringify(review_initialApplySteps)) });
+                showReviewProcessingScreen();
+                const simulationGenerator = ReviewService.runApplySimulation(scenario);
+                for await (const update of simulationGenerator) {
+                    if (update.type === 'UPDATE_STEP') {
+                        review_updateApplyStep(update.payload.id, update.payload.status, update.payload.duration, update.payload.details);
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        review_addApplySubstep(update.payload.parentId, update.payload.substep);
+                    }
+                }
+                showReviewScreen();
+            },
+            review_tryRepairFile: () => {
+                const { selectedTransactionId, review_selectedItemIndex } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.[review_selectedItemIndex];
+                if (!file || file.reviewStatus !== 'FAILED') return;
+                const repairedFile = ReviewService.tryRepairFile(file);
+                useTransactionStore.getState().actions.updateFileReviewStatus(
+                    selectedTransactionId, file.id, repairedFile.reviewStatus || 'AWAITING', undefined
+                );
+            },
+            review_showBulkRepair: () => get().actions.review_toggleBodyView('bulk_repair'),
+            review_executeBulkRepairOption: async (option) => {
+                const { selectedTransactionId } = get();
+                let tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx) return;
+                switch (option) {
+                    case 1:
+                        if (!tx.files) break;
+                        ReviewService.generateBulkRepairPrompt(tx.files);
+                        set({ review_bodyView: 'none' });
+                        break;
+                    case 2: {
+                        const { updateFileReviewStatus } = useTransactionStore.getState().actions;
+                        set({ review_bodyView: 'none' });
+                        if (!tx.files) break;
+                        const failedFileIds = new Set(tx.files.filter(f => f.reviewStatus === 'FAILED').map(f => f.id));
+                        if (failedFileIds.size === 0) break;
+                        failedFileIds.forEach(id => updateFileReviewStatus(selectedTransactionId!, id, 'RE_APPLYING'));
+                        tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId)!;
+                        const finalFiles = await ReviewService.runBulkReapply(tx.files!);
+                        finalFiles.forEach(file => updateFileReviewStatus(selectedTransactionId!, file.id, file.reviewStatus || 'AWAITING', file.reviewError));
+                        break;
+                    }
+                    case 3:
+                        get().actions.review_setBodyView('confirm_handoff');
+                        break;
+                    case 4:
+                        if (!tx.files) break;
+                        tx.files.forEach(file => {
+                            if (file.reviewStatus === 'FAILED') {
+                                useTransactionStore.getState().actions.updateFileReviewStatus(selectedTransactionId!, file.id, 'REJECTED');
+                            }
+                        });
+                        set({ review_bodyView: 'none' });
+                        break;
+                    default:
+                        set({ review_bodyView: 'none' });
+                }
+            },
+            review_confirmHandoff: () => {
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === get().selectedTransactionId);
+                if (!tx?.files) return;
+                ReviewService.generateHandoffPrompt(tx.hash, tx.message, tx.reasoning || '', tx.files);
+                ReviewService.performHandoff(tx.hash);
+            },
+            review_scrollReasoningUp: () => set(state => ({ review_reasoningScrollIndex: Math.max(0, state.review_reasoningScrollIndex - 1) })),
+            review_scrollReasoningDown: () => set(state => {
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === state.selectedTransactionId);
+                if (!tx?.reasoning) return {};
+                const maxLines = tx.reasoning.split('\n').length;
+                return { review_reasoningScrollIndex: Math.min(maxLines - 1, state.review_reasoningScrollIndex + 1) };
+            }),
+            review_navigateScriptErrorUp: () => set(state => ({ review_scriptErrorIndex: Math.max(0, state.review_scriptErrorIndex - 1) })),
+            review_navigateScriptErrorDown: () => set(state => {
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === state.selectedTransactionId);
+                if (!tx?.scripts || !tx?.files) return {};
+                const selectedScript = tx.scripts[state.review_selectedItemIndex - tx.files.length];
+                if (selectedScript?.output) {
+                    const errorLines = selectedScript.output.split('\n').filter(line => line.includes('Error') || line.includes('Warning'));
+                    return { review_scriptErrorIndex: Math.min(errorLines.length - 1, state.review_scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+            review_updateApplyStep: (id, status, duration, details) => {
+                set(state => ({
+                    review_applySteps: state.review_applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep = { ...s, status };
+                            if (duration !== undefined) newStep.duration = duration;
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            review_addApplySubstep: (parentId, substep) => {
+                set(state => ({
+                    review_applySteps: state.review_applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+
+            // --- Transaction Detail Actions ---
+            detail_load: (transactionId) => set({
+                selectedTransactionId: transactionId,
+                detail_navigatorFocus: 'PROMPT',
+                detail_expandedSection: null,
+                detail_selectedFileIndex: 0,
+                detail_bodyView: 'NONE',
+            }),
+            detail_navigateUp: () => {
+                const navigatorOrder: NavigatorSection[] = ['PROMPT', 'REASONING', 'FILES'];
+                const { detail_navigatorFocus, detail_selectedFileIndex } = get();
+                if (detail_navigatorFocus === 'FILES_LIST') {
+                    set({ detail_selectedFileIndex: Math.max(0, detail_selectedFileIndex - 1) });
+                } else {
+                    const currentIndex = navigatorOrder.indexOf(detail_navigatorFocus as NavigatorSection);
+                    if (currentIndex > 0) {
+                        set({ detail_navigatorFocus: navigatorOrder[currentIndex - 1] });
+                    }
+                }
+            },
+            detail_navigateDown: () => {
+                const navigatorOrder: NavigatorSection[] = ['PROMPT', 'REASONING', 'FILES'];
+                const { detail_navigatorFocus, detail_selectedFileIndex, selectedTransactionId } = get();
+                const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+                const files = transaction?.files || [];
+                if (detail_navigatorFocus === 'FILES_LIST') {
+                    set({ detail_selectedFileIndex: Math.min(files.length - 1, detail_selectedFileIndex + 1) });
+                } else {
+                    const currentIndex = navigatorOrder.indexOf(detail_navigatorFocus as NavigatorSection);
+                    if (currentIndex < navigatorOrder.length - 1) {
+                        set({ detail_navigatorFocus: navigatorOrder[currentIndex + 1]! });
+                    }
+                }
+            },
+            detail_handleEnterOrRight: () => {
+                const { detail_navigatorFocus, detail_expandedSection } = get();
+                if (detail_navigatorFocus === 'FILES_LIST') {
+                    set({ detail_bodyView: 'DIFF_VIEW' });
+                    return;
+                }
+                if (detail_expandedSection === detail_navigatorFocus) {
+                    if (detail_navigatorFocus === 'FILES') {
+                        set({ detail_navigatorFocus: 'FILES_LIST', detail_bodyView: 'FILES_LIST' });
+                    }
+                    return;
+                }
+                set({ detail_expandedSection: detail_navigatorFocus });
+                if (detail_navigatorFocus === 'PROMPT') set({ detail_bodyView: 'PROMPT' });
+                if (detail_navigatorFocus === 'REASONING') set({ detail_bodyView: 'REASONING' });
+                if (detail_navigatorFocus === 'FILES') set({ detail_bodyView: 'FILES_LIST' });
+            },
+            detail_handleEscapeOrLeft: () => {
+                const { detail_navigatorFocus, detail_expandedSection, detail_bodyView } = get();
+                if (detail_bodyView === 'DIFF_VIEW') {
+                    set({ detail_bodyView: 'FILES_LIST' });
+                    return;
+                }
+                if (detail_navigatorFocus === 'FILES_LIST') {
+                    set({ detail_navigatorFocus: 'FILES', detail_bodyView: 'NONE' });
+                    return;
+                }
+                if (detail_expandedSection) {
+                    set({ detail_expandedSection: null, detail_bodyView: 'NONE' });
+                }
+            },
+            detail_toggleRevertConfirm: () => set(state => ({
+                detail_bodyView: state.detail_bodyView === 'REVERT_CONFIRM' ? 'NONE' : 'REVERT_CONFIRM',
+            })),
+            detail_confirmRevert: () => {
+                const { selectedTransactionId } = get();
+                if (!selectedTransactionId) return;
+                TransactionService.revertTransaction(selectedTransactionId);
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
+                set({ detail_bodyView: 'NONE' });
+            },
+
+            // --- Transaction History Actions ---
+            history_load: (initialState) => {
+                const { transactions } = useTransactionStore.getState();
+                set({
+                    history_selectedItemPath: transactions[0]?.id || '',
+                    history_mode: 'LIST',
+                    history_expandedIds: new Set(),
+                    history_selectedForAction: new Set(),
+                    history_filterQuery: '',
+                    ...initialState,
+                });
+            },
+            history_navigateUp: () => {
+                const { history_expandedIds, history_selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = history_getVisibleItemPaths(transactions, history_expandedIds);
+                const currentIndex = visibleItems.indexOf(history_selectedItemPath);
+                if (currentIndex > 0) {
+                    set({ history_selectedItemPath: visibleItems[currentIndex - 1]! });
+                }
+            },
+            history_navigateDown: () => {
+                const { history_expandedIds, history_selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = history_getVisibleItemPaths(transactions, history_expandedIds);
+                const currentIndex = visibleItems.indexOf(history_selectedItemPath);
+                if (currentIndex < visibleItems.length - 1) {
+                    set({ history_selectedItemPath: visibleItems[currentIndex + 1]! });
+                }
+            },
+            history_expandOrDrillDown: () => set(state => {
+                const { history_selectedItemPath, history_expandedIds } = state;
+                const newExpandedIds = new Set(history_expandedIds);
+                if (!newExpandedIds.has(history_selectedItemPath)) {
+                    newExpandedIds.add(history_selectedItemPath);
+                }
+                return { history_expandedIds: newExpandedIds };
+            }),
+            history_collapseOrBubbleUp: () => set(state => {
+                const { history_selectedItemPath, history_expandedIds } = state;
+                const newExpandedIds = new Set(history_expandedIds);
+                if (newExpandedIds.has(history_selectedItemPath)) {
+                    newExpandedIds.delete(history_selectedItemPath);
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${history_selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+                    return { history_expandedIds: newExpandedIds };
+                } else if (history_selectedItemPath.includes('/')) {
+                    const parentId = history_selectedItemPath.split('/')[0];
+                    return { history_selectedItemPath: parentId || '' };
+                }
+                return {};
+            }),
+            history_toggleSelection: () => set(state => {
+                const { history_selectedItemPath, history_selectedForAction } = state;
+                const txId = history_selectedItemPath.split('/')[0];
+                if (!txId) return {};
+                const newSelection = new Set(history_selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { history_selectedForAction: newSelection };
+            }),
+            history_setMode: (mode) => set({ history_mode: mode }),
+            history_setFilterQuery: (query) => set({ history_filterQuery: query }),
+            history_applyFilter: () => {
+                set({ history_mode: 'LIST' });
+            },
+            history_prepareDebugState: (stateName) => {
+                const { actions } = get();
+                switch (stateName) {
+                    case 'l1-drill':
+                        actions.history_load({ history_expandedIds: new Set(['3']), history_selectedItemPath: '3' });
+                        break;
+                    case 'l2-drill':
+                        actions.history_load({ history_expandedIds: new Set(['3', '3-1']), history_selectedItemPath: '3-1' });
+                        break;
+                    case 'filter':
+                        actions.history_load({ history_mode: 'FILTER', history_filterQuery: 'logger.ts status:committed' });
+                        break;
+                    case 'copy':
+                        actions.history_load({ history_selectedForAction: new Set(['3', '6']) });
+                        break;
+                    case 'bulk':
+                        actions.history_load({ history_mode: 'BULK_ACTIONS', history_selectedForAction: new Set(['3', '6']) });
+                        break;
+                }
+            },
+        },
+    }));
+  src/hooks/useReviewScreen.tsx: |-
+    import { useMemo, useDebugValue } from 'react';
+    import { useInput, useApp } from 'ink';
+    import { useUIStore } from '../stores/ui.store';
+    import { useAppStore } from '../stores/app.store';
+    import { useCopyStore, type CopyItem } from '../stores/copy.store';
+    import { CopyService } from '../services/copy.service';
+    import type { FileItem } from '../types/domain.types';
+
+    export const useReviewScreen = () => {
+        const { exit } = useApp();
+        const store = useUIStore();
+        const {
+            selectedTransactionId: transactionId,
+            review_selectedItemIndex: selectedItemIndex,
+            review_bodyView: bodyView,
+            review_patchStatus: patchStatus,
+        } = store;
+
+        const transaction = useTransactionStore(s => s.transactions.find(t => t.id === transactionId));
+        const transactionActions = useTransactionStore(s => s.actions);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        // The transaction from the store is now the single source of truth for file review status
+        const files: FileItem[] = transaction?.files || [];
+
+        const scripts = transaction?.scripts || [];
+
+        const {
+            review_moveSelectionUp: moveSelectionUp,
+            review_moveSelectionDown: moveSelectionDown,
+            review_expandDiff: expandDiff,
+            review_toggleBodyView: toggleBodyView,
+            review_setBodyView: setBodyView,
+            review_startApplySimulation: startApplySimulation,
+            review_approve: approve,
+            review_tryRepairFile: tryRepairFile,
+            review_showBulkRepair: showBulkRepair,
+            review_executeBulkRepairOption: executeBulkRepairOption,
+            review_confirmHandoff: confirmHandoff,
+            review_scrollReasoningUp: scrollReasoningUp,
+            review_scrollReasoningDown: scrollReasoningDown,
+            review_navigateScriptErrorUp: navigateScriptErrorUp,
+            review_navigateScriptErrorDown: navigateScriptErrorDown,
+        } = store.actions;
+        const {
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        } = useMemo(() => {
+            const approvedFiles = files.filter(f => f.reviewStatus === 'APPROVED');
+            return {
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+                approvedLinesAdded: approvedFiles.reduce((sum, f) => sum + f.linesAdded, 0),
+                approvedLinesRemoved: approvedFiles.reduce((sum, f) => sum + f.linesRemoved, 0),
+            };
+        }, [files]);
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const title = 'Select data to copy from review:';
+            const selectedFile = selectedItemIndex < files.length ? files[selectedItemIndex] : undefined;
+            const items = CopyService.getCopyItemsForReview(transaction, transaction.files || [], selectedFile);
+            useCopyStore.getState().actions.open(title, items);
+        };
+
+        useInput((input, key) => {
+            // For demo purposes: Pressing 1 or 2 triggers the processing screen simulation.
+            if (input === '1') {
+                startApplySimulation('success');
+                return;
+            }
+            if (input === '2') {
+                // The store's default is failure, but to re-trigger the processing screen
+                startApplySimulation('failure');
+                return;
+            }
+
+            if (input.toLowerCase() === 'q') exit();
+
+            // Handle Escape key - context-sensitive behavior
+            if (key.escape) {
+                if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
+                    toggleBodyView(bodyView); // Close modal
+                } else if (bodyView !== 'none') {
+                    setBodyView('none');
+                } else {
+                    showDashboardScreen();
+                }
+                return;
+            }
+
+            // Handoff Confirmation
+            if (bodyView === 'confirm_handoff') {
+                if (key.return) {
+                    confirmHandoff();
+                }
+                return;
+            }
+
+            // Bulk Repair Navigation
+            if (bodyView === 'bulk_repair') {
+                if (input >= '1' && input <= '4') {
+                    executeBulkRepairOption(parseInt(input));
+                }
+                return;
+            }
+
+            // Reasoning Scroll Navigation
+            if (bodyView === 'reasoning') {
+                if (key.upArrow) scrollReasoningUp();
+                if (key.downArrow) scrollReasoningDown();
+                if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+                return;
+            }
+
+            // Script Output Navigation
+            if (bodyView === 'script_output') {
+                if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+                if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+                if (key.return) toggleBodyView('script_output');
+                if (input.toLowerCase() === 'c') {
+                    // Copy script output
+                    const scriptIndex = selectedItemIndex - numFiles;
+                    const selectedScript = scripts[scriptIndex];
+                    if (selectedScript) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                    }
+                }
+                return;
+            }
+
+            // Diff View Navigation
+            if (bodyView === 'diff') {
+                if (input.toLowerCase() === 'x') expandDiff();
+                if (input.toLowerCase() === 'd') toggleBodyView('diff');
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0) {
+                    if (transactionId) {
+                        transactionActions.rejectAllFiles(transactionId);
+                    }
+                }
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+
+            if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+
+            if (input === ' ') {
+                if (selectedItemIndex < numFiles) {
+                    const file = files[selectedItemIndex];
+                    if (file && file.reviewStatus !== 'FAILED' && transactionId) {
+                        transactionActions.toggleFileApproval(transactionId, file.id);
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd') {
+                if (selectedItemIndex < numFiles) {
+                    toggleBodyView('diff');
+                }
+            }
+
+            if (key.return) { // Enter key
+                 if (selectedItemIndex >= numFiles) { // It's a script
+                    toggleBodyView('script_output');
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+
+            // Handle T for single repair and Shift+T for bulk repair
+            if (input.toLowerCase() === 't') {
+                if (key.shift) { // Bulk repair
+                    const hasFailedFiles = files.some(f => f.reviewStatus === 'FAILED');
+                    if (hasFailedFiles) {
+                        showBulkRepair();
+                    }
+                } else {
+                    if (selectedItemIndex < numFiles) {
+                        const file = files[selectedItemIndex];
+                        if (file && file.reviewStatus === 'FAILED') {
+                            tryRepairFile();
+                        }
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        });
+
+        return {
+            ...store,
+            transaction,
+            files,
+            scripts,
+            patchStatus,
+            numFiles,
+            approvedFilesCount,
+            approvedLinesAdded,
+            approvedLinesRemoved,
+        };
+    };
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useUIStore } from '../stores/ui.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import { COPYABLE_ITEMS } from '../types/copy.types';
+    import { CopyService } from '../services/copy.service';
+    import { ReviewService } from '../services/review.service';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import type { Transaction } from '../types/domain.types';
+    import { moveIndex } from '../stores/navigation.utils';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: uiActions } = useUIStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    uiActions.dashboard_setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    uiActions.dashboard_setStatus('CONFIRM_APPROVE');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    uiActions.dashboard_setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    uiActions.review_setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1');
+                    appActions.showReviewScreen();
+                    const { selectedTransactionId, review_selectedItemIndex } = useUIStore.getState();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                    if (!tx) return;
+                    const selectedFile = tx.files && selectedItemIndex < tx.files.length
+                        ? tx.files[selectedItemIndex]
+                        : undefined;
+                    const items = CopyService.getCopyItemsForReview(tx, tx.files || [], selectedFile);
+                    useCopyStore.getState().actions.open(
+                        'Select data to copy from review:', items);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    ReviewService.loadTransactionForReview('2');
+                    appActions.showReviewScreen();
+                    uiActions.review_setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    ReviewService.loadTransactionForReview('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => appActions.showReviewProcessingScreen(),
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    uiActions.detail_load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    uiActions.history_load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown',
+                action: () => {
+                    uiActions.history_prepareDebugState('l1-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Diff)',
+                action: () => {
+                    uiActions.history_prepareDebugState('l2-drill');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    uiActions.history_prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    uiActions.history_prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { history_selectedForAction } = useUIStore.getState();
+                    const allTxs = useTransactionStore.getState().transactions;
+                    const txsToCopy = allTxs.filter((tx: Transaction) =>
+                        selectedForAction.has(tx.id),
+                    );
+                    const items = CopyService.getCopyItemsForHistory(txsToCopy);
+                    useCopyStore.getState().actions.open(
+                        `Select data to copy from ${txsToCopy.length} transactions:`, items);
+                },
+            },
+        ];
+        return { menuItems, appActions };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems, appActions } = useDebugMenuActions();
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    appActions.toggleDebugMenu();
+                }
+                return;
+            }
+            if (key.escape) {
+                appActions.toggleDebugMenu();
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 90

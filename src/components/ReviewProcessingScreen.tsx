@@ -1,8 +1,10 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { useTransactionStore } from '../stores/transaction.store';
-import { useReviewStore, type ApplyStep } from '../stores/review.store';
+import { useUIStore } from '../stores/ui.store';
+import type { ApplyStep } from '../types/view.types';
 import Separator from './Separator';
+import { useStdoutDimensions } from '../utils';
 
 const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep, isSubstep?: boolean }) => {
     if (isSubstep) {
@@ -45,15 +47,16 @@ const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep, isSubstep?
 };
 
 const ReviewProcessingScreen = () => {
-    const { transactionId, patchStatus, applySteps } = useReviewStore(state => ({
-        transactionId: state.transactionId,
-        patchStatus: state.patchStatus,
-        applySteps: state.applySteps,
+    const { selectedTransactionId, review_patchStatus, review_applySteps } = useUIStore(state => ({
+        selectedTransactionId: state.selectedTransactionId,
+        review_patchStatus: state.review_patchStatus,
+        review_applySteps: state.review_applySteps,
     }));
-    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === transactionId));
+    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
+    const [width] = useStdoutDimensions();
 
-    const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
-    const failureCase = patchStatus === 'PARTIAL_FAILURE';
+    const totalDuration = review_applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
+    const failureCase = review_patchStatus === 'PARTIAL_FAILURE';
     const footerText = failureCase
         ? `Elapsed: ${totalDuration.toFixed(1)}s · Transitioning to repair workflow...`
         : `Elapsed: ${totalDuration.toFixed(1)}s · Processing... Please wait.`;
@@ -65,14 +68,14 @@ const ReviewProcessingScreen = () => {
     return (
         <Box flexDirection="column">
             <Text color="cyan">▲ relaycode apply</Text>
-            <Separator />
+            <Separator width={width} />
             <Box marginY={1} flexDirection="column">
                 <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
                 <Box flexDirection="column" marginTop={1} gap={1}>
-                    {applySteps.map(step => <ApplyStepRow key={step.id} step={step} />)}
+                    {review_applySteps.map(step => <ApplyStepRow key={step.id} step={step} />)}
                 </Box>
             </Box>
-            <Separator />
+            <Separator width={width} />
             <Text>{footerText}</Text>
         </Box>
     );

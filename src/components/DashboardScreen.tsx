@@ -1,9 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import { type Transaction, type DashboardStatus } from '../stores/dashboard.store';
 import Separator from './Separator';
-import type { TransactionStatus } from '../types/domain.types';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 
 // --- Sub-components & Helpers ---
@@ -81,6 +80,7 @@ const DashboardScreen = () => {
         isProcessing,
         viewOffset,
         viewportHeight,
+        width,
         transactionsToConfirm,
     } = useDashboardScreen();
 
@@ -130,7 +130,7 @@ const DashboardScreen = () => {
     return (
         <Box flexDirection="column" height="100%">
             <Text color="cyan">▲ relaycode dashboard</Text>
-            <Separator />
+            <Separator width={width} />
             <Box marginY={1}>
                 {renderStatusBar()}
             </Box>
@@ -138,7 +138,7 @@ const DashboardScreen = () => {
             {isModal && (
                 <>
                     <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                    <Separator />
+                    <Separator width={width} />
                 </>
             )}
             
@@ -156,7 +156,7 @@ const DashboardScreen = () => {
                 })}
             </Box>
 
-            <Box marginTop={1}><Separator /></Box>
+            <Box marginTop={1}><Separator width={width} /></Box>
             {renderFooter()}
         </Box>
     );

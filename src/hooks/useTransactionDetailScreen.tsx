@@ -1,5 +1,5 @@
 import { useInput } from 'ink';
-import { useTransactionDetailStore } from '../stores/transaction-detail.store';
+import { useUIStore } from '../stores/ui.store';
 import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useMemo } from 'react';
@@ -8,23 +8,29 @@ import { CopyService } from '../services/copy.service';
 
 export const useTransactionDetailScreen = () => {
     const { showDashboardScreen } = useAppStore(s => s.actions);
-    const store = useTransactionDetailStore();
-    const { bodyView } = store;
+    const store = useUIStore();
+    const {
+        selectedTransactionId,
+        detail_bodyView: bodyView,
+    } = store;
 
-    const transaction = useTransactionStore(s => s.transactions.find(tx => tx.id === store.transactionId));
+    const transaction = useTransactionStore(s => s.transactions.find(tx => tx.id === selectedTransactionId));
     const files = useMemo(() => transaction?.files || [], [transaction]);
 
     const {
         // Main nav
-        navigateUp, navigateDown, handleEnterOrRight, handleEscapeOrLeft,
-        toggleRevertConfirm,
+        detail_navigateUp: navigateUp,
+        detail_navigateDown: navigateDown,
+        detail_handleEnterOrRight: handleEnterOrRight,
+        detail_handleEscapeOrLeft: handleEscapeOrLeft,
+        detail_toggleRevertConfirm: toggleRevertConfirm,
         // Revert modal nav
-        confirmRevert,
+        detail_confirmRevert: confirmRevert,
     } = store.actions;
 
     const openCopyMode = () => {
         if (!transaction) return;
-        const { selectedFileIndex } = store;
+        const { detail_selectedFileIndex: selectedFileIndex } = store;
         const selectedFile = files[selectedFileIndex];
         const title = `Select data to copy from transaction ${transaction.hash}:`;
         const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
@@ -58,9 +64,11 @@ export const useTransactionDetailScreen = () => {
     return {
         transaction,
         files,
-        ...store,
+        navigatorFocus: store.detail_navigatorFocus,
+        expandedSection: store.detail_expandedSection,
+        selectedFileIndex: store.detail_selectedFileIndex,
+        bodyView: store.detail_bodyView,
         actions: {
-            ...store.actions,
             showDashboardScreen,
         },
     };

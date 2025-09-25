@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { moveIndex } from './navigation.utils';
+import { useUIStore } from './ui.store';
 import type { CopyItem } from '../types/copy.types';
 
 export type { CopyItem };
 
 interface CopyState {
-    isOpen: boolean;
     title: string;
     items: CopyItem[];
     selectedIndex: number;
@@ -25,7 +25,6 @@ interface CopyState {
 }
 
 export const useCopyStore = create<CopyState>((set, get) => ({
-    isOpen: false,
     title: '',
     items: [],
     selectedIndex: 0,
@@ -36,8 +35,8 @@ export const useCopyStore = create<CopyState>((set, get) => ({
     actions: {
         open: (title, items, onClose) => {
             const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+            useUIStore.getState().actions.setActiveOverlay('copy');
             set({
-                isOpen: true,
                 title,
                 items,
                 selectedIndex: 0,
@@ -47,8 +46,9 @@ export const useCopyStore = create<CopyState>((set, get) => ({
             });
         },
         close: () => {
+            useUIStore.getState().actions.setActiveOverlay('none');
             get().onClose?.();
-            set({ isOpen: false, items: [], onClose: undefined });
+            set({ items: [], onClose: undefined });
         },
         navigateUp: () => set(state => ({
             selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),

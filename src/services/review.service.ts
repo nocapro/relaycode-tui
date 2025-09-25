@@ -1,4 +1,4 @@
-import { useReviewStore } from '../stores/review.store';
+import { useUIStore } from '../stores/ui.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
@@ -112,7 +112,28 @@ async function* runApplySimulation(scenario: 'success' | 'failure'): AsyncGenera
 }
 
 const loadTransactionForReview = (transactionId: string, initialState?: { bodyView: ReviewBodyView }) => {
-    useReviewStore.getState().actions.load(transactionId, initialState);
+    const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+    if (!transaction) return;
+
+    // This simulates the backend determining which files failed or succeeded and sets it ONCE on load.
+    // For this demo, tx '1' is the failure case, any other is success.
+    const isFailureCase = transaction.id === '1';
+    const { updateFileReviewStatus } = useTransactionStore.getState().actions;
+
+    (transaction.files || []).forEach((file, index) => {
+        if (isFailureCase) {
+            const isFailedFile = index > 0;
+            updateFileReviewStatus(
+                transactionId,
+                file.id,
+                isFailedFile ? 'FAILED' : 'APPROVED',
+                isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined,
+            );
+        } else {
+            updateFileReviewStatus(transactionId, file.id, 'APPROVED');
+        }
+    });
+    useUIStore.getState().actions.review_load(transactionId, initialState);
 };
 
 const generateSingleFileRepairPrompt = (file: FileItem): string => {

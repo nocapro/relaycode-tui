@@ -103,21 +103,26 @@ const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: n
 
 const TransactionHistoryScreen = () => {
     const {
-        store,
+        history_mode,
+        history_filterQuery,
+        history_selectedForAction,
+        history_selectedItemPath,
+        history_expandedIds,
+        actions,
         transactions,
         itemsInView,
-        transactionsInView,
         pathsInViewSet,
         filterStatus,
         showingStatus,
+        width,
     } = useTransactionHistoryScreen();
 
     const renderFooter = () => {
-        if (store.mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
-        if (store.mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
+        if (history_mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
+        if (history_mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
         
         const actions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
-        if (store.selectedForAction.size > 0) {
+        if (history_selectedForAction.size > 0) {
             actions.push('(C)opy', '(B)ulk');
         }
         return <Text>{actions.join(' · ')}</Text>;
@@ -126,12 +131,12 @@ const TransactionHistoryScreen = () => {
     return (
         <Box flexDirection="column">
             <Text color="cyan">▲ relaycode transaction history</Text>
-            <Separator />
+            <Separator width={width} />
 
             <Box>
                 <Text>Filter: </Text>
-                {store.mode === 'FILTER' ? (
-                    <TextInput value={store.filterQuery} onChange={store.actions.setFilterQuery} />
+                {history_mode === 'FILTER' ? (
+                    <TextInput value={history_filterQuery} onChange={actions.history_setFilterQuery} />
                 ) : (
                     <Text>{filterStatus}</Text>
                 )}
@@ -139,12 +144,12 @@ const TransactionHistoryScreen = () => {
             </Box>
 
             <Box flexDirection="column" marginY={1}>
-                {store.mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={store.selectedForAction.size} />}
+                {history_mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={history_selectedForAction.size} />}
 
-                {store.mode === 'LIST' && transactions.map((tx: Transaction) => {
-                    const isTxSelected = store.selectedItemPath.startsWith(tx.id);
-                    const isTxExpanded = store.expandedIds.has(tx.id);
-                    const isSelectedForAction = store.selectedForAction.has(tx.id);
+                {history_mode === 'LIST' && transactions.map((tx: Transaction) => {
+                    const isTxSelected = history_selectedItemPath.startsWith(tx.id);
+                    const isTxExpanded = history_expandedIds.has(tx.id);
+                    const isSelectedForAction = history_selectedForAction.has(tx.id);
 
                     const showTxRow = pathsInViewSet.has(tx.id);
 
@@ -153,7 +158,7 @@ const TransactionHistoryScreen = () => {
                             {showTxRow && (
                                 <TransactionRow
                                     tx={tx}
-                                    isSelected={isTxSelected && !store.selectedItemPath.includes('/')}
+                                    isSelected={isTxSelected && !history_selectedItemPath.includes('/')}
                                     isExpanded={isTxExpanded}
                                     isSelectedForAction={isSelectedForAction}
                                 />
@@ -161,8 +166,8 @@ const TransactionHistoryScreen = () => {
                             {isTxExpanded && tx.files?.map((file: FileItem) => {
                                 if (!pathsInViewSet.has(`${tx.id}/${file.id}`)) return null;
                                 const filePath = `${tx.id}/${file.id}`;
-                                const isFileSelected = store.selectedItemPath === filePath;
-                                const isFileExpanded = store.expandedIds.has(filePath);
+                                const isFileSelected = history_selectedItemPath === filePath;
+                                const isFileExpanded = history_expandedIds.has(filePath);
                                 return (
                                     <FileRow
                                         key={file.id}
@@ -177,7 +182,7 @@ const TransactionHistoryScreen = () => {
                 })}
             </Box>
 
-            <Separator />
+            <Separator width={width} />
             {renderFooter()}
         </Box>
     );

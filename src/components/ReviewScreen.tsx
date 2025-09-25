@@ -3,6 +3,7 @@ import { Box, Text } from 'ink';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
+import { useStdoutDimensions } from '../utils';
 import type { ScriptResult, FileItem } from '../types/domain.types';
 import { useReviewScreen } from '../hooks/useReviewScreen';
 
@@ -102,12 +103,18 @@ const ReviewScreen = () => {
         files,
         scripts = [],
         patchStatus,
-        selectedItemIndex, bodyView, isDiffExpanded, reasoningScrollIndex, scriptErrorIndex,
+        review_selectedItemIndex: selectedItemIndex,
+        review_bodyView: bodyView,
+        review_isDiffExpanded: isDiffExpanded,
+        review_reasoningScrollIndex: reasoningScrollIndex,
+        review_scriptErrorIndex: scriptErrorIndex,
         numFiles,
         approvedFilesCount,
         approvedLinesAdded,
         approvedLinesRemoved,
     } = useReviewScreen();
+
+    const [width] = useStdoutDimensions();
 
     if (!transaction) {
         return <Text>Loading review...</Text>;
@@ -163,7 +170,7 @@ const ReviewScreen = () => {
                 <Box flexDirection="column">
                     <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
                     <Box marginTop={1} flexDirection="column">
-                        {outputLines.map((line, index) => {
+                        {outputLines.map((line: string, index: number) => {
                             const isError = line.includes('Error');
                             const isWarning = line.includes('Warning');
                             const isHighlighted = errorLines[scriptErrorIndex] === line;
@@ -309,7 +316,7 @@ const ReviewScreen = () => {
         <Box flexDirection="column">
             {/* Header */}
             <Text color="cyan">▲ relaycode review</Text>
-            <Separator />
+            <Separator width={width} />
             
             {/* Navigator Section */}
             <Box flexDirection="column" marginY={1}>
@@ -333,7 +340,7 @@ const ReviewScreen = () => {
                 </Box>
             </Box>
 
-            <Separator/>
+            <Separator width={width}/>
 
             {/* Script Results (if any) */}
             {scripts.length > 0 && (
@@ -348,7 +355,7 @@ const ReviewScreen = () => {
                             />
                         ))}
                     </Box>
-                    <Separator/>
+                    <Separator width={width}/>
                 </>
             )}
 
@@ -364,7 +371,7 @@ const ReviewScreen = () => {
                 ))}
             </Box>
             
-            <Separator/>
+            <Separator width={width}/>
             
             {/* Body Viewport */}
             {bodyView !== 'none' && (
@@ -372,7 +379,7 @@ const ReviewScreen = () => {
                     <Box marginY={1}>
                         {renderBody()}
                     </Box>
-                    <Separator />
+                    <Separator width={width} />
                 </>
             )}
 

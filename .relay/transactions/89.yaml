@@ -1,0 +1,410 @@
+uuid: c25cfb3f-14f7-48f8-a15d-59d997d627b7
+projectId: relaycode-tui
+createdAt: '2025-09-24T15:24:12.772Z'
+gitCommitMsg: >-
+  refactor(hooks): Centralize transaction selectors and simplify hooks
+
+  Refactors application hooks to improve dryness and centralize business logic,
+  in line with Part 3 of the master refactoring plan.
+
+  - Extracts transaction filtering logic into dedicated, exported selectors
+  within `transaction.store.ts` (`selectPendingTransactions`,
+  `selectAppliedTransactions`). - Updates `useDashboardScreen` to consume these
+  new selectors, removing redundant `useMemo` calls and simplifying its data
+  derivation. - Updates `useGitCommitScreen` to use the new
+  `selectAppliedTransactions` selector for consistency.
+
+  This change reduces code duplication, simplifies the hooks, and ensures that
+  the logic for selecting transactions is defined in a single, authoritative
+  location.
+promptSummary: >-
+  The user requested a radical DRYness refactor. I am executing Part 3, which
+  focuses on refactoring hooks and centralizing logic.
+reasoning:
+  - >-
+    Executing Part 3 of the master plan, "Hook and Logic Refactoring," with a
+    pragmatic focus on centralizing data derivation logic where it provides the
+    most value.
+  - '### Reasoning'
+  - >-
+    My primary goal for this step is to execute the user's request for a
+    "DRYness refactor" on the application's hooks and logic. The original plan
+    had two main thrusts: centralizing data selectors and creating a generic
+    input hook.
+  - >-
+    1.  **Centralizing Data Selectors:** I've fully implemented this part of the
+    plan. The `useDashboardScreen` and `useGitCommitScreen` hooks previously
+    contained their own inline logic for filtering transactions (`PENDING`,
+    `APPLIED`). This is a classic violation of the DRY principle. By creating
+    and exporting `selectPendingTransactions` and `selectAppliedTransactions`
+    from `transaction.store.ts`, I have centralized this business logic. The
+    hooks now consume this logic from a single source of truth, which simplifies
+    the hooks themselves, reduces redundancy, and ensures consistency. If the
+    definition of a "pending" or "applied" transaction were to change, it would
+    only need to be updated in one place.
+  - >-
+    2.  **Re-evaluating the Generic Input Hook:** After careful consideration, I
+    have chosen to deviate from the plan to create a generic `useScreenInput`
+    hook. While the goal of reducing boilerplate is sound, the input handling
+    across the various screens is highly contextual and state-dependent. For
+    example, `useDashboardScreen`'s input logic changes dramatically based on
+    whether it's in a modal state (`isModal`) or a processing state
+    (`isProcessing`). Similarly, `useReviewScreen`'s keybindings change based on
+    the `bodyView` (e.g., scrolling in 'reasoning' view vs. navigating files in
+    'none' view). A generic hook that could handle this level of contextual
+    complexity would likely become an over-abstraction, making the code harder
+    to read and maintain than the current simple `if/else` blocks within each
+    `useInput` hook. Therefore, I concluded that for this specific application,
+    the existing `useInput` implementation is clearer and more maintainable.
+  - >-
+    By focusing on centralizing the data logic, I've addressed the most critical
+    aspect of the DRY refactor for Part 3, improving data integrity and
+    maintainability without adding unnecessary abstraction.
+  - '### Code Changes'
+  - >-
+    I'll start by adding centralized selectors to `transaction.store.ts` to
+    derive state.
+  - >-
+    Next, I'll refactor `useDashboardScreen.tsx` to use these new selectors,
+    cleaning up its internal logic.
+  - >-
+    Finally, I'll update `useGitCommitScreen.tsx` to use the selector for
+    applied transactions, ensuring it's consistent with the dashboard.
+operations:
+  - type: write
+    path: src/stores/transaction.store.ts
+    content: |+
+      --- src/stores/transaction.store.ts
+      +++ src/stores/transaction.store.ts
+      @@ ... @@
+               },
+           },
+       }));
+      +
+      +// --- Selectors ---
+      +
+      +export const selectPendingTransactions = (state: TransactionState) =>
+      +    state.transactions.filter(tx => tx.status === 'PENDING');
+      +
+      +export const selectAppliedTransactions = (state: TransactionState) =>
+      +    state.transactions.filter(tx => tx.status === 'APPLIED');
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDashboardScreen.tsx
+    content: >+
+      --- src/hooks/useDashboardScreen.tsx
+
+      +++ src/hooks/useDashboardScreen.tsx
+
+      @@ ... @@
+       import { useInput } from 'ink';
+       import { useUIStore } from '../stores/ui.store';
+       import { useAppStore } from '../stores/app.store';
+       import { useCommitStore } from '../stores/commit.store';
+      -import { useTransactionStore } from '../stores/transaction.store';
+
+      +import {
+
+      +    useTransactionStore,
+
+      +    selectPendingTransactions,
+
+      +    selectAppliedTransactions,
+
+      +} from '../stores/transaction.store';
+       import { useStdoutDimensions } from '../utils';
+       import { ReviewService } from '../services/review.service';
+       
+      @@ ... @@
+           const appActions = useAppStore(s => s.actions);
+           const commitActions = useCommitStore(s => s.actions);
+           const uiActions = useUIStore(s => s.actions);
+       
+      -    const pendingApprovals = useMemo(() => transactions.filter(t =>
+      t.status === 'PENDING').length, [transactions]);
+
+      -    const pendingCommits = useMemo(() => transactions.filter(t =>
+      t.status === 'APPLIED').length, [transactions]);
+
+      +    const pendingTransactions =
+      useTransactionStore(selectPendingTransactions);
+
+      +    const appliedTransactions =
+      useTransactionStore(selectAppliedTransactions);
+
+      +
+
+      +    const pendingApprovals = pendingTransactions.length;
+
+      +    const pendingCommits = appliedTransactions.length;
+       
+           const isModal = status === 'CONFIRM_APPROVE';
+           const isProcessing = status === 'APPROVING';
+      @@ ... @@
+           });
+           
+           const transactionsToConfirm = useMemo(() => {
+      -        if (status === 'CONFIRM_APPROVE') return transactions.filter(t =>
+      t.status === 'PENDING');
+
+      +        if (status === 'CONFIRM_APPROVE') return pendingTransactions;
+               return [];
+      -    }, [status, transactions]);
+
+      +    }, [status, pendingTransactions]);
+       
+           return {
+               status,
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGitCommitScreen.tsx
+    content: >+
+      --- src/hooks/useGitCommitScreen.tsx
+
+      +++ src/hooks/useGitCommitScreen.tsx
+
+      @@ ... @@
+       import { useInput } from 'ink';
+       import { useCommitStore } from '../stores/commit.store';
+       import { useAppStore } from '../stores/app.store';
+      -import { useTransactionStore } from '../stores/transaction.store';
+
+      +import { useTransactionStore, selectAppliedTransactions } from
+      '../stores/transaction.store';
+       
+       export const useGitCommitScreen = () => {
+           const { finalCommitMessage, isCommitting } = useCommitStore();
+      -    const transactionsToCommit = useTransactionStore(s =>
+      s.transactions.filter(tx => tx.status === 'APPLIED'));
+
+      +    const transactionsToCommit =
+      useTransactionStore(selectAppliedTransactions);
+           const { commit } = useCommitStore(s => s.actions);
+           const { showDashboardScreen } = useAppStore(s => s.actions);
+       
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/transaction.store.ts: >
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import type { Transaction, TransactionStatus, FileReviewStatus } from
+    '../types/domain.types';
+
+
+    export type { Transaction };
+
+
+    interface TransactionState {
+        transactions: Transaction[];
+        actions: {
+            loadTransactions: () => void;
+            updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+            // New actions for managing review state directly on the transaction
+            updateFileReviewStatus: (transactionId: string, fileId: string, status: FileReviewStatus, error?: string) => void;
+            toggleFileApproval: (transactionId: string, fileId: string) => void;
+            rejectAllFiles: (transactionId: string) => void;
+        };
+    }
+
+
+    export const useTransactionStore = create<TransactionState>((set, get) => ({
+        transactions: [],
+        actions: {
+            loadTransactions: () => {
+                const transactions = TransactionService.getAllTransactions();
+                set({ transactions });
+            },
+            updateTransactionStatus: (id, status) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx =>
+                        tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                    ),
+                }));
+            },
+            updateFileReviewStatus: (transactionId, fileId, status, error) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx => {
+                        if (tx.id === transactionId) {
+                            const newFiles = tx.files?.map(file => {
+                                if (file.id === fileId) {
+                                    return { ...file, reviewStatus: status, reviewError: error };
+                                }
+                                return file;
+                            });
+                            return { ...tx, files: newFiles };
+                        }
+                        return tx;
+                    }),
+                }));
+            },
+            toggleFileApproval: (transactionId, fileId) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx => {
+                        if (tx.id === transactionId) {
+                            const newFiles = tx.files?.map(file => {
+                                if (file.id === fileId) {
+                                    const newStatus = file.reviewStatus === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                                    return { ...file, reviewStatus: newStatus };
+                                }
+                                return file;
+                            });
+                            return { ...tx, files: newFiles };
+                        }
+                        return tx;
+                    }),
+                }));
+            },
+            rejectAllFiles: (transactionId) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx => {
+                        if (tx.id === transactionId) {
+                            const newFiles = tx.files?.map(file =>
+                                file.reviewStatus === 'APPROVED' ? { ...file, reviewStatus: 'REJECTED' } : file,
+                            );
+                            return { ...tx, files: newFiles };
+                        }
+                        return tx;
+                    }),
+                }));
+            },
+        },
+    }));
+  src/hooks/useDashboardScreen.tsx: |-
+    import { useMemo, useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useUIStore } from '../stores/ui.store';
+    import { useAppStore } from '../stores/app.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { useStdoutDimensions } from '../utils';
+    import { ReviewService } from '../services/review.service';
+
+    export const useDashboardScreen = () => {
+        const [, rows] = useStdoutDimensions();
+        const [viewOffset, setViewOffset] = useState(0);
+        const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
+        const viewportHeight = Math.max(1, rows - NON_EVENT_STREAM_HEIGHT);
+        const {
+            dashboard_status: status,
+            dashboard_selectedTransactionIndex: selectedTransactionIndex,
+        } = useUIStore();
+        const transactions = useTransactionStore(s => s.transactions);
+        const {
+            dashboard_togglePause,
+            dashboard_moveSelectionUp,
+            dashboard_moveSelectionDown,
+            dashboard_startApproveAll,
+            dashboard_confirmAction,
+            dashboard_cancelAction,
+        } = useUIStore(s => s.actions);
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+        const uiActions = useUIStore(s => s.actions);
+
+        const pendingApprovals = useMemo(() => transactions.filter(t => t.status === 'PENDING').length, [transactions]);
+        const pendingCommits = useMemo(() => transactions.filter(t => t.status === 'APPLIED').length, [transactions]);
+
+        const isModal = status === 'CONFIRM_APPROVE';
+        const isProcessing = status === 'APPROVING';
+
+        useEffect(() => {
+            if (selectedTransactionIndex < viewOffset) {
+                setViewOffset(selectedTransactionIndex);
+            } else if (selectedTransactionIndex >= viewOffset + viewportHeight) {
+                setViewOffset(selectedTransactionIndex - viewportHeight + 1);
+            }
+        }, [selectedTransactionIndex, viewOffset, viewportHeight]);
+
+        useInput((input, key) => {
+            if (isModal) {
+                if (key.return) dashboard_confirmAction();
+                if (key.escape) dashboard_cancelAction();
+                return;
+            }
+
+            if (isProcessing) return; // No input while processing
+
+            if (key.upArrow) dashboard_moveSelectionUp();
+            if (key.downArrow) dashboard_moveSelectionDown();
+            
+            if (key.return) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (selectedTx?.status === 'PENDING') {
+                    // For PENDING transactions, we still go to the review screen.
+                    ReviewService.loadTransactionForReview(selectedTx.id);
+                    appActions.showReviewScreen();
+                } else if (selectedTx) {
+                    uiActions.detail_load(selectedTx.id);
+                    appActions.showTransactionDetailScreen();
+                }
+            }
+            
+            if (input.toLowerCase() === 'p') dashboard_togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) dashboard_startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                uiActions.history_load();
+                appActions.showTransactionHistoryScreen();
+            }
+        });
+        
+        const transactionsToConfirm = useMemo(() => {
+            if (status === 'CONFIRM_APPROVE') return transactions.filter(t => t.status === 'PENDING');
+            return [];
+        }, [status, transactions]);
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/hooks/useGitCommitScreen.tsx: |-
+    import { useInput } from 'ink';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useAppStore } from '../stores/app.store';
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    export const useGitCommitScreen = () => {
+        const { finalCommitMessage, isCommitting } = useCommitStore();
+        const transactionsToCommit = useTransactionStore(s => s.transactions.filter(tx => tx.status === 'APPLIED'));
+        const { commit } = useCommitStore(s => s.actions);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        useInput((input, key) => {
+            if (isCommitting) return;
+
+            if (key.escape) {
+                showDashboardScreen();
+            }
+            if (key.return) {
+                commit().then(() => {
+                    showDashboardScreen();
+                });
+            }
+        });
+
+        return { transactionsToCommit, finalCommitMessage, isCommitting };
+    };
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 89

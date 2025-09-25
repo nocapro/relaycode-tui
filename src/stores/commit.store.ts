@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Transaction } from '../types/domain.types';
 import { CommitService } from '../services/commit.service';
-import { useTransactionStore } from './transaction.store';
+import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
 
 interface CommitState {
     finalCommitMessage: string;
@@ -17,15 +17,13 @@ export const useCommitStore = create<CommitState>((set, get) => ({
     isCommitting: false,
     actions: {
         prepareCommitScreen: () => {
-            const { transactions } = useTransactionStore.getState();
-            const appliedTransactions = transactions.filter(tx => tx.status === 'APPLIED');
+            const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
             const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
             set({ finalCommitMessage });
         },
         commit: async () => {
             set({ isCommitting: true });
-            const { transactions } = useTransactionStore.getState();
-            const appliedTransactions = transactions.filter(tx => tx.status === 'APPLIED');
+            const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
             await CommitService.commit(appliedTransactions);
             set({ isCommitting: false });
         },

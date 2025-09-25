@@ -1,0 +1,140 @@
+uuid: c25ca6ba-0d50-48a6-ab6c-389f25bb1822
+projectId: relaycode-tui
+createdAt: '2025-09-25T00:39:00.559Z'
+gitCommitMsg: >-
+  fix(ui): Correct debug menu rendering logic
+
+  The debug menu was not appearing because it was being rendered inside the main
+  screen container, which is hidden when any overlay is active.
+
+  This commit moves the debug menu rendering to the top level of the App
+  component, parallel to other overlays like the help and copy screens. This
+  ensures it is rendered correctly when activated via Ctrl+B.
+promptSummary: >-
+  The user reported that the debug menu is not displaying when triggered. I am
+  fixing the rendering logic.
+reasoning:
+  - >-
+    I've identified the rendering logic error that's preventing the Debug Menu
+    from appearing. The menu was being rendered inside a container that was
+    simultaneously being hidden when any overlay was activated.
+  - >-
+    The fix is to treat the Debug Menu like other overlays (`Help`, `Copy`) and
+    render it at the top level of the `App` component, outside of the main
+    screen container. This ensures it's rendered independently and becomes
+    visible when its corresponding state is active.
+  - 'Here is the patch for `src/App.tsx`:'
+operations:
+  - type: write
+    path: src/App.tsx
+    content: |+
+      --- src/App.tsx
+      +++ src/App.tsx
+      @@ -32,7 +32,6 @@
+           }, [currentScreen, activeOverlay]);
+       
+           const renderMainScreen = () => {
+      -        if (activeOverlay === 'debug') return <DebugMenu />;
+               if (currentScreen === 'splash') return <SplashScreen />;
+               if (currentScreen === 'init') return <InitializationScreen />;
+               if (currentScreen === 'dashboard') return <DashboardScreen />;
+      @@ -55,6 +54,7 @@
+                   </Box>
+                   {activeOverlay === 'help' && <GlobalHelpScreen />}
+                   {activeOverlay === 'copy' && <CopyScreen />}
+      +            {activeOverlay === 'debug' && <DebugMenu />}
+               </>
+           );
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/App.tsx: >-
+    import React, { useEffect } from 'react';
+
+    import { Box, useInput } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import GlobalHelpScreen from './components/GlobalHelpScreen';
+
+    import CopyScreen from './components/CopyScreen';
+
+    import { useUIStore } from './stores/ui.store';
+
+    import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+        const activeOverlay = useUIStore(s => s.activeOverlay);
+        const isOverlayOpen = activeOverlay !== 'none';
+
+        // Global hotkeys are active if no modal-like component is open
+        const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
+        useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+        useEffect(() => {
+            // Clear the terminal when the screen changes to ensure a clean view.
+            // This is especially important when transitioning from the splash screen.
+            // eslint-disable-next-line no-console
+            console.clear();
+        }, [currentScreen, activeOverlay]);
+
+        const renderMainScreen = () => {
+            if (activeOverlay === 'debug') return <DebugMenu />;
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isOverlayOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                {activeOverlay === 'help' && <GlobalHelpScreen />}
+                {activeOverlay === 'copy' && <CopyScreen />}
+            </>
+        );
+    };
+
+
+    export default App;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 95

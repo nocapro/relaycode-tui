@@ -1,0 +1,143 @@
+uuid: c257004f-723c-473d-9d47-6804a621434f
+projectId: relaycode-tui
+createdAt: '2025-09-25T00:34:02.513Z'
+gitCommitMsg: >-
+  fix(ts): Add explicit type annotation to fix type inference error
+
+  The TypeScript compiler was widening the type of `newStatus` in the
+  `toggleFileApproval` action to `string`, causing a type mismatch with the
+  expected `FileReviewStatus`.
+
+  This commit adds an explicit type annotation (`: FileReviewStatus`) to the
+  `newStatus` variable, ensuring its type is correctly inferred and resolving
+  the compilation error.
+promptSummary: >-
+  Fix a TypeScript error in `transaction.store.ts` related to incorrect type
+  inference for `FileReviewStatus`.
+reasoning:
+  - >-
+    I've identified the source of the TypeScript error. The compiler was
+    incorrectly widening the type of the `newStatus` variable within the
+    `toggleFileApproval` action to a generic `string`, which is not assignable
+    to the more specific `FileReviewStatus` type.
+  - >-
+    To resolve this, I will add an explicit type annotation to the `newStatus`
+    variable, ensuring TypeScript correctly understands its type and resolving
+    the compilation error.
+operations:
+  - type: write
+    path: src/stores/transaction.store.ts
+    content: >+
+      --- src/stores/transaction.store.ts
+
+      +++ src/stores/transaction.store.ts
+
+      @@ -53,7 +53,7 @@
+                           if (tx.id === transactionId) {
+                               const newFiles = tx.files?.map(file => {
+                                   if (file.id === fileId) {
+      -                                const newStatus = file.reviewStatus ===
+      'APPROVED' ? 'REJECTED' : 'APPROVED';
+
+      +                                const newStatus: FileReviewStatus =
+      file.reviewStatus === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                                       return { ...file, reviewStatus: newStatus };
+                                   }
+                                   return file;
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/transaction.store.ts: >
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import type { Transaction, TransactionStatus, FileReviewStatus } from
+    '../types/domain.types';
+
+
+    export type { Transaction };
+
+
+    interface TransactionState {
+        transactions: Transaction[];
+        actions: {
+            loadTransactions: () => void;
+            updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+            // New actions for managing review state directly on the transaction
+            updateFileReviewStatus: (transactionId: string, fileId: string, status: FileReviewStatus, error?: string) => void;
+            toggleFileApproval: (transactionId: string, fileId: string) => void;
+            rejectAllFiles: (transactionId: string) => void;
+        };
+    }
+
+
+    export const useTransactionStore = create<TransactionState>((set, get) => ({
+        transactions: [],
+        actions: {
+            loadTransactions: () => {
+                const transactions = TransactionService.getAllTransactions();
+                set({ transactions });
+            },
+            updateTransactionStatus: (id, status) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx =>
+                        tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                    ),
+                }));
+            },
+            updateFileReviewStatus: (transactionId, fileId, status, error) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx => {
+                        if (tx.id === transactionId) {
+                            const newFiles = tx.files?.map(file => {
+                                if (file.id === fileId) {
+                                    return { ...file, reviewStatus: status, reviewError: error };
+                                }
+                                return file;
+                            });
+                            return { ...tx, files: newFiles };
+                        }
+                        return tx;
+                    }),
+                }));
+            },
+            toggleFileApproval: (transactionId, fileId) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx => {
+                        if (tx.id === transactionId) {
+                            const newFiles = tx.files?.map(file => {
+                                if (file.id === fileId) {
+                                    const newStatus = file.reviewStatus === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                                    return { ...file, reviewStatus: newStatus };
+                                }
+                                return file;
+                            });
+                            return { ...tx, files: newFiles };
+                        }
+                        return tx;
+                    }),
+                }));
+            },
+            rejectAllFiles: (transactionId) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx => {
+                        if (tx.id === transactionId) {
+                            const newFiles = tx.files?.map(file =>
+                                file.reviewStatus === 'APPROVED' ? { ...file, reviewStatus: 'REJECTED' as const } : file,
+                            );
+                            return { ...tx, files: newFiles };
+                        }
+                        return tx;
+                    }),
+                }));
+            },
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 93

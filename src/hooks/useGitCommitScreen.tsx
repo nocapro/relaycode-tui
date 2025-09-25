@@ -1,11 +1,11 @@
 import { useInput } from 'ink';
 import { useCommitStore } from '../stores/commit.store';
 import { useAppStore } from '../stores/app.store';
-import { useTransactionStore } from '../stores/transaction.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
 
 export const useGitCommitScreen = () => {
     const { finalCommitMessage, isCommitting } = useCommitStore();
-    const transactionsToCommit = useTransactionStore(s => s.transactions.filter(tx => tx.status === 'APPLIED'));
+    const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
     const { commit } = useCommitStore(s => s.actions);
     const { showDashboardScreen } = useAppStore(s => s.actions);
 

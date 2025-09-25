@@ -1,17 +1,11 @@
-import { useDashboardStore } from '../stores/dashboard.store';
 import { sleep } from '../utils';
-import { useTransactionStore } from '../stores/transaction.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
 
 const approveAll = async () => {
-    // Find pending transactions and mark them as in-progress
-    const pendingTxIds: string[] = [];
+    const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
+    const pendingTxIds = pendingTransactions.map(tx => tx.id);
     const { updateTransactionStatus } = useTransactionStore.getState().actions;
-    useTransactionStore.getState().transactions.forEach(tx => {
-        if (tx.status === 'PENDING') {
-            pendingTxIds.push(tx.id);
-            updateTransactionStatus(tx.id, 'IN-PROGRESS');
-        }
-    });
+    pendingTxIds.forEach(id => updateTransactionStatus(id, 'IN-PROGRESS'));
 
     await sleep(2000); // Simulate approval process
 

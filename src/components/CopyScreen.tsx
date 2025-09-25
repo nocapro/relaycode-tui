@@ -2,10 +2,13 @@ import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useCopyStore } from '../stores/copy.store';
 import Separator from './Separator';
+import { useUIStore } from '../stores/ui.store';
+import { useStdoutDimensions } from '../utils';
 
 const CopyScreen = () => {
+    const activeOverlay = useUIStore(s => s.activeOverlay);
     const {
-        isOpen, title, items, selectedIndex, selectedIds, lastCopiedMessage,
+        title, items, selectedIndex, selectedIds, lastCopiedMessage,
         actions,
     } = useCopyStore(state => ({ ...state, actions: state.actions }));
 
@@ -35,12 +38,8 @@ const CopyScreen = () => {
         if(item) {
             actions.toggleSelectionById(item.id);
         }
-    }, { isActive: isOpen });
-
-    // The component is always rendered by App, but we control visibility via isOpen
-    if (!isOpen) {
-        return null;
-    }
+    }, { isActive: activeOverlay === 'copy' });
+    const [width] = useStdoutDimensions();
 
     return (
         <Box 
@@ -58,7 +57,7 @@ const CopyScreen = () => {
                 width="80%"
             >
                 <Text bold color="yellow">▲ relaycode · copy mode</Text>
-                <Separator />
+                <Separator width={Math.floor(width * 0.8) - 4} />
                 <Box flexDirection="column" marginY={1}>
                     <Text>{title}</Text>
                     <Box flexDirection="column" marginTop={1}>
@@ -74,7 +73,7 @@ const CopyScreen = () => {
                         })}
                     </Box>
                 </Box>
-                <Separator />
+                <Separator width={Math.floor(width * 0.8) - 4} />
                 {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
                 <Text>(↑↓) Nav · (Spc/Hotkey) Toggle · (Enter) Copy · (Esc) Close</Text>
             </Box>
