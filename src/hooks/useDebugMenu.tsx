@@ -25,6 +25,10 @@ const useDebugMenuActions = () => {
 
     const menuItems: MenuItem[] = [
         {
+            title: 'View Debug Log',
+            action: () => useViewStore.getState().actions.setActiveOverlay('log'),
+        },
+        {
             title: 'Splash Screen',
             action: () => appActions.showSplashScreen(),
         },

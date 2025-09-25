@@ -51,6 +51,10 @@ const main = () => {
                 appActions.showDashboardScreen();
                 useViewStore.getState().actions.setActiveOverlay('debug');
                 break;
+            case 'DebugLogScreen':
+                appActions.showDashboardScreen();
+                useViewStore.getState().actions.setActiveOverlay('log');
+                break;
             default:
                 process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
                 process.exit(1);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { moveIndex } from './navigation.utils';
 import { useViewStore } from './view.store';
+import { LoggerService } from '../services/logger.service';
 import { CopyService } from '../services/copy.service';
 import type { CopyItem } from '../types/copy.types';
 import type { Transaction, FileItem } from '../types/domain.types';
@@ -104,6 +105,7 @@ export const useCopyStore = create<CopyState>((set, get) => ({
             const itemsToCopy = items.filter(i => selectedIds.has(i.id));
             if (itemsToCopy.length === 0) return;
 
+            LoggerService.info(`Copying ${itemsToCopy.length} item(s) to clipboard.`);
             const dataPromises = itemsToCopy.map(item => item.getData());
             const resolvedData = await Promise.all(dataPromises);
 
@@ -111,8 +113,7 @@ export const useCopyStore = create<CopyState>((set, get) => ({
                 .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
                 .join('\n\n');
             const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
             set({ lastCopiedMessage: message });
         },
     },

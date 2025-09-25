@@ -23,9 +23,13 @@ the reasoning view should one column, so vertically spread text with scrollable 
 
   file-editor-screen
 
-===
+=== DONE
 
-we already have debug menu of ctrl+b, now we want more screen named debug log so user can know the system debug log of what system activities behind is happening, so user has knowledge like why certain clipboard not detected etc
+we already have debug menu of ctrl+b, now we want more screen named debug log (ctrl+l) so user can know the system debug log of what system activities behind is happening, so user has knowledge like why certain clipboard not detected etc
+
+so I also think we need multi level logger utils and implement to necessary areas
+
+dont forget to add screen to debug menu to let user go to log debug screen and see simulated activities being happening there
 
 ===
 

@@ -9,6 +9,7 @@ import GitCommitScreen from './components/GitCommitScreen';
 import TransactionDetailScreen from './components/TransactionDetailScreen';
 import TransactionHistoryScreen from './components/TransactionHistoryScreen';
 import DebugMenu from './components/DebugMenu'; 
+import DebugLogScreen from './components/DebugLogScreen';
 import GlobalHelpScreen from './components/GlobalHelpScreen';
 import CopyScreen from './components/CopyScreen';
 import { useViewStore } from './stores/view.store';
@@ -20,7 +21,7 @@ const App = () => {
     const isOverlayOpen = activeOverlay !== 'none';
 
     // Global hotkeys are active if no modal-like component is open
-    const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
+    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log'; // These overlays have their own input handlers
     useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
 
     const renderMainScreen = () => {
@@ -47,6 +48,7 @@ const App = () => {
             </Box>
             {activeOverlay === 'help' && <GlobalHelpScreen />}
             {activeOverlay === 'copy' && <CopyScreen />}
+            {activeOverlay === 'log' && <DebugLogScreen />}
             {activeOverlay === 'debug' && <DebugMenu />}
         </>
     );

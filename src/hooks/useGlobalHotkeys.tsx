@@ -20,9 +20,13 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
             setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
             return;
         }
+        if (key.ctrl && input === 'l') {
+            setActiveOverlay(activeOverlay === 'log' ? 'none' : 'log');
+            return;
+        }
 
-        // If debug menu is open, it has its own input handler, so we stop here.
-        if (activeOverlay === 'debug') {
+        // If an overlay with its own input is open, stop here.
+        if (activeOverlay === 'debug' || activeOverlay === 'log') {
             return;
         }
 

@@ -1,0 +1,316 @@
+uuid: c2570087-449e-419b-b0b8-c34057e9373e
+projectId: relaycode-tui
+createdAt: '2025-09-25T13:56:53.169Z'
+gitCommitMsg: >-
+  feat: add debug log screen and logging service
+
+  Introduces a new debug logging system to provide users with insight into
+  background system activities. This lays the foundation for better
+  troubleshooting and application transparency.
+
+  - Creates `LogEntry` and `LogLevel` types. - Implements `useLogStore`
+  (Zustand) for centralized log state management. - Implements `LoggerService`
+  with a simple API (`.info`, `.debug`) and
+    a simulator to generate live log data.
+  - Adds a new `DebugLogScreen` component to display logs. - Adds
+  `useDebugLogScreen` hook to manage the screen's state, input,
+    and viewport scrolling.
+promptSummary: >-
+  Create the foundation for a debug log system, including a new debug log
+  screen, a Zustand store for logs, a logger service, and the associated UI
+  hook. This corresponds to Part 1 and 2 of the multi-part plan.
+reasoning:
+  - Executing Part 1 and 2 of the plan.
+  - '### **Part 1: Logging System Foundation**'
+  - >-
+    First, I will create the foundational pieces for the logging system: the
+    data types, the Zustand store to manage state, and a service to provide a
+    simple, global API for logging.
+  - >-
+    I'll start by creating a new file to define the types for our logging
+    system.
+  - >-
+    Next, I'll create the Zustand store that will hold and manage the log
+    entries. This store will ensure that new logs are added efficiently and that
+    the total number of logs is capped to prevent memory issues.
+  - >-
+    To complete the foundation, I'll create the `LoggerService`. This service
+    provides a simple API (`.info()`, `.debug()`, etc.) that other parts of the
+    application can use without needing to interact directly with the Zustand
+    store. It also contains a simulator to generate logs, making the debug
+    screen feel alive even without full application instrumentation.
+  - '### **Part 2: Debug Log Screen UI and Logic**'
+  - >-
+    Now I will build the user-facing parts of the feature. This includes a
+    custom hook to manage the screen's state and a component to render the UI.
+  - >-
+    First, the `useDebugLogScreen` hook will encapsulate all the logic for the
+    screen, including state subscriptions, input handling, and lifecycle effects
+    for the log simulator.
+  - >-
+    Finally, I'll create the `DebugLogScreen` component. This component will use
+    the hook to get its data and will be responsible for rendering the log
+    entries with appropriate styling and the action footer.
+operations:
+  - type: write
+    path: src/types/log.types.ts
+    content: |-
+      /**
+       * Log level for a log entry.
+       */
+      export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+      /**
+       * Represents a single log entry in the system.
+       */
+      export interface LogEntry {
+          timestamp: number;
+          level: LogLevel;
+          message: string;
+      }
+    patchStrategy: replace
+  - type: write
+    path: src/stores/log.store.ts
+    content: |-
+      import { create } from 'zustand';
+      import type { LogEntry, LogLevel } from '../types/log.types';
+
+      const MAX_LOGS = 200;
+
+      interface LogState {
+          logs: LogEntry[];
+          actions: {
+              addLog: (level: LogLevel, message: string) => void;
+              clearLogs: () => void;
+          };
+      }
+
+      export const useLogStore = create<LogState>((set) => ({
+          logs: [],
+          actions: {
+              addLog: (level, message) => {
+                  set(state => {
+                      const newLog: LogEntry = {
+                          level,
+                          message,
+                          timestamp: Date.now(),
+                      };
+                      // Prepend new log and trim the array to max size
+                      const updatedLogs = [newLog, ...state.logs].slice(0, MAX_LOGS);
+                      return { logs: updatedLogs };
+                  });
+              },
+              clearLogs: () => set({ logs: [] }),
+          },
+      }));
+    patchStrategy: replace
+  - type: write
+    path: src/services/logger.service.ts
+    content: >-
+      import { useLogStore } from '../stores/log.store';
+
+
+      let simulatorInterval: NodeJS.Timeout | null = null;
+
+
+      const startSimulator = () => {
+          if (simulatorInterval) return;
+
+          // Initial burst of logs to populate the view
+          LoggerService.info('Log simulator started.');
+          LoggerService.debug('Initializing clipboard watcher...');
+          setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
+
+          simulatorInterval = setInterval(() => {
+              const random = Math.random();
+              if (random < 0.6) {
+                  LoggerService.debug('Clipboard watcher polling...');
+              } else if (random < 0.8) {
+                  LoggerService.debug('No clipboard change detected.');
+              } else {
+                  LoggerService.info('Clipboard content changed.');
+              }
+          }, 2000);
+      };
+
+
+      const stopSimulator = () => {
+          if (simulatorInterval) {
+              clearInterval(simulatorInterval);
+              simulatorInterval = null;
+              LoggerService.info('Log simulator stopped.');
+          }
+      };
+
+
+      const debug = (message: string) =>
+      useLogStore.getState().actions.addLog('DEBUG', message);
+
+      const info = (message: string) =>
+      useLogStore.getState().actions.addLog('INFO', message);
+
+      const warn = (message: string) =>
+      useLogStore.getState().actions.addLog('WARN', message);
+
+      const error = (message: string) =>
+      useLogStore.getState().actions.addLog('ERROR', message);
+
+
+
+      export const LoggerService = {
+          debug,
+          info,
+          warn,
+          error,
+          startSimulator,
+          stopSimulator,
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useDebugLogScreen.tsx
+    content: |-
+      import { useState, useEffect } from 'react';
+      import { useInput } from 'ink';
+      import { useLogStore } from '../stores/log.store';
+      import { useViewStore } from '../stores/view.store';
+      import { useViewport } from './useViewport';
+      import { LoggerService } from '../services/logger.service';
+      import { moveIndex } from '../stores/navigation.utils';
+
+      export const useDebugLogScreen = () => {
+          const logs = useLogStore(s => s.logs);
+          const clearLogs = useLogStore(s => s.actions.clearLogs);
+          const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
+
+          const [selectedIndex, setSelectedIndex] = useState(0);
+
+          const { viewOffset, viewportHeight } = useViewport({
+              selectedIndex,
+              reservedRows: 6, // Header, borders, footer
+          });
+
+          useInput((input, key) => {
+              if (key.escape) {
+                  setActiveOverlay('none');
+                  return;
+              }
+              if (key.upArrow) {
+                  setSelectedIndex(i => moveIndex(i, 'up', logs.length));
+                  return;
+              }
+              if (key.downArrow) {
+                  setSelectedIndex(i => moveIndex(i, 'down', logs.length));
+                  return;
+              }
+              if (input.toLowerCase() === 'c') {
+                  clearLogs();
+                  setSelectedIndex(0);
+              }
+          });
+
+          useEffect(() => {
+              LoggerService.startSimulator();
+              return () => {
+                  LoggerService.stopSimulator();
+              };
+          }, []);
+
+          const logsInView = logs.slice(viewOffset, viewOffset + viewportHeight);
+
+          return {
+              logsInView,
+              logCount: logs.length,
+              selectedIndex,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/DebugLogScreen.tsx
+    content: >-
+      import { Box, Text } from 'ink';
+
+      import Separator from './Separator';
+
+      import ActionFooter from './ActionFooter';
+
+      import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+
+      import type { LogEntry } from '../types/log.types';
+
+
+      const LogLevelColors = {
+          DEBUG: 'gray',
+          INFO: 'white',
+          WARN: 'yellow',
+          ERROR: 'red',
+      };
+
+
+      const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected:
+      boolean }) => {
+          const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+          const color = LogLevelColors[entry.level];
+
+          return (
+              <Text color={color}>
+                  {isSelected ? '> ' : '  '}
+                  <Text color="gray">{time}</Text>
+                  {' '}
+                  <Text bold color={color}>[{entry.level.padEnd(5, ' ')}]</Text>
+                  {' '}
+                  {entry.message}
+              </Text>
+          );
+      };
+
+
+      const DebugLogScreen = () => {
+          const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
+
+          return (
+              <Box
+                  flexDirection="column"
+                  borderStyle="round"
+                  borderColor="yellow"
+                  width="100%"
+                  height="100%"
+                  paddingX={2}
+              >
+                  <Text bold color="yellow">▲ relaycode · DEBUG LOG</Text>
+                  <Separator />
+                  <Box flexDirection="column" flexGrow={1} marginY={1}>
+                      {logsInView.map((entry, index) => (
+                          <LogEntryRow
+                              key={`${entry.timestamp}-${index}`}
+                              entry={entry}
+                              isSelected={selectedIndex === index}
+                          />
+                      ))}
+                      {logCount === 0 && <Text color="gray">No log entries yet. Waiting for system activity...</Text>}
+                  </Box>
+                  <Separator />
+                  <ActionFooter actions={[
+                      { key: '↑↓', label: 'Scroll' },
+                      { key: 'C', label: 'Clear' },
+                      { key: 'Esc/Ctrl+L', label: 'Close' },
+                  ]}/>
+              </Box>
+          );
+      };
+
+
+      export default DebugLogScreen;
+    patchStrategy: replace
+snapshot:
+  src/types/log.types.ts: null
+  src/stores/log.store.ts: null
+  src/services/logger.service.ts: null
+  src/hooks/useDebugLogScreen.tsx: null
+  src/components/DebugLogScreen.tsx: null
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 146

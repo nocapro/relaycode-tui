@@ -1,0 +1,1314 @@
+uuid: c6e268f7-d7de-497b-91de-830209c1694f
+projectId: relaycode-tui
+createdAt: '2025-09-25T14:02:35.196Z'
+gitCommitMsg: >-
+  feat(debug): implement debug log screen and service
+
+  Introduces a new debug log screen accessible via Ctrl+L and a centralized
+  LoggerService.
+
+  - Adds a `log` overlay state to the view store. - Implements a global hotkey
+  (Ctrl+L) to toggle the log screen. - Adds "View Debug Log" to the main debug
+  menu (Ctrl+B). - Instruments key services (init, dashboard, commit, editor)
+  and hooks
+    (splash, copy) with logging calls to provide visibility into system
+    activities.
+  - Replaces various `console.log` calls with the new LoggerService for
+    centralized output management.
+promptSummary: Implement a debug log screen and integrate logging throughout the application.
+reasoning:
+  - >-
+    Executing Parts 3 and 4 of the plan, I will now integrate the new debug log
+    screen into the application and instrument various services and hooks with
+    logging calls. This will make the debug log screen accessible and populate
+    it with meaningful data about system activities.
+  - '### Part 3: Application Integration and Accessibility'
+  - >-
+    First, I'll update the application's state management, global hotkeys, and
+    component rendering to recognize and display the new debug log screen.
+  - I am modifying `view.store.ts` to add `'log'` as a possible active overlay.
+  - >-
+    Next, I'll wire up the `Ctrl+L` global hotkey to toggle the debug log
+    screen.
+  - >-
+    Now, I'll update the main `App.tsx` component to render the `DebugLogScreen`
+    when its overlay is active.
+  - To make it accessible from the debug menu, I'll add a new menu item.
+  - >-
+    Finally, I'll add a command to the CLI runner to open the debug log screen
+    directly for development purposes.
+  - '### Part 4: Code Instrumentation and Log Generation'
+  - >-
+    With the screen integrated, I will now add logging calls throughout the
+    application to provide visibility into system activities.
+  - I'll start with the initialization service.
+  - Adding logs to the dashboard service for the approval process.
+  - Instrumenting the commit service.
+  - Replacing `console.log` in the editor service mock.
+  - Instrumenting the copy action in `copy.store.ts`.
+  - >-
+    Finally, updating the splash screen to use the new logger instead of
+    `console.log`.
+operations:
+  - type: write
+    path: src/stores/view.store.ts
+    content: |+
+      --- src/stores/view.store.ts
+      +++ src/stores/view.store.ts
+      @@ -2,7 +2,7 @@
+       
+       interface ViewState {
+           selectedTransactionId: string | null;
+      -    activeOverlay: 'none' | 'help' | 'copy' | 'debug';
+      +    activeOverlay: 'none' | 'help' | 'copy' | 'debug' | 'log';
+           actions: {
+               setSelectedTransactionId: (id: string | null) => void;
+               setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: >
+      --- src/hooks/useGlobalHotkeys.tsx
+
+      +++ src/hooks/useGlobalHotkeys.tsx
+
+      @@ -21,10 +21,15 @@
+                   setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+                   return;
+               }
+      +        if (key.ctrl && input === 'l') {
+
+      +            setActiveOverlay(activeOverlay === 'log' ? 'none' : 'log');
+
+      +            return;
+
+      +        }
+       
+      -        // If debug menu is open, it has its own input handler, so we
+      stop here.
+
+      -        if (activeOverlay === 'debug') {
+
+      +        // If an overlay with its own input is open, stop here.
+
+      +        if (activeOverlay === 'debug' || activeOverlay === 'log') {
+                   return;
+               }
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: src/App.tsx
+    content: >
+      --- src/App.tsx
+
+      +++ src/App.tsx
+
+      @@ -8,6 +8,7 @@
+       import TransactionDetailScreen from './components/TransactionDetailScreen';
+       import TransactionHistoryScreen from './components/TransactionHistoryScreen';
+       import DebugMenu from './components/DebugMenu'; 
+      +import DebugLogScreen from './components/DebugLogScreen';
+       import GlobalHelpScreen from './components/GlobalHelpScreen';
+       import CopyScreen from './components/CopyScreen';
+       import { useViewStore } from './stores/view.store';
+      @@ -19,7 +20,7 @@
+           const isOverlayOpen = activeOverlay !== 'none';
+       
+           // Global hotkeys are active if no modal-like component is open
+      -    const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode
+      has its own input handler
+
+      +    const areGlobalHotkeysActive = activeOverlay !== 'copy' &&
+      activeOverlay !== 'log'; // These overlays have their own input handlers
+           useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+       
+           const renderMainScreen = () => {
+      @@ -46,6 +47,7 @@
+                   </Box>
+                   {activeOverlay === 'help' && <GlobalHelpScreen />}
+                   {activeOverlay === 'copy' && <CopyScreen />}
+      +            {activeOverlay === 'log' && <DebugLogScreen />}
+                   {activeOverlay === 'debug' && <DebugMenu />}
+               </>
+           );
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -21,6 +21,10 @@
+           const { actions: historyActions } = useHistoryStore();
+       
+           const menuItems: MenuItem[] = [
+      +        {
+
+      +            title: 'View Debug Log',
+
+      +            action: () =>
+      useViewStore.getState().actions.setActiveOverlay('log'),
+
+      +        },
+               {
+                   title: 'Splash Screen',
+                   action: () => appActions.showSplashScreen(),
+    patchStrategy: standard-diff
+  - type: write
+    path: index.tsx
+    content: |
+      --- index.tsx
+      +++ index.tsx
+      @@ -38,6 +38,10 @@
+                       appActions.showDashboardScreen();
+                       useViewStore.getState().actions.setActiveOverlay('debug');
+                       break;
+      +            case 'DebugLogScreen':
+      +                appActions.showDashboardScreen();
+      +                useViewStore.getState().actions.setActiveOverlay('log');
+      +                break;
+                   default:
+                       process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                       process.exit(1);
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/init.service.ts
+    content: >
+      --- src/services/init.service.ts
+
+      +++ src/services/init.service.ts
+
+      @@ -1,33 +1,42 @@
+       import { useInitStore } from '../stores/init.store';
+       import { sleep } from '../utils';
+       import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
+      +import { LoggerService } from './logger.service';
+       
+       const runInitializationProcess = async () => {
+      +    LoggerService.info('Starting initialization process...');
+           const { actions } = useInitStore.getState();
+           actions.resetInit();
+           actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+       
+           actions.setPhase('ANALYZE');
+      +    LoggerService.debug('Phase set to ANALYZE');
+           for (const task of INITIAL_ANALYZE_TASKS) {
+               actions.updateAnalyzeTask(task.id, 'active');
+      +        LoggerService.debug(`Analyzing task active: ${task.title}`);
+               await sleep(800);
+               actions.updateAnalyzeTask(task.id, 'done');
+           }
+           actions.setAnalysisResults('relaycode (from package.json)', true);
+           await sleep(500);
+       
+           actions.setPhase('CONFIGURE');
+      +    LoggerService.debug('Phase set to CONFIGURE');
+           const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
+           for (const task of configTasksUntilInteractive) {
+               actions.updateConfigureTask(task.id, 'active');
+      +        LoggerService.debug(`Configuring task active: ${task.title}`);
+               await sleep(800);
+               actions.updateConfigureTask(task.id, 'done');
+           }
+           await sleep(500);
+       
+           actions.setPhase('INTERACTIVE');
+      +    LoggerService.debug('Phase set to INTERACTIVE');
+       };
+       
+       const resumeInitializationProcess = async () => {
+      +    LoggerService.info('Resuming initialization process...');
+           const { actions } = useInitStore.getState();
+           
+           actions.setPhase('CONFIGURE');
+      -    const lastTask = INITIAL_CONFIGURE_TASKS[2];
+
+      +    LoggerService.debug('Phase set to CONFIGURE');
+
+      +    const lastTask =
+      INITIAL_CONFIGURE_TASKS[INITIAL_CONFIGURE_TASKS.length - 1];
+           if (lastTask) {
+               actions.updateConfigureTask(lastTask.id, 'active');
+      +        LoggerService.debug(`Configuring task active:
+      ${lastTask.title}`);
+               await sleep(800);
+               actions.updateConfigureTask(lastTask.id, 'done');
+               await sleep(500);
+       
+               actions.setPhase('FINALIZE');
+      +        LoggerService.info('Initialization process finalized.');
+           }
+       };
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/dashboard.service.ts
+    content: >
+      --- src/services/dashboard.service.ts
+
+      +++ src/services/dashboard.service.ts
+
+      @@ -1,15 +1,21 @@
+       import { sleep } from '../utils';
+       import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+      +import { LoggerService } from './logger.service';
+       
+       const approveAll = async () => {
+      +    LoggerService.info('Starting bulk approval process...');
+           const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
+           const pendingTxIds = pendingTransactions.map(tx => tx.id);
+      +    LoggerService.debug(`Found ${pendingTxIds.length} pending
+      transactions to approve.`);
+           const { updateTransactionStatus } = useTransactionStore.getState().actions;
+      -    pendingTxIds.forEach(id => updateTransactionStatus(id,
+      'IN-PROGRESS'));
+
+      +    pendingTxIds.forEach(id => {
+
+      +        updateTransactionStatus(id, 'IN-PROGRESS');
+
+      +        LoggerService.debug(`Transaction ${id} status set to
+      IN-PROGRESS.`);
+
+      +    });
+       
+           await sleep(2000); // Simulate approval process
+       
+           // Mark them as applied
+           pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+      +    LoggerService.info(`Bulk approval complete. ${pendingTxIds.length}
+      transactions applied.`);
+       };
+       
+       export const DashboardService = {
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/commit.service.ts
+    content: >
+      --- src/services/commit.service.ts
+
+      +++ src/services/commit.service.ts
+
+      @@ -1,8 +1,12 @@
+       import type { Transaction } from '../types/domain.types';
+       import { sleep } from '../utils';
+       import { useTransactionStore } from '../stores/transaction.store';
+      +import { LoggerService } from './logger.service';
+       
+       const generateCommitMessage = (transactions: Transaction[]): string => {
+      +    LoggerService.info(`Generating commit message for
+      ${transactions.length} transactions.`);
+           if (transactions.length === 0) {
+      +        LoggerService.warn('generateCommitMessage called with 0
+      transactions.');
+               return '';
+           }
+           // Using a more complex aggregation for better demo, based on the readme
+      @@ -13,11 +17,13 @@
+           ];
+       
+           if (transactions.length === 1 && transactions[0]) {
+      +        LoggerService.debug('Using single transaction message for
+      commit.');
+               return transactions[0].message;
+           }
+       
+      +    LoggerService.debug('Using aggregated message for commit.');
+           return `${title}\n\n${bodyPoints.join('\n\n')}`;
+       };
+       
+       const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
+      +    LoggerService.info(`Committing ${transactionsToCommit.length}
+      transactions to git...`);
+           // In a real app, this would run git commands.
+           // For simulation, we'll just update the transaction store.
+           const { updateTransactionStatus } = useTransactionStore.getState().actions;
+      @@ -29,6 +35,7 @@
+           txIds.forEach(id => {
+               updateTransactionStatus(id, 'COMMITTED');
+           });
+      +    LoggerService.info('Commit successful.');
+       };
+       
+       export const CommitService = {
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/editor.service.ts
+    content: >
+      --- src/services/editor.service.ts
+
+      +++ src/services/editor.service.ts
+
+      @@ -1,9 +1,10 @@
+
+      +import { LoggerService } from './logger.service';
+
+      +
+       /**
+        * Mock editor service.
+        * In a real application, this would interact with the user's default editor.
+        */
+       const openFileInEditor = async (filePath: string): Promise<void> => {
+      -    // eslint-disable-next-line no-console
+
+      -    console.log(`[EDITOR MOCK] Opening file in default editor:
+      ${filePath}`);
+
+      +    LoggerService.debug(`[EDITOR MOCK] Opening file in default editor:
+      ${filePath}`);
+       };
+       
+       const getTransactionYamlPath = (transactionHash: string): string => {
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/copy.store.ts
+    content: >
+      --- src/stores/copy.store.ts
+
+      +++ src/stores/copy.store.ts
+
+      @@ -1,6 +1,7 @@
+       import { create } from 'zustand';
+       import { moveIndex } from './navigation.utils';
+       import { useViewStore } from './view.store';
+      +import { LoggerService } from '../services/logger.service';
+       import { CopyService } from '../services/copy.service';
+       import type { CopyItem } from '../types/copy.types';
+       import type { Transaction, FileItem } from '../types/domain.types';
+      @@ -118,13 +119,13 @@
+                   const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+                   if (itemsToCopy.length === 0) return;
+       
+      +            LoggerService.info(`Copying ${itemsToCopy.length} item(s) to
+      clipboard.`);
+                   const dataPromises = itemsToCopy.map(item => item.getData());
+                   const resolvedData = await Promise.all(dataPromises);
+       
+                   const content = itemsToCopy
+                       .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                       .join('\n\n');
+                   const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+      -            // eslint-disable-next-line no-console
+
+      -            console.log(`[CLIPBOARD MOCK]
+      ${message}\n${content.substring(0, 200)}...`);
+
+      +            LoggerService.debug(`[CLIPBOARD MOCK]
+      ${message}\n${content.substring(0, 200)}...`);
+                   set({ lastCopiedMessage: message });
+               },
+           },
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useSplashScreen.tsx
+    content: |
+      --- src/hooks/useSplashScreen.tsx
+      +++ src/hooks/useSplashScreen.tsx
+      @@ -2,6 +2,7 @@
+       import { useInput } from 'ink';
+       import { useAppStore } from '../stores/app.store';
+       import { UI_CONFIG } from '../config/ui.config';
+      +import { LoggerService } from '../services/logger.service';
+       
+       export const useSplashScreen = () => {
+           const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+      @@ -14,25 +15,21 @@
+           useInput((input) => {
+               const lowerInput = input.toLowerCase();
+               if (lowerInput === 'v') {
+      -            // eslint-disable-next-line no-console
+      -            console.log('[MOCK] Opening noca.pro in browser...');
+      +            LoggerService.info('[MOCK] Opening noca.pro in browser...');
+                   return;
+               }
+               if (lowerInput === 'x') {
+      -            // eslint-disable-next-line no-console
+      -            console.log('[MOCK] Opening X/Twitter in browser...');
+      +            LoggerService.info('[MOCK] Opening X/Twitter in browser...');
+                   return;
+               }
+               if (lowerInput === 'd') {
+      -            // eslint-disable-next-line no-console
+      -            console.log('[MOCK] Opening Discord in browser...');
+      +            LoggerService.info('[MOCK] Opening Discord in browser...');
+                   return;
+               }
+               if (lowerInput === 'g') {
+      -            // eslint-disable-next-line no-console
+      -            console.log('[MOCK] Opening GitHub in browser...');
+      +            LoggerService.info('[MOCK] Opening GitHub in browser...');
+                   return;
+               }
+       
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/view.store.ts: |-
+    import { create } from 'zustand';
+
+    interface ViewState {
+        selectedTransactionId: string | null;
+        activeOverlay: 'none' | 'help' | 'copy' | 'debug';
+        actions: {
+            setSelectedTransactionId: (id: string | null) => void;
+            setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+        };
+    }
+
+    export const useViewStore = create<ViewState>((set) => ({
+        selectedTransactionId: null,
+        activeOverlay: 'none',
+        actions: {
+            setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
+            setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+        },
+    }));
+  src/App.tsx: >-
+    import { Box } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import GlobalHelpScreen from './components/GlobalHelpScreen';
+
+    import CopyScreen from './components/CopyScreen';
+
+    import { useViewStore } from './stores/view.store';
+
+    import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+        const activeOverlay = useViewStore(s => s.activeOverlay);
+        const isOverlayOpen = activeOverlay !== 'none';
+
+        // Global hotkeys are active if no modal-like component is open
+        const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
+        useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+        const renderMainScreen = () => {
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isOverlayOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                {activeOverlay === 'help' && <GlobalHelpScreen />}
+                {activeOverlay === 'copy' && <CopyScreen />}
+                {activeOverlay === 'debug' && <DebugMenu />}
+            </>
+        );
+    };
+
+
+    export default App;
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { currentScreen } = useAppStore(s => ({
+            currentScreen: s.currentScreen,
+        }));
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+                return;
+            }
+
+            // If debug menu is open, it has its own input handler, so we stop here.
+            if (activeOverlay === 'debug') {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === 'help') {
+                if (key.escape || input === '?') {
+                    setActiveOverlay('none');
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay('help');
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q') {
+                if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+                    exit();
+                }
+                navigateBack();
+            } else if (key.escape) {
+                navigateBack();
+            }
+        }, { isActive });
+    };
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => {
+                    reviewActions.load('2'); // Use tx '2' which has scripts
+                    appActions.showReviewProcessingScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    useViewStore.getState().actions.setActiveOverlay('none');
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay('none');
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+  index.tsx: |-
+    import { render } from 'ink';
+    import App from './src/App';
+    import { useAppStore } from './src/stores/app.store';
+    import { useViewStore } from './src/stores/view.store';
+    import { useDetailStore } from './src/stores/detail.store';
+    import { useHistoryStore } from './src/stores/history.store';
+    import { useReviewStore } from './src/stores/review.store';
+    import { useTransactionStore } from './src/stores/transaction.store';
+    import { useCommitStore } from './src/stores/commit.store';
+
+    const main = () => {
+        // Initialize stores
+        useTransactionStore.getState().actions.loadTransactions();
+        const args = process.argv.slice(2);
+
+        if (args[0] === 'debug-screen' && args[1]) {
+            const screenName = args[1].replace(/\.tsx$/, '');
+            const { actions: appActions } = useAppStore.getState();
+
+            switch (screenName) {
+                case 'DashboardScreen':
+                    appActions.showDashboardScreen();
+                    break;
+                case 'GitCommitScreen':
+                    useCommitStore.getState().actions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    break;
+                case 'ReviewProcessingScreen':
+                    useReviewStore.getState().actions.load('1');
+                    appActions.showReviewProcessingScreen();
+                    break;
+                case 'ReviewScreen':
+                    useReviewStore.getState().actions.load('1');
+                    appActions.showReviewScreen();
+                    break;
+                case 'TransactionDetailScreen':
+                    useDetailStore.getState().actions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    break;
+                case 'TransactionHistoryScreen':
+                    useHistoryStore.getState().actions.load();
+                    appActions.showTransactionHistoryScreen();
+                    break;
+                case 'InitializationScreen':
+                     appActions.showInitScreen();
+                     break;
+                case 'SplashScreen':
+                     appActions.showSplashScreen();
+                     break;
+                case 'DebugMenu':
+                    appActions.showDashboardScreen();
+                    useViewStore.getState().actions.setActiveOverlay('debug');
+                    break;
+                default:
+                    process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                    process.exit(1);
+            }
+        }
+
+        // Check if we're running in an interactive terminal
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+            // eslint-disable-next-line no-console
+            console.clear();
+            render(<App />);
+        } else {
+            process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+            process.exit(1);
+        }
+    };
+
+    main();
+  src/services/init.service.ts: >-
+    import { useInitStore } from '../stores/init.store';
+
+    import { sleep } from '../utils';
+
+    import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from
+    '../constants/init.constants';
+
+
+    const runInitializationProcess = async () => {
+        const { actions } = useInitStore.getState();
+        actions.resetInit();
+        actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+
+        actions.setPhase('ANALYZE');
+        for (const task of INITIAL_ANALYZE_TASKS) {
+            actions.updateAnalyzeTask(task.id, 'active');
+            await sleep(800);
+            actions.updateAnalyzeTask(task.id, 'done');
+        }
+        actions.setAnalysisResults('relaycode (from package.json)', true);
+        await sleep(500);
+
+        actions.setPhase('CONFIGURE');
+        const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
+        for (const task of configTasksUntilInteractive) {
+            actions.updateConfigureTask(task.id, 'active');
+            await sleep(800);
+            actions.updateConfigureTask(task.id, 'done');
+        }
+        await sleep(500);
+
+        actions.setPhase('INTERACTIVE');
+    };
+
+
+    const resumeInitializationProcess = async () => {
+        const { actions } = useInitStore.getState();
+        
+        actions.setPhase('CONFIGURE');
+        const lastTask = INITIAL_CONFIGURE_TASKS[2];
+        if (lastTask) {
+            actions.updateConfigureTask(lastTask.id, 'active');
+            await sleep(800);
+            actions.updateConfigureTask(lastTask.id, 'done');
+            await sleep(500);
+
+            actions.setPhase('FINALIZE');
+        }
+    };
+
+
+    export const InitService = {
+        runInitializationProcess,
+        resumeInitializationProcess,
+    };
+  src/services/dashboard.service.ts: >-
+    import { sleep } from '../utils';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+
+    const approveAll = async () => {
+        const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
+        const pendingTxIds = pendingTransactions.map(tx => tx.id);
+        const { updateTransactionStatus } = useTransactionStore.getState().actions;
+        pendingTxIds.forEach(id => updateTransactionStatus(id, 'IN-PROGRESS'));
+
+        await sleep(2000); // Simulate approval process
+
+        // Mark them as applied
+        pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+    };
+
+
+    export const DashboardService = {
+        approveAll,
+    };
+  src/services/commit.service.ts: >-
+    import type { Transaction } from '../types/domain.types';
+
+    import { sleep } from '../utils';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+
+    const generateCommitMessage = (transactions: Transaction[]): string => {
+        if (transactions.length === 0) {
+            return '';
+        }
+        // Using a more complex aggregation for better demo, based on the readme
+        const title = 'feat: implement new dashboard and clipboard logic';
+        const bodyPoints = [
+            '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+            '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+        ];
+
+        if (transactions.length === 1 && transactions[0]) {
+            return transactions[0].message;
+        }
+
+        return `${title}\n\n${bodyPoints.join('\n\n')}`;
+    };
+
+
+    const commit = async (transactionsToCommit: Transaction[]): Promise<void> =>
+    {
+        // In a real app, this would run git commands.
+        // For simulation, we'll just update the transaction store.
+        const { updateTransactionStatus } = useTransactionStore.getState().actions;
+
+        const txIds = transactionsToCommit.map(tx => tx.id);
+
+        // A bit of simulation
+        await sleep(500);
+
+        txIds.forEach(id => {
+            updateTransactionStatus(id, 'COMMITTED');
+        });
+    };
+
+
+    export const CommitService = {
+        generateCommitMessage,
+        commit,
+    };
+  src/services/editor.service.ts: |-
+    /**
+     * Mock editor service.
+     * In a real application, this would interact with the user's default editor.
+     */
+    const openFileInEditor = async (filePath: string): Promise<void> => {
+        // eslint-disable-next-line no-console
+        console.log(`[EDITOR MOCK] Opening file in default editor: ${filePath}`);
+    };
+
+    const getTransactionYamlPath = (transactionHash: string): string => {
+        return `.relay/transactions/${transactionHash}.yml`;
+    };
+
+    export const EditorService = {
+        openFileInEditor,
+        getTransactionYamlPath,
+    };
+  src/stores/copy.store.ts: |-
+    import { create } from 'zustand';
+    import { moveIndex } from './navigation.utils';
+    import { useViewStore } from './view.store';
+    import { CopyService } from '../services/copy.service';
+    import type { CopyItem } from '../types/copy.types';
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    export type { CopyItem };
+
+    interface CopyState {
+        title: string;
+        items: CopyItem[];
+        selectedIndex: number;
+        selectedIds: Set<string>;
+        lastCopiedMessage: string | null;
+        onClose?: () => void;
+
+        actions: {
+            open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+            close: () => void;
+            openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+            openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+            openForHistory: (transactions: Transaction[]) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            toggleSelection: () => void;
+            toggleSelectionById: (id: string) => void;
+            executeCopy: () => void;
+        };
+    }
+
+    export const useCopyStore = create<CopyState>((set, get) => ({
+        title: '',
+        items: [],
+        selectedIndex: 0,
+        selectedIds: new Set(),
+        lastCopiedMessage: null,
+        onClose: undefined,
+
+        actions: {
+            open: (title, items, onClose) => {
+                const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+                useViewStore.getState().actions.setActiveOverlay('copy');
+                set({
+                    title,
+                    items,
+                    selectedIndex: 0,
+                    selectedIds: defaultSelectedIds,
+                    lastCopiedMessage: null,
+                    onClose,
+                });
+            },
+            close: () => {
+                useViewStore.getState().actions.setActiveOverlay('none');
+                get().onClose?.();
+                set({ items: [], onClose: undefined });
+            },
+            openForReview: (transaction, files, selectedFile) => {
+                const { actions } = get();
+                const title = 'Select data to copy from review:';
+                const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+                actions.open(title, items);
+            },
+            openForDetail: (transaction, selectedFile) => {
+                const { actions } = get();
+                const title = `Select data to copy from transaction ${transaction.hash}:`;
+                const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+                actions.open(title, items);
+            },
+            openForHistory: (transactions) => {
+                const { actions } = get();
+                const title = `Select data to copy from ${transactions.length} transactions:`;
+                const items = CopyService.getCopyItemsForHistory(transactions);
+                actions.open(title, items);
+            },
+            navigateUp: () => set(state => ({
+                selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
+            })),
+            navigateDown: () => set(state => ({
+                selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+            })),
+            toggleSelection: () => set(state => {
+                const currentItem = state.items[state.selectedIndex];
+                if (!currentItem) return {};
+                const newSelectedIds = new Set(state.selectedIds);
+                if (newSelectedIds.has(currentItem.id)) {
+                    newSelectedIds.delete(currentItem.id);
+                } else {
+                    newSelectedIds.add(currentItem.id);
+                }
+                return { selectedIds: newSelectedIds };
+            }),
+            toggleSelectionById: (id: string) => set(state => {
+                const newSelectedIds = new Set(state.selectedIds);
+                if (newSelectedIds.has(id)) {
+                    newSelectedIds.delete(id);
+                } else {
+                    newSelectedIds.add(id);
+                }
+                return { selectedIds: newSelectedIds };
+            }),
+            executeCopy: async () => {
+                const { items, selectedIds } = get();
+                const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+                if (itemsToCopy.length === 0) return;
+
+                const dataPromises = itemsToCopy.map(item => item.getData());
+                const resolvedData = await Promise.all(dataPromises);
+
+                const content = itemsToCopy
+                    .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                    .join('\n\n');
+                const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+                // eslint-disable-next-line no-console
+                console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+                set({ lastCopiedMessage: message });
+            },
+        },
+    }));
+  src/hooks/useSplashScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { UI_CONFIG } from '../config/ui.config';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+
+        const handleSkip = () => {
+            showInitScreen();
+        };
+
+        useInput((input) => {
+            const lowerInput = input.toLowerCase();
+            if (lowerInput === 'v') {
+                // eslint-disable-next-line no-console
+                console.log('[MOCK] Opening noca.pro in browser...');
+                return;
+            }
+            if (lowerInput === 'x') {
+                // eslint-disable-next-line no-console
+                console.log('[MOCK] Opening X/Twitter in browser...');
+                return;
+            }
+            if (lowerInput === 'd') {
+                // eslint-disable-next-line no-console
+                console.log('[MOCK] Opening Discord in browser...');
+                return;
+            }
+            if (lowerInput === 'g') {
+                // eslint-disable-next-line no-console
+                console.log('[MOCK] Opening GitHub in browser...');
+                return;
+            }
+
+            // Any other key skips
+            handleSkip(); 
+        });
+
+        useEffect(() => {
+            if (countdown === 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen]);
+
+        return { countdown };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 147

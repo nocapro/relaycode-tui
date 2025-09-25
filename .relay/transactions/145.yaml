@@ -1,0 +1,507 @@
+uuid: ccfac419-eb59-450f-a3ac-665a3d01cf3b
+projectId: relaycode-tui
+createdAt: '2025-09-25T10:39:12.001Z'
+gitCommitMsg: >-
+  feat: add debug log screen and logging infrastructure
+
+  Introduces a new debug log feature to provide insight into system activities.
+
+  - **Logging Infrastructure**: Adds a new log store, service, and types for a
+  centralized logging system. - **UI**: Creates a new full-screen
+  `DebugLogScreen` component to display and navigate logs. - **Integration**:
+  Wires up the new screen with a `Ctrl+L` global hotkey and integrates it into
+  the main app shell.
+promptSummary: I want to add a debug log screen accessible with Ctrl+L.
+reasoning:
+  - >-
+    Here are the changes to implement the foundational logging infrastructure,
+    user interface, and system integration for the new debug log feature.
+  - '### Part 1: Foundational Logging Infrastructure'
+  - >-
+    I'll start by creating the necessary types, the state store for logs, and a
+    service to provide a clean logging API.
+  - First, I'll define the data structures for a log entry.
+  - >-
+    Next, I'll create a Zustand store to manage the log entries. It will
+    automatically cap the number of stored logs to prevent memory issues.
+  - >-
+    Finally, I'll create a logging service to act as a simple, decoupled API for
+    the rest of the application.
+  - '### Part 2: User Interface for the Debug Log'
+  - >-
+    Now I'll build the UI, starting with a custom hook to manage its state and
+    logic.
+  - >-
+    This hook will handle keyboard input for scrolling and closing the log view,
+    and it will use our existing `useViewport` hook for efficient rendering of a
+    potentially long list of logs.
+  - >-
+    With the logic hook complete, I'll create the `DebugLogScreen` component
+    itself. It will render the logs with color-coded levels and timestamps.
+  - '### Part 3: System Integration'
+  - >-
+    To make the new feature accessible, I'll integrate it into the application
+    shell.
+  - >-
+    First, I'll update the `view.store` to recognize the new `'log'` overlay
+    state.
+  - Next, I'll add the `Ctrl+L` global hotkey to toggle the debug log overlay.
+  - >-
+    Finally, I'll update the main `App.tsx` component to render the
+    `DebugLogScreen` when its overlay is active.
+operations:
+  - type: write
+    path: src/types/log.types.ts
+    content: |-
+      export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+      export interface LogEntry {
+          timestamp: number;
+          level: LogLevel;
+          message: string;
+          context?: Record<string, any>;
+      }
+    patchStrategy: replace
+  - type: write
+    path: src/stores/log.store.ts
+    content: |-
+      import { create } from 'zustand';
+      import type { LogEntry } from '../types/log.types';
+
+      const MAX_LOG_ENTRIES = 500;
+
+      interface LogState {
+          logs: LogEntry[];
+          actions: {
+              addLog: (entry: Omit<LogEntry, 'timestamp'>) => void;
+          };
+      }
+
+      export const useLogStore = create<LogState>((set) => ({
+          logs: [],
+          actions: {
+              addLog: (entry) => set(state => {
+                  const newLogEntry: LogEntry = {
+                      ...entry,
+                      timestamp: Date.now(),
+                  };
+                  // Prepend new log and enforce max entries
+                  const updatedLogs = [newLogEntry, ...state.logs].slice(0, MAX_LOG_ENTRIES);
+                  return { logs: updatedLogs };
+              }),
+          },
+      }));
+    patchStrategy: replace
+  - type: write
+    path: src/services/log.service.ts
+    content: >-
+      import { useLogStore } from '../stores/log.store';
+
+      import type { LogLevel } from '../types/log.types';
+
+
+      const log = (level: LogLevel, message: string, context?: Record<string,
+      any>) => {
+          useLogStore.getState().actions.addLog({ level, message, context });
+      };
+
+
+      export const Logger = {
+          debug: (message: string, context?: Record<string, any>) => log('DEBUG', message, context),
+          info: (message: string, context?: Record<string, any>) => log('INFO', message, context),
+          warn: (message: string, context?: Record<string, any>) => log('WARN', message, context),
+          error: (message: string, context?: Record<string, any>) => log('ERROR', message, context),
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useDebugLogScreen.tsx
+    content: |-
+      import { useState, useEffect } from 'react';
+      import { useInput } from 'ink';
+      import { useLogStore } from '../stores/log.store';
+      import { useViewStore } from '../stores/view.store';
+      import { useViewport } from './useViewport';
+
+      const PAGE_JUMP_SIZE = 10;
+
+      export const useDebugLogScreen = () => {
+          const logs = useLogStore(s => s.logs);
+          const { setActiveOverlay } = useViewStore(s => s.actions);
+          const [selectedIndex, setSelectedIndex] = useState(0);
+
+          // Reset index when logs change (new log comes in) so we see the latest.
+          useEffect(() => {
+              setSelectedIndex(0);
+          }, [logs]);
+
+          const { viewOffset, viewportHeight } = useViewport({
+              selectedIndex,
+              reservedRows: 6, // Header, separators, footer
+          });
+
+          useInput((input, key) => {
+              if (key.escape || (key.ctrl && input === 'l')) {
+                  setActiveOverlay('none');
+                  return;
+              }
+
+              if (key.upArrow) {
+                  setSelectedIndex(i => Math.max(0, i - 1));
+              }
+              if (key.downArrow) {
+                  setSelectedIndex(i => Math.min(logs.length - 1, i + 1));
+              }
+              if (key.pageUp) {
+                  setSelectedIndex(i => Math.max(0, i - PAGE_JUMP_SIZE));
+              }
+              if (key.pageDown) {
+                  setSelectedIndex(i => Math.min(logs.length - 1, i + PAGE_JUMP_SIZE));
+              }
+              if (key.home) {
+                  setSelectedIndex(0);
+              }
+              if (key.end) {
+                  setSelectedIndex(logs.length - 1);
+              }
+          });
+
+          const visibleLogs = logs.slice(viewOffset, viewOffset + viewportHeight);
+
+          return {
+              logs,
+              visibleLogs,
+              selectedIndex,
+              viewOffset,
+              viewportHeight,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/DebugLogScreen.tsx
+    content: >-
+      import { Box, Text } from 'ink';
+
+      import Separator from './Separator';
+
+      import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+
+      import { useStdoutDimensions } from '../utils';
+
+      import ActionFooter from './ActionFooter';
+
+      import type { LogEntry, LogLevel } from '../types/log.types';
+
+
+      const getLevelColor = (level: LogLevel) => {
+          switch (level) {
+              case 'DEBUG': return 'gray';
+              case 'INFO': return 'white';
+              case 'WARN': return 'yellow';
+              case 'ERROR': return 'red';
+              default: return 'white';
+          }
+      };
+
+
+      const LogRow = ({ log, isSelected }: { log: LogEntry; isSelected: boolean
+      }) => {
+          const date = new Date(log.timestamp);
+          const time = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}.${date.getMilliseconds().toString().padStart(3, '0')}`;
+          const levelColor = getLevelColor(log.level);
+
+          return (
+              <Box>
+                  <Text backgroundColor={isSelected ? 'blue' : undefined}>
+                      <Text color="gray">{time}</Text>
+                      <Text> [</Text>
+                      <Text color={levelColor}>{log.level.padEnd(5)}</Text>
+                      <Text>] </Text>
+                      <Text>{log.message}</Text>
+                  </Text>
+              </Box>
+          );
+      };
+
+
+      const DebugLogScreen = () => {
+          const { logs, visibleLogs, selectedIndex, viewOffset } = useDebugLogScreen();
+          const [width] = useStdoutDimensions();
+
+          return (
+              <Box
+                  flexDirection="column"
+                  borderStyle="round"
+                  borderColor="yellow"
+                  width="100%"
+                  height="100%"
+                  paddingX={2}
+              >
+                  <Text bold color="yellow">▲ relaycode · DEBUG LOG</Text>
+                  <Separator width={width - 4} />
+                  <Box flexDirection="column" flexGrow={1} marginY={1}>
+                      {visibleLogs.map((log, index) => {
+                          const actualIndex = viewOffset + index;
+                          return (
+                              <LogRow
+                                  key={log.timestamp + '-' + actualIndex}
+                                  log={log}
+                                  isSelected={selectedIndex === actualIndex}
+                              />
+                          );
+                      })}
+                  </Box>
+                  <Separator width={width - 4} />
+                  <Text>
+                      Showing {Math.min(viewOffset + 1, logs.length)}-{Math.min(viewOffset + visibleLogs.length, logs.length)} of {logs.length} log entries.
+                  </Text>
+                  <ActionFooter actions={[
+                      { key: '↑↓', label: 'Scroll' },
+                      { key: 'PgUp/PgDn', label: 'Jump' },
+                      { key: 'Home/End', label: 'Go to Top/Bottom' },
+                      { key: 'Esc/Ctrl+L', label: 'Close' },
+                  ]}/>
+              </Box>
+          );
+      };
+
+
+      export default DebugLogScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/stores/view.store.ts
+    content: |+
+      --- src/stores/view.store.ts
+      +++ src/stores/view.store.ts
+      @@ -2,7 +2,7 @@
+       
+       interface ViewState {
+           selectedTransactionId: string | null;
+      -    activeOverlay: 'none' | 'help' | 'copy' | 'debug';
+      +    activeOverlay: 'none' | 'help' | 'copy' | 'debug' | 'log';
+           actions: {
+               setSelectedTransactionId: (id: string | null) => void;
+               setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: >+
+      --- src/hooks/useGlobalHotkeys.tsx
+
+      +++ src/hooks/useGlobalHotkeys.tsx
+
+      @@ -17,8 +17,14 @@
+                   return;
+               }
+       
+      -        // If debug menu is open, it has its own input handler, so we
+      stop here.
+
+      -        if (activeOverlay === 'debug') {
+
+      +        if (key.ctrl && input === 'l') {
+
+      +            setActiveOverlay(activeOverlay === 'log' ? 'none' : 'log');
+
+      +            return;
+
+      +        }
+
+      +
+
+      +        // If an overlay with its own input handler is open, stop here.
+
+      +        // Currently, debug and log screens have their own handlers.
+
+      +        if (activeOverlay === 'debug' || activeOverlay === 'log') {
+                   return;
+               }
+       
+               // Help screen takes precedence over other keys
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/App.tsx
+    content: |
+      --- src/App.tsx
+      +++ src/App.tsx
+      @@ -9,6 +9,7 @@
+       import TransactionHistoryScreen from './components/TransactionHistoryScreen';
+       import DebugMenu from './components/DebugMenu'; 
+       import GlobalHelpScreen from './components/GlobalHelpScreen';
+      +import DebugLogScreen from './components/DebugLogScreen';
+       import CopyScreen from './components/CopyScreen';
+       import { useViewStore } from './stores/view.store';
+       import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+      @@ -43,6 +44,7 @@
+                   {activeOverlay === 'help' && <GlobalHelpScreen />}
+                   {activeOverlay === 'copy' && <CopyScreen />}
+                   {activeOverlay === 'debug' && <DebugMenu />}
+      +            {activeOverlay === 'log' && <DebugLogScreen />}
+               </>
+           );
+       };
+       
+    patchStrategy: standard-diff
+snapshot:
+  src/types/log.types.ts: null
+  src/stores/log.store.ts: null
+  src/services/log.service.ts: null
+  src/hooks/useDebugLogScreen.tsx: null
+  src/components/DebugLogScreen.tsx: null
+  src/stores/view.store.ts: |-
+    import { create } from 'zustand';
+
+    interface ViewState {
+        selectedTransactionId: string | null;
+        activeOverlay: 'none' | 'help' | 'copy' | 'debug';
+        actions: {
+            setSelectedTransactionId: (id: string | null) => void;
+            setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+        };
+    }
+
+    export const useViewStore = create<ViewState>((set) => ({
+        selectedTransactionId: null,
+        activeOverlay: 'none',
+        actions: {
+            setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
+            setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+        },
+    }));
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { currentScreen } = useAppStore(s => ({
+            currentScreen: s.currentScreen,
+        }));
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+                return;
+            }
+
+            // If debug menu is open, it has its own input handler, so we stop here.
+            if (activeOverlay === 'debug') {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === 'help') {
+                if (key.escape || input === '?') {
+                    setActiveOverlay('none');
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay('help');
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q') {
+                if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+                    exit();
+                }
+                navigateBack();
+            } else if (key.escape) {
+                navigateBack();
+            }
+        }, { isActive });
+    };
+  src/App.tsx: >-
+    import { Box } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import GlobalHelpScreen from './components/GlobalHelpScreen';
+
+    import CopyScreen from './components/CopyScreen';
+
+    import { useViewStore } from './stores/view.store';
+
+    import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+        const activeOverlay = useViewStore(s => s.activeOverlay);
+        const isOverlayOpen = activeOverlay !== 'none';
+
+        // Global hotkeys are active if no modal-like component is open
+        const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
+        useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+        const renderMainScreen = () => {
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isOverlayOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                {activeOverlay === 'help' && <GlobalHelpScreen />}
+                {activeOverlay === 'copy' && <CopyScreen />}
+                {activeOverlay === 'debug' && <DebugMenu />}
+            </>
+        );
+    };
+
+
+    export default App;
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 145

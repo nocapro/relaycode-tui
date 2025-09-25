@@ -1,9 +1,12 @@
 import type { Transaction } from '../types/domain.types';
 import { sleep } from '../utils';
 import { useTransactionStore } from '../stores/transaction.store';
+import { LoggerService } from './logger.service';
 
 const generateCommitMessage = (transactions: Transaction[]): string => {
+    LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
     if (transactions.length === 0) {
+        LoggerService.warn('generateCommitMessage called with 0 transactions.');
         return '';
     }
     // Using a more complex aggregation for better demo, based on the readme
@@ -14,13 +17,16 @@ const generateCommitMessage = (transactions: Transaction[]): string => {
     ];
 
     if (transactions.length === 1 && transactions[0]) {
+        LoggerService.debug('Using single transaction message for commit.');
         return transactions[0].message;
     }
 
+    LoggerService.debug('Using aggregated message for commit.');
     return `${title}\n\n${bodyPoints.join('\n\n')}`;
 };
 
 const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
+    LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
     // In a real app, this would run git commands.
     // For simulation, we'll just update the transaction store.
     const { updateTransactionStatus } = useTransactionStore.getState().actions;
@@ -33,6 +39,7 @@ const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
     txIds.forEach(id => {
         updateTransactionStatus(id, 'COMMITTED');
     });
+    LoggerService.info('Commit successful.');
 };
 
 export const CommitService = {

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 interface ViewState {
     selectedTransactionId: string | null;
-    activeOverlay: 'none' | 'help' | 'copy' | 'debug';
+    activeOverlay: 'none' | 'help' | 'copy' | 'debug' | 'log';
     actions: {
         setSelectedTransactionId: (id: string | null) => void;
         setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;

@@ -27,7 +27,7 @@
     "eslint.config.js",
     "tsconfig.json",
     "index.tsx",
-    "src",
+    "src"
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"
     // "docs/relaycode-tui/dashboard-screen.readme.md"
@@ -40,8 +40,8 @@
     // "docs/relaycode-tui/review-processing-screen.readme.md"
     // "docs/relaycode-tui/reason-screen.readme.md"
     // "docs/relaycode-tui/git-commit-screen.readme.md",
-    "docs/relaycode-tui/transaction-detail-screen.readme.md",
-    "docs/relaycode-tui/transaction-history-screen.readme.md"
+    // "docs/relaycode-tui/transaction-detail-screen.readme.md",
+    // "docs/relaycode-tui/transaction-history-screen.readme.md"
   ],
   "ignore": {
     "useGitignore": true,
