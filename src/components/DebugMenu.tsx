@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 import Separator from './Separator';
 import { useDebugMenu } from '../hooks/useDebugMenu';
 import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
 
 const getKeyForIndex = (index: number): string => {
     if (index < 9) {
@@ -33,7 +34,12 @@ const DebugMenu = () => {
                 ))}
             </Box>
             <Separator width={width - 4} />
-            <Text>(↑↓) Nav · (1-9,a-z) Jump · (Enter) Select · (Esc / Ctrl+B) Close</Text>
+            <ActionFooter actions={[
+                { key: '↑↓', label: 'Nav' },
+                { key: '1-9,a-z', label: 'Jump' },
+                { key: 'Enter', label: 'Select' },
+                { key: 'Esc/Ctrl+B', label: 'Close' },
+            ]}/>
         </Box>
     );
 };

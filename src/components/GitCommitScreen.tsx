@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+import ActionFooter from './ActionFooter';
 
 const GitCommitScreen = () => {
     const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
@@ -9,10 +10,6 @@ const GitCommitScreen = () => {
     const transactionLines = transactionsToCommit.map(tx => (
         <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
     ));
-
-    const footer = isCommitting
-        ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-        : <Text>(Enter) Confirm & Commit      (Esc) Cancel</Text>;
 
     return (
         <Box flexDirection="column">
@@ -37,7 +34,13 @@ const GitCommitScreen = () => {
                  <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
             </Box>
             <Separator />
-            {footer}
+            {isCommitting
+                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                : <ActionFooter actions={[
+                    { key: 'Enter', label: 'Confirm & Commit' },
+                    { key: 'Esc', label: 'Cancel' },
+                ]}/>
+            }
         </Box>
     );
 };

@@ -4,6 +4,8 @@ import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
 import type { ScriptResult, FileItem, FileChangeType } from '../types/domain.types';
 import { useReviewScreen } from '../hooks/useReviewScreen';
+import ActionFooter from './ActionFooter';
+import type { ActionItem } from '../types/actions.types';
 
 // --- Sub-components ---
 
@@ -309,28 +311,42 @@ const ReviewScreen = () => {
     const renderFooter = () => {
         // Contextual footer for body views
         if (bodyView === 'diff') {
-            return <Text>(↑↓) Nav · (X)pand · (D/Esc) Back</Text>;
+            return <ActionFooter actions={[
+                { key: '↑↓', label: 'Nav' },
+                { key: 'X', label: 'Expand' },
+                { key: 'D/Esc', label: 'Back' },
+            ]}/>;
         }
         if (bodyView === 'reasoning') {
-            return <Text>(↑↓) Scroll Text · (R)Collapse View · (C)opy Mode</Text>;
+            return <ActionFooter actions={[
+                { key: '↑↓', label: 'Scroll Text' },
+                { key: 'R', label: 'Collapse View' },
+                { key: 'C', label: 'Copy Mode' },
+            ]}/>;
         }
         if (bodyView === 'script_output') {
-            return (
-                <Text>(↑↓) Nav · (J↓/K↑) Next/Prev Error · (C)opy Output · (Ent/Esc) Back</Text>
-            );
+            return <ActionFooter actions={[
+                { key: '↑↓', label: 'Nav' },
+                { key: 'J↓/K↑', label: 'Next/Prev Error' },
+                { key: 'C', label: 'Copy Output' },
+                { key: 'Ent/Esc', label: 'Back' },
+            ]}/>;
         }
         if (bodyView === 'bulk_repair') {
-            return <Text>Choose an option [1-4, Esc]:</Text>;
+            return <Text>Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel</Text>;
         }
         if (bodyView === 'bulk_instruct') {
-            return <Text>Choose an option [1-4, Esc]:</Text>;
+            return <Text>Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel</Text>;
         }
         if (bodyView === 'confirm_handoff') {
-            return <Text>(Enter) Confirm Handoff      (Esc) Cancel</Text>;
+            return <ActionFooter actions={[
+                { key: 'Enter', label: 'Confirm Handoff' },
+                { key: 'Esc', label: 'Cancel' },
+            ]}/>;
         }
 
         // Main footer
-        const actions = ['(↑↓) Nav'];
+        const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
 
         const currentItem = navigableItems[selectedItemIndex];
         
@@ -338,49 +354,49 @@ const ReviewScreen = () => {
             const selectedFile = files.find(f => f.id === currentItem.id);
             const fileState = fileReviewStates.get(currentItem.id);
             if (fileState?.status !== 'FAILED') {
-                actions.push('(Spc) Toggle');
+                actions.push({ key: 'Spc', label: 'Toggle' });
             }
-            actions.push('(D)iff');
+            actions.push({ key: 'D', label: 'Diff' });
             
             // Add repair options for failed files
             if (selectedFile && fileState?.status === 'FAILED') {
-                actions.push('(T)ry Repair');
+                actions.push({ key: 'T', label: 'Try Repair' });
             }
             if (selectedFile && fileState?.status === 'REJECTED') {
-                actions.push('(I)nstruct');
+                actions.push({ key: 'I', label: 'Instruct' });
             }
         } else if (currentItem?.type === 'script') {
-            actions.push('(Ent) Expand Details');
+            actions.push({ key: 'Ent', label: 'Expand Details' });
         } else { // Prompt or Reasoning
-            actions.push('(Ent) Expand');
+            actions.push({ key: 'Ent', label: 'Expand' });
         }
 
         if (currentItem?.type !== 'reasoning') {
-            actions.push('(R)easoning');
+            actions.push({ key: 'R', label: 'Reasoning' });
         }
 
         // Add bulk repair if there are failed files
         const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
         if (hasFailedFiles) {
-            actions.push('(Shift+T) Bulk Repair');
+            actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
         }
         // Add bulk instruct if there are rejected files
         if (hasRejectedFiles) {
-            actions.push('(Shift+I) Bulk Instruct');
+            actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
         }
         
-        actions.push('(C)opy');
+        actions.push({ key: 'C', label: 'Copy' });
 
         if (approvedFilesCount > 0) {
-            actions.push('(A)pprove');
+            actions.push({ key: 'A', label: 'Approve' });
         }
 
         if (Array.from(fileReviewStates.values()).some(s => s.status === 'APPROVED' || s.status === 'FAILED')) {
-            actions.push('(Shift+R) Reject All');
+            actions.push({ key: 'Shift+R', label: 'Reject All' });
         }
-        actions.push('(Q)uit');
+        actions.push({ key: 'Q', label: 'Quit' });
 
-        return <Text>{actions.join(' · ')}</Text>;
+        return <ActionFooter actions={actions} />;
     };
 
     return (

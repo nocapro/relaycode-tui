@@ -6,6 +6,8 @@ import Separator from './Separator';
 import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
 import { UI_CONFIG } from '../config/ui.config';
+import ActionFooter from './ActionFooter';
+import type { ActionItem } from '../types/actions.types';
 
 // --- Sub-components ---
 
@@ -159,13 +161,21 @@ const TransactionHistoryScreen = () => {
 
     const renderFooter = () => {
         if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
-        if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3, Esc]:</Text>;
+        if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3] or (Esc) Cancel</Text>;
         
-        const footerActions = ['(↑↓) Nav', '(→) Expand', '(←) Collapse', '(Spc) Select', '(Ent) Details', '(F)ilter'];
+        const footerActions: ActionItem[] = [
+            { key: '↑↓', label: 'Nav' },
+            { key: '→', label: 'Expand' },
+            { key: '←', label: 'Collapse' },
+            { key: 'Spc', label: 'Select' },
+            { key: 'Ent', label: 'Details' },
+            { key: 'F', label: 'Filter' },
+        ];
+
         if (selectedForAction.size > 0) {
-            footerActions.push('(C)opy', '(B)ulk');
+            footerActions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
         }
-        return <Text>{footerActions.join(' · ')}</Text>;
+        return <ActionFooter actions={footerActions} />;
     };
 
     return (

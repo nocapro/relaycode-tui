@@ -17,4 +17,8 @@ export const UI_CONFIG = {
     splash: {
         initialCountdown: 3, // Seconds before auto-skip
     },
+    footer: {
+        horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+        actionSeparator: ' · ',
+    },
 } as const;

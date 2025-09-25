@@ -5,6 +5,8 @@ import Separator from './Separator';
 import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 import { UI_CONFIG } from '../config/ui.config';
+import ActionFooter from './ActionFooter';
+import type { ActionItem } from '../types/actions.types';
 
 // --- Sub-components & Helpers ---
 
@@ -144,23 +146,24 @@ const DashboardScreen = () => {
 
     const renderFooter = () => {
         if (isModal) return (
-            <Text>
-                (<Text color="cyan" bold>Enter</Text>) Confirm      (<Text color="cyan" bold>Esc</Text>) Cancel
-            </Text>
+            <ActionFooter actions={[
+                { key: 'Enter', label: 'Confirm' },
+                { key: 'Esc', label: 'Cancel' },
+            ]}/>
         );
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
-        const pauseAction = status === 'PAUSED'
-			? <Text>(<Text color="cyan" bold>P</Text>)resume</Text>
-			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
-		return (
-            <Box>
-                <Text color="gray">(<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>→</Text>/Ent) View · </Text>
-                <Text color="gray">(<Text color="cyan" bold>←</Text>) Collapse · (<Text color="cyan" bold>L</Text>)og · </Text>
-                <Text color="gray">(<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit · </Text>
-                <Text color="gray">{pauseAction} · (<Text color="cyan" bold>Q</Text>)uit</Text>
-            </Box>
-        );
+        const footerActions: ActionItem[] = [
+            { key: '↑↓', label: 'Nav' },
+            { key: '→/Ent', label: 'View' },
+            { key: '←', label: 'Collapse' },
+            { key: 'L', label: 'Log' },
+            { key: 'A', label: 'Approve All' },
+            { key: 'C', label: 'Commit' },
+            { key: 'P', label: status === 'PAUSED' ? 'Resume' : 'Pause' },
+            { key: 'Q', label: 'Quit' },
+        ];
+		return <ActionFooter actions={footerActions} />;
     };
     
     return (

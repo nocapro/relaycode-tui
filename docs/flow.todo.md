@@ -36,7 +36,7 @@ transaction history screen, transaction detail screen, review screen .
 
 so context feature is useful for user to get latest files content as parsable markdown format the same file as the transaction point
 
-===
+=== DONE
 
 responsive view of action buttons like
 

@@ -3,6 +3,7 @@ import { useCopyStore } from '../stores/copy.store';
 import Separator from './Separator';
 import { useViewStore } from '../stores/view.store';
 import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
 
 const CopyScreen = () => {
     const activeOverlay = useViewStore(s => s.activeOverlay);
@@ -74,7 +75,12 @@ const CopyScreen = () => {
                 </Box>
                 <Separator width={Math.floor(width * 0.8) - 4} />
                 {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <Text>(↑↓) Nav · (Spc/Hotkey) Toggle · (Enter) Copy · (Esc) Close</Text>
+                <ActionFooter actions={[
+                    { key: '↑↓', label: 'Nav' },
+                    { key: 'Spc/Hotkey', label: 'Toggle' },
+                    { key: 'Enter', label: 'Copy' },
+                    { key: 'Esc', label: 'Close' },
+                ]}/>
             </Box>
         </Box>
     );

@@ -1,0 +1,184 @@
+uuid: c32a0491-a67b-4029-9e8c-859424177d13
+projectId: relaycode-tui
+createdAt: '2025-09-25T09:17:37.489Z'
+gitCommitMsg: >-
+  refactor(ui): enhance ActionFooter to be fully responsive
+
+  Updates the `ActionFooter` component to dynamically calculate and render the
+  optimal number of columns based on the available terminal width.
+
+  - The component now measures the widest action item to determine a base column
+  width. - It calculates how many of these columns can fit on screen and
+  distributes the actions accordingly. - This provides a more robust responsive
+  layout, gracefully degrading from a multi-column grid on wide screens to a
+  single vertical list on very narrow screens, ensuring readability at all
+  sizes.
+promptSummary: >-
+  The user requested a more responsive ActionFooter that can spread actions into
+  one, two, three, or more columns depending on the terminal width.
+reasoning:
+  - >-
+    My apologies for the error in the previous attempt. The patch failed because
+    I made incorrect assumptions about the initial state of the codebase. I
+    understand now that the `ActionFooter` component and its related types
+    already exist, and my goal is to enhance the component's responsiveness.
+  - >-
+    I will now provide the corrected change, which modifies only the
+    `ActionFooter.tsx` component to implement a more robust, multi-column layout
+    that adapts to the available terminal width. This single, focused change
+    directly addresses your request.
+  - >-
+    Here is the updated `ActionFooter.tsx` with dynamic column calculation. It
+    will render actions in as many columns as can comfortably fit, falling back
+    to fewer columns or a single vertical list on very narrow screens.
+operations:
+  - type: write
+    path: src/components/ActionFooter.tsx
+    content: |-
+      import { Box, Text } from 'ink';
+      import { useStdoutDimensions } from '../utils';
+      import { UI_CONFIG } from '../config/ui.config';
+      import type { ActionItem } from '../types/actions.types';
+
+      interface ActionFooterProps {
+          actions: ActionItem[];
+      }
+
+      const Action = ({ item }: { item: ActionItem }) => (
+          <Text>
+              (<Text color="cyan" bold>{item.key}</Text>) {item.label}
+          </Text>
+      );
+
+      const ActionFooter = ({ actions }: ActionFooterProps) => {
+          const [width] = useStdoutDimensions();
+          const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
+          const separatorWidth = actionSeparator.length;
+
+          // Calculate required width for a single line
+          const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
+          const singleLineWidth = formattedActions.join(actionSeparator).length;
+
+          // 1. Render horizontally if it fits
+          if (singleLineWidth <= width - horizontalPadding * 2) {
+              return (
+                  <Box>
+                      {actions.map((item, index) => (
+                          <Text key={item.key}>
+                              <Action item={item} />
+                              {index < actions.length - 1 && <Text>{actionSeparator}</Text>}
+                          </Text>
+                      ))}
+                  </Box>
+              );
+          }
+
+          // 2. If it doesn't fit, calculate multi-column layout
+          const itemWidths = formattedActions.map(a => a.length);
+          const maxItemWidth = Math.max(...itemWidths);
+          
+          // Determine how many columns can fit, ensuring at least one
+          const availableWidth = width - horizontalPadding * 2;
+          // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
+          const numColumns = Math.min(
+              actions.length,
+              Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth)))
+          );
+          
+          const itemsPerColumn = Math.ceil(actions.length / numColumns);
+          const columns: ActionItem[][] = Array.from({ length: numColumns }, () => []);
+
+          actions.forEach((action, index) => {
+              const columnIndex = Math.floor(index / itemsPerColumn);
+              if (columns[columnIndex]) {
+                  columns[columnIndex].push(action);
+              }
+          });
+
+          return (
+              <Box flexDirection="row" width="100%">
+                  {columns.map((column, colIndex) => (
+                      <Box
+                          key={colIndex}
+                          flexDirection="column"
+                          // Use a flex-basis approach for more even distribution if needed,
+                          // but fixed width is better for alignment.
+                          width={maxItemWidth + separatorWidth}
+                      >
+                          {column.map(item => (
+                              <Action key={item.key} item={item} />
+                          ))}
+                      </Box>
+                  ))}
+              </Box>
+          );
+      };
+
+      export default ActionFooter;
+    patchStrategy: replace
+snapshot:
+  src/components/ActionFooter.tsx: |-
+    import { Box, Text } from 'ink';
+    import { useStdoutDimensions } from '../utils';
+    import { UI_CONFIG } from '../config/ui.config';
+    import type { ActionItem } from '../types/actions.types';
+
+    interface ActionFooterProps {
+        actions: ActionItem[];
+    }
+
+    const Action = ({ item }: { item: ActionItem }) => (
+        <Text>
+            (<Text color="cyan" bold>{item.key}</Text>) {item.label}
+        </Text>
+    );
+
+    const ActionFooter = ({ actions }: ActionFooterProps) => {
+        const [width] = useStdoutDimensions();
+        const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
+
+        const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
+        const requiredWidth = formattedActions.join(actionSeparator).length;
+
+        // Render horizontally if it fits
+        if (requiredWidth <= width - horizontalPadding * 2) {
+            return (
+                <Box>
+                    {actions.map((item, index) => (
+                        <Text key={item.key}>
+                            <Action item={item} />
+                            {index < actions.length - 1 && <Text>{actionSeparator}</Text>}
+                        </Text>
+                    ))}
+                </Box>
+            );
+        }
+
+        // Render in two columns if it doesn't fit horizontally
+        const midPoint = Math.ceil(actions.length / 2);
+        const leftColumn = actions.slice(0, midPoint);
+        const rightColumn = actions.slice(midPoint);
+
+        // Calculate max width for left column to align columns nicely
+        const leftColumnMaxWidth = Math.max(...leftColumn.map(a => `(${a.key}) ${a.label}`.length));
+
+        return (
+            <Box flexDirection="row" width="100%">
+                <Box flexDirection="column" width={`${leftColumnMaxWidth + 4}px`}>
+                    {leftColumn.map(item => <Action key={item.key} item={item} />)}
+                </Box>
+                <Box flexDirection="column">
+                    {rightColumn.map(item => <Action key={item.key} item={item} />)}
+                </Box>
+            </Box>
+        );
+    };
+
+    export default ActionFooter;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 135

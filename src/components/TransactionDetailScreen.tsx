@@ -4,6 +4,8 @@ import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
 import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
 import type { FileChangeType } from '../types/domain.types';
+import ActionFooter from './ActionFooter';
+import type { ActionItem } from '../types/actions.types';
 
 const getFileChangeTypeIcon = (type: FileChangeType) => {
     switch (type) {
@@ -115,23 +117,48 @@ const TransactionDetailScreen = () => {
 
     const renderFooter = () => {
         if (bodyView === 'REVERT_CONFIRM') {
-            return <Text>(Enter) Confirm Revert      (Esc) Cancel</Text>;
+            return <ActionFooter actions={[
+                { key: 'Enter', label: 'Confirm Revert' },
+                { key: 'Esc', label: 'Cancel' },
+            ]} />;
         }
         
-        const baseActions = ['(↑↓) Nav', '(C)opy', '(U)ndo', '(Q)uit/Back'];
+        const baseActions: ActionItem[] = [
+            { key: 'C', label: 'Copy' },
+            { key: 'U', label: 'Undo' },
+            { key: 'Q', label: 'Quit/Back' },
+        ];
+        let contextualActions: ActionItem[] = [];
 
         if (focusedItemPath.includes('/')) { // Is a file
             if (bodyView === 'DIFF_VIEW') {
-                return <Text>(↑↓) Nav Files · (←) Back to List · {baseActions.slice(1).join(' · ')}</Text>;
+                contextualActions = [
+                    { key: '↑↓', label: 'Nav Files' },
+                    { key: '←', label: 'Back to List' },
+                ];
+            } else {
+                contextualActions = [
+                    { key: '↑↓', label: 'Nav Files' },
+                    { key: '→', label: 'View Diff' },
+                    { key: '←', label: 'Back to Sections' },
+                ];
             }
-            return <Text>(↑↓) Nav Files · (→) View Diff · (←) Back to Sections · {baseActions.slice(1).join(' · ')}</Text>;
+            return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
         }
         
         if (expandedItemPaths.has(focusedItemPath)) {
-            return <Text>(↑↓) Nav/Scroll · (→) Drill In · (←) Collapse · {baseActions.slice(1).join(' · ')}</Text>;
+            contextualActions = [
+                { key: '↑↓', label: 'Nav/Scroll' },
+                { key: '→', label: 'Drill In' },
+                { key: '←', label: 'Collapse' },
+            ];
+        } else {
+            contextualActions = [
+                { key: '↑↓', label: 'Nav' },
+                { key: '→', label: 'Expand' },
+            ];
         }
-        
-        return <Text>(↑↓) Nav · (→) Expand · {baseActions.slice(1).join(' · ')}</Text>;
+        return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
     };
 
     const { message, timestamp, status } = transaction;
