@@ -8,9 +8,10 @@ import { useReviewStore } from '../stores/review.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useHistoryStore } from '../stores/history.store';
 import { useViewport } from './useViewport';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
 
 export const useDashboardScreen = () => {
-    const NON_EVENT_STREAM_HEIGHT = 9; // Header, separators, status, footer, etc.
+    const NON_EVENT_STREAM_HEIGHT = VIEW_CONSTANTS.DASHBOARD_NON_EVENT_STREAM_HEIGHT;
     const {
         status,
         selectedTransactionIndex,

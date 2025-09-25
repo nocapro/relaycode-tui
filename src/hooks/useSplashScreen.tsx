@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
 
 export const useSplashScreen = () => {
     const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState(3);
+    const [countdown, setCountdown] = useState<number>(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
 
     const handleSkip = () => {
         showInitScreen();

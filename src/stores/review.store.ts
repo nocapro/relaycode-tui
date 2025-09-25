@@ -4,6 +4,7 @@ import { useTransactionStore } from './transaction.store';
 import { useViewStore } from './view.store';
 import { ReviewService } from '../services/review.service';
 import { moveIndex } from './navigation.utils';
+import { INITIAL_APPLY_STEPS } from '../constants/review.constants';
 import type { FileReviewStatus } from '../types/domain.types';
 
 export interface ApplyStep {
@@ -19,13 +20,6 @@ export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
 export type ApplyUpdate =
     | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
     | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };
-
-export const initialApplySteps: ApplyStep[] = [
-    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
-    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
-    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
-    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
-];
 
 interface ReviewState {
     patchStatus: PatchStatus;
@@ -66,7 +60,7 @@ interface ReviewState {
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
     patchStatus: 'SUCCESS',
-    applySteps: initialApplySteps,
+    applySteps: INITIAL_APPLY_STEPS,
     selectedItemIndex: 0,
     bodyView: 'none',
     isDiffExpanded: false,
@@ -90,7 +84,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 isDiffExpanded: false,
                 reasoningScrollIndex: 0,
                 scriptErrorIndex: 0,
-                applySteps: JSON.parse(JSON.stringify(initialApplySteps)),
+                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
             });
         },
         moveSelectionUp: () => set(state => {
@@ -129,7 +123,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         startApplySimulation: async (scenario) => {
             const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
             const { updateApplyStep, addApplySubstep } = get().actions;
-            set({ applySteps: JSON.parse(JSON.stringify(initialApplySteps)) });
+            set({ applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)) });
             showReviewProcessingScreen();
             const simulationGenerator = ReviewService.runApplySimulation(scenario);
             for await (const update of simulationGenerator) {

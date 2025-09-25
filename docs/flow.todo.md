@@ -104,7 +104,7 @@ extract out all content strings,urls to content/[entity].content.ts files for ea
 
 ===
 
-extract out all constants to constants/[entitity].constants.ts files
+extract out all constants to constants/[domain].constants.ts files
 
 ===
 

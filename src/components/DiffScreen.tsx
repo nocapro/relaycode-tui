@@ -1,16 +1,16 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
 
 interface DiffScreenProps {
     filePath: string;
     diffContent: string;
     isExpanded: boolean;
 }
-
 const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
     const lines = diffContent.split('\n');
-    const COLLAPSE_THRESHOLD = 20;
-    const COLLAPSE_SHOW_LINES = 8;
+    const COLLAPSE_THRESHOLD = VIEW_CONSTANTS.DIFF_COLLAPSE_THRESHOLD;
+    const COLLAPSE_SHOW_LINES = VIEW_CONSTANTS.DIFF_COLLAPSE_SHOW_LINES;
 
     const renderContent = () => {
         if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {

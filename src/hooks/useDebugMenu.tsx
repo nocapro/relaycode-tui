@@ -9,7 +9,7 @@ import { useHistoryStore } from '../stores/history.store';
 import { useInitStore } from '../stores/init.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
-import { COPYABLE_ITEMS } from '../types/copy.types';
+import { COPYABLE_ITEMS } from '../constants/copy.constants';
 import { CopyService } from '../services/copy.service';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';

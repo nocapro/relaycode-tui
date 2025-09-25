@@ -1,6 +1,6 @@
 import type { Transaction, FileItem } from '../types/domain.types';
 import type { CopyItem } from '../types/copy.types';
-import { COPYABLE_ITEMS } from '../types/copy.types';
+import { COPYABLE_ITEMS } from '../constants/copy.constants';
 
 const createBaseTransactionCopyItems = (transaction: Transaction): CopyItem[] => [
     { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },

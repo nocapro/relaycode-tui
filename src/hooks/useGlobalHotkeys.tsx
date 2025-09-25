@@ -1,8 +1,7 @@
 import { useApp, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
-
-const MAIN_SCREENS_FOR_QUIT: string[] = ['dashboard', 'init'];
+import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
 
 export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
     const { exit } = useApp();
@@ -43,7 +42,7 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
         }
         
         // Quit from main screens
-        if (input.toLowerCase() === 'q' && MAIN_SCREENS_FOR_QUIT.includes(currentScreen)) {
+        if (input.toLowerCase() === 'q' && (MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
             exit();
         }
     }, { isActive });

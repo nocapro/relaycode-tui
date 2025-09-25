@@ -6,6 +6,7 @@ import { useTransactionStore } from '../stores/transaction.store';
 import { useCopyStore } from '../stores/copy.store';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
 import { useViewport } from './useViewport';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
 
 export const useTransactionHistoryScreen = () => {
     const store = useHistoryStore();
@@ -19,7 +20,7 @@ export const useTransactionHistoryScreen = () => {
     );
     const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
 
-    const NON_CONTENT_HEIGHT = 8; // Header, filter, separators, footer, etc.
+    const NON_CONTENT_HEIGHT = VIEW_CONSTANTS.HISTORY_NON_CONTENT_HEIGHT;
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
         padding: NON_CONTENT_HEIGHT,

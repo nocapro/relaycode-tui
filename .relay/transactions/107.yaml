@@ -1,0 +1,360 @@
+uuid: c3284370-128a-4113-9112-a7f4575971ab
+projectId: relaycode-tui
+createdAt: '2025-09-25T01:49:08.607Z'
+gitCommitMsg: >-
+  fix: resolve TS errors and lint warnings after constants refactor
+
+  - Fixes a TypeScript error in `useGlobalHotkeys` by casting the
+  `MAIN_SCREENS_FOR_QUIT` array for the `.includes()` check. - Corrects
+  TypeScript errors in `useSplashScreen` by explicitly typing the `countdown`
+  state as `number`, resolving type inference issues with `useState`. -
+  Addresses `max-len` ESLint warnings in `detail.store.ts` by reformatting lines
+  that became too long after the constant extraction.
+promptSummary: Fix TypeScript errors and ESLint warnings from the previous refactoring.
+reasoning:
+  - I will now address the TypeScript compiler errors and ESLint warnings.
+  - >-
+    First, I'll fix the TypeScript error in `useGlobalHotkeys.tsx`. The compiler
+    is correctly pointing out that the `.includes()` method expects a more
+    specific type than what `currentScreen` provides. I will cast the array to
+    `readonly string[]` to resolve this without complex type gymnastics.
+  - >-
+    Next, I'll fix the two related TypeScript errors in `useSplashScreen.tsx`.
+    The `countdown` state was being inferred as the literal type `3` because of
+    `as const` on the constant, preventing it from being updated to other
+    numbers. Explicitly typing the state with `useState<number>` will solve
+    this.
+  - >-
+    Finally, I'll fix the `max-len` ESLint warnings in
+    `src/stores/detail.store.ts`. The recent refactoring made some lines too
+    long. I will reformat them to comply with the 120-character limit. I am
+    omitting the warning for `review.service.ts` as the provided file content
+    does not show a line length violation at the reported line.
+operations:
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: >+
+      --- src/hooks/useGlobalHotkeys.tsx
+
+      +++ src/hooks/useGlobalHotkeys.tsx
+
+      @@ -42,7 +42,7 @@
+               }
+               
+               // Quit from main screens
+      -        if (input.toLowerCase() === 'q' &&
+      MAIN_SCREENS_FOR_QUIT.includes(currentScreen)) {
+
+      +        if (input.toLowerCase() === 'q' && (MAIN_SCREENS_FOR_QUIT as
+      readonly string[]).includes(currentScreen)) {
+                   exit();
+               }
+           }, { isActive });
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useSplashScreen.tsx
+    content: >+
+      --- src/hooks/useSplashScreen.tsx
+
+      +++ src/hooks/useSplashScreen.tsx
+
+      @@ -5,7 +5,7 @@
+       
+       export const useSplashScreen = () => {
+           const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+      -    const [countdown, setCountdown] =
+      useState(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
+
+      +    const [countdown, setCountdown] =
+      useState<number>(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
+       
+           const handleSkip = () => {
+               showInitScreen();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/detail.store.ts
+    content: >+
+      --- src/stores/detail.store.ts
+
+      +++ src/stores/detail.store.ts
+
+      @@ -41,7 +41,11 @@
+                   });
+               },
+               navigateUp: () => {
+      -            const navigatorOrder: NavigatorSection[] =
+      [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING,
+      NAVIGATOR_SECTIONS.FILES];
+
+      +            const navigatorOrder: NavigatorSection[] = [
+
+      +                NAVIGATOR_SECTIONS.PROMPT,
+
+      +                NAVIGATOR_SECTIONS.REASONING,
+
+      +                NAVIGATOR_SECTIONS.FILES,
+
+      +            ];
+                   const { navigatorFocus, selectedFileIndex } = get();
+                   if (navigatorFocus === 'FILES_LIST') {
+                       set({ selectedFileIndex: Math.max(0, selectedFileIndex - 1) });
+      @@ -53,7 +57,11 @@
+                   }
+               },
+               navigateDown: () => {
+      -            const navigatorOrder: NavigatorSection[] =
+      [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING,
+      NAVIGATOR_SECTIONS.FILES];
+
+      +            const navigatorOrder: NavigatorSection[] = [
+
+      +                NAVIGATOR_SECTIONS.PROMPT,
+
+      +                NAVIGATOR_SECTIONS.REASONING,
+
+      +                NAVIGATOR_SECTIONS.FILES,
+
+      +            ];
+                   const { navigatorFocus, selectedFileIndex } = get();
+                   const { selectedTransactionId } = useViewStore.getState();
+                   const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+      @@ -91,9 +99,11 @@
+                       set({ expandedSection: null, bodyView: DETAIL_BODY_VIEWS.NONE });
+                   }
+               },
+      -        toggleRevertConfirm: () => set(state => ({
+
+      -            bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
+      ? DETAIL_BODY_VIEWS.NONE : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+
+      -        })),
+
+      +        toggleRevertConfirm: () => set(state => ({
+
+      +            bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
+
+      +                ? DETAIL_BODY_VIEWS.NONE
+
+      +                : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+
+      +        })),
+               confirmRevert: () => {
+                   const { selectedTransactionId } = useViewStore.getState();
+                   if (!selectedTransactionId) return;
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { currentScreen } = useAppStore(s => ({
+            currentScreen: s.currentScreen,
+        }));
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+                return;
+            }
+
+            // If debug menu is open, it has its own input handler, so we stop here.
+            if (activeOverlay === 'debug') {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === 'help') {
+                if (key.escape || input === '?') {
+                    setActiveOverlay('none');
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay('help');
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q' && MAIN_SCREENS_FOR_QUIT.includes(currentScreen)) {
+                exit();
+            }
+        }, { isActive });
+    };
+  src/hooks/useSplashScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { VIEW_CONSTANTS } from '../constants/view.constants';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
+
+        const handleSkip = () => {
+            showInitScreen();
+        };
+
+        useInput(() => {
+            handleSkip();
+        });
+
+        useEffect(() => {
+            if (countdown === 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen]);
+
+        return { countdown };
+    };
+  src/stores/detail.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from
+    '../constants/detail.constants';
+
+
+    type ObjectValues<T> = T[keyof T];
+
+
+    export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
+
+    export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
+     
+    interface DetailState {
+        navigatorFocus: NavigatorSection | 'FILES_LIST';
+        expandedSection: NavigatorSection | null;
+        selectedFileIndex: number;
+        bodyView: DetailBodyView;
+        actions: {
+            load: (transactionId: string) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            handleEnterOrRight: () => void;
+            handleEscapeOrLeft: () => void;
+            toggleRevertConfirm: () => void;
+            confirmRevert: () => void;
+        };
+    }
+
+
+    export const useDetailStore = create<DetailState>((set, get) => ({
+        navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
+        expandedSection: null,
+        selectedFileIndex: 0,
+        bodyView: DETAIL_BODY_VIEWS.NONE,
+        actions: {
+            load: (transactionId) => {
+                useViewStore.getState().actions.setSelectedTransactionId(transactionId);
+                set({
+                    navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
+                    expandedSection: null,
+                    selectedFileIndex: 0,
+                    bodyView: DETAIL_BODY_VIEWS.NONE,
+                });
+            },
+            navigateUp: () => {
+                const navigatorOrder: NavigatorSection[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
+                const { navigatorFocus, selectedFileIndex } = get();
+                if (navigatorFocus === 'FILES_LIST') {
+                    set({ selectedFileIndex: Math.max(0, selectedFileIndex - 1) });
+                } else {
+                    const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
+                    if (currentIndex > 0) {
+                        set({ navigatorFocus: navigatorOrder[currentIndex - 1]! });
+                    }
+                }
+            },
+            navigateDown: () => {
+                const navigatorOrder: NavigatorSection[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
+                const { navigatorFocus, selectedFileIndex } = get();
+                const { selectedTransactionId } = useViewStore.getState();
+                const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+                const files = transaction?.files || [];
+                if (navigatorFocus === 'FILES_LIST') {
+                    set({ selectedFileIndex: Math.min(files.length - 1, selectedFileIndex + 1) });
+                } else {
+                    const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
+                    if (currentIndex < navigatorOrder.length - 1) {
+                        set({ navigatorFocus: navigatorOrder[currentIndex + 1]! });
+                    }
+                }
+            },
+            handleEnterOrRight: () => {
+                const { navigatorFocus, expandedSection } = get();
+                if (navigatorFocus === 'FILES_LIST') {
+                    set({ bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW });
+                    return;
+                }
+                if (expandedSection === navigatorFocus) {
+                    if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) {
+                        set({ navigatorFocus: 'FILES_LIST', bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
+                    }
+                    return;
+                }
+                set({ expandedSection: navigatorFocus as NavigatorSection });
+                if (navigatorFocus === NAVIGATOR_SECTIONS.PROMPT) set({ bodyView: DETAIL_BODY_VIEWS.PROMPT });
+                if (navigatorFocus === NAVIGATOR_SECTIONS.REASONING) set({ bodyView: DETAIL_BODY_VIEWS.REASONING });
+                if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
+            },
+            handleEscapeOrLeft: () => {
+                const { navigatorFocus, expandedSection, bodyView } = get();
+                if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                    set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
+                    return;
+                }
+                if (navigatorFocus === 'FILES_LIST') {
+                    set({ navigatorFocus: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.NONE });
+                    return;
+                }
+                if (expandedSection) {
+                    set({ expandedSection: null, bodyView: DETAIL_BODY_VIEWS.NONE });
+                }
+            },
+            toggleRevertConfirm: () => set(state => ({
+                bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? DETAIL_BODY_VIEWS.NONE : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+            })),
+            confirmRevert: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (!selectedTransactionId) return;
+                TransactionService.revertTransaction(selectedTransactionId);
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
+                set({ bodyView: DETAIL_BODY_VIEWS.NONE });
+            },
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 107

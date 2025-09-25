@@ -1,26 +1,14 @@
 import { useInitStore } from '../stores/init.store';
-import type { Task } from '../stores/init.store';
 import { sleep } from '../utils';
-
-const initialAnalyzeTasks: Task[] = [
-    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
-    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
-    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
-];
-
-const initialConfigureTasks: Task[] = [
-    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
-    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
-    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
-];
+import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
 
 const runInitializationProcess = async () => {
     const { actions } = useInitStore.getState();
     actions.resetInit();
-    actions.setTasks(initialAnalyzeTasks, initialConfigureTasks);
+    actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
 
     actions.setPhase('ANALYZE');
-    for (const task of initialAnalyzeTasks) {
+    for (const task of INITIAL_ANALYZE_TASKS) {
         actions.updateAnalyzeTask(task.id, 'active');
         await sleep(800);
         actions.updateAnalyzeTask(task.id, 'done');
@@ -29,7 +17,7 @@ const runInitializationProcess = async () => {
     await sleep(500);
 
     actions.setPhase('CONFIGURE');
-    const configTasksUntilInteractive = initialConfigureTasks.slice(0, 2);
+    const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
     for (const task of configTasksUntilInteractive) {
         actions.updateConfigureTask(task.id, 'active');
         await sleep(800);
@@ -44,7 +32,7 @@ const resumeInitializationProcess = async () => {
     const { actions } = useInitStore.getState();
     
     actions.setPhase('CONFIGURE');
-    const lastTask = initialConfigureTasks[2];
+    const lastTask = INITIAL_CONFIGURE_TASKS[2];
     if (lastTask) {
         actions.updateConfigureTask(lastTask.id, 'active');
         await sleep(800);
