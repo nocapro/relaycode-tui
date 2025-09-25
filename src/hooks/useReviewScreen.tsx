@@ -68,24 +68,18 @@ export const useReviewScreen = () => {
 
     const handleGlobalInput = (input: string, key: Key): boolean => {
         if (input === '1') { // For demo purposes
-            startApplySimulation('success');
-            return true;
+            startApplySimulation('success'); return true;
         }
         if (input === '2') { // For demo purposes
-            startApplySimulation('failure');
-            return true;
+            startApplySimulation('failure'); return true;
         }
-        if (input.toLowerCase() === 'q') {
-            exit();
-            return true;
-        }
+        // The 'q' (quit/back) is now handled by the global hotkey hook.
+
         if (key.escape) {
             if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff') {
                 toggleBodyView(bodyView);
             } else if (bodyView !== 'none') {
                 setBodyView('none');
-            } else {
-                showDashboardScreen();
             }
             return true;
         }

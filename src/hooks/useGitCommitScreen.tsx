@@ -12,9 +12,6 @@ export const useGitCommitScreen = () => {
     useInput((input, key) => {
         if (isCommitting) return;
 
-        if (key.escape) {
-            showDashboardScreen();
-        }
         if (key.return) {
             commit().then(() => {
                 showDashboardScreen();

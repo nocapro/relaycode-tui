@@ -37,7 +37,7 @@ const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
 const TransactionDetailScreen = () => {
     const {
         transaction, files,
-        navigatorFocus, expandedSection, selectedFileIndex, bodyView,
+        focusedItemPath, expandedItemPaths, bodyView,
     } = useTransactionDetailScreen();
 
     if (!transaction) {
@@ -45,32 +45,33 @@ const TransactionDetailScreen = () => {
     }
 
     const renderNavigator = () => {
-        const isPromptFocused = navigatorFocus === 'PROMPT';
-        const isReasoningFocused = navigatorFocus === 'REASONING';
-        const isFilesFocused = navigatorFocus === 'FILES' || navigatorFocus === 'FILES_LIST';
+        const isPromptFocused = focusedItemPath === 'PROMPT';
+        const isReasoningFocused = focusedItemPath === 'REASONING';
+        const isFilesFocused = focusedItemPath.startsWith('FILES');
         
-        const isPromptExpanded = expandedSection === 'PROMPT';
-        const isReasoningExpanded = expandedSection === 'REASONING';
-        const isFilesExpanded = expandedSection === 'FILES';
+        const isPromptExpanded = expandedItemPaths.has('PROMPT');
+        const isReasoningExpanded = expandedItemPaths.has('REASONING');
+        const isFilesExpanded = expandedItemPaths.has('FILES');
         
         return (
             <Box flexDirection="column">
-                <Text color={isPromptFocused && !isFilesFocused ? 'cyan' : undefined}>
-                    {isPromptFocused && !isFilesFocused ? '> ' : '  '}
+                <Text color={isPromptFocused ? 'cyan' : undefined}>
+                    {isPromptFocused ? '> ' : '  '}
                     {isPromptExpanded ? '▾' : '▸'} (P)rompt
                 </Text>
-                <Text color={isReasoningFocused && !isFilesFocused ? 'cyan' : undefined}>
-                    {isReasoningFocused && !isFilesFocused ? '> ' : '  '}
+                <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                    {isReasoningFocused ? '> ' : '  '}
                     {isReasoningExpanded ? '▾' : '▸'} (R)easoning ({transaction.reasoning?.split('\n\n').length || 0} steps)
                 </Text>
                 <Text color={isFilesFocused ? 'cyan' : undefined}>
-                    {isFilesFocused && navigatorFocus !== 'FILES_LIST' ? '> ' : '  '}
+                    {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
                     {isFilesExpanded ? '▾' : '▸'} (F)iles ({files.length})
                 </Text>
                 {isFilesExpanded && (
                     <Box flexDirection="column" paddingLeft={2}>
-                        {files.map((file, index) => {
-                             const isFileSelected = navigatorFocus === 'FILES_LIST' && selectedFileIndex === index;
+                        {files.map((file) => {
+                             const fileId = `FILES/${file.id}`;
+                             const isFileSelected = focusedItemPath === fileId;
                              const stats = file.type === 'DEL' ? '' : ` (+${file.linesAdded}/-${file.linesRemoved})`;
                              return (
                                 <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
@@ -105,7 +106,8 @@ const TransactionDetailScreen = () => {
              return <Text color="gray">(Select a file and press → to view the diff)</Text>;
         }
         if (bodyView === 'DIFF_VIEW') {
-            const file = files[selectedFileIndex];
+            const fileId = focusedItemPath.split('/')[1];
+            const file = files.find(f => f.id === fileId);
             if (!file) return null;
             return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} />;
         }
@@ -117,18 +119,20 @@ const TransactionDetailScreen = () => {
             return <Text>(Enter) Confirm Revert      (Esc) Cancel</Text>;
         }
         
-        if (navigatorFocus === 'FILES_LIST') {
+        const baseActions = ['(↑↓) Nav', '(C)opy', '(U)ndo', '(Q)uit/Back'];
+
+        if (focusedItemPath.includes('/')) { // Is a file
             if (bodyView === 'DIFF_VIEW') {
-                return <Text>(↑↓) Nav Files · (←) Back to Files · (C)opy Mode · (U)ndo · (Q)uit</Text>;
+                return <Text>(↑↓) Nav Files · (←) Back to List · {baseActions.slice(1).join(' · ')}</Text>;
             }
-            return <Text>(↑↓) Nav Files · (→) View Diff · (←) Back to Sections · (C)opy Mode · (Q)uit</Text>;
+            return <Text>(↑↓) Nav Files · (→) View Diff · (←) Back to Sections · {baseActions.slice(1).join(' · ')}</Text>;
         }
         
-        if (expandedSection) {
-            return <Text>(↑↓) Nav/Scroll · (←) Collapse · (C)opy Mode · (U)ndo · (Q)uit</Text>;
+        if (expandedItemPaths.has(focusedItemPath)) {
+            return <Text>(↑↓) Nav/Scroll · (→) Drill In · (←) Collapse · {baseActions.slice(1).join(' · ')}</Text>;
         }
         
-        return <Text>(↑↓) Nav · (→) Expand · (C)opy Mode · (U)ndo · (Q)uit</Text>;
+        return <Text>(↑↓) Nav · (→) Expand · {baseActions.slice(1).join(' · ')}</Text>;
     };
 
     const { message, timestamp, status } = transaction;

@@ -10,102 +10,112 @@ export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
 export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
  
 interface DetailState {
-    navigatorFocus: NavigatorSection | 'FILES_LIST';
-    expandedSection: NavigatorSection | null;
-    selectedFileIndex: number;
+    focusedItemPath: string; // e.g., 'PROMPT', 'FILES', 'FILES/1-1'
+    expandedItemPaths: Set<string>;
     bodyView: DetailBodyView;
     actions: {
         load: (transactionId: string) => void;
         navigateUp: () => void;
         navigateDown: () => void;
-        handleEnterOrRight: () => void;
-        handleEscapeOrLeft: () => void;
+        expandOrDrillDown: () => void;
+        collapseOrBubbleUp: () => void;
         toggleRevertConfirm: () => void;
         confirmRevert: () => void;
     };
 }
 
+const getVisibleItemPaths = (expandedItemPaths: Set<string>): string[] => {
+    const { selectedTransactionId } = useViewStore.getState();
+    const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+    if (!transaction) return [];
+
+    const paths: string[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
+    if (expandedItemPaths.has(NAVIGATOR_SECTIONS.FILES) && transaction.files) {
+        for (const file of transaction.files) {
+            paths.push(`${NAVIGATOR_SECTIONS.FILES}/${file.id}`);
+        }
+    }
+    return paths;
+};
+
 export const useDetailStore = create<DetailState>((set, get) => ({
-    navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
-    expandedSection: null,
-    selectedFileIndex: 0,
+    focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+    expandedItemPaths: new Set(),
     bodyView: DETAIL_BODY_VIEWS.NONE,
     actions: {
         load: (transactionId) => {
             useViewStore.getState().actions.setSelectedTransactionId(transactionId);
             set({
-                navigatorFocus: NAVIGATOR_SECTIONS.PROMPT,
-                expandedSection: null,
-                selectedFileIndex: 0,
+                focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+                expandedItemPaths: new Set(),
                 bodyView: DETAIL_BODY_VIEWS.NONE,
             });
         },
         navigateUp: () => {
-            const navigatorOrder: NavigatorSection[] = [
-                NAVIGATOR_SECTIONS.PROMPT,
-                NAVIGATOR_SECTIONS.REASONING,
-                NAVIGATOR_SECTIONS.FILES,
-            ];
-            const { navigatorFocus, selectedFileIndex } = get();
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ selectedFileIndex: Math.max(0, selectedFileIndex - 1) });
-            } else {
-                const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
-                if (currentIndex > 0) {
-                    set({ navigatorFocus: navigatorOrder[currentIndex - 1]! });
-                }
+            const { expandedItemPaths, focusedItemPath } = get();
+            const visibleItems = getVisibleItemPaths(expandedItemPaths);
+            const currentIndex = visibleItems.indexOf(focusedItemPath);
+            if (currentIndex > 0) {
+                set({ focusedItemPath: visibleItems[currentIndex - 1]! });
             }
         },
         navigateDown: () => {
-            const navigatorOrder: NavigatorSection[] = [
-                NAVIGATOR_SECTIONS.PROMPT,
-                NAVIGATOR_SECTIONS.REASONING,
-                NAVIGATOR_SECTIONS.FILES,
-            ];
-            const { navigatorFocus, selectedFileIndex } = get();
-            const { selectedTransactionId } = useViewStore.getState();
-            const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
-            const files = transaction?.files || [];
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ selectedFileIndex: Math.min(files.length - 1, selectedFileIndex + 1) });
+            const { expandedItemPaths, focusedItemPath } = get();
+            const visibleItems = getVisibleItemPaths(expandedItemPaths);
+            const currentIndex = visibleItems.indexOf(focusedItemPath);
+            if (currentIndex < visibleItems.length - 1) {
+                set({ focusedItemPath: visibleItems[currentIndex + 1]! });
+            }
+        },
+        expandOrDrillDown: () => set(state => {
+            const { focusedItemPath, expandedItemPaths } = state;
+            const newExpandedPaths = new Set(expandedItemPaths);
+            
+            if (focusedItemPath.includes('/')) { // Is a file
+                return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
+            }
+
+            // Is a section header
+            if (newExpandedPaths.has(focusedItemPath)) {
+                // Already expanded, drill in if it's FILES
+                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
+                    const visibleItems = getVisibleItemPaths(newExpandedPaths);
+                    const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
+                    if (firstFile) {
+                        return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                    }
+                }
+                return {}; // No-op for PROMPT/REASONING if already expanded
             } else {
-                const currentIndex = navigatorOrder.indexOf(navigatorFocus as NavigatorSection);
-                if (currentIndex < navigatorOrder.length - 1) {
-                    set({ navigatorFocus: navigatorOrder[currentIndex + 1]! });
-                }
+                // Not expanded, so expand it
+                newExpandedPaths.add(focusedItemPath);
+                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
+                if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
+                if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
+                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;
+                return { expandedItemPaths: newExpandedPaths, bodyView: newBodyView };
             }
-        },
-        handleEnterOrRight: () => {
-            const { navigatorFocus, expandedSection } = get();
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW });
-                return;
-            }
-            if (expandedSection === navigatorFocus) {
-                if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) {
-                    set({ navigatorFocus: 'FILES_LIST', bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
-                }
-                return;
-            }
-            set({ expandedSection: navigatorFocus as NavigatorSection });
-            if (navigatorFocus === NAVIGATOR_SECTIONS.PROMPT) set({ bodyView: DETAIL_BODY_VIEWS.PROMPT });
-            if (navigatorFocus === NAVIGATOR_SECTIONS.REASONING) set({ bodyView: DETAIL_BODY_VIEWS.REASONING });
-            if (navigatorFocus === NAVIGATOR_SECTIONS.FILES) set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
-        },
-        handleEscapeOrLeft: () => {
-            const { navigatorFocus, expandedSection, bodyView } = get();
+        }),
+        collapseOrBubbleUp: () => set(state => {
+            const { focusedItemPath, expandedItemPaths, bodyView } = state;
+            
             if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
-                set({ bodyView: DETAIL_BODY_VIEWS.FILES_LIST });
-                return;
+                return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
             }
-            if (navigatorFocus === 'FILES_LIST') {
-                set({ navigatorFocus: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.NONE });
-                return;
+
+            if (focusedItemPath.includes('/')) { // Is a file
+                return { focusedItemPath: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
             }
-            if (expandedSection) {
-                set({ expandedSection: null, bodyView: DETAIL_BODY_VIEWS.NONE });
+            
+            // Is a section header
+            if (expandedItemPaths.has(focusedItemPath)) {
+                const newExpandedPaths = new Set(expandedItemPaths);
+                newExpandedPaths.delete(focusedItemPath);
+                return { expandedItemPaths: newExpandedPaths, bodyView: DETAIL_BODY_VIEWS.NONE };
             }
-        },
+            
+            return {}; // No-op if not expanded (global back will handle)
+        }),
         toggleRevertConfirm: () => set(state => ({
             bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
                 ? DETAIL_BODY_VIEWS.NONE

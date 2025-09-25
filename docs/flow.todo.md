@@ -92,7 +92,7 @@ update transaction history screen
 
 - should streamline the esc and quit behaviour accross screen for consistency
 
-- implement drilling left righ arrow
+- implement drilling left right arrow just like transaction history screen
 
 === DONE
 

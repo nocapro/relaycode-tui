@@ -10,66 +10,54 @@ export const useTransactionDetailScreen = () => {
     const { showDashboardScreen } = useAppStore(s => s.actions);
     const store = useDetailStore();
     const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
-    const {
-        bodyView,
-    } = store;
-
     const transaction = useTransactionStore(s => s.transactions.find(tx => tx.id === selectedTransactionId));
     const files = useMemo(() => transaction?.files || [], [transaction]);
 
     const {
-        // Main nav
         navigateUp,
         navigateDown,
-        handleEnterOrRight,
-        handleEscapeOrLeft,
+        expandOrDrillDown,
+        collapseOrBubbleUp,
         toggleRevertConfirm,
-        // Revert modal nav
         confirmRevert,
     } = store.actions;
 
     const openCopyMode = () => {
         if (!transaction) return;
-        const { selectedFileIndex } = store;
-        const selectedFile = files[selectedFileIndex];
+        const { focusedItemPath } = store;
+        const fileId = focusedItemPath.split('/')[1];
+        const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
         useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
     };
 
-    const handleRevertConfirmInput = (_input: string, key: Key): void => {
-        if (key.escape) toggleRevertConfirm();
-        if (key.return) confirmRevert();
-    };
-
-    const handleMainInput = (input: string, key: Key): void => {
-        if (input.toLowerCase() === 'q') {
-            showDashboardScreen();
+    useInput((input: string, key: Key) => {
+        if (store.bodyView === 'REVERT_CONFIRM') {
+            if (key.escape) toggleRevertConfirm();
+            if (key.return) confirmRevert();
+            return;
         }
+
+        // --- Main Input ---
         if (input.toLowerCase() === 'c') {
             openCopyMode();
+            return;
         }
         if (input.toLowerCase() === 'u') {
             toggleRevertConfirm();
+            return;
         }
 
         if (key.upArrow) navigateUp();
         if (key.downArrow) navigateDown();
-        if (key.return || key.rightArrow) handleEnterOrRight();
-        if (key.escape || key.leftArrow) handleEscapeOrLeft();
-    };
-
-    useInput((input: string, key: Key) => {
-        if (bodyView === 'REVERT_CONFIRM') {
-            return handleRevertConfirmInput(input, key);
-        }
-        return handleMainInput(input, key);
-    });
+        if (key.return || key.rightArrow) expandOrDrillDown();
+        if (key.escape || key.leftArrow) collapseOrBubbleUp();
+    }, { isActive: useViewStore.getState().activeOverlay === 'none' }); // Prevent input when copy overlay is open
 
     return {
         transaction,
         files,
-        navigatorFocus: store.navigatorFocus,
-        expandedSection: store.expandedSection,
-        selectedFileIndex: store.selectedFileIndex,
+        focusedItemPath: store.focusedItemPath,
+        expandedItemPaths: store.expandedItemPaths,
         bodyView: store.bodyView,
         actions: {
             showDashboardScreen,

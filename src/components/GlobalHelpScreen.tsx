@@ -24,11 +24,12 @@ const GlobalHelpScreen = () => {
                     <Box flexDirection="column">
                         <Text bold color="cyan">GLOBAL</Text>
                         <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
-                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (from main screens)</Text>
+                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
                     </Box>
                     <Box flexDirection="column">
                         <Text bold color="cyan">DASHBOARD (watch)</Text>
                         <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                        <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
                         <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
                         <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
                         <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
@@ -36,6 +37,7 @@ const GlobalHelpScreen = () => {
                     <Box flexDirection="column">
                         <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
                         <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                        <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
                         <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
                         <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
                         <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>

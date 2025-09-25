@@ -1045,42 +1045,6 @@ export const useGitCommitScreen = () => {
 };
 ```
 
-## File: src/hooks/useSplashScreen.tsx
-```typescript
-import { useState, useEffect } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { VIEW_CONSTANTS } from '../constants/view.constants';
-
-export const useSplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState<number>(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
-
-    const handleSkip = () => {
-        showInitScreen();
-    };
-
-    useInput(() => {
-        handleSkip();
-    });
-
-    useEffect(() => {
-        if (countdown === 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
-
-    return { countdown };
-};
-```
-
 ## File: src/services/dashboard.service.ts
 ```typescript
 import { sleep } from '../utils';
@@ -1286,68 +1250,62 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
 };
 ```
 
-## File: src/hooks/useInitializationScreen.tsx
+## File: src/hooks/useSplashScreen.tsx
 ```typescript
-import React, { useEffect } from 'react';
-import { Text, useApp, useInput } from 'ink';
-import { useInitStore } from '../stores/init.store';
+import { useState, useEffect } from 'react';
+import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
-import { InitService } from '../services/init.service';
+import { VIEW_CONSTANTS } from '../constants/view.constants';
 
-export const useInitializationScreen = () => {
-    const phase = useInitStore(s => s.phase);
-    const interactiveChoice = useInitStore(s => s.interactiveChoice);
-    const actions = useInitStore(s => s.actions);
-    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
-    const { exit } = useApp();
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState<number>(VIEW_CONSTANTS.SPLASH_INITIAL_COUNTDOWN);
 
-    useInput((input, key) => {
-        if (phase === 'INTERACTIVE') {
-            if (key.return) {
-                actions.setInteractiveChoice('ignore');
-            } else if (input.toLowerCase() === 's') {
-                actions.setInteractiveChoice('share');
-            }
+    const handleSkip = () => {
+        showInitScreen();
+    };
+
+    useInput((input) => {
+        const lowerInput = input.toLowerCase();
+        if (lowerInput === 'v') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening noca.pro in browser...');
+            return;
         }
-        if (phase === 'FINALIZE') {
-            if (input.toLowerCase() === 'w') {
-                showDashboardScreen();
-            }
+        if (lowerInput === 'x') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening X/Twitter in browser...');
+            return;
         }
+        if (lowerInput === 'd') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening Discord in browser...');
+            return;
+        }
+        if (lowerInput === 'g') {
+            // eslint-disable-next-line no-console
+            console.log('[MOCK] Opening GitHub in browser...');
+            return;
+        }
+
+        // Any other key skips
+        handleSkip(); 
     });
 
     useEffect(() => {
-        InitService.runInitializationProcess();
-    }, []);
-
-    useEffect(() => {
-        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
-            InitService.resumeInitializationProcess();
+        if (countdown === 0) {
+            showInitScreen();
+            return;
         }
-    }, [interactiveChoice, phase]);
 
-    const {
-        analyzeTasks,
-        configureTasks,
-        projectId,
-    } = useInitStore();
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
 
-    let footerText;
-    switch (phase) {
-        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
-        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
-        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
-        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
-    }
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
 
-    return {
-        phase,
-        analyzeTasks,
-        configureTasks,
-        interactiveChoice,
-        projectId,
-        footerText,
-    };
+    return { countdown };
 };
 ```
 
@@ -1631,6 +1589,74 @@ export const allMockTransactions: Transaction[] = [
  */
 export const createMockTransactions = (): Transaction[] => {
     return JSON.parse(JSON.stringify(allMockTransactions));
+};
+```
+
+## File: src/hooks/useInitializationScreen.tsx
+```typescript
+import React, { useEffect } from 'react';
+import { Text, useApp, useInput } from 'ink';
+import { useInitStore } from '../stores/init.store';
+import { useAppStore } from '../stores/app.store';
+import { InitService } from '../services/init.service';
+
+export const useInitializationScreen = () => {
+    const phase = useInitStore(s => s.phase);
+    const interactiveChoice = useInitStore(s => s.interactiveChoice);
+    const actions = useInitStore(s => s.actions);
+    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+    const { exit } = useApp();
+
+    useInput((input, key) => {
+        if (phase === 'INTERACTIVE') {
+            if (key.return) {
+                actions.setInteractiveChoice('ignore');
+            } else if (input.toLowerCase() === 's') {
+                actions.setInteractiveChoice('share');
+            }
+        }
+        if (phase === 'FINALIZE') {
+            if (input.toLowerCase() === 'w') {
+                showDashboardScreen();
+            }
+            if (input.toLowerCase() === 'q') {
+                exit();
+            }
+        }
+    });
+
+    useEffect(() => {
+        InitService.runInitializationProcess();
+    }, []);
+
+    useEffect(() => {
+        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+            InitService.resumeInitializationProcess();
+        }
+    }, [interactiveChoice, phase]);
+
+    const {
+        analyzeTasks,
+        configureTasks,
+        projectId,
+    } = useInitStore();
+
+    let footerText;
+    switch (phase) {
+        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+    }
+
+    return {
+        phase,
+        analyzeTasks,
+        configureTasks,
+        interactiveChoice,
+        projectId,
+        footerText,
+    };
 };
 ```
 
@@ -2795,12 +2821,47 @@ export const useReviewScreen = () => {
 };
 ```
 
+## File: src/stores/app.store.ts
+```typescript
+import { create } from 'zustand';
+import type { AppScreen } from '../types/view.types';
+
+interface AppState {
+    currentScreen: AppScreen;
+    actions: {
+        showInitScreen: () => void;
+        showReviewProcessingScreen: () => void;
+        showDashboardScreen: () => void;
+        showReviewScreen: () => void;
+        showGitCommitScreen: () => void;
+        showSplashScreen: () => void;
+        showTransactionHistoryScreen: () => void;
+        showTransactionDetailScreen: () => void;
+    };
+}
+
+export const useAppStore = create<AppState>((set) => ({
+    currentScreen: 'splash',
+    actions: {
+        showInitScreen: () => set({ currentScreen: 'init' }),
+        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+        showReviewScreen: () => set({ currentScreen: 'review' }),
+        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+        showSplashScreen: () => set({ currentScreen: 'splash' }),
+        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+    },
+}));
+```
+
 ## File: index.tsx
 ```typescript
 import React from 'react';
 import { render } from 'ink';
 import App from './src/App';
 import { useAppStore } from './src/stores/app.store';
+import { useViewStore } from './src/stores/view.store';
 import { useDetailStore } from './src/stores/detail.store';
 import { useHistoryStore } from './src/stores/history.store';
 import { useReviewStore } from './src/stores/review.store';
@@ -2846,6 +2907,10 @@ const main = () => {
             case 'SplashScreen':
                  appActions.showSplashScreen();
                  break;
+            case 'DebugMenu':
+                appActions.showDashboardScreen();
+                useViewStore.getState().actions.setActiveOverlay('debug');
+                break;
             default:
                 process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
                 process.exit(1);
@@ -2864,40 +2929,6 @@ const main = () => {
 };
 
 main();
-```
-
-## File: src/stores/app.store.ts
-```typescript
-import { create } from 'zustand';
-import type { AppScreen } from '../types/view.types';
-
-interface AppState {
-    currentScreen: AppScreen;
-    actions: {
-        showInitScreen: () => void;
-        showReviewProcessingScreen: () => void;
-        showDashboardScreen: () => void;
-        showReviewScreen: () => void;
-        showGitCommitScreen: () => void;
-        showSplashScreen: () => void;
-        showTransactionHistoryScreen: () => void;
-        showTransactionDetailScreen: () => void;
-    };
-}
-
-export const useAppStore = create<AppState>((set) => ({
-    currentScreen: 'splash',
-    actions: {
-        showInitScreen: () => set({ currentScreen: 'init' }),
-        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
-        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
-        showReviewScreen: () => set({ currentScreen: 'review' }),
-        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
-        showSplashScreen: () => set({ currentScreen: 'splash' }),
-        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
-        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
-    },
-}));
 ```
 
 ## File: src/components/TransactionDetailScreen.tsx
@@ -3283,6 +3314,7 @@ import { useInput, type Key } from 'ink';
 import { useHistoryStore } from '../stores/history.store';
 import { useAppStore } from '../stores/app.store';
 import { useTransactionStore } from '../stores/transaction.store';
+import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
 import { useViewport } from './useViewport';
@@ -3291,7 +3323,7 @@ import { VIEW_CONSTANTS } from '../constants/view.constants';
 export const useTransactionHistoryScreen = () => {
     const store = useHistoryStore();
     const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, actions } = store;
-    const { showDashboardScreen } = useAppStore(s => s.actions);
+    const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
     const transactions = useTransactionStore(s => s.transactions);
 
     const visibleItemPaths = useMemo(
@@ -3318,9 +3350,16 @@ export const useTransactionHistoryScreen = () => {
         if (key.return) actions.applyFilter();
     };
 
-    const handleBulkActionsInput = (_input: string, key: Key): void => {
-        if (key.escape) actions.setMode('LIST');
-        // Add number handlers...
+    const handleBulkActionsInput = (input: string, key: Key): void => {
+        if (key.escape) {
+            actions.setMode('LIST');
+            return;
+        }
+        if (input >= '1' && input <= '3') {
+            // eslint-disable-next-line no-console
+            console.log(`[MOCK] Bulk action #${input} selected.`);
+            actions.setMode('LIST');
+        }
     };
 
     const handleListInput = (input: string, key: Key): void => {
@@ -3329,6 +3368,13 @@ export const useTransactionHistoryScreen = () => {
         if (key.rightArrow) actions.expandOrDrillDown();
         if (key.leftArrow) actions.collapseOrBubbleUp();
         if (input === ' ') actions.toggleSelection();
+        if (key.return) {
+            const txId = selectedItemPath.split('/')[0];
+            if (txId && !selectedItemPath.includes('/')) {
+                useDetailStore.getState().actions.load(txId);
+                showTransactionDetailScreen();
+            }
+        }
 
         if (input.toLowerCase() === 'f') actions.setMode('FILTER');
         if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
@@ -3800,7 +3846,6 @@ import { useInitStore } from '../stores/init.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
 import { COPYABLE_ITEMS } from '../constants/copy.constants';
-import { CopyService } from '../services/copy.service';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import type { Transaction } from '../types/domain.types';
@@ -3903,9 +3948,7 @@ const useDebugMenuActions = () => {
                 const selectedFile = tx.files && tx.files.length > 0
                     ? tx.files[0]
                     : undefined;
-                const items = CopyService.getCopyItemsForReview(tx, tx.files || [], selectedFile);
-                useCopyStore.getState().actions.open(
-                    'Select data to copy from review:', items);
+                useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
             },
         },
         {
@@ -3985,12 +4028,17 @@ const useDebugMenuActions = () => {
             action: () => {
                 historyActions.prepareDebugState('copy');
                 appActions.showTransactionHistoryScreen();
-                const allTxs = useTransactionStore.getState().transactions;
-                // The 'copy' debug state sets selectedForAction to ['3', '6']. We'll use that directly.
-                const txsToCopy = allTxs.filter((tx: Transaction) => ['3', '6'].includes(tx.id));
-                const items = CopyService.getCopyItemsForHistory(txsToCopy);
-                useCopyStore.getState().actions.open(
-                    `Select data to copy from ${txsToCopy.length} transactions:`, items);
+                const { transactions } = useTransactionStore.getState();
+                const { selectedForAction } = useHistoryStore.getState();
+                const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                useCopyStore.getState().actions.openForHistory(txsToCopy);
+            },
+        },
+        {
+            title: 'History: Bulk Actions Mode',
+            action: () => {
+                historyActions.prepareDebugState('bulk');
+                appActions.showTransactionHistoryScreen();
             },
         },
     ];
@@ -4285,7 +4333,7 @@ const DashboardScreen = () => {
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
         const pauseAction = status === 'PAUSED'
-			? <Text>(<Text color="cyan" bold>R</Text>)esume</Text>
+			? <Text>(<Text color="cyan" bold>P</Text>)resume</Text>
 			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
 		return (
             <Text color="gray">
