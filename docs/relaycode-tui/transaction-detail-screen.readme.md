@@ -70,7 +70,7 @@ This is the default view upon selecting a transaction. It provides a complete, s
 
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (→) Expand · (C)opy Mode · (U)ndo · (Q)uit
+ (↑↓) Nav · (→) Expand · (C)opy Mode · (O)pen YAML · (U)ndo · (Q)uit
 ```
 
 #### 2.2. Expanding a Section: Viewing Reasoning
@@ -113,7 +113,7 @@ The user wants to read the full reasoning behind the transaction.
      files failed to restore. This provides much better diagnostics.
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav/Scroll · (←) Collapse · (C)opy Mode · (U)ndo · (Q)uit
+ (↑↓) Nav/Scroll · (←) Collapse · (C)opy Mode · (O)pen YAML · (U)ndo · (Q)uit
 ```
 
 #### 2.3. Hierarchical Drill-Down: Inspecting File Diffs
@@ -149,7 +149,7 @@ This demonstrates the powerful two-level navigation for inspecting code changes.
 
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav Files · (→) View Diff · (←) Back to Sections · (C)opy Mode · (Q)uit
+ (↑↓) Nav Files · (→) View Diff · (←) Back to Sections · (C)opy Mode · (O)pen File · (U)ndo · (Q)uit
 ```
 
 **Step B: Display the Diff**
@@ -200,7 +200,7 @@ This demonstrates the powerful two-level navigation for inspecting code changes.
    }
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav Files · (←) Back to Files · (C)opy Mode · (U)ndo · (Q)uit
+ (↑↓) Nav Files · (←) Back to Files · (C)opy Mode · (O)pen File · (U)ndo · (Q)uit
 ```
 
 ---
@@ -293,6 +293,7 @@ This action initiates a safe, non-destructive revert of the transaction.
 | `→`          | Expand / Drill Down| Navigator (Sections or Files)              |
 | `←`          | Collapse / Go Back | Navigator (Expanded Sections or Files)     |
 | `(C)`        | Enter/Exit Copy Mode | Primary Views & Copy Mode                  |
+| `(O)`        | Open in Editor     | Universal                                  |
 | `(U)`        | Initiate Revert    | Primary Views                              |
 | `(Q)` `Esc`  | Quit / Cancel      | Universal                                  |
 | `(Enter)`    | Confirm Action     | Copy Mode (to copy), Revert Modal (to revert) |

@@ -195,7 +195,7 @@ const useDebugMenuActions = () => {
             },
         },
         {
-            title: 'Detail: Diff View',
+            title: 'Detail: Diff View (for File Open action)',
             action: () => {
                 detailActions.load('3', {
                     focusedItemPath: 'FILES/3-1',
@@ -234,7 +234,7 @@ const useDebugMenuActions = () => {
             },
         },
         {
-            title: 'History: L2 Drilldown (File Diff)',
+            title: 'History: L2 Drilldown (for File Open action)',
             action: () => {
                 historyActions.prepareDebugState('l2-drill-diff');
                 appActions.showTransactionHistoryScreen();

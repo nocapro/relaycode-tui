@@ -4,6 +4,7 @@ import { useViewStore } from '../stores/view.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import { useMemo } from 'react';
 import { useCopyStore } from '../stores/copy.store';
+import { EditorService } from '../services/editor.service';
 
 export const useTransactionDetailScreen = () => {
     const store = useDetailStore();
@@ -42,6 +43,18 @@ export const useTransactionDetailScreen = () => {
         if (input.toLowerCase() === 'u') {
             toggleRevertConfirm();
             return;
+        }
+        if (input.toLowerCase() === 'o') {
+            if (!transaction) return;
+            const { focusedItemPath } = store;
+            if (focusedItemPath.includes('/')) { // Is a file
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (file) EditorService.openFileInEditor(file.path);
+            } else { // Is a section, open the transaction YAML
+                const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
+                EditorService.openFileInEditor(yamlPath);
+            }
         }
 
         if (key.upArrow) navigateUp();

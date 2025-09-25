@@ -6,6 +6,7 @@ import { useTransactionStore } from '../stores/transaction.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import type { TransactionStatus } from '../types/domain.types';
+import { EditorService } from '../services/editor.service';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
 import { useViewport } from './useViewport';
 
@@ -61,6 +62,20 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
             if (txId && !selectedItemPath.includes('/')) {
                 useDetailStore.getState().actions.load(txId);
                 showTransactionDetailScreen();
+            }
+        }
+        if (input.toLowerCase() === 'o') {
+            const txId = selectedItemPath.split('/')[0];
+            const tx = transactions.find(t => t.id === txId);
+            if (!tx) return;
+
+            if (selectedItemPath.includes('/file/')) {
+                const fileId = selectedItemPath.split('/')[2];
+                const file = tx.files?.find(f => f.id === fileId);
+                if (file) EditorService.openFileInEditor(file.path);
+            } else {
+                const yamlPath = EditorService.getTransactionYamlPath(tx.hash);
+                EditorService.openFileInEditor(yamlPath);
             }
         }
 

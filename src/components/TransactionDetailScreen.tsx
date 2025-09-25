@@ -123,14 +123,16 @@ const TransactionDetailScreen = () => {
             ]} />;
         }
         
+        const isFileFocused = focusedItemPath.includes('/');
         const baseActions: ActionItem[] = [
             { key: 'C', label: 'Copy' },
+            { key: 'O', label: isFileFocused ? 'Open File' : 'Open YAML' },
             { key: 'U', label: 'Undo' },
             { key: 'Q', label: 'Quit/Back' },
         ];
         let contextualActions: ActionItem[] = [];
 
-        if (focusedItemPath.includes('/')) { // Is a file
+        if (isFileFocused) { // Is a file
             if (bodyView === 'DIFF_VIEW') {
                 contextualActions = [
                     { key: '↑↓', label: 'Nav Files' },

@@ -1,0 +1,1289 @@
+uuid: c2570b4a-a0f1-432d-94e8-8a719c629864
+projectId: relaycode-tui
+createdAt: '2025-09-25T10:14:26.575Z'
+gitCommitMsg: >-
+  feat: add 'Open in Editor' functionality
+
+  Introduces an 'Open in Editor' feature, accessible via the 'O' key, on the
+  Transaction Detail and Transaction History screens.
+
+  - When a file is selected, it opens the source file in the default editor. -
+  When a transaction or a content section is selected, it opens the
+  transaction's corresponding YAML file. - A new `EditorService` has been
+  created to encapsulate this functionality with a mock implementation. -
+  Footers on both screens have been updated to display the new action. - The
+  debug menu has been updated for easier testing of these states.
+promptSummary: >-
+  I need to add functionality to open files in an external editor from the
+  Transaction Detail and Transaction History screens.
+reasoning:
+  - >-
+    I have executed parts 1, 2, 3, and 4 of the architect's plan. Here are the
+    required file modifications.
+  - '### Part 1: Foundational - The Editor Service'
+  - >-
+    I will start by creating the new `EditorService` to encapsulate interactions
+    with the user's editor. This service provides a mock implementation for
+    opening files.
+  - '### Part 2: Integration with Transaction Detail Screen'
+  - >-
+    Now, I will integrate the `EditorService` into the Transaction Detail
+    screen. This involves updating the screen's hook to handle the new 'o'
+    keybinding and modifying the component to display the "Open" action in the
+    footer.
+  - '### Part 3: Integration with Transaction History Screen'
+  - >-
+    Next, I'll add the "Open in Editor" functionality to the Transaction History
+    screen, following the same pattern of updating the hook and the component's
+    footer.
+  - '### Part 4: Debug Menu & Testing Scenarios'
+  - >-
+    Finally, I will update the Debug Menu to make testing the new "Open"
+    functionality more convenient by renaming existing menu items to clarify
+    their relevance for this feature.
+operations:
+  - type: write
+    path: src/services/editor.service.ts
+    content: |-
+      /**
+       * Mock editor service.
+       * In a real application, this would interact with the user's default editor.
+       */
+      const openFileInEditor = async (filePath: string): Promise<void> => {
+          // eslint-disable-next-line no-console
+          console.log(`[EDITOR MOCK] Opening file in default editor: ${filePath}`);
+      };
+
+      const getTransactionYamlPath = (transactionHash: string): string => {
+          return `.relay/transactions/${transactionHash}.yml`;
+      };
+
+      export const EditorService = {
+          openFileInEditor,
+          getTransactionYamlPath,
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useTransactionDetailScreen.tsx
+    content: >+
+      --- src/hooks/useTransactionDetailScreen.tsx
+
+      +++ src/hooks/useTransactionDetailScreen.tsx
+
+      @@ -4,6 +4,7 @@
+       import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
+       import { useMemo } from 'react';
+       import { useCopyStore } from '../stores/copy.store';
+      +import { EditorService } from '../services/editor.service';
+       
+       export const useTransactionDetailScreen = () => {
+           const store = useDetailStore();
+      @@ -37,6 +38,18 @@
+                   toggleRevertConfirm();
+                   return;
+               }
+      +        if (input.toLowerCase() === 'o') {
+
+      +            if (!transaction) return;
+
+      +            const { focusedItemPath } = store;
+
+      +            if (focusedItemPath.includes('/')) { // Is a file
+
+      +                const fileId = focusedItemPath.split('/')[1];
+
+      +                const file = files.find(f => f.id === fileId);
+
+      +                if (file) EditorService.openFileInEditor(file.path);
+
+      +            } else { // Is a section, open the transaction YAML
+
+      +                const yamlPath =
+      EditorService.getTransactionYamlPath(transaction.hash);
+
+      +                EditorService.openFileInEditor(yamlPath);
+
+      +            }
+
+      +        }
+       
+               if (key.upArrow) navigateUp();
+               if (key.downArrow) navigateDown();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionDetailScreen.tsx
+    content: |+
+      --- src/components/TransactionDetailScreen.tsx
+      +++ src/components/TransactionDetailScreen.tsx
+      @@ -165,6 +165,7 @@
+               
+               const baseActions: ActionItem[] = [
+                   { key: 'C', label: 'Copy' },
+      +            { key: 'O', label: 'Open' },
+                   { key: 'U', label: 'Undo' },
+                   { key: 'Q', label: 'Quit/Back' },
+               ];
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionHistoryScreen.tsx
+    content: >+
+      --- src/hooks/useTransactionHistoryScreen.tsx
+
+      +++ src/hooks/useTransactionHistoryScreen.tsx
+
+      @@ -5,6 +5,7 @@
+       import { useDetailStore } from '../stores/detail.store';
+       import { useCopyStore } from '../stores/copy.store';
+       import type { TransactionStatus } from '../types/domain.types';
+      +import { EditorService } from '../services/editor.service';
+       import { getVisibleItemPaths } from '../stores/navigation.utils';
+       import { useViewport } from './useViewport';
+       
+      @@ -58,6 +59,20 @@
+                       showTransactionDetailScreen();
+                   }
+               }
+      +        if (input.toLowerCase() === 'o') {
+
+      +            const txId = selectedItemPath.split('/')[0];
+
+      +            const tx = transactions.find(t => t.id === txId);
+
+      +            if (!tx) return;
+
+      +
+
+      +            if (selectedItemPath.includes('/file/')) {
+
+      +                const fileId = selectedItemPath.split('/')[2];
+
+      +                const file = tx.files?.find(f => f.id === fileId);
+
+      +                if (file) EditorService.openFileInEditor(file.path);
+
+      +            } else {
+
+      +                const yamlPath =
+      EditorService.getTransactionYamlPath(tx.hash);
+
+      +                EditorService.openFileInEditor(yamlPath);
+
+      +            }
+
+      +        }
+       
+               if (input.toLowerCase() === 'f') actions.setMode('FILTER');
+               if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionHistoryScreen.tsx
+    content: |+
+      --- src/components/TransactionHistoryScreen.tsx
+      +++ src/components/TransactionHistoryScreen.tsx
+      @@ -204,6 +204,7 @@
+                   { key: '←', label: 'Collapse' },
+                   { key: 'Spc', label: 'Select' },
+                   { key: 'Ent', label: 'Details' },
+      +            { key: 'O', label: 'Open' },
+                   { key: 'F', label: 'Filter' },
+               ];
+       
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -118,14 +118,14 @@
+                   },
+               },
+               {
+      -            title: 'Review: Diff View',
+      +            title: 'Review: Diff View',
+                   action: () => {
+                       reviewActions.load('1');
+                       reviewActions.setBodyView('diff');
+                       appActions.showReviewScreen();
+                   },
+               },
+               {
+      -            title: 'Review: Reasoning View',
+      +            title: 'Review: Reasoning View',
+                   action: () => {
+                       reviewActions.load('1', { bodyView: 'reasoning' });
+                       appActions.showReviewScreen();
+      @@ -211,7 +211,7 @@
+                   },
+               },
+               {
+      -            title: 'Detail: Diff View',
+      +            title: 'Detail: Diff View (for File Open action)',
+                   action: () => {
+                       detailActions.load('3', {
+                           focusedItemPath: 'FILES/3-1',
+      @@ -242,7 +242,7 @@
+                   },
+               },
+               {
+      -            title: 'History: L2 Drilldown (File Diff)',
+      +            title: 'History: L2 Drilldown (for File Open action)',
+                   action: () => {
+                       historyActions.prepareDebugState('l2-drill-diff');
+                       appActions.showTransactionHistoryScreen();
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/editor.service.ts: null
+  src/hooks/useTransactionDetailScreen.tsx: >-
+    import { useInput, type Key } from 'ink';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useTransactionStore, selectSelectedTransaction } from
+    '../stores/transaction.store';
+
+    import { useMemo } from 'react';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+
+    export const useTransactionDetailScreen = () => {
+        const store = useDetailStore();
+        const transaction = useTransactionStore(selectSelectedTransaction);
+        const files = useMemo(() => transaction?.files || [], [transaction]);
+
+        const {
+            navigateUp,
+            navigateDown,
+            expandOrDrillDown,
+            collapseOrBubbleUp,
+            toggleRevertConfirm,
+            confirmRevert,
+        } = store.actions;
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const { focusedItemPath } = store;
+            const fileId = focusedItemPath.split('/')[1];
+            const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
+            useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
+        };
+
+        useInput((input: string, key: Key) => {
+            if (store.bodyView === 'REVERT_CONFIRM') {
+                if (key.escape) toggleRevertConfirm();
+                if (key.return) confirmRevert();
+                return;
+            }
+
+            // --- Main Input ---
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+                return;
+            }
+            if (input.toLowerCase() === 'u') {
+                toggleRevertConfirm();
+                return;
+            }
+
+            if (key.upArrow) navigateUp();
+            if (key.downArrow) navigateDown();
+            if (key.return || key.rightArrow) expandOrDrillDown();
+            if (key.escape || key.leftArrow) collapseOrBubbleUp();
+        }, { isActive: useViewStore.getState().activeOverlay === 'none' }); // Prevent input when copy overlay is open
+
+        return {
+            transaction,
+            files,
+            focusedItemPath: store.focusedItemPath,
+            expandedItemPaths: store.expandedItemPaths,
+            bodyView: store.bodyView,
+        };
+    };
+  src/components/TransactionDetailScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import { useTransactionDetailScreen } from
+    '../hooks/useTransactionDetailScreen';
+
+    import type { FileChangeType } from '../types/domain.types';
+
+    import ActionFooter from './ActionFooter';
+
+    import type { ActionItem } from '../types/actions.types';
+
+
+    const getFileChangeTypeIcon = (type: FileChangeType) => {
+        switch (type) {
+            case 'MOD': return '[MOD]';
+            case 'ADD': return '[ADD]';
+            case 'DEL': return '[DEL]';
+            case 'REN': return '[REN]';
+        }
+    };
+
+
+    const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
+        return (
+            <Box 
+                borderStyle="round"
+                borderColor="yellow"
+                flexDirection="column"
+                paddingX={2}
+                width="80%"
+                alignSelf='center'
+            >
+                <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
+                <Box height={1} />
+                <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
+                <Box height={1} />
+                <Text wrap="wrap">Are you sure?</Text>
+            </Box>
+        );
+    };
+
+
+    const TransactionDetailScreen = () => {
+        const {
+            transaction, files,
+            focusedItemPath, expandedItemPaths, bodyView,
+        } = useTransactionDetailScreen();
+
+        if (!transaction) {
+            return <Text>Loading transaction...</Text>;
+        }
+
+        const renderNavigator = () => {
+            const isPromptFocused = focusedItemPath === 'PROMPT';
+            const isReasoningFocused = focusedItemPath === 'REASONING';
+            const isFilesFocused = focusedItemPath.startsWith('FILES');
+            
+            const isPromptExpanded = expandedItemPaths.has('PROMPT');
+            const isReasoningExpanded = expandedItemPaths.has('REASONING');
+            const isFilesExpanded = expandedItemPaths.has('FILES');
+            
+            return (
+                <Box flexDirection="column">
+                    <Text color={isPromptFocused ? 'cyan' : undefined}>
+                        {isPromptFocused ? '> ' : '  '}
+                        {isPromptExpanded ? '▾' : '▸'} (P)rompt
+                    </Text>
+                    <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                        {isReasoningFocused ? '> ' : '  '}
+                        {isReasoningExpanded ? '▾' : '▸'} (R)easoning ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                    </Text>
+                    <Text color={isFilesFocused ? 'cyan' : undefined}>
+                        {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
+                        {isFilesExpanded ? '▾' : '▸'} (F)iles ({files.length})
+                    </Text>
+                    {isFilesExpanded && (
+                        <Box flexDirection="column" paddingLeft={2}>
+                            {files.map((file) => {
+                                 const fileId = `FILES/${file.id}`;
+                                 const isFileSelected = focusedItemPath === fileId;
+                                 const stats = file.type === 'DEL' ? '' : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                                 return (
+                                    <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                        {isFileSelected ? '> ' : '  '}
+                                        {`${getFileChangeTypeIcon(file.type)} ${file.path}${stats}`}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                    )}
+                </Box>
+            );
+        };
+
+        const renderBody = () => {
+            if (bodyView === 'NONE') {
+                return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
+            }
+            if (bodyView === 'PROMPT') {
+                return (
+                    <Box flexDirection="column">
+                        <Text>PROMPT</Text>
+                        <Box marginTop={1}><Text>{transaction.prompt}</Text></Box>
+                    </Box>
+                );
+            }
+            if (bodyView === 'REASONING') {
+                if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
+                return <ReasonScreen reasoning={transaction.reasoning} />;
+            }
+            if (bodyView === 'FILES_LIST') {
+                 return <Text color="gray">(Select a file and press → to view the diff)</Text>;
+            }
+            if (bodyView === 'DIFF_VIEW') {
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (!file) return null;
+                return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} />;
+            }
+            return null;
+        };
+
+        const renderFooter = () => {
+            if (bodyView === 'REVERT_CONFIRM') {
+                return <ActionFooter actions={[
+                    { key: 'Enter', label: 'Confirm Revert' },
+                    { key: 'Esc', label: 'Cancel' },
+                ]} />;
+            }
+            
+            const baseActions: ActionItem[] = [
+                { key: 'C', label: 'Copy' },
+                { key: 'U', label: 'Undo' },
+                { key: 'Q', label: 'Quit/Back' },
+            ];
+            let contextualActions: ActionItem[] = [];
+
+            if (focusedItemPath.includes('/')) { // Is a file
+                if (bodyView === 'DIFF_VIEW') {
+                    contextualActions = [
+                        { key: '↑↓', label: 'Nav Files' },
+                        { key: '←', label: 'Back to List' },
+                    ];
+                } else {
+                    contextualActions = [
+                        { key: '↑↓', label: 'Nav Files' },
+                        { key: '→', label: 'View Diff' },
+                        { key: '←', label: 'Back to Sections' },
+                    ];
+                }
+                return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
+            }
+            
+            if (expandedItemPaths.has(focusedItemPath)) {
+                contextualActions = [
+                    { key: '↑↓', label: 'Nav/Scroll' },
+                    { key: '→', label: 'Drill In' },
+                    { key: '←', label: 'Collapse' },
+                ];
+            } else {
+                contextualActions = [
+                    { key: '↑↓', label: 'Nav' },
+                    { key: '→', label: 'Expand' },
+                ];
+            }
+            return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
+        };
+
+        const { message, timestamp, status } = transaction;
+        const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
+        const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text>▲ relaycode transaction details</Text>
+                <Separator />
+                
+                {/* Modal takeover for Revert */}
+                {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
+                
+                {/* Main view */}
+                <Box flexDirection="column" display={bodyView === 'REVERT_CONFIRM' ? 'none' : 'flex'}>
+                    {/* Navigator Part A */}
+                    <Box flexDirection="column" marginY={1}>
+                        <Text>UUID: {transaction.id}</Text>
+                        <Text>Git: {message}</Text>
+                        <Text>Date: {date} · Status: {status}</Text>
+                        <Text>Stats: {fileStats}</Text>
+                    </Box>
+                    
+                    {/* Navigator Part B */}
+                    {renderNavigator()}
+                    
+                    <Separator />
+                    
+                    {/* Body */}
+                    <Box marginY={1}>
+                        {renderBody()}
+                    </Box>
+                    
+                    <Separator />
+                </Box>
+                
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default TransactionDetailScreen;
+  src/hooks/useTransactionHistoryScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { useInput, type Key } from 'ink';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import type { TransactionStatus } from '../types/domain.types';
+
+    import { getVisibleItemPaths } from '../stores/navigation.utils';
+
+    import { useViewport } from './useViewport';
+
+
+    export const useTransactionHistoryScreen = ({ reservedRows }: {
+    reservedRows: number }) => {
+        const store = useHistoryStore();
+        const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
+        const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
+        const transactions = useTransactionStore(s => s.transactions);
+
+        const visibleItemPaths = useMemo(
+            () => getVisibleItemPaths(transactions, expandedIds),
+            [transactions, expandedIds],
+        );
+        const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            reservedRows,
+        });
+
+        const openCopyMode = () => {
+            const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+
+            if (transactionsToCopy.length === 0) return;
+            useCopyStore.getState().actions.openForHistory(transactionsToCopy);
+        };
+
+        const handleFilterInput = (_input: string, key: Key): void => {
+            if (key.escape) actions.setMode('LIST');
+            if (key.return) actions.applyFilter();
+        };
+
+        const handleBulkActionsInput = (input: string, key: Key): void => {
+            if (key.escape) {
+                actions.setMode('LIST');
+                return;
+            }
+            if (input >= '1' && input <= '3') {
+                // eslint-disable-next-line no-console
+                console.log(`[MOCK] Bulk action #${input} selected.`);
+                actions.setMode('LIST');
+            }
+        };
+
+        const handleListInput = (input: string, key: Key): void => {
+            if (key.upArrow) actions.navigateUp();
+            if (key.downArrow) actions.navigateDown();
+            if (key.rightArrow) actions.expandOrDrillDown();
+            if (key.leftArrow) actions.collapseOrBubbleUp();
+            if (input === ' ') actions.toggleSelection();
+            if (key.return) {
+                const txId = selectedItemPath.split('/')[0];
+                if (txId && !selectedItemPath.includes('/')) {
+                    useDetailStore.getState().actions.load(txId);
+                    showTransactionDetailScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'f') actions.setMode('FILTER');
+            if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+            if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode('BULK_ACTIONS');
+            
+            if (key.escape || input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        };
+
+        useInput((input: string, key: Key) => {
+            if (mode === 'FILTER') {
+                handleFilterInput(input, key);
+                return;
+            }
+            if (mode === 'BULK_ACTIONS') {
+                handleBulkActionsInput(input, key);
+                return;
+            }
+            handleListInput(input, key);
+        });
+
+        const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+        const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+        const transactionsInView = useMemo(
+            () => transactions.filter(tx => txIdsInView.has(tx.id)),
+            [transactions, txIdsInView],
+        );
+        const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+        const filterStatusText = filterQuery ? filterQuery : '(none)';
+        const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
+        
+        const hasSelection = selectedForAction.size > 0;
+
+        const statsStatus = useMemo(() => {
+            const stats = transactions.reduce((acc, tx) => {
+                acc[tx.status] = (acc[tx.status] || 0) + 1;
+                return acc;
+            }, {} as Record<TransactionStatus, number>);
+            
+            const parts = [];
+            if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
+            if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
+            if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
+            if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
+            if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
+            if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
+
+            return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
+        }, [transactions]);
+
+        return {
+            mode,
+            filterQuery,
+            selectedForAction,
+            selectedItemPath,
+            expandedIds,
+            actions,
+            transactions,
+            viewOffset,
+            itemsInView,
+            loadingPaths,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus: filterStatusText,
+            showingStatus: showingStatusText,
+            statsStatus,
+            hasSelection,
+            visibleItemPaths,
+        };
+    };
+  src/components/TransactionHistoryScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import Spinner from 'ink-spinner';
+
+    import Separator from './Separator';
+
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    import { useTransactionHistoryScreen } from
+    '../hooks/useTransactionHistoryScreen';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import ActionFooter from './ActionFooter';
+
+    import type { ActionItem } from '../types/actions.types';
+
+
+    // --- Sub-components ---
+
+
+    const ContentRow = ({ title, content, isSelected, isExpanded, isLoading }: {
+        title: string;
+        content: string;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isLoading: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}{icon} {title}
+                </Text>
+                {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+                {isExpanded && !isLoading && (
+                    <Box paddingLeft={8} flexDirection="column">
+                        {(content || '').split('\n').map((line, i) => <Text key={i}>{line || ' '}</Text>)}
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    const DiffPreview = ({ diff }: { diff: string }) => {
+        const lines = diff.split('\n');
+        const previewLines = lines.slice(0, 5);
+        const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+        return (
+            <Box flexDirection="column" paddingLeft={8}>
+                {previewLines.map((line, i) => {
+                    let color = 'white';
+                    if (line.startsWith('+')) color = 'green';
+                    if (line.startsWith('-')) color = 'red';
+                    if (line.startsWith('@@')) color = 'cyan';
+                    return <Text key={i} color={color}>{line}</Text>;
+                })}
+                {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+            </Box>
+        );
+    };
+
+
+    const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
+        file: FileItem;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isLoading: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
+        
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {icon} {typeMap[file.type]} {file.path}
+                </Text>
+                {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+                {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
+            </Box>
+        );
+    };
+
+
+    const TransactionRow = ({
+        tx,
+        isSelected,
+        isExpanded,
+        isSelectedForAction,
+        hasSelection,
+    }: {
+        tx: Transaction;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isSelectedForAction: boolean;
+        hasSelection: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const statusMap = {
+            COMMITTED: <Text color="green">✓ Committed</Text>,
+            HANDOFF: <Text color="magenta">→ Handoff</Text>,
+            REVERTED: <Text color="gray">↩ Reverted</Text>,
+            APPLIED: <Text color="blue">✓ Applied</Text>,
+            PENDING: <Text color="yellow">? Pending</Text>,
+            FAILED: <Text color="red">✗ Failed</Text>,
+        };
+        const date = new Date(tx.timestamp).toISOString().split('T')[0];
+        const selectionIndicator = isSelectedForAction ? '[x] ' : '[ ] ';
+        
+        const statusDisplay = statusMap[tx.status as keyof typeof statusMap] || tx.status;
+
+        return (
+            <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {hasSelection && selectionIndicator}
+                    {icon} {statusDisplay} · {tx.hash} · {date} ·{' '}
+                    {tx.message}
+                </Text>
+                {isExpanded && (
+                    <Box flexDirection="column" paddingLeft={8}>
+                        {tx.stats && (
+                            <Text color="gray">
+                                Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}
+                            </Text>
+                        )}
+                        <Text>Files:</Text>
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    const BulkActionsMode = ({ selectedForActionCount }: {
+    selectedForActionCount: number }) => {
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
+                <Box marginY={1}>
+                    <Text>This action is often irreversible. Are you sure?</Text>
+                </Box>
+                <Text>(1) Revert Selected Transactions</Text>
+                <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+                <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
+                <Text>(Esc) Cancel</Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const TransactionHistoryScreen = () => {
+        const {
+            mode,
+            filterQuery,
+            selectedForAction,
+            selectedItemPath,
+            expandedIds,
+            loadingPaths,
+            actions,
+            transactions,
+            itemsInView,
+            filterStatus,
+            showingStatus,
+            statsStatus,
+            hasSelection,
+        } = useTransactionHistoryScreen({ reservedRows: UI_CONFIG.history.reservedRows });
+
+        const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
+
+        const renderFooter = () => {
+            if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
+            if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3] or (Esc) Cancel</Text>;
+            
+            const footerActions: ActionItem[] = [
+                { key: '↑↓', label: 'Nav' },
+                { key: '→', label: 'Expand' },
+                { key: '←', label: 'Collapse' },
+                { key: 'Spc', label: 'Select' },
+                { key: 'Ent', label: 'Details' },
+                { key: 'F', label: 'Filter' },
+            ];
+
+            if (selectedForAction.size > 0) {
+                footerActions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
+            }
+            return <ActionFooter actions={footerActions} />;
+        };
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode transaction history</Text>
+                <Separator />
+
+                <Box>
+                    <Text>Filter: </Text>
+                    {mode === 'FILTER' ? (
+                        <TextInput value={filterQuery} onChange={actions.setFilterQuery} />
+                    ) : (
+                        <Text>{filterStatus}</Text>
+                    )}
+                    <Text> · {showingStatus}</Text>
+                    {statsStatus && <Text> · {statsStatus}</Text>}
+                </Box>
+
+                <Box flexDirection="column" marginY={1}>
+                    {mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
+
+                    {mode === 'LIST' && itemsInView.map(path => {
+                        const txId = path.split('/')[0]!;
+                        const tx = transactionsById.get(txId);
+                        if (!tx) return <Text key={path}>Error: Missing TX {txId}</Text>;
+
+                        // Is a transaction row
+                        if (path === tx.id) {
+                            return (
+                                <TransactionRow
+                                    key={path}
+                                    tx={tx}
+                                    isSelected={selectedItemPath === path}
+                                    isExpanded={expandedIds.has(path)}
+                                    isSelectedForAction={selectedForAction.has(tx.id)}
+                                    hasSelection={hasSelection}
+                                />
+                            );
+                        }
+
+                        // Is a child row
+                        const itemType = path.split('/')[1]!;
+                        const isSelected = selectedItemPath === path;
+                        const isExpanded = expandedIds.has(path);
+                        const isLoading = loadingPaths.has(path);
+
+                        if (itemType === 'file') {
+                            const fileId = path.split('/')[2]!;
+                            const file = tx.files?.find(f => f.id === fileId);
+                            if (!file) return null;
+                            return (
+                                <FileRow
+                                    key={path} file={file} isSelected={isSelected}
+                                    isExpanded={isExpanded} isLoading={isLoading}
+                                />
+                            );
+                        }
+
+                        const contentMap = {
+                            message: { title: 'Commit Message', content: tx.message || '' },
+                            prompt: { title: 'Prompt', content: tx.prompt || '' },
+                            reasoning: { title: 'Reasoning', content: tx.reasoning || '' },
+                        };
+
+                        const item = contentMap[itemType as keyof typeof contentMap];
+                        if (!item) return null;
+
+                        return (
+                            <ContentRow
+                                key={path}
+                                {...item}
+                                isSelected={isSelected}
+                                isExpanded={isExpanded}
+                                isLoading={isLoading}
+                            />
+                        );
+                    })}
+                </Box>
+
+                <Separator />
+                {renderFooter()}
+            </Box>
+        );
+    };
+
+
+    export default TransactionHistoryScreen;
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => {
+                    reviewActions.load('2'); // Use tx '2' which has scripts
+                    appActions.showReviewProcessingScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (File Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    useViewStore.getState().actions.setActiveOverlay('none');
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay('none');
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 142

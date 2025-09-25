@@ -1,5 +1,9 @@
 # Directory Structure
 ```
+docs/
+  relaycode-tui/
+    transaction-detail-screen.readme.md
+    transaction-history-screen.readme.md
 src/
   components/
     ActionFooter.tsx
@@ -42,6 +46,7 @@ src/
     commit.service.ts
     copy.service.ts
     dashboard.service.ts
+    editor.service.ts
     fs.service.ts
     init.service.ts
     review.service.ts
@@ -74,37 +79,29 @@ tsconfig.json
 
 # Files
 
-## File: src/services/fs.service.ts
-```typescript
-import { sleep } from '../utils';
-
+## File: src/services/editor.service.ts
+````typescript
 /**
- * Mock file system service.
- * In a real application, this would interact with the actual filesystem.
+ * Mock editor service.
+ * In a real application, this would interact with the user's default editor.
  */
-const readFileContent = async (filePath: string): Promise<string> => {
-    // Simulate async file read
-    await sleep(50 + Math.random() * 100);
-
-    const lang = filePath.split('.').pop() || '';
-    
-    return `// Mock content for ${filePath}
-// Language: ${lang}
-// In a real implementation, this would read from the filesystem.
-
-function helloWorld() {
-    console.log("Hello from ${filePath}!");
-}
-`;
+const openFileInEditor = async (filePath: string): Promise<void> => {
+    // eslint-disable-next-line no-console
+    console.log(`[EDITOR MOCK] Opening file in default editor: ${filePath}`);
 };
 
-export const FileSystemService = {
-    readFileContent,
+const getTransactionYamlPath = (transactionHash: string): string => {
+    return `.relay/transactions/${transactionHash}.yml`;
 };
-```
+
+export const EditorService = {
+    openFileInEditor,
+    getTransactionYamlPath,
+};
+````
 
 ## File: src/components/ActionFooter.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import { useStdoutDimensions } from '../utils';
 import { UI_CONFIG } from '../config/ui.config';
@@ -185,33 +182,10 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
 };
 
 export default ActionFooter;
-```
-
-## File: src/constants/copy.constants.ts
-```typescript
-/**
- * Constants for the Copy/Clipboard feature.
- */
-export const COPYABLE_ITEMS = {
-    UUID: 'UUID',
-    MESSAGE: 'Git Message',
-    PROMPT: 'Prompt',
-    REASONING: 'Reasoning',
-    FILE_DIFF: 'Diff for',
-    ALL_DIFFS: 'All Diffs',
-    CONTEXT_FILES: 'Context Files (latest)',
-    FULL_YAML: 'Full YAML representation',
-    // For multi-selection contexts
-    MESSAGES: 'Git Messages',
-    PROMPTS: 'Prompts',
-    REASONINGS: 'Reasonings',
-    DIFFS: 'Diffs',
-    UUIDS: 'UUIDs',
-} as const;
-```
+````
 
 ## File: src/constants/detail.constants.ts
-```typescript
+````typescript
 /**
  * Constants for the Transaction Detail screen.
  */
@@ -229,10 +203,10 @@ export const DETAIL_BODY_VIEWS = {
     REVERT_CONFIRM: 'REVERT_CONFIRM',
     NONE: 'NONE',
 } as const;
-```
+````
 
 ## File: src/constants/init.constants.ts
-```typescript
+````typescript
 import type { Task } from '../stores/init.store';
 
 /**
@@ -249,10 +223,10 @@ export const INITIAL_CONFIGURE_TASKS: Task[] = [
     { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
     { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
 ];
-```
+````
 
 ## File: src/constants/review.constants.ts
-```typescript
+````typescript
 import type { ApplyStep } from '../stores/review.store';
 
 /**
@@ -264,10 +238,39 @@ export const INITIAL_APPLY_STEPS: ApplyStep[] = [
     { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
     { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
 ];
-```
+````
+
+## File: src/services/fs.service.ts
+````typescript
+import { sleep } from '../utils';
+
+/**
+ * Mock file system service.
+ * In a real application, this would interact with the actual filesystem.
+ */
+const readFileContent = async (filePath: string): Promise<string> => {
+    // Simulate async file read
+    await sleep(50 + Math.random() * 100);
+
+    const lang = filePath.split('.').pop() || '';
+    
+    return `// Mock content for ${filePath}
+// Language: ${lang}
+// In a real implementation, this would read from the filesystem.
+
+function helloWorld() {
+    console.log("Hello from ${filePath}!");
+}
+`;
+};
+
+export const FileSystemService = {
+    readFileContent,
+};
+````
 
 ## File: src/stores/view.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 
 interface ViewState {
@@ -287,10 +290,10 @@ export const useViewStore = create<ViewState>((set) => ({
         setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
     },
 }));
-```
+````
 
 ## File: src/types/actions.types.ts
-```typescript
+````typescript
 /**
  * Represents a single action item for display in a responsive footer.
  */
@@ -298,18 +301,322 @@ export interface ActionItem {
     key: string;
     label: string;
 }
-```
+````
 
 ## File: src/types/debug.types.ts
-```typescript
+````typescript
 export interface MenuItem {
     title: string;
     action: () => void;
 }
+````
+
+## File: docs/relaycode-tui/transaction-detail-screen.readme.md
+````markdown
+Of course. Here is the final, comprehensive `TRANSACTION-DETAIL-SCREEN.README.MD`. It is structured to be a "show, don't tell" specification, using full-screen mockups to disclose every major state and interaction. This document is designed to be the single source of truth for implementing this feature.
+
+***
+
+# TRANSACTION-DETAIL-SCREEN.README.MD
+
+## Relaycode TUI: The Transaction Detail Screen Specification
+
+This document specifies the final design and behavior of the stateful Transaction Detail screen. This screen serves as the single source of truth for a past transaction, providing a deep, forensic analysis view. It is engineered for complete context via progressive disclosure, interactive data extraction, and direct, safe actions.
+
+### 1. Anatomy of the Screen
+
+The interface is divided into four consistent, logical components.
+
+```
+ ▲ relaycode transaction details                                    (Header)
+ ──────────────────────────────────────────────────────────────────────────────
+  UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+  Git:  fix: add missing error handling
+  Date: 2023-10-27 14:32:15 · Status: Committed           (Navigator - Part A)
+  Stats: 3 Files · +25 lines, -8 lines
+
+ > ▸ (P)rompt
+   ▸ (R)easoning (3 steps)                                  (Navigator - Part B)
+   ▸ (F)iles (3)
+ ──────────────────────────────────────────────────────────────────────────────
+
+  (The Body is a dynamic viewport that renders content based on     (Body)
+   the user's focus and actions within the Navigator.)
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (→) Expand · (C)opy Mode · (U)ndo · (Q)uit         (Footer)
 ```
 
+1.  **Header:** Static branding, confirming the user's location.
+2.  **Navigator:** The top half of the screen and the primary control surface. It contains static metadata (Part A) and a navigable list of expandable sections (Part B).
+3.  **Body:** A dynamic viewport that renders detailed content (like diffs or full text) based on the user's selection in the Navigator.
+4.  **Footer:** The contextual action bar, which updates to show only the currently available keyboard shortcuts.
+
+---
+
+### 2. The User Journey: A State-by-State Disclosure
+
+This section illustrates the screen's behavior through a typical user interaction flow.
+
+#### 2.1. Initial State: The Collapsed Overview
+
+This is the default view upon selecting a transaction. It provides a complete, scannable summary with all detailed sections collapsed.
+
+**Behavior:**
+*   The initial focus is on the navigable sections (`(P)rompt`, `(R)easoning`, `(F)iles`).
+*   The Body is empty, prompting the user to expand a section for more details.
+*   The `▸` symbol indicates a collapsed section.
+
+```
+ ▲ relaycode transaction details
+ ──────────────────────────────────────────────────────────────────────────────
+  UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+  Git:  fix: add missing error handling
+  Date: 2023-10-27 14:32:15 · Status: Committed
+  Stats: 3 Files · +25 lines, -8 lines
+
+ > ▸ (P)rompt
+   ▸ (R)easoning (3 steps)
+   ▸ (F)iles (3)
+
+ ──────────────────────────────────────────────────────────────────────────────
+
+  (Press → to expand a section and view its contents)
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (→) Expand · (C)opy Mode · (O)pen YAML · (U)ndo · (Q)uit
+```
+
+#### 2.2. Expanding a Section: Viewing Reasoning
+
+The user wants to read the full reasoning behind the transaction.
+
+**Trigger:** The user navigates to `▸ (R)easoning` and presses `(→)`.
+
+**Behavior:**
+*   The `▸` icon for Reasoning flips to `▾`, indicating it is expanded.
+*   The Body renders the full, formatted text of the reasoning.
+*   The Footer updates to show that `(←)` will now collapse the section and that `(↑↓)` can be used to scroll if the content overflows.
+
+```
+ ▲ relaycode transaction details
+ ──────────────────────────────────────────────────────────────────────────────
+  UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+  Git:  fix: add missing error handling
+  Date: 2023-10-27 14:32:15 · Status: Committed
+  Stats: 3 Files · +25 lines, -8 lines
+
+   ▸ (P)rompt
+ > ▾ (R)easoning (3 steps)
+   ▸ (F)iles (3)
+
+ ──────────────────────────────────────────────────────────────────────────────
+  REASONING
+
+  1. The primary goal was to make the rollback functionality in `restoreSnapshot`
+     more robust. The previous implementation used a simple for-loop which would
+     halt on the first error, leaving the project in a partially restored state.
+
+  2. I opted for a `Promise.all` approach to run file restorations in parallel.
+     This improves performance slightly but, more importantly, ensures all
+     restoration attempts are completed, even if some fail.
+
+  3. An `restoreErrors` array was introduced to collect any exceptions that occur
+     during the process. If this array is not empty after the `Promise.all`
+     completes, a comprehensive error is thrown, informing the user exactly which
+     files failed to restore. This provides much better diagnostics.
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav/Scroll · (←) Collapse · (C)opy Mode · (O)pen YAML · (U)ndo · (Q)uit
+```
+
+#### 2.3. Hierarchical Drill-Down: Inspecting File Diffs
+
+This demonstrates the powerful two-level navigation for inspecting code changes.
+
+**Step A: Expand the File List**
+
+**Trigger:** The user navigates to `▸ (F)iles (3)` and presses `(→)`.
+
+**Behavior:**
+*   The `(F)iles` section expands *within the Navigator*, revealing an interactive list of affected files.
+*   Focus shifts to this new inner list. `[MOD]`, `[ADD]`, etc., denote the change type.
+
+```
+ ▲ relaycode transaction details
+ ──────────────────────────────────────────────────────────────────────────────
+  UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+  Git:  fix: add missing error handling
+  Date: 2023-10-27 14:32:15 · Status: Committed
+  Stats: 3 Files · +25 lines, -8 lines
+
+   ▸ (P)rompt
+   ▸ (R)easoning (3 steps)
+   ▾ (F)iles (3)
+     > [MOD] src/core/transaction.ts (+18/-5)
+       [MOD] src/utils/logger.ts    (+7/-3)
+       [DEL] src/utils/old-helper.ts
+
+ ──────────────────────────────────────────────────────────────────────────────
+
+  (Select a file and press → to view the diff)
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav Files · (→) View Diff · (←) Back to Sections · (C)opy Mode · (O)pen File · (U)ndo · (Q)uit
+```
+
+**Step B: Display the Diff**
+
+**Trigger:** With `src/core/transaction.ts` selected, the user presses `(→)` again.
+
+**Behavior:**
+*   The Body renders a clean, syntax-highlighted diff for the selected file.
+*   Navigating with `(↑↓)` in the file list will now instantly update the Body with the diff for the newly selected file.
+*   Pressing `(←)` will clear the Body and return focus to the file list itself (the state in Step A).
+
+```
+ ▲ relaycode transaction details
+ ──────────────────────────────────────────────────────────────────────────────
+  UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+  Git:  fix: add missing error handling
+  Date: 2023-10-27 14:32:15 · Status: Committed
+  Stats: 3 Files · +25 lines, -8 lines
+
+   ▸ (P)rompt
+   ▸ (R)easoning (3 steps)
+   ▾ (F)iles (3)
+     > [MOD] src/core/transaction.ts (+18/-5)
+       [MOD] src/utils/logger.ts    (+7/-3)
+       [DEL] src/utils/old-helper.ts
+
+ ──────────────────────────────────────────────────────────────────────────────
+  DIFF: src/core/transaction.ts
+
+   export const restoreSnapshot = async (snapshot: FileSnapshot, ...): ... => {
+     ...
+-    for (const [filePath, content] of entries) {
+-        if (content === null) {
+-            await deleteFile(filePath, cwd);
+-        }
+-    }
++    const restoreErrors: { path: string, error: unknown }[] = [];
++
++    await Promise.all(entries.map(async ([filePath, content]) => {
++        try {
++          if (content === null) { ... }
++        } catch (error) {
++          restoreErrors.push({ path: filePath, error });
++        }
++    }));
++
++    if (restoreErrors.length > 0) { ... }
+   }
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav Files · (←) Back to Files · (C)opy Mode · (O)pen File · (U)ndo · (Q)uit
+```
+
+---
+
+### 3. Advanced Modes & Actions
+
+#### 3.1. Advanced Copy Mode
+
+This mode transforms the screen into a powerful data extraction tool.
+
+**Trigger:** The user presses `(C)` from any non-modal view.
+
+**Behavior:**
+*   The entire screen is replaced by a multi-select checklist interface.
+*   The user can navigate `(↑↓)`, toggle items with `(Spc)`, and press `(Enter)` to copy a formatted aggregation of the selected data to the clipboard.
+*   A confirmation message provides immediate feedback. Pressing `(C)` or `(Esc)` exits the mode.
+
+```
+ ▲ relaycode details · copy mode
+ ──────────────────────────────────────────────────────────────────────────────
+ Select data to copy from transaction e4a7c112 (use Space to toggle):
+
+ > [x] (M) Git Message
+   [ ] (P) Prompt
+   [x] (R) Reasoning
+   [ ] (A) All Diffs (3 files)
+   [ ] (F) Diff for: src/core/transaction.ts
+   [ ] (X) Context Files (latest) (3 files)
+   [ ] (U) UUID
+   [ ] (Y) Full YAML representation
+
+ ──────────────────────────────────────────────────────────────────────────────
+  ✓ Copied 2 items to clipboard.
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Spc) Toggle · (Enter) Copy Selected · (C)opy/Exit
+```
+
+#### 3.2. Revert Confirmation Modal
+
+This action initiates a safe, non-destructive revert of the transaction.
+
+**Trigger:** The user presses `(U)` from any primary view.
+
+**Behavior:**
+*   A modal overlay appears, halting all other interactions to prevent accidental reverts.
+*   The text clearly explains that this creates a *new* transaction, preserving history.
+*   The footer simplifies to the only two possible actions: Confirm or Cancel.
+
+```
+ ▲ relaycode transaction details
+ ──────────────────────────────────────────────────────────────────────────────
+  UUID: e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
+  Git:  ┌──────────────────────────────────────────────────────────┐
+  Date: │                 REVERT THIS TRANSACTION?                 │
+        │                                                          │
+  Stats:│ This will create a NEW transaction that reverses all     │
+        │ changes made by e4a7c112. The original transaction       │
+ ───────│ record will be preserved.                                │
+        │                                                          │
+   ▸ (P)│                       Are you sure?                      │
+   ▸ (R)└──────────────────────────────────────────────────────────┘
+   ▾ (F)iles (3)
+     > [MOD] src/core/transaction.ts (+18/-5)
+       [MOD] src/utils/logger.ts    (+7/-3)
+       [DEL] src/utils/old-helper.ts
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (Enter) Confirm Revert      (Esc) Cancel
+```
+
+---
+
+### 4. UI Legend & Keybindings
+
+| Symbol | Meaning                 | Context       | Description                                  |
+| :----- | :---------------------- | :------------ | :------------------------------------------- |
+| `>`    | Focused/Selected Item   | Universal     | The currently active line for navigation.    |
+| `▸`    | Collapsed Section       | Navigator     | Indicates a section can be expanded with `→`. |
+| `▾`    | Expanded Section        | Navigator     | Indicates a section can be collapsed with `←`.|
+| `[MOD]`| Modified File           | File List     | The file was modified.                       |
+| `[ADD]`| Added File              | File List     | The file was newly created.                  |
+| `[DEL]`| Deleted File            | File List     | The file was deleted.                        |
+| `[REN]`| Renamed File            | File List     | The file was renamed.                        |
+
+| Key(s)       | Action             | Context                                    |
+| :----------- | :----------------- | :----------------------------------------- |
+| `↑` `↓`      | Navigate           | Universal                                  |
+| `→`          | Expand / Drill Down| Navigator (Sections or Files)              |
+| `←`          | Collapse / Go Back | Navigator (Expanded Sections or Files)     |
+| `(C)`        | Enter/Exit Copy Mode | Primary Views & Copy Mode                  |
+| `(O)`        | Open in Editor     | Universal                                  |
+| `(U)`        | Initiate Revert    | Primary Views                              |
+| `(Q)` `Esc`  | Quit / Cancel      | Universal                                  |
+| `(Enter)`    | Confirm Action     | Copy Mode (to copy), Revert Modal (to revert) |
+| `(Spc)`      | Toggle Selection   | Copy Mode                                  |
+````
+
 ## File: src/config/ui.config.ts
-```typescript
+````typescript
 /**
  * Centralized UI configuration.
  * This object is the single source of truth for layout constants, thresholds,
@@ -334,10 +641,10 @@ export const UI_CONFIG = {
         actionSeparator: ' · ',
     },
 } as const;
-```
+````
 
 ## File: src/constants/app.constants.ts
-```typescript
+````typescript
 /**
  * Application-level screens and navigation constants.
  */
@@ -363,10 +670,33 @@ export const SCREENS_WITH_DASHBOARD_BACK_ACTION = [
     APP_SCREENS.GIT_COMMIT,
     APP_SCREENS.TRANSACTION_DETAIL,
 ];
-```
+````
+
+## File: src/constants/copy.constants.ts
+````typescript
+/**
+ * Constants for the Copy/Clipboard feature.
+ */
+export const COPYABLE_ITEMS = {
+    UUID: 'UUID',
+    MESSAGE: 'Git Message',
+    PROMPT: 'Prompt',
+    REASONING: 'Reasoning',
+    FILE_DIFF: 'Diff for',
+    ALL_DIFFS: 'All Diffs',
+    CONTEXT_FILES: 'Context Files (latest)',
+    FULL_YAML: 'Full YAML representation',
+    // For multi-selection contexts
+    MESSAGES: 'Git Messages',
+    PROMPTS: 'Prompts',
+    REASONINGS: 'Reasonings',
+    DIFFS: 'Diffs',
+    UUIDS: 'UUIDs',
+} as const;
+````
 
 ## File: src/hooks/useViewport.ts
-```typescript
+````typescript
 import { useState, useEffect } from 'react';
 import { useStdoutDimensions } from '../utils';
 
@@ -395,10 +725,10 @@ export const useViewport = ({ selectedIndex, reservedRows }: UseViewportOptions)
         width: columns,
     };
 };
-```
+````
 
 ## File: src/types/domain.types.ts
-```typescript
+````typescript
 // --- Core Domain Models ---
 
 /** The type of change applied to a file. */
@@ -455,10 +785,10 @@ export interface Transaction {
         linesRemoved: number;
     };
 }
-```
+````
 
 ## File: src/utils.ts
-```typescript
+````typescript
 import { useState, useEffect } from 'react';
 
 // Utility for simulation
@@ -485,10 +815,10 @@ export const useStdoutDimensions = (): [number, number] => {
 
     return [dimensions.columns, dimensions.rows];
 };
-```
+````
 
 ## File: eslint.config.js
-```javascript
+````javascript
 import js from '@eslint/js';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
@@ -605,10 +935,10 @@ export default [
     ],
   },
 ];
-```
+````
 
 ## File: tsconfig.json
-```json
+````json
 {
   "compilerOptions": {
     // Environment setup & latest features
@@ -638,10 +968,241 @@ export default [
     "noPropertyAccessFromIndexSignature": false
   }
 }
+````
+
+## File: docs/relaycode-tui/transaction-history-screen.readme.md
+````markdown
+# TRANSACTION-HISTORY-SCREEN.README.MD
+
+## Relaycode TUI: The Stateful Transaction History Screen
+
+This document specifies the final design and behavior of the stateful Transaction History screen, the command center for a project's AI-driven development history. Triggered by `relay log`, this screen transforms a simple log into a powerful, interactive database explorer.
+
+### 1. Core Philosophy
+
+The transaction history is the project's institutional memory. This screen is engineered to make that memory **discoverable, drillable, queryable, and actionable**.
+
+-   **Discoverable & Drillable:** The log is an interactive outline. Users get a high-level overview and then progressively disclose more detail *in-place* using familiar arrow key navigation, minimizing context switching.
+-   **Queryable:** A powerful, live-filtering system allows users to instantly find specific transactions based on content, status, file paths, or dates.
+-   **Actionable:** The screen provides sophisticated tools for bulk data extraction (Copy Mode) and history management (Bulk Actions), turning insight into action.
+
+---
+
+### 2. The Interaction Journey: A Walkthrough
+
+The power of the screen is best understood by following a user's workflow from browsing to deep analysis and action.
+
+#### **State 2.1: Default View - The 10,000-Foot Overview**
+
+Upon launching `relay log`, the user is presented with a clean, compact, and reverse-chronological list of all transactions. Each entry is a single line, prefixed with `▸` to indicate it can be expanded.
+
+```
+ ▲ relaycode transaction history
+ ──────────────────────────────────────────────────────────────────────────────
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+ > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+   ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+   ▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI
+   ▸ ↩ Reverted  · b2c9e04d · 2023-10-26 · style: update button component
+   ▸ ✗ Reverted  · 9c2e1a05 · 2023-10-25 · docs: update readme with TUI spec
+   ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (→) Expand · (Spc) Select · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy · (B)ulk
 ```
 
+#### **State 2.2: Level 1 Drill-Down - The Content Overview**
+
+Pressing `(→)` on the selected transaction expands it in-place, revealing its core components: Commit Message, Prompt, Reasoning, and Files. The icon changes to `▾` and the footer updates to include the `(←) Collapse` action.
+
+```
+ ▲ relaycode transaction history
+ ──────────────────────────────────────────────────────────────────────────────
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+ > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+       ▸ Commit Message
+       ▸ Prompt
+       ▸ Reasoning
+       ▸ Files (3)
+
+   ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+   ▸ → Handoff   · 8a3f21b8 · 2023-10-26 · feat: implement new dashboard UI
+   ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (←) Collapse · (→) Expand · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy
+```
+
+#### **State 2.3: Level 2 Drill-Down - In-place Content Preview**
+
+With the transaction expanded, the user can navigate `(↓)` to a content item like `Reasoning` and press `(→)` again. This performs a second-level expansion, showing the full text content directly within the list.
+
+```
+ ▲ relaycode transaction history
+ ──────────────────────────────────────────────────────────────────────────────
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+ > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+       ▸ Commit Message
+       ▸ Prompt
+       ▾ Reasoning
+           1. Identified a potential uncaught exception in the `restoreSnapshot`
+              function if a file operation fails midway through a loop...
+           2. Wrapped the file restoration loop in a `Promise.all` for
+              robustness and comprehensive error collection.
+       ▸ Files (3)
+
+   ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+   ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (←→) Collapse/Expand · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy
+```
+
+#### **State 2.4: Level 3 Drill-Down - The In-place Diff Preview**
+
+By navigating to and expanding the `Files` item, the user can then select a specific file and press `(→)` again. This performs a third-level expansion, showing a truncated preview of that file's diff directly within the list.
+
+```
+ ▲ relaycode transaction history
+ ──────────────────────────────────────────────────────────────────────────────
+  Filter: (none) · Showing 1-10 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+ > ▾ ✓ Committed · e4a7c112 · fix: add missing error handling
+       ...
+       ▾ Files (3)
+         ▾ [MOD] src/core/transaction.ts
+               --- a/src/core/transaction.ts
+               +++ b/src/core/transaction.ts
+               @@ -45,7 +45,9 @@
+               -    for (const [filePath, content] of entries) {
+               +    const restoreErrors: { path: string, error: unknown }[] = [];
+               ... 4 lines hidden ...
+         ▸ [MOD] src/utils/logger.ts
+         ▸ [DEL] src/utils/old-helper.ts
+
+   ▸ ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+   ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav File/Tx · (←→) Collapse/Expand · (Ent) Full Diff · (O)pen File · (X)pand Full Diff
+```
+
+---
+*(Page Break)*
+---
+
+#### **State 2.5: Filtering Mode - Querying the History**
+
+From any browsing state, pressing `(F)` shifts focus to the filter bar. The transaction list updates in real-time as the user constructs their query. The footer shows context-specific actions.
+
+```
+ ▲ relaycode transaction history
+ ──────────────────────────────────────────────────────────────────────────────
+  Filter: logger.ts status:committed ▸ |
+
+ > ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+   ✓ Committed · 4b9d8f03 · 2023-10-27 · refactor: simplify clipboard logic
+   ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (Enter) Apply Filter & Return      (Esc) Cancel
+```
+After pressing `(Enter)`, the filter is applied, the status bar is updated, and control returns to the (now much shorter) transaction list.
+
+```
+ ▲ relaycode transaction history
+ ──────────────────────────────────────────────────────────────────────────────
+  Filter: logger.ts status:committed · Showing 2 of 42 · Stats: 6 Cmt, 1 H/O, 2 Rev
+
+ > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
+   ▸ ✓ Committed · 1a2b3c4d · 2023-10-22 · feat: introduce structured logging
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (→) Expand · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy · (B)ulk Actions
+```
+
+#### **State 2.6: Advanced Copy Mode - Aggregating Data for Export**
+
+After selecting one or more transactions with `(Space)`, pressing `(C)` transforms the entire screen into a powerful, two-panel data aggregation tool. The user can select multiple transactions *and* multiple data fields to create a custom report.
+
+```
+ ▲ relaycode history · copy mode
+ ──────────────────────────────────────────────────────────────────────────────
+ [x] ✓ e4a7c112 · fix: add missing error handling
+ [ ] ✓ 4b9d8f03 · refactor: simplify clipboard logic
+ [x] → 8a3f21b8 · feat: implement new dashboard UI
+ ...
+ ──────────────────────────────────────────────────────────────────────────────
+ Select data to copy from 2 transactions:
+
+ [x] (M) Git Messages         [ ] (P) Prompts          [x] (R) Reasonings
+ [ ] (D) Diffs                [ ] (X) Context Files    [ ] (U) UUIDs
+ [ ] (Y) Full YAML
+ 
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav Panels · (←→) Nav Items · (Spc) Toggle · (Enter) Copy · (C)opy/Exit
+```
+Pressing `(Enter)` aggregates the selected data (`Git Messages` and `Reasonings` from two transactions) and places it on the clipboard, providing instant feedback.
+
+```
+ ──────────────────────────────────────────────────────────────────────────────
+ ✓ Copied Messages & Reasonings to clipboard.
+ ──────────────────────────────────────────────────────────────────────────────
+```
+**Example Clipboard Output:**
+```
+--- TRANSACTION e4a7c112 ---
+
+[Git Message]
+fix: add missing error handling
+- Added try/catch to restoreSnapshot to prevent crashes on partial reverts.
+
+[Reasoning]
+1. Identified a potential uncaught exception in the restoreSnapshot function.
+2. Wrapped the file restoration loop in a Promise.all for robustness.
+
+--- TRANSACTION 8a3f21b8 ---
+
+[Git Message]
+feat: implement new dashboard UI
+- Creates a new stateful dashboard screen for the 'watch' command.
+
+[Reasoning]
+1. The goal was to provide a more application-like feel for the watch command.
+2. Designed a high-density layout to show system status and recent history.
+```
+
+#### **State 2.7: Bulk Actions Mode - Managing History**
+
+Multi-selecting items with `(Space)` and then pressing `(B)` brings up a modal for performing operations on the entire selection. This is for powerful, state-changing actions.
+
+```
+ ▲ relaycode history · bulk actions
+ ──────────────────────────────────────────────────────────────────────────────
+ [x] ✓ e4a7c112 · fix: add missing error handling
+ [ ] ✓ 4b9d8f03 · refactor: simplify clipboard logic
+ [x] → 8a3f21b8 · feat: implement new dashboard UI
+ ...
+ ──────────────────────────────────────────────────────────────────────────────
+  PERFORM BULK ACTION ON 2 SELECTED ITEMS
+
+  This action is often irreversible. Are you sure?
+
+  (1) Revert Selected Transactions
+  (2) Mark as 'Git Committed'
+  (3) Delete Selected Transactions (from Relaycode history)
+  (Esc) Cancel
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Choose an option [1-3, Esc]:
+```
+This comprehensive design ensures the Transaction History screen is an indispensable tool for managing the entire lifecycle of AI-assisted changes, providing unparalleled efficiency and control.
+````
+
 ## File: src/components/DiffScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import { UI_CONFIG } from '../config/ui.config';
 
@@ -691,10 +1252,10 @@ const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
 };
 
 export default DiffScreen;
-```
+````
 
 ## File: src/services/dashboard.service.ts
-```typescript
+````typescript
 import { sleep } from '../utils';
 import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
 
@@ -713,133 +1274,10 @@ const approveAll = async () => {
 export const DashboardService = {
     approveAll,
 };
-```
-
-## File: src/stores/copy.store.ts
-```typescript
-import { create } from 'zustand';
-import { moveIndex } from './navigation.utils';
-import { useViewStore } from './view.store';
-import { CopyService } from '../services/copy.service';
-import type { CopyItem } from '../types/copy.types';
-import type { Transaction, FileItem } from '../types/domain.types';
-
-export type { CopyItem };
-
-interface CopyState {
-    title: string;
-    items: CopyItem[];
-    selectedIndex: number;
-    selectedIds: Set<string>;
-    lastCopiedMessage: string | null;
-    onClose?: () => void;
-
-    actions: {
-        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
-        close: () => void;
-        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
-        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
-        openForHistory: (transactions: Transaction[]) => void;
-        navigateUp: () => void;
-        navigateDown: () => void;
-        toggleSelection: () => void;
-        toggleSelectionById: (id: string) => void;
-        executeCopy: () => void;
-    };
-}
-
-export const useCopyStore = create<CopyState>((set, get) => ({
-    title: '',
-    items: [],
-    selectedIndex: 0,
-    selectedIds: new Set(),
-    lastCopiedMessage: null,
-    onClose: undefined,
-
-    actions: {
-        open: (title, items, onClose) => {
-            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
-            useViewStore.getState().actions.setActiveOverlay('copy');
-            set({
-                title,
-                items,
-                selectedIndex: 0,
-                selectedIds: defaultSelectedIds,
-                lastCopiedMessage: null,
-                onClose,
-            });
-        },
-        close: () => {
-            useViewStore.getState().actions.setActiveOverlay('none');
-            get().onClose?.();
-            set({ items: [], onClose: undefined });
-        },
-        openForReview: (transaction, files, selectedFile) => {
-            const { actions } = get();
-            const title = 'Select data to copy from review:';
-            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
-            actions.open(title, items);
-        },
-        openForDetail: (transaction, selectedFile) => {
-            const { actions } = get();
-            const title = `Select data to copy from transaction ${transaction.hash}:`;
-            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
-            actions.open(title, items);
-        },
-        openForHistory: (transactions) => {
-            const { actions } = get();
-            const title = `Select data to copy from ${transactions.length} transactions:`;
-            const items = CopyService.getCopyItemsForHistory(transactions);
-            actions.open(title, items);
-        },
-        navigateUp: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
-        })),
-        navigateDown: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
-        })),
-        toggleSelection: () => set(state => {
-            const currentItem = state.items[state.selectedIndex];
-            if (!currentItem) return {};
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(currentItem.id)) {
-                newSelectedIds.delete(currentItem.id);
-            } else {
-                newSelectedIds.add(currentItem.id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        toggleSelectionById: (id: string) => set(state => {
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(id)) {
-                newSelectedIds.delete(id);
-            } else {
-                newSelectedIds.add(id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        executeCopy: async () => {
-            const { items, selectedIds } = get();
-            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
-            if (itemsToCopy.length === 0) return;
-
-            const dataPromises = itemsToCopy.map(item => item.getData());
-            const resolvedData = await Promise.all(dataPromises);
-
-            const content = itemsToCopy
-                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
-                .join('\n\n');
-            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
-            // eslint-disable-next-line no-console
-            console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
-            set({ lastCopiedMessage: message });
-        },
-    },
-}));
-```
+````
 
 ## File: src/stores/history.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
 import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath } from './navigation.utils';
@@ -986,10 +1424,10 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         },
     },
 }));
-```
+````
 
 ## File: src/types/view.types.ts
-```typescript
+````typescript
 import type { APP_SCREENS } from '../constants/app.constants';
 
 // --- UI / View-Specific Types ---
@@ -998,10 +1436,10 @@ import type { APP_SCREENS } from '../constants/app.constants';
 type ObjectValues<T> = T[keyof T];
 
 export type AppScreen = ObjectValues<typeof APP_SCREENS>;
-```
+````
 
 ## File: src/components/GlobalHelpScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 
 const GlobalHelpScreen = () => {
@@ -1056,10 +1494,10 @@ const GlobalHelpScreen = () => {
 };
 
 export default GlobalHelpScreen;
-```
+````
 
 ## File: src/components/ReasonScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 
 interface ReasonScreenProps {
@@ -1083,10 +1521,10 @@ const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonS
 };
 
 export default ReasonScreen;
-```
+````
 
 ## File: src/services/commit.service.ts
-```typescript
+````typescript
 import type { Transaction } from '../types/domain.types';
 import { sleep } from '../utils';
 import { useTransactionStore } from '../stores/transaction.store';
@@ -1128,141 +1566,133 @@ export const CommitService = {
     generateCommitMessage,
     commit,
 };
-```
+````
 
-## File: src/stores/detail.store.ts
-```typescript
+## File: src/stores/copy.store.ts
+````typescript
 import { create } from 'zustand';
-import { useTransactionStore } from './transaction.store';
+import { moveIndex } from './navigation.utils';
 import { useViewStore } from './view.store';
-import { TransactionService } from '../services/transaction.service';
-import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from '../constants/detail.constants';
-import { findNextPath, findPrevPath, getParentPath } from './navigation.utils';
+import { CopyService } from '../services/copy.service';
+import type { CopyItem } from '../types/copy.types';
+import type { Transaction, FileItem } from '../types/domain.types';
 
-type ObjectValues<T> = T[keyof T];
+export type { CopyItem };
 
-export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
-export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
- 
-interface DetailState {
-    focusedItemPath: string; // e.g., 'PROMPT', 'FILES', 'FILES/1-1'
-    expandedItemPaths: Set<string>;
-    bodyView: DetailBodyView;
+interface CopyState {
+    title: string;
+    items: CopyItem[];
+    selectedIndex: number;
+    selectedIds: Set<string>;
+    lastCopiedMessage: string | null;
+    onClose?: () => void;
+
     actions: {
-        load: (transactionId: string) => void;
+        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+        close: () => void;
+        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+        openForHistory: (transactions: Transaction[]) => void;
         navigateUp: () => void;
         navigateDown: () => void;
-        expandOrDrillDown: () => void;
-        collapseOrBubbleUp: () => void;
-        toggleRevertConfirm: () => void;
-        confirmRevert: () => void;
+        toggleSelection: () => void;
+        toggleSelectionById: (id: string) => void;
+        executeCopy: () => void;
     };
 }
 
-const getVisibleItemPaths = (expandedItemPaths: Set<string>): string[] => {
-    const { selectedTransactionId } = useViewStore.getState();
-    const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
-    if (!transaction) return [];
+export const useCopyStore = create<CopyState>((set, get) => ({
+    title: '',
+    items: [],
+    selectedIndex: 0,
+    selectedIds: new Set(),
+    lastCopiedMessage: null,
+    onClose: undefined,
 
-    const paths: string[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
-    if (expandedItemPaths.has(NAVIGATOR_SECTIONS.FILES) && transaction.files) {
-        for (const file of transaction.files) {
-            paths.push(`${NAVIGATOR_SECTIONS.FILES}/${file.id}`);
-        }
-    }
-    return paths;
-};
-
-export const useDetailStore = create<DetailState>((set, get) => ({
-    focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
-    expandedItemPaths: new Set(),
-    bodyView: DETAIL_BODY_VIEWS.NONE,
     actions: {
-        load: (transactionId) => {
-            useViewStore.getState().actions.setSelectedTransactionId(transactionId);
+        open: (title, items, onClose) => {
+            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+            useViewStore.getState().actions.setActiveOverlay('copy');
             set({
-                focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
-                expandedItemPaths: new Set(),
-                bodyView: DETAIL_BODY_VIEWS.NONE,
+                title,
+                items,
+                selectedIndex: 0,
+                selectedIds: defaultSelectedIds,
+                lastCopiedMessage: null,
+                onClose,
             });
         },
-        navigateUp: () => {
-            const { expandedItemPaths, focusedItemPath } = get();
-            const visibleItems = getVisibleItemPaths(expandedItemPaths);
-            set({ focusedItemPath: findPrevPath(focusedItemPath, visibleItems) });
+        close: () => {
+            useViewStore.getState().actions.setActiveOverlay('none');
+            get().onClose?.();
+            set({ items: [], onClose: undefined });
         },
-        navigateDown: () => {
-            const { expandedItemPaths, focusedItemPath } = get();
-            const visibleItems = getVisibleItemPaths(expandedItemPaths);
-            set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
+        openForReview: (transaction, files, selectedFile) => {
+            const { actions } = get();
+            const title = 'Select data to copy from review:';
+            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+            actions.open(title, items);
         },
-        expandOrDrillDown: () => set(state => {
-            const { focusedItemPath, expandedItemPaths } = state;
-            const newExpandedPaths = new Set(expandedItemPaths);
-            
-            if (focusedItemPath.includes('/')) { // Is a file
-                return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
-            }
-
-            // Is a section header
-            if (newExpandedPaths.has(focusedItemPath)) {
-                // Already expanded, drill in if it's FILES
-                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
-                    const visibleItems = getVisibleItemPaths(newExpandedPaths);
-                    const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
-                    if (firstFile) {
-                        return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
-                    }
-                }
-                return {}; // No-op for PROMPT/REASONING if already expanded
-            } else {
-                // Not expanded, so expand it
-                newExpandedPaths.add(focusedItemPath);
-                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
-                if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
-                if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
-                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;
-                return { expandedItemPaths: newExpandedPaths, bodyView: newBodyView };
-            }
-        }),
-        collapseOrBubbleUp: () => set(state => {
-            const { focusedItemPath, expandedItemPaths, bodyView } = state;
-            
-            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
-                return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
-            }
-
-            if (getParentPath(focusedItemPath)) { // Is a file
-                return { focusedItemPath: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
-            }
-            
-            // Is a section header
-            if (expandedItemPaths.has(focusedItemPath)) {
-                const newExpandedPaths = new Set(expandedItemPaths);
-                newExpandedPaths.delete(focusedItemPath);
-                return { expandedItemPaths: newExpandedPaths, bodyView: DETAIL_BODY_VIEWS.NONE };
-            }
-            
-            return {}; // No-op if not expanded (global back will handle)
-        }),
-        toggleRevertConfirm: () => set(state => ({
-            bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
-                ? DETAIL_BODY_VIEWS.NONE
-                : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+        openForDetail: (transaction, selectedFile) => {
+            const { actions } = get();
+            const title = `Select data to copy from transaction ${transaction.hash}:`;
+            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+            actions.open(title, items);
+        },
+        openForHistory: (transactions) => {
+            const { actions } = get();
+            const title = `Select data to copy from ${transactions.length} transactions:`;
+            const items = CopyService.getCopyItemsForHistory(transactions);
+            actions.open(title, items);
+        },
+        navigateUp: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
         })),
-        confirmRevert: () => {
-            const { selectedTransactionId } = useViewStore.getState();
-            if (!selectedTransactionId) return;
-            TransactionService.revertTransaction(selectedTransactionId);
-            useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
-            set({ bodyView: DETAIL_BODY_VIEWS.NONE });
+        navigateDown: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+        })),
+        toggleSelection: () => set(state => {
+            const currentItem = state.items[state.selectedIndex];
+            if (!currentItem) return {};
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(currentItem.id)) {
+                newSelectedIds.delete(currentItem.id);
+            } else {
+                newSelectedIds.add(currentItem.id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        toggleSelectionById: (id: string) => set(state => {
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(id)) {
+                newSelectedIds.delete(id);
+            } else {
+                newSelectedIds.add(id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        executeCopy: async () => {
+            const { items, selectedIds } = get();
+            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+            if (itemsToCopy.length === 0) return;
+
+            const dataPromises = itemsToCopy.map(item => item.getData());
+            const resolvedData = await Promise.all(dataPromises);
+
+            const content = itemsToCopy
+                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                .join('\n\n');
+            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+            // eslint-disable-next-line no-console
+            console.log(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            set({ lastCopiedMessage: message });
         },
     },
 }));
-```
+````
 
 ## File: src/stores/navigation.utils.ts
-```typescript
+````typescript
 import type { Transaction } from '../types/domain.types';
 
 export const moveIndex = (
@@ -1314,21 +1744,10 @@ export const getVisibleItemPaths = (
     }
     return paths;
 };
-```
-
-## File: src/types/copy.types.ts
-```typescript
-export interface CopyItem {
-    id: string;
-    key: string;
-    label: string;
-    getData: () => string | Promise<string>;
-    isDefaultSelected?: boolean;
-}
-```
+````
 
 ## File: src/components/CopyScreen.tsx
-```typescript
+````typescript
 import { Box, Text, useInput } from 'ink';
 import { useCopyStore } from '../stores/copy.store';
 import Separator from './Separator';
@@ -1418,10 +1837,10 @@ const CopyScreen = () => {
 };
 
 export default CopyScreen;
-```
+````
 
 ## File: src/data/mocks.ts
-```typescript
+````typescript
 import type { Transaction } from '../types/domain.types';
 
 const mockReasoning1 = `1. Identified a potential uncaught exception in the \`restoreSnapshot\` function
@@ -1494,10 +1913,10 @@ export const allMockTransactions: Transaction[] = [
 export const createMockTransactions = (): Transaction[] => {
     return JSON.parse(JSON.stringify(allMockTransactions));
 };
-```
+````
 
 ## File: src/hooks/useGitCommitScreen.tsx
-```typescript
+````typescript
 import { useInput } from 'ink';
 import { useCommitStore } from '../stores/commit.store';
 import { useAppStore } from '../stores/app.store';
@@ -1521,10 +1940,10 @@ export const useGitCommitScreen = () => {
 
     return { transactionsToCommit, finalCommitMessage, isCommitting };
 };
-```
+````
 
 ## File: src/hooks/useSplashScreen.tsx
-```typescript
+````typescript
 import { useState, useEffect } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
@@ -1580,10 +1999,10 @@ export const useSplashScreen = () => {
 
     return { countdown };
 };
-```
+````
 
 ## File: src/services/init.service.ts
-```typescript
+````typescript
 import { useInitStore } from '../stores/init.store';
 import { sleep } from '../utils';
 import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
@@ -1633,10 +2052,156 @@ export const InitService = {
     runInitializationProcess,
     resumeInitializationProcess,
 };
-```
+````
+
+## File: src/stores/detail.store.ts
+````typescript
+import { create } from 'zustand';
+import { useTransactionStore } from './transaction.store';
+import { useViewStore } from './view.store';
+import { TransactionService } from '../services/transaction.service';
+import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from '../constants/detail.constants';
+import { findNextPath, findPrevPath, getParentPath } from './navigation.utils';
+
+type ObjectValues<T> = T[keyof T];
+
+export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
+export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
+
+// Omit 'actions' from state type for partial updates
+type DetailStateData = Omit<DetailState, 'actions'>;
+ 
+interface DetailState {
+    focusedItemPath: string; // e.g., 'PROMPT', 'FILES', 'FILES/1-1'
+    expandedItemPaths: Set<string>;
+    bodyView: DetailBodyView;
+    actions: {
+        load: (transactionId: string, initialState?: Partial<DetailStateData>) => void;
+        navigateUp: () => void;
+        navigateDown: () => void;
+        expandOrDrillDown: () => void;
+        collapseOrBubbleUp: () => void;
+        toggleRevertConfirm: () => void;
+        confirmRevert: () => void;
+    };
+}
+
+const getVisibleItemPaths = (expandedItemPaths: Set<string>): string[] => {
+    const { selectedTransactionId } = useViewStore.getState();
+    const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+    if (!transaction) return [];
+
+    const paths: string[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
+    if (expandedItemPaths.has(NAVIGATOR_SECTIONS.FILES) && transaction.files) {
+        for (const file of transaction.files) {
+            paths.push(`${NAVIGATOR_SECTIONS.FILES}/${file.id}`);
+        }
+    }
+    return paths;
+};
+
+export const useDetailStore = create<DetailState>((set, get) => ({
+    focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+    expandedItemPaths: new Set(),
+    bodyView: DETAIL_BODY_VIEWS.NONE,
+    actions: {
+        load: (transactionId, initialState) => {
+            useViewStore.getState().actions.setSelectedTransactionId(transactionId);
+            set({
+                focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+                expandedItemPaths: new Set(),
+                bodyView: DETAIL_BODY_VIEWS.NONE,
+                ...initialState,
+            });
+        },
+        navigateUp: () => {
+            const { expandedItemPaths, focusedItemPath } = get();
+            const visibleItems = getVisibleItemPaths(expandedItemPaths);
+            set({ focusedItemPath: findPrevPath(focusedItemPath, visibleItems) });
+        },
+        navigateDown: () => {
+            const { expandedItemPaths, focusedItemPath } = get();
+            const visibleItems = getVisibleItemPaths(expandedItemPaths);
+            set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
+        },
+        expandOrDrillDown: () => set(state => {
+            const { focusedItemPath, expandedItemPaths } = state;
+            const newExpandedPaths = new Set(expandedItemPaths);
+            
+            if (focusedItemPath.includes('/')) { // Is a file
+                return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
+            }
+
+            // Is a section header
+            if (newExpandedPaths.has(focusedItemPath)) {
+                // Already expanded, drill in if it's FILES
+                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
+                    const visibleItems = getVisibleItemPaths(newExpandedPaths);
+                    const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
+                    if (firstFile) {
+                        return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                    }
+                }
+                return {}; // No-op for PROMPT/REASONING if already expanded
+            } else {
+                // Not expanded, so expand it
+                newExpandedPaths.add(focusedItemPath);
+                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
+                if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
+                if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
+                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;
+                return { expandedItemPaths: newExpandedPaths, bodyView: newBodyView };
+            }
+        }),
+        collapseOrBubbleUp: () => set(state => {
+            const { focusedItemPath, expandedItemPaths, bodyView } = state;
+            
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+            }
+
+            if (getParentPath(focusedItemPath)) { // Is a file
+                return { focusedItemPath: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+            }
+            
+            // Is a section header
+            if (expandedItemPaths.has(focusedItemPath)) {
+                const newExpandedPaths = new Set(expandedItemPaths);
+                newExpandedPaths.delete(focusedItemPath);
+                return { expandedItemPaths: newExpandedPaths, bodyView: DETAIL_BODY_VIEWS.NONE };
+            }
+            
+            return {}; // No-op if not expanded (global back will handle)
+        }),
+        toggleRevertConfirm: () => set(state => ({
+            bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
+                ? DETAIL_BODY_VIEWS.NONE
+                : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+        })),
+        confirmRevert: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (!selectedTransactionId) return;
+            TransactionService.revertTransaction(selectedTransactionId);
+            useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
+            set({ bodyView: DETAIL_BODY_VIEWS.NONE });
+        },
+    },
+}));
+````
+
+## File: src/types/copy.types.ts
+````typescript
+export interface CopyItem {
+    id: string;
+    key: string;
+    label: string;
+    getData: () => string | Promise<string>;
+    isDefaultSelected?: boolean;
+}
+````
 
 ## File: src/components/ReviewProcessingScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useViewStore } from '../stores/view.store';
@@ -1718,10 +2283,10 @@ const ReviewProcessingScreen = () => {
 };
 
 export default ReviewProcessingScreen;
-```
+````
 
 ## File: src/components/Separator.tsx
-```typescript
+````typescript
 import {Text} from 'ink';
 import { useStdoutDimensions } from '../utils';
 
@@ -1732,10 +2297,10 @@ const Separator = ({ width: propWidth }: { width?: number }) => {
 };
 
 export default Separator;
-```
+````
 
 ## File: src/hooks/useGlobalHotkeys.tsx
-```typescript
+````typescript
 import { useApp, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
@@ -1791,10 +2356,10 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
         }
     }, { isActive });
 };
-```
+````
 
 ## File: src/hooks/useInitializationScreen.tsx
-```typescript
+````typescript
 import { useEffect } from 'react';
 import { Text, useApp, useInput } from 'ink';
 import { useInitStore } from '../stores/init.store';
@@ -1859,10 +2424,99 @@ export const useInitializationScreen = () => {
         footerText,
     };
 };
-```
+````
+
+## File: package.json
+````json
+{
+  "name": "relaycode-tui",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.tsx",
+    "dev": "bun run --watch index.tsx",
+    "debug-screen": "bun run index.tsx debug-screen",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "clipboardy": "^4.0.0",
+    "ink": "^6.3.1",
+    "ink-select-input": "^4.2.2",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.1.1",
+    "zustand": "^4.5.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.19.17",
+    "@types/react": "^18.3.24",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript": "^5.9.2"
+  }
+}
+````
+
+## File: src/components/GitCommitScreen.tsx
+````typescript
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+import ActionFooter from './ActionFooter';
+
+const GitCommitScreen = () => {
+    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+    const transactionLines = transactionsToCommit.map(tx => (
+        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+    ));
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode git commit</Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text bold>TRANSACTIONS INCLUDED</Text>
+                    {transactionLines}
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text bold>FINAL COMMIT MESSAGE</Text>
+                <Box marginTop={1}>
+                    <Text>{finalCommitMessage}</Text>
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} paddingX={2}>
+                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+            </Box>
+            <Separator />
+            {isCommitting
+                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                : <ActionFooter actions={[
+                    { key: 'Enter', label: 'Confirm & Commit' },
+                    { key: 'Esc', label: 'Cancel' },
+                ]}/>
+            }
+        </Box>
+    );
+};
+
+export default GitCommitScreen;
+````
 
 ## File: src/services/copy.service.ts
-```typescript
+````typescript
 import type { Transaction, FileItem } from '../types/domain.types';
 import type { CopyItem } from '../types/copy.types';
 import { COPYABLE_ITEMS } from '../constants/copy.constants';
@@ -1973,99 +2627,10 @@ export const CopyService = {
     getCopyItemsForDetail,
     getCopyItemsForHistory,
 };
-```
-
-## File: package.json
-```json
-{
-  "name": "relaycode-tui",
-  "module": "index.tsx",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "start": "bun run index.tsx",
-    "dev": "bun run --watch index.tsx",
-    "debug-screen": "bun run index.tsx debug-screen",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
-  },
-  "dependencies": {
-    "clipboardy": "^4.0.0",
-    "ink": "^6.3.1",
-    "ink-select-input": "^4.2.2",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "react": "^19.1.1",
-    "zustand": "^4.5.7"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^20.19.17",
-    "@types/react": "^18.3.24",
-    "@typescript-eslint/eslint-plugin": "^8.44.0",
-    "@typescript-eslint/parser": "^8.44.0",
-    "eslint": "^9.36.0",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "typescript": "^5.9.2"
-  }
-}
-```
-
-## File: src/components/GitCommitScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
-import ActionFooter from './ActionFooter';
-
-const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
-
-    const transactionLines = transactionsToCommit.map(tx => (
-        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-    ));
-
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode git commit</Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold>TRANSACTIONS INCLUDED</Text>
-                    {transactionLines}
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text bold>FINAL COMMIT MESSAGE</Text>
-                <Box marginTop={1}>
-                    <Text>{finalCommitMessage}</Text>
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} paddingX={2}>
-                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
-            </Box>
-            <Separator />
-            {isCommitting
-                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-                : <ActionFooter actions={[
-                    { key: 'Enter', label: 'Confirm & Commit' },
-                    { key: 'Esc', label: 'Cancel' },
-                ]}/>
-            }
-        </Box>
-    );
-};
-
-export default GitCommitScreen;
-```
+````
 
 ## File: src/services/transaction.service.ts
-```typescript
+````typescript
 import { createMockTransactions } from '../data/mocks';
 import type { Transaction } from '../types/domain.types';
 
@@ -2079,10 +2644,10 @@ export const TransactionService = {
     revertTransaction,
     getAllTransactions: (): Transaction[] => createMockTransactions(),
 };
-```
+````
 
 ## File: src/stores/transaction.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 import { TransactionService } from '../services/transaction.service';
 import { useViewStore } from './view.store';
@@ -2128,10 +2693,10 @@ export const selectSelectedTransaction = (state: TransactionState): Transaction 
     const { selectedTransactionId } = useViewStore.getState();
     return state.transactions.find(t => t.id === selectedTransactionId);
 };
-```
+````
 
 ## File: src/components/SplashScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import { useSplashScreen } from '../hooks/useSplashScreen';
@@ -2186,10 +2751,10 @@ const SplashScreen = () => {
 };
 
 export default SplashScreen;
-```
+````
 
 ## File: src/hooks/useDashboardScreen.tsx
-```typescript
+````typescript
 import { useInput } from 'ink';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
@@ -2304,10 +2869,10 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
         transactionsToConfirm,
     };
 };
-```
+````
 
 ## File: src/stores/commit.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 import { CommitService } from '../services/commit.service';
 import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
@@ -2338,10 +2903,10 @@ export const useCommitStore = create<CommitState>((set) => ({
         },
     },
 }));
-```
+````
 
 ## File: src/stores/init.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 
 // Store Interface
@@ -2407,10 +2972,10 @@ export const useInitStore = create<InitState>((set) => ({
         }),
     },
 }));
-```
+````
 
 ## File: src/components/InitializationScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import type { Task } from '../stores/init.store';
@@ -2541,16 +3106,17 @@ const InitializationScreen = () => {
 };
 
 export default InitializationScreen;
-```
+````
 
 ## File: src/hooks/useTransactionDetailScreen.tsx
-```typescript
+````typescript
 import { useInput, type Key } from 'ink';
 import { useDetailStore } from '../stores/detail.store';
 import { useViewStore } from '../stores/view.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import { useMemo } from 'react';
 import { useCopyStore } from '../stores/copy.store';
+import { EditorService } from '../services/editor.service';
 
 export const useTransactionDetailScreen = () => {
     const store = useDetailStore();
@@ -2590,6 +3156,18 @@ export const useTransactionDetailScreen = () => {
             toggleRevertConfirm();
             return;
         }
+        if (input.toLowerCase() === 'o') {
+            if (!transaction) return;
+            const { focusedItemPath } = store;
+            if (focusedItemPath.includes('/')) { // Is a file
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (file) EditorService.openFileInEditor(file.path);
+            } else { // Is a section, open the transaction YAML
+                const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
+                EditorService.openFileInEditor(yamlPath);
+            }
+        }
 
         if (key.upArrow) navigateUp();
         if (key.downArrow) navigateDown();
@@ -2605,10 +3183,10 @@ export const useTransactionDetailScreen = () => {
         bodyView: store.bodyView,
     };
 };
-```
+````
 
 ## File: src/components/DebugMenu.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import { useDebugMenu } from '../hooks/useDebugMenu';
@@ -2656,10 +3234,10 @@ const DebugMenu = () => {
 };
 
 export default DebugMenu;
-```
+````
 
 ## File: src/services/review.service.ts
-```typescript
+````typescript
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
@@ -2889,10 +3467,10 @@ export const ReviewService = {
     tryInstructFile,
     runBulkReapply,
 };
-```
+````
 
 ## File: src/stores/app.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 import type { AppScreen } from '../types/view.types';
 import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
@@ -2931,10 +3509,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
     },
 }));
-```
+````
 
 ## File: index.tsx
-```typescript
+````typescript
 import { render } from 'ink';
 import App from './src/App';
 import { useAppStore } from './src/stores/app.store';
@@ -3006,10 +3584,10 @@ const main = () => {
 };
 
 main();
-```
+````
 
 ## File: src/hooks/useReviewScreen.tsx
-```typescript
+````typescript
 import { useMemo } from 'react';
 import { useInput, type Key } from 'ink';
 import { useReviewStore } from '../stores/review.store';
@@ -3288,10 +3866,10 @@ export const useReviewScreen = () => {
         hasRejectedFiles,
     };
 };
-```
+````
 
 ## File: src/components/TransactionDetailScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
@@ -3417,8 +3995,10 @@ const TransactionDetailScreen = () => {
             ]} />;
         }
         
+        const isFileFocused = focusedItemPath.includes('/');
         const baseActions: ActionItem[] = [
             { key: 'C', label: 'Copy' },
+            { key: 'O', label: isFileFocused ? 'Open File' : 'Open YAML' },
             { key: 'U', label: 'Undo' },
             { key: 'Q', label: 'Quit/Back' },
         ];
@@ -3426,7 +4006,7 @@ const TransactionDetailScreen = () => {
 
         if (focusedItemPath.includes('/')) { // Is a file
             if (bodyView === 'DIFF_VIEW') {
-                contextualActions = [
+        if (isFileFocused) { // Is a file
                     { key: '↑↓', label: 'Nav Files' },
                     { key: '←', label: 'Back to List' },
                 ];
@@ -3500,10 +4080,10 @@ const TransactionDetailScreen = () => {
 };
 
 export default TransactionDetailScreen;
-```
+````
 
 ## File: src/components/TransactionHistoryScreen.tsx
-```typescript
+````typescript
 import { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
@@ -3669,12 +4249,14 @@ const TransactionHistoryScreen = () => {
         if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
         if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3] or (Esc) Cancel</Text>;
         
+        const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
         const footerActions: ActionItem[] = [
             { key: '↑↓', label: 'Nav' },
             { key: '→', label: 'Expand' },
             { key: '←', label: 'Collapse' },
             { key: 'Spc', label: 'Select' },
             { key: 'Ent', label: 'Details' },
+            { key: 'O', label: openActionLabel },
             { key: 'F', label: 'Filter' },
         ];
 
@@ -3768,10 +4350,10 @@ const TransactionHistoryScreen = () => {
 };
 
 export default TransactionHistoryScreen;
-```
+````
 
 ## File: src/hooks/useTransactionHistoryScreen.tsx
-```typescript
+````typescript
 import { useMemo } from 'react';
 import { useInput, type Key } from 'ink';
 import { useHistoryStore } from '../stores/history.store';
@@ -3780,6 +4362,7 @@ import { useTransactionStore } from '../stores/transaction.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
 import type { TransactionStatus } from '../types/domain.types';
+import { EditorService } from '../services/editor.service';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
 import { useViewport } from './useViewport';
 
@@ -3835,6 +4418,20 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
             if (txId && !selectedItemPath.includes('/')) {
                 useDetailStore.getState().actions.load(txId);
                 showTransactionDetailScreen();
+            }
+        }
+        if (input.toLowerCase() === 'o') {
+            const txId = selectedItemPath.split('/')[0];
+            const tx = transactions.find(t => t.id === txId);
+            if (!tx) return;
+
+            if (selectedItemPath.includes('/file/')) {
+                const fileId = selectedItemPath.split('/')[2];
+                const file = tx.files?.find(f => f.id === fileId);
+                if (file) EditorService.openFileInEditor(file.path);
+            } else {
+                const yamlPath = EditorService.getTransactionYamlPath(tx.hash);
+                EditorService.openFileInEditor(yamlPath);
             }
         }
 
@@ -3909,10 +4506,10 @@ export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: nu
         visibleItemPaths,
     };
 };
-```
+````
 
 ## File: src/App.tsx
-```typescript
+````typescript
 import { Box } from 'ink';
 import { useAppStore } from './stores/app.store';
 import SplashScreen from './components/SplashScreen';
@@ -3968,10 +4565,10 @@ const App = () => {
 };
 
 export default App;
-```
+````
 
 ## File: src/components/ReviewScreen.tsx
-```typescript
+````typescript
 import { Box, Text } from 'ink';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
@@ -4479,10 +5076,10 @@ const ReviewScreen = () => {
 };
 
 export default ReviewScreen;
-```
+````
 
 ## File: src/stores/dashboard.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
 import { DashboardService } from '../services/dashboard.service';
@@ -4558,10 +5155,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
     },
 }));
-```
+````
 
 ## File: src/hooks/useDebugMenu.tsx
-```typescript
+````typescript
 import { useState } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
@@ -4631,6 +5228,14 @@ const useDebugMenuActions = () => {
             title: 'Dashboard: Approving',
             action: () => {
                 dashboardActions.setStatus('APPROVING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Expanded View',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                dashboardActions.setExpandedTransactionId('1');
                 appActions.showDashboardScreen();
             },
         },
@@ -4740,6 +5345,35 @@ const useDebugMenuActions = () => {
             },
         },
         {
+            title: 'Detail: Copy Mode',
+            action: () => {
+                detailActions.load('3');
+                appActions.showTransactionDetailScreen();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                if (!tx) return;
+                const selectedFile = tx.files?.[0];
+                useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+            },
+        },
+        {
+            title: 'Detail: Diff View (for File Open action)',
+            action: () => {
+                detailActions.load('3', {
+                    focusedItemPath: 'FILES/3-1',
+                    bodyView: 'DIFF_VIEW',
+                    expandedItemPaths: new Set(['FILES']),
+                });
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Detail: Revert Confirm',
+            action: () => {
+                detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
             title: 'Transaction History Screen',
             action: () => {
                 historyActions.load();
@@ -4761,7 +5395,7 @@ const useDebugMenuActions = () => {
             },
         },
         {
-            title: 'History: L2 Drilldown (File Diff)',
+            title: 'History: L2 Drilldown (for File Open action)',
             action: () => {
                 historyActions.prepareDebugState('l2-drill-diff');
                 appActions.showTransactionHistoryScreen();
@@ -4843,10 +5477,10 @@ export const useDebugMenu = () => {
         menuItems,
     };
 };
-```
+````
 
 ## File: src/components/DashboardScreen.tsx
-```typescript
+````typescript
 import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
@@ -5058,10 +5692,10 @@ const DashboardScreen = () => {
 };
 
 export default DashboardScreen;
-```
+````
 
 ## File: src/stores/review.store.ts
-```typescript
+````typescript
 import { create } from 'zustand';
 import { useAppStore } from './app.store';
 import { useTransactionStore } from './transaction.store';
@@ -5411,4 +6045,4 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         })),
     },
 }));
-```
+````

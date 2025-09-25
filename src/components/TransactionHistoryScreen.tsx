@@ -163,12 +163,14 @@ const TransactionHistoryScreen = () => {
         if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
         if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3] or (Esc) Cancel</Text>;
         
+        const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
         const footerActions: ActionItem[] = [
             { key: '↑↓', label: 'Nav' },
             { key: '→', label: 'Expand' },
             { key: '←', label: 'Collapse' },
             { key: 'Spc', label: 'Select' },
             { key: 'Ent', label: 'Details' },
+            { key: 'O', label: openActionLabel },
             { key: 'F', label: 'Filter' },
         ];
 

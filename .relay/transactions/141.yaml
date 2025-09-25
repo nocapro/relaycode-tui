@@ -1,0 +1,2250 @@
+uuid: c2596ab6-35a1-42ee-89d7-56e632833075
+projectId: relaycode-tui
+createdAt: '2025-09-25T09:56:48.132Z'
+gitCommitMsg: >-
+  feat(ui): implement dimming for overlays and modals
+
+  Refactors the application's UI architecture to consistently dim background
+  content when a modal, overlay, or confirmation prompt is active. This improves
+  user focus on the current action.
+
+  - The root `App.tsx` now uses absolute positioning for global overlays
+  (`Help`, `Copy`, `Debug`), allowing the main screen to remain visible but
+  dimmed underneath. - `DashboardScreen`, `TransactionDetailScreen`,
+  `ReviewScreen`, and `TransactionHistoryScreen` have been updated to apply the
+  same dimming logic for their internal modal states (e.g., confirmations, bulk
+  actions). - Replaced `display: 'none'` with `dimColor` to keep background
+  content contextually visible. - Standardized the appearance of some in-screen
+  modals to make them more visually distinct.
+promptSummary: >-
+  Implement a UI dimming effect for modals and overlays across the application
+  to improve user focus.
+reasoning:
+  - >-
+    This is an excellent architectural plan. I will now execute all parts in a
+    single transaction to implement the UI dimming effect for modals and
+    overlays, enhancing user focus.
+  - '### Part 1: Architecting Global Overlay Dimming'
+  - >-
+    I will modify `App.tsx` to always render the main screen, applying a
+    `dimColor` when an overlay is active. The overlays themselves will be moved
+    into an absolutely positioned container to ensure they render on top of the
+    main content.
+  - '### Part 2: Implementing In-Screen Modal Dimming'
+  - >-
+    For screens with internal confirmation modals, I will adjust the layout to
+    dim the background content instead of hiding it.
+  - >-
+    First, for `DashboardScreen.tsx`, I'll wrap the background elements in
+    containers that receive `dimColor` when the confirmation modal is active.
+  - >-
+    Next, in `TransactionDetailScreen.tsx`, I will replace the `display: 'none'`
+    logic with `dimColor` to keep the main view visible but de-emphasized behind
+    the revert confirmation.
+  - '### Part 3: Extending Dimming to Complex Modal Views'
+  - >-
+    I'll now refactor the more complex screens to follow the same dimming
+    pattern for their modal-like views.
+  - >-
+    In `ReviewScreen.tsx`, I will identify the modal views and wrap the entire
+    background content in a single `Box` that applies `dimColor`.
+  - >-
+    Finally, I will update `TransactionHistoryScreen.tsx`. I'll refactor the
+    layout to treat the "Bulk Actions" view as an overlay modal, dimming the
+    background list, and improving the modal's appearance.
+operations:
+  - type: write
+    path: src/App.tsx
+    content: |
+      --- src/App.tsx
+      +++ src/App.tsx
+      @@ -19,16 +19,25 @@
+           };
+       
+           return (
+      -        <>
+      +        <Box width="100%" height="100%">
+                   <Box
+                       width="100%"
+                       height="100%"
+                       flexDirection="column"
+      -                display={isOverlayOpen ? 'none' : 'flex'}
+      +                dimColor={isOverlayOpen}
+                   >
+                       {renderMainScreen()}
+                   </Box>
+      -            {activeOverlay === 'help' && <GlobalHelpScreen />}
+      -            {activeOverlay === 'copy' && <CopyScreen />}
+      -            {activeOverlay === 'debug' && <DebugMenu />}
+      -        </>
+      +
+      +            {isOverlayOpen && (
+      +                <Box
+      +                    position="absolute"
+      +                    top={0}
+      +                    left={0}
+      +                    width="100%"
+      +                    height="100%"
+      +                >
+      +                    {activeOverlay === 'help' && <GlobalHelpScreen />}
+      +                    {activeOverlay === 'copy' && <CopyScreen />}
+      +                    {activeOverlay === 'debug' && <DebugMenu />}
+      +                </Box>
+      +            )}
+      +        </Box>
+           );
+       };
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: >
+      --- src/components/DashboardScreen.tsx
+
+      +++ src/components/DashboardScreen.tsx
+
+      @@ -211,46 +211,46 @@
+           
+           return (
+               <Box flexDirection="column" height="100%">
+      -            <Text color="cyan">▲ relaycode dashboard</Text>
+
+      -            <Separator />
+
+      -            <Box marginY={1}>
+
+      -                {renderStatusBar()}
+
+      -            </Box>
+
+      -            
+
+      -            {isModal && (
+
+      -                <>
+
+      -                    <ConfirmationContent
+      transactionsToConfirm={transactionsToConfirm} />
+
+      -                    <Separator />
+
+      -                </>
+
+      -            )}
+
+      -            
+
+      -            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+
+      -            <Box flexDirection="column" marginTop={1}>
+
+      -                {transactions.length === 0 && (
+
+      -                     <Box paddingLeft={2}><Text color="gray">Listening
+      for changes... no events yet.</Text></Box>
+
+      -                )}
+
+      -                {transactions.slice(viewOffset, viewOffset +
+      viewportHeight).map((tx, index) => {
+
+      -                    const actualIndex = viewOffset + index;
+
+      -                    const isExpanded = expandedTransactionId === tx.id;
+
+      -                    return (
+
+      -                        <React.Fragment key={tx.id}>
+
+      -                            <EventStreamItem
+
+      -                                transaction={tx}
+
+      -                                isSelected={!isModal && actualIndex ===
+      selectedTransactionIndex}
+
+      -                                isExpanded={isExpanded}
+
+      -                            />
+
+      -                            {isExpanded && <ExpandedEventInfo
+      transaction={tx} />}
+
+      -                        </React.Fragment>
+
+      -                    );
+
+      -                })}
+
+      +            <Box dimColor={isModal}>
+
+      +                <Text color="cyan">▲ relaycode dashboard</Text>
+
+      +                <Separator />
+
+      +                <Box marginY={1}>
+
+      +                    {renderStatusBar()}
+
+      +                </Box>
+                   </Box>
+       
+      -            <Box marginTop={1}><Separator /></Box>
+
+      +            {isModal && (
+
+      +                <>
+
+      +                    <ConfirmationContent
+      transactionsToConfirm={transactionsToConfirm} />
+
+      +                    <Separator />
+
+      +                </>
+
+      +            )}
+
+      +
+
+      +            <Box flexDirection="column" flexGrow={1} dimColor={isModal}>
+
+      +                <Text bold underline> EVENT STREAM (Last 15
+      minutes)</Text>
+
+      +                <Box flexDirection="column" marginTop={1}>
+
+      +                    {transactions.length === 0 && (
+
+      +                         <Box paddingLeft={2}><Text
+      color="gray">Listening for changes... no events yet.</Text></Box>
+
+      +                    )}
+
+      +                    {transactions.slice(viewOffset, viewOffset +
+      viewportHeight).map((tx, index) => {
+
+      +                        const actualIndex = viewOffset + index;
+
+      +                        const isExpanded = expandedTransactionId ===
+      tx.id;
+
+      +                        return (
+
+      +                            <React.Fragment key={tx.id}>
+
+      +                                <EventStreamItem
+
+      +                                    transaction={tx}
+
+      +                                    isSelected={!isModal && actualIndex
+      === selectedTransactionIndex}
+
+      +                                    isExpanded={isExpanded}
+
+      +                                />
+
+      +                                {isExpanded && <ExpandedEventInfo
+      transaction={tx} />}
+
+      +                            </React.Fragment>
+
+      +                        );
+
+      +                    })}
+
+      +                </Box>
+
+      +            </Box>
+
+      +
+
+      +            <Box><Separator /></Box>
+                   {renderFooter()}
+               </Box>
+           );
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionDetailScreen.tsx
+    content: >+
+      --- src/components/TransactionDetailScreen.tsx
+
+      +++ src/components/TransactionDetailScreen.tsx
+
+      @@ -143,8 +143,8 @@
+                   {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
+                   
+                   {/* Main view */}
+      -            <Box flexDirection="column" display={bodyView ===
+      'REVERT_CONFIRM' ? 'none' : 'flex'}>
+
+      +            <Box flexDirection="column" dimColor={bodyView ===
+      'REVERT_CONFIRM'}>
+                       {/* Navigator Part A */}
+                       <Box flexDirection="column" marginY={1}>
+                           <Text>UUID: {transaction.id}</Text>
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewScreen.tsx
+    content: >+
+      --- src/components/ReviewScreen.tsx
+
+      +++ src/components/ReviewScreen.tsx
+
+      @@ -113,6 +113,8 @@
+               hasRejectedFiles,
+           } = useReviewScreen();
+       
+      +    const isModalView = ['confirm_handoff', 'bulk_repair',
+      'bulk_instruct'].includes(bodyView);
+
+      +
+           if (!transaction) {
+               return <Text>Loading review...</Text>;
+           }
+      @@ -359,85 +361,87 @@
+       
+           return (
+               <Box flexDirection="column">
+      -            {/* Header */}
+
+      -            <Text color="cyan">▲ relaycode review</Text>
+
+      -            <Separator />
+
+      -            
+
+      -            {/* Navigator Section */}
+
+      -            <Box flexDirection="column" marginY={1}>
+
+      -                <Box flexDirection="column">
+
+      -                    <Text>{hash} · {message}</Text>
+
+      -                    <Text>
+
+      -                        (<Text
+      color="green">+{totalLinesAdded}</Text>/<Text
+      color="red">-{totalLinesRemoved}</Text>) · {numFiles} Files ·
+      {approvedFilesCount}/{numFiles} Approved
+
+      -                        {patchStatus === 'PARTIAL_FAILURE' &&
+      scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+
+      -                        {patchStatus === 'PARTIAL_FAILURE' && <Text
+      color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+
+      -                    </Text>
+
+      -                </Box>
+
+      -
+
+      -                <Box flexDirection="column" marginTop={1}>
+
+      -                    <Text color={navigableItems[selectedItemIndex]?.type
+      === 'prompt' ? 'cyan' : undefined}>
+
+      -                        {navigableItems[selectedItemIndex]?.type ===
+      'prompt' ? '> ' : '  '}
+
+      -                        (P)rompt ▸ {(prompt || '').substring(0, 60)}...
+
+      -                    </Text>
+
+      -                    <Text color={navigableItems[selectedItemIndex]?.type
+      === 'reasoning' ? 'cyan' : undefined}>
+
+      -                        {navigableItems[selectedItemIndex]?.type ===
+      'reasoning' ? '> ' : '  '}
+
+      -                        (R)easoning ({(reasoning ||
+      '').split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{'
+      '}
+
+      -                        {((reasoning || '').split('\n')[0] ??
+      '').substring(0, 50)}...
+
+      -                    </Text>
+
+      -                </Box>
+
+      -            </Box>
+
+      -
+
+      -            <Separator />
+
+      -
+
+      -            {/* Script Results (if any) */}
+
+      -            {scripts.length > 0 && navigableItems.some(i => i.type ===
+      'script') && (
+
+      -                <>
+
+      -                    <Box flexDirection="column" marginY={1}>
+
+      -                        {scripts.map((script: ScriptResult) => (
+
+      -                            (() => {
+
+      -                                const navItemIndex =
+      navigableItems.findIndex(i => {
+
+      -                                    if (i.type === 'script') {
+
+      -                                        return i.id === script.command;
+
+      -                                    }
+
+      -                                    return false;
+
+      -                                });
+
+      -                                const isSelected = selectedItemIndex ===
+      navItemIndex;
+
+      -                                return (
+
+      -                                    <ScriptItemRow
+
+      -                                        key={script.command}
+
+      -                                        script={script}
+
+      -                                        isSelected={isSelected}
+
+      -                                        isExpanded={bodyView ===
+      'script_output' && isSelected}
+
+      -                                    />
+
+      -                                );
+
+      -                            })()
+
+      -                        ))}
+
+      +            <Box dimColor={isModalView}>
+
+      +                {/* Header */}
+
+      +                <Text color="cyan">▲ relaycode review</Text>
+
+      +                <Separator />
+
+      +                
+
+      +                {/* Navigator Section */}
+
+      +                <Box flexDirection="column" marginY={1}>
+
+      +                    <Box flexDirection="column">
+
+      +                        <Text>{hash} · {message}</Text>
+
+      +                        <Text>
+
+      +                            (<Text
+      color="green">+{totalLinesAdded}</Text>/<Text
+      color="red">-{totalLinesRemoved}</Text>) · {numFiles} Files ·
+      {approvedFilesCount}/{numFiles} Approved
+
+      +                            {patchStatus === 'PARTIAL_FAILURE' &&
+      scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+
+      +                            {patchStatus === 'PARTIAL_FAILURE' && <Text
+      color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+
+      +                        </Text>
+                           </Box>
+      +
+
+      +                    <Box flexDirection="column" marginTop={1}>
+
+      +                        <Text
+      color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' :
+      undefined}>
+
+      +                            {navigableItems[selectedItemIndex]?.type ===
+      'prompt' ? '> ' : '  '}
+
+      +                            (P)rompt ▸ {(prompt || '').substring(0,
+      60)}...
+
+      +                        </Text>
+
+      +                        <Text
+      color={navigableItems[selectedItemIndex]?.type === 'reasoning' ? 'cyan' :
+      undefined}>
+
+      +                            {navigableItems[selectedItemIndex]?.type ===
+      'reasoning' ? '> ' : '  '}
+
+      +                            (R)easoning ({(reasoning ||
+      '').split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{'
+      '}
+
+      +                            {((reasoning || '').split('\n')[0] ??
+      '').substring(0, 50)}...
+
+      +                        </Text>
+
+      +                    </Box>
+
+      +                </Box>
+
+      +
+
+      +                <Separator />
+
+      +
+
+      +                {/* Script Results (if any) */}
+
+      +                {scripts.length > 0 && navigableItems.some(i => i.type
+      === 'script') && (
+
+      +                    <>
+
+      +                        <Box flexDirection="column" marginY={1}>
+
+      +                            {scripts.map((script: ScriptResult) => (
+
+      +                                (() => {
+
+      +                                    const navItemIndex =
+      navigableItems.findIndex(i => {
+
+      +                                        if (i.type === 'script') {
+
+      +                                            return i.id ===
+      script.command;
+
+      +                                        }
+
+      +                                        return false;
+
+      +                                    });
+
+      +                                    const isSelected = selectedItemIndex
+      === navItemIndex;
+
+      +                                    return (
+
+      +                                        <ScriptItemRow
+
+      +                                            key={script.command}
+
+      +                                            script={script}
+
+      +                                            isSelected={isSelected}
+
+      +                                            isExpanded={bodyView ===
+      'script_output' && isSelected}
+
+      +                                        />
+
+      +                                    );
+
+      +                                })()
+
+      +                            ))}
+
+      +                        </Box>
+
+      +                        <Separator />
+
+      +                    </>
+
+      +                )}
+
+      +
+
+      +                {/* Files Section */}
+
+      +                <Box flexDirection="column" marginY={1}>
+
+      +                    <Text bold>FILES</Text>
+
+      +                    {files.map((file: FileItem) => {
+
+      +                        const navItemIndex = navigableItems.findIndex(i
+      => {
+
+      +                            if (i.type === 'file') {
+
+      +                                return i.id === file.id;
+
+      +                            }
+
+      +                            return false;
+
+      +                        });
+
+      +                        const isFocused = selectedItemIndex ===
+      navItemIndex;
+
+      +                        const reviewState =
+      fileReviewStates.get(file.id);
+
+      +                        return (
+
+      +                            <FileItemRow
+
+      +                                key={file.id}
+
+      +                                file={file}
+
+      +                                isFocused={isFocused}
+
+      +                                reviewStatus={reviewState?.status ||
+      'AWAITING'}
+
+      +                                reviewError={reviewState?.error}
+
+      +                                reviewDetails={reviewState?.details}
+
+      +                            />
+
+      +                        );
+
+      +                    })}
+
+      +                </Box>
+
+      +            </Box>
+
+      +            
+
+      +            <Separator />
+
+      +            
+
+      +            {/* Body Viewport */}
+
+      +            {bodyView !== 'none' && (
+
+      +                <>
+
+      +                    <Box marginY={1}>
+
+      +                        {renderBody()}
+
+      +                    </Box>
+                           <Separator />
+                       </>
+                   )}
+      -
+
+      -            {/* Files Section */}
+
+      -            <Box flexDirection="column" marginY={1}>
+
+      -                <Text bold>FILES</Text>
+
+      -                {files.map((file: FileItem) => {
+
+      -                    const navItemIndex = navigableItems.findIndex(i => {
+
+      -                        if (i.type === 'file') {
+
+      -                            return i.id === file.id;
+
+      -                        }
+
+      -                        return false;
+
+      -                    });
+
+      -                    const isFocused = selectedItemIndex === navItemIndex;
+
+      -                    const reviewState = fileReviewStates.get(file.id);
+
+      -                    return (
+
+      -                        <FileItemRow
+
+      -                            key={file.id}
+
+      -                            file={file}
+
+      -                            isFocused={isFocused}
+
+      -                            reviewStatus={reviewState?.status ||
+      'AWAITING'}
+
+      -                            reviewError={reviewState?.error}
+
+      -                            reviewDetails={reviewState?.details}
+
+      -                        />
+
+      -                    );
+
+      -                })}
+
+      -            </Box>
+
+      -            
+
+      -            <Separator />
+
+      -            
+
+      -            {/* Body Viewport */}
+
+      -            {bodyView !== 'none' && (
+
+      -                <>
+
+      -                    <Box marginY={1}>
+
+      -                        {renderBody()}
+
+      -                    </Box>
+
+      -                    <Separator />
+
+      -                </>
+
+      -            )}
+       
+                   {/* Footer */}
+                   <Box>
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionHistoryScreen.tsx
+    content: >+
+      --- src/components/TransactionHistoryScreen.tsx
+
+      +++ src/components/TransactionHistoryScreen.tsx
+
+      @@ -102,15 +102,23 @@
+       };
+       
+       const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: number }) => {
+           return (
+      -        <Box flexDirection="column" marginY={1}>
+
+      +        <Box
+
+      +            borderStyle="round"
+
+      +            borderColor="yellow"
+
+      +            flexDirection="column"
+
+      +            paddingX={2}
+
+      +            width="80%"
+
+      +        >
+                   <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
+      -            <Box marginY={1}>
+
+      +            <Box marginY={1} flexDirection="column">
+                       <Text>This action is often irreversible. Are you sure?</Text>
+      +                <Box marginTop={1} flexDirection="column">
+
+      +                    <Text>(1) Revert Selected Transactions</Text>
+
+      +                    <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+
+      +                    <Text>(3) Delete Selected Transactions (from
+      Relaycode history)</Text>
+
+      +                </Box>
+                   </Box>
+      -            <Text>(1) Revert Selected Transactions</Text>
+
+      -            <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+
+      -            <Text>(3) Delete Selected Transactions (from Relaycode
+      history)</Text>
+
+      -            <Text>(Esc) Cancel</Text>
+               </Box>
+           );
+       };
+      @@ -136,21 +144,24 @@
+           const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
+       
+           const renderFooter = () => {
+      -        if (mode === 'FILTER') return <Text>(Enter) Apply Filter &
+      Return      (Esc) Cancel</Text>; 
+
+      -        if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3]
+      or (Esc) Cancel</Text>;
+
+      +        if (mode === 'FILTER') return <Text>(Enter) Apply Filter &
+      Return      (Esc) Cancel</Text>;
+
+      +        if (mode === 'BULK_ACTIONS') return <ActionFooter actions={[
+
+      +            { key: '1-3', label: 'Select' },
+
+      +            { key: 'Esc', label: 'Cancel' },
+
+      +        ]} />;
+               
+               const footerActions: ActionItem[] = [
+                   { key: '↑↓', label: 'Nav' },
+                   { key: '→', label: 'Expand' },
+                   { key: '←', label: 'Collapse' },
+                   { key: 'Spc', label: 'Select' },
+      -            { key: 'Ent', label: 'Details' },
+
+      +            { key: 'Enter', label: 'Details' },
+                   { key: 'F', label: 'Filter' },
+               ];
+       
+               if (selectedForAction.size > 0) {
+                   footerActions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
+               }
+      +        footerActions.push({ key: 'Q', label: 'Quit' });
+               return <ActionFooter actions={footerActions} />;
+           };
+       
+      @@ -159,65 +170,71 @@
+                   <Text color="cyan">▲ relaycode transaction history</Text>
+                   <Separator />
+       
+      -            <Box>
+
+      -                <Text>Filter: </Text>
+
+      -                {mode === 'FILTER' ? (
+
+      -                    <TextInput value={filterQuery}
+      onChange={actions.setFilterQuery} />
+
+      -                ) : (
+
+      -                    <Text>{filterStatus}</Text>
+
+      -                )}
+
+      -                <Text> · {showingStatus}</Text>
+
+      -                {statsStatus && <Text> · {statsStatus}</Text>}
+
+      -            </Box>
+
+      +            <Box flexGrow={1} position="relative">
+
+      +                <Box dimColor={mode === 'BULK_ACTIONS'}>
+
+      +                    <Box>
+
+      +                        <Text>Filter: </Text>
+
+      +                        {mode === 'FILTER' ? (
+
+      +                            <TextInput value={filterQuery}
+      onChange={actions.setFilterQuery} />
+
+      +                        ) : (
+
+      +                            <Text>{filterStatus}</Text>
+
+      +                        )}
+
+      +                        <Text> · {showingStatus}</Text>
+
+      +                        {statsStatus && <Text> · {statsStatus}</Text>}
+
+      +                    </Box>
+       
+      -            <Box flexDirection="column" marginY={1}>
+
+      -                {mode === 'BULK_ACTIONS' && <BulkActionsMode
+      selectedForActionCount={selectedForAction.size} />}
+
+      -
+
+      -                {mode === 'LIST' && itemsInView.map(path => {
+
+      -                    const txId = path.split('/')[0]!;
+
+      -                    const tx = transactionsById.get(txId);
+
+      -                    if (!tx) return <Text key={path}>Error: Missing TX
+      {txId}</Text>;
+
+      -
+
+      -                    // Is a transaction row
+
+      -                    if (path === tx.id) {
+
+      -                        return (
+
+      -                            <TransactionRow
+
+      -                                key={path}
+
+      -                                tx={tx}
+
+      -                                isSelected={selectedItemPath === path}
+
+      -                                isExpanded={expandedIds.has(path)}
+
+      -                               
+      isSelectedForAction={selectedForAction.has(tx.id)}
+
+      -                                hasSelection={hasSelection}
+
+      -                            />
+
+      -                        );
+
+      -                    }
+
+      -
+
+      -                    // Is a child row
+
+      -                    const itemType = path.split('/')[1]!;
+
+      -                    const isSelected = selectedItemPath === path;
+
+      -                    const isExpanded = expandedIds.has(path);
+
+      -                    const isLoading = loadingPaths.has(path);
+
+      -
+
+      -                    if (itemType === 'file') {
+
+      -                        const fileId = path.split('/')[2]!;
+
+      -                        const file = tx.files?.find(f => f.id ===
+      fileId);
+
+      -                        if (!file) return null;
+
+      -                        return (
+
+      -                            <FileRow
+
+      -                                key={path} file={file}
+      isSelected={isSelected}
+
+      -                                isExpanded={isExpanded}
+      isLoading={isLoading}
+
+      -                            />
+
+      -                        );
+
+      -                    }
+
+      -
+
+      -                    const contentMap = {
+
+      -                        message: { title: 'Commit Message', content:
+      tx.message || '' },
+
+      -                        prompt: { title: 'Prompt', content: tx.prompt ||
+      '' },
+
+      -                        reasoning: { title: 'Reasoning', content:
+      tx.reasoning || '' },
+
+      -                    };
+
+      -
+
+      -                    const item = contentMap[itemType as keyof typeof
+      contentMap];
+
+      -                    if (!item) return null;
+
+      -
+
+      -                    return (
+
+      -                        <ContentRow
+
+      -                            key={path}
+
+      -                            {...item}
+
+      -                            isSelected={isSelected}
+
+      -                            isExpanded={isExpanded}
+
+      -                            isLoading={isLoading}
+
+      -                        />
+
+      -                    );
+
+      -                })}
+
+      -            </Box>
+
+      +                    <Box flexDirection="column" marginY={1}>
+
+      +                        {itemsInView.map(path => {
+
+      +                            const txId = path.split('/')[0]!;
+
+      +                            const tx = transactionsById.get(txId);
+
+      +                            if (!tx) return <Text key={path}>Error:
+      Missing TX {txId}</Text>;
+
+      +
+
+      +                            // Is a transaction row
+
+      +                            if (path === tx.id) {
+
+      +                                return (
+
+      +                                    <TransactionRow
+
+      +                                        key={path}
+
+      +                                        tx={tx}
+
+      +                                        isSelected={selectedItemPath ===
+      path}
+
+      +                                       
+      isExpanded={expandedIds.has(path)}
+
+      +                                       
+      isSelectedForAction={selectedForAction.has(tx.id)}
+
+      +                                        hasSelection={hasSelection}
+
+      +                                    />
+
+      +                                );
+
+      +                            }
+
+      +
+
+      +                            // Is a child row
+
+      +                            const itemType = path.split('/')[1]!;
+
+      +                            const isSelected = selectedItemPath === path;
+
+      +                            const isExpanded = expandedIds.has(path);
+
+      +                            const isLoading = loadingPaths.has(path);
+
+      +
+
+      +                            if (itemType === 'file') {
+
+      +                                const fileId = path.split('/')[2]!;
+
+      +                                const file = tx.files?.find(f => f.id ===
+      fileId);
+
+      +                                if (!file) return null;
+
+      +                                return (
+
+      +                                    <FileRow
+
+      +                                        key={path} file={file}
+      isSelected={isSelected}
+
+      +                                        isExpanded={isExpanded}
+      isLoading={isLoading}
+
+      +                                    />
+
+      +                                );
+
+      +                            }
+
+      +
+
+      +                            const contentMap = {
+
+      +                                message: { title: 'Commit Message',
+      content: tx.message || '' },
+
+      +                                prompt: { title: 'Prompt', content:
+      tx.prompt || '' },
+
+      +                                reasoning: { title: 'Reasoning', content:
+      tx.reasoning || '' },
+
+      +                            };
+
+      +
+
+      +                            const item = contentMap[itemType as keyof
+      typeof contentMap];
+
+      +                            if (!item) return null;
+
+      +
+
+      +                            return (
+
+      +                                <ContentRow
+
+      +                                    key={path}
+
+      +                                    {...item}
+
+      +                                    isSelected={isSelected}
+
+      +                                    isExpanded={isExpanded}
+
+      +                                    isLoading={isLoading}
+
+      +                                />
+
+      +                            );
+
+      +                        })}
+
+      +                    </Box>
+
+      +                </Box>
+
+      +                {mode === 'BULK_ACTIONS' && (
+
+      +                    <Box position="absolute" top={2} left={0} right={0}
+      alignItems="center">
+
+      +                        <BulkActionsMode
+      selectedForActionCount={selectedForAction.size} />
+
+      +                    </Box>
+
+      +                )}
+
+      +            </Box>
+       
+                   <Separator />
+                   {renderFooter()}
+
+    patchStrategy: standard-diff
+snapshot:
+  src/App.tsx: >-
+    import { Box } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import GlobalHelpScreen from './components/GlobalHelpScreen';
+
+    import CopyScreen from './components/CopyScreen';
+
+    import { useViewStore } from './stores/view.store';
+
+    import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+        const activeOverlay = useViewStore(s => s.activeOverlay);
+        const isOverlayOpen = activeOverlay !== 'none';
+
+        // Global hotkeys are active if no modal-like component is open
+        const areGlobalHotkeysActive = activeOverlay !== 'copy'; // Copy mode has its own input handler
+        useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+        const renderMainScreen = () => {
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isOverlayOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                {activeOverlay === 'help' && <GlobalHelpScreen />}
+                {activeOverlay === 'copy' && <CopyScreen />}
+                {activeOverlay === 'debug' && <DebugMenu />}
+            </>
+        );
+    };
+
+
+    export default App;
+  src/components/DashboardScreen.tsx: "import React from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport Separator from './Separator';\nimport type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';\nimport { useDashboardScreen } from '../hooks/useDashboardScreen';\nimport { UI_CONFIG } from '../config/ui.config';\nimport ActionFooter from './ActionFooter';\nimport type { ActionItem } from '../types/actions.types';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'HANDOFF': return <Text color=\"magenta\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst getFileChangeTypeIcon = (type: FileChangeType) => {\n    switch (type) {\n        case 'MOD': return '[MOD]';\n        case 'ADD': return '[ADD]';\n        case 'DEL': return '[DEL]';\n        case 'REN': return '[REN]';\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `${minutes}m`;\n};\n\nconst ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {\n    const stats = transaction.stats;\n    const files = transaction.files || [];\n\n    return (\n        <Box flexDirection=\"column\" paddingLeft={4} marginBottom={1} borderStyle=\"round\" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor=\"gray\">\n            {stats && (\n                <Text color=\"gray\">\n                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}\n                </Text>\n            )}\n             <Box flexDirection=\"column\" paddingLeft={1}>\n                {files.map(file => (\n                     <Text key={file.id}>\n                        <Text color=\"gray\">{getFileChangeTypeIcon(file.type)}</Text> {file.path}\n                    </Text>\n                ))}\n             </Box>\n        </Box>\n    );\n};\n\nconst EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    const expandIcon = isExpanded ? '▾' : '▸';\n    \n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {expandIcon} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n        expandedTransactionId,\n    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <ActionFooter actions={[\n                { key: 'Enter', label: 'Confirm' },\n                { key: 'Esc', label: 'Cancel' },\n            ]}/>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const footerActions: ActionItem[] = [\n            { key: '↑↓', label: 'Nav' },\n            { key: '→/Ent', label: 'View' },\n            { key: '←', label: 'Collapse' },\n            { key: 'L', label: 'Log' },\n            { key: 'A', label: 'Approve All' },\n            { key: 'C', label: 'Commit' },\n            { key: 'P', label: status === 'PAUSED' ? 'Resume' : 'Pause' },\n            { key: 'Q', label: 'Quit' },\n        ];\n\t\treturn <ActionFooter actions={footerActions} />;\n    };\n    \n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            <Text color=\"cyan\">▲ relaycode dashboard</Text>\n            <Separator />\n            <Box marginY={1}>\n                {renderStatusBar()}\n            </Box>\n            \n            {isModal && (\n                <>\n                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                    <Separator />\n                </>\n            )}\n            \n            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {transactions.length === 0 && (\n                     <Box paddingLeft={2}><Text color=\"gray\">Listening for changes... no events yet.</Text></Box>\n                )}\n                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                    const actualIndex = viewOffset + index;\n                    const isExpanded = expandedTransactionId === tx.id;\n                    return (\n                        <React.Fragment key={tx.id}>\n                            <EventStreamItem\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                                isExpanded={isExpanded}\n                            />\n                            {isExpanded && <ExpandedEventInfo transaction={tx} />}\n                        </React.Fragment>\n                    );\n                })}\n            </Box>\n\n            <Box marginTop={1}><Separator /></Box>\n            {renderFooter()}\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/components/TransactionDetailScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import { useTransactionDetailScreen } from
+    '../hooks/useTransactionDetailScreen';
+
+    import type { FileChangeType } from '../types/domain.types';
+
+    import ActionFooter from './ActionFooter';
+
+    import type { ActionItem } from '../types/actions.types';
+
+
+    const getFileChangeTypeIcon = (type: FileChangeType) => {
+        switch (type) {
+            case 'MOD': return '[MOD]';
+            case 'ADD': return '[ADD]';
+            case 'DEL': return '[DEL]';
+            case 'REN': return '[REN]';
+        }
+    };
+
+
+    const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
+        return (
+            <Box 
+                borderStyle="round"
+                borderColor="yellow"
+                flexDirection="column"
+                paddingX={2}
+                width="80%"
+                alignSelf='center'
+            >
+                <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
+                <Box height={1} />
+                <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
+                <Box height={1} />
+                <Text wrap="wrap">Are you sure?</Text>
+            </Box>
+        );
+    };
+
+
+    const TransactionDetailScreen = () => {
+        const {
+            transaction, files,
+            focusedItemPath, expandedItemPaths, bodyView,
+        } = useTransactionDetailScreen();
+
+        if (!transaction) {
+            return <Text>Loading transaction...</Text>;
+        }
+
+        const renderNavigator = () => {
+            const isPromptFocused = focusedItemPath === 'PROMPT';
+            const isReasoningFocused = focusedItemPath === 'REASONING';
+            const isFilesFocused = focusedItemPath.startsWith('FILES');
+            
+            const isPromptExpanded = expandedItemPaths.has('PROMPT');
+            const isReasoningExpanded = expandedItemPaths.has('REASONING');
+            const isFilesExpanded = expandedItemPaths.has('FILES');
+            
+            return (
+                <Box flexDirection="column">
+                    <Text color={isPromptFocused ? 'cyan' : undefined}>
+                        {isPromptFocused ? '> ' : '  '}
+                        {isPromptExpanded ? '▾' : '▸'} (P)rompt
+                    </Text>
+                    <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                        {isReasoningFocused ? '> ' : '  '}
+                        {isReasoningExpanded ? '▾' : '▸'} (R)easoning ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                    </Text>
+                    <Text color={isFilesFocused ? 'cyan' : undefined}>
+                        {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
+                        {isFilesExpanded ? '▾' : '▸'} (F)iles ({files.length})
+                    </Text>
+                    {isFilesExpanded && (
+                        <Box flexDirection="column" paddingLeft={2}>
+                            {files.map((file) => {
+                                 const fileId = `FILES/${file.id}`;
+                                 const isFileSelected = focusedItemPath === fileId;
+                                 const stats = file.type === 'DEL' ? '' : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                                 return (
+                                    <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                        {isFileSelected ? '> ' : '  '}
+                                        {`${getFileChangeTypeIcon(file.type)} ${file.path}${stats}`}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                    )}
+                </Box>
+            );
+        };
+
+        const renderBody = () => {
+            if (bodyView === 'NONE') {
+                return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
+            }
+            if (bodyView === 'PROMPT') {
+                return (
+                    <Box flexDirection="column">
+                        <Text>PROMPT</Text>
+                        <Box marginTop={1}><Text>{transaction.prompt}</Text></Box>
+                    </Box>
+                );
+            }
+            if (bodyView === 'REASONING') {
+                if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
+                return <ReasonScreen reasoning={transaction.reasoning} />;
+            }
+            if (bodyView === 'FILES_LIST') {
+                 return <Text color="gray">(Select a file and press → to view the diff)</Text>;
+            }
+            if (bodyView === 'DIFF_VIEW') {
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (!file) return null;
+                return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} />;
+            }
+            return null;
+        };
+
+        const renderFooter = () => {
+            if (bodyView === 'REVERT_CONFIRM') {
+                return <ActionFooter actions={[
+                    { key: 'Enter', label: 'Confirm Revert' },
+                    { key: 'Esc', label: 'Cancel' },
+                ]} />;
+            }
+            
+            const baseActions: ActionItem[] = [
+                { key: 'C', label: 'Copy' },
+                { key: 'U', label: 'Undo' },
+                { key: 'Q', label: 'Quit/Back' },
+            ];
+            let contextualActions: ActionItem[] = [];
+
+            if (focusedItemPath.includes('/')) { // Is a file
+                if (bodyView === 'DIFF_VIEW') {
+                    contextualActions = [
+                        { key: '↑↓', label: 'Nav Files' },
+                        { key: '←', label: 'Back to List' },
+                    ];
+                } else {
+                    contextualActions = [
+                        { key: '↑↓', label: 'Nav Files' },
+                        { key: '→', label: 'View Diff' },
+                        { key: '←', label: 'Back to Sections' },
+                    ];
+                }
+                return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
+            }
+            
+            if (expandedItemPaths.has(focusedItemPath)) {
+                contextualActions = [
+                    { key: '↑↓', label: 'Nav/Scroll' },
+                    { key: '→', label: 'Drill In' },
+                    { key: '←', label: 'Collapse' },
+                ];
+            } else {
+                contextualActions = [
+                    { key: '↑↓', label: 'Nav' },
+                    { key: '→', label: 'Expand' },
+                ];
+            }
+            return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
+        };
+
+        const { message, timestamp, status } = transaction;
+        const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
+        const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text>▲ relaycode transaction details</Text>
+                <Separator />
+                
+                {/* Modal takeover for Revert */}
+                {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
+                
+                {/* Main view */}
+                <Box flexDirection="column" display={bodyView === 'REVERT_CONFIRM' ? 'none' : 'flex'}>
+                    {/* Navigator Part A */}
+                    <Box flexDirection="column" marginY={1}>
+                        <Text>UUID: {transaction.id}</Text>
+                        <Text>Git: {message}</Text>
+                        <Text>Date: {date} · Status: {status}</Text>
+                        <Text>Stats: {fileStats}</Text>
+                    </Box>
+                    
+                    {/* Navigator Part B */}
+                    {renderNavigator()}
+                    
+                    <Separator />
+                    
+                    {/* Body */}
+                    <Box marginY={1}>
+                        {renderBody()}
+                    </Box>
+                    
+                    <Separator />
+                </Box>
+                
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default TransactionDetailScreen;
+  src/components/ReviewScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import type { ScriptResult, FileItem, FileChangeType } from
+    '../types/domain.types';
+
+    import { useReviewScreen } from '../hooks/useReviewScreen';
+
+    import ActionFooter from './ActionFooter';
+
+    import type { ActionItem } from '../types/actions.types';
+
+
+    // --- Sub-components ---
+
+
+    const FileItemRow = ({ file, reviewStatus, reviewError, reviewDetails,
+    isFocused }: {
+        file: FileItem;
+        reviewStatus: string;
+        reviewError?: string;
+        reviewDetails?: string;
+        isFocused: boolean;
+    }) => {
+        let icon;
+        let iconColor;
+        switch (reviewStatus) {
+            case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
+            case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
+            case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
+            case 'AWAITING': icon = '[●]'; iconColor = 'yellow'; break;
+            case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
+        }
+
+        const typeColor = (type: FileChangeType) => {
+            switch (type) {
+                case 'ADD': return 'green';
+                case 'DEL': return 'red';
+                case 'REN': return 'yellow';
+                default: return 'white';
+            }
+        };
+
+        const diffStats = <Text>(+<Text color="green">{file.linesAdded}</Text>/-<Text color="red">{file.linesRemoved}</Text>)</Text>;
+        const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+        const prefix = isFocused ? '> ' : '  ';
+        const colorProps = isFocused ? { bold: true, color: 'cyan' } : {};
+
+        if (reviewStatus === 'FAILED') {
+            return (
+                <Box>
+                    <Text {...colorProps}>
+                        {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
+                        <Text color="red">    ({reviewError})</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (reviewStatus === 'AWAITING') {
+            return (
+                <Box>
+                    <Text {...colorProps}>
+                        {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
+                        <Text color="yellow">    ({reviewDetails})</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        if (reviewStatus === 'RE_APPLYING') {
+            return (
+                 <Box>
+                    <Text {...colorProps}>
+                        {prefix}<Text color={iconColor}>{icon} RE-APPLYING... {file.path}</Text>
+                        <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
+                    </Text>
+                </Box>
+            );
+        }
+
+        return (
+            <Box>
+                <Text {...colorProps}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> {file.type}{' '}
+                    <Text color={typeColor(file.type)}>{file.path}</Text>{' '}
+                    {diffStats} [{strategy}]
+                </Text>
+            </Box>
+        );
+    };
+
+
+    const ScriptItemRow = ({
+        script,
+        isSelected,
+        isExpanded,
+    }: {
+        script: ScriptResult;
+        isSelected: boolean;
+        isExpanded: boolean;
+    }) => {
+        const icon = script.success ? '✓' : '✗';
+        const iconColor = script.success ? 'green' : 'red';
+        const arrow = isExpanded ? '▾' : '▸';
+        const prefix = isSelected ? '> ' : '  ';
+        
+        // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+        const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                          script.command.includes('lint') ? 'Linter' : 
+                          'Script';
+
+        return (
+            <Box>
+                <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                    {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                    {script.summary}
+                </Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const ReviewScreen = () => {
+        const {
+            transaction,
+            files,
+            scripts = [],
+            patchStatus,
+            selectedItemIndex,
+            bodyView,
+            isDiffExpanded,
+            reasoningScrollIndex,
+            scriptErrorIndex,
+            fileReviewStates,
+            numFiles,
+            approvedFilesCount,
+            totalLinesAdded,
+            totalLinesRemoved,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+            navigableItems,
+            hasRejectedFiles,
+        } = useReviewScreen();
+
+        if (!transaction) {
+            return <Text>Loading review...</Text>;
+        }
+        const { hash, message, prompt = '', reasoning = '' } = transaction;
+
+        const renderBody = () => {
+            if (bodyView === 'none') return null;
+
+            if (bodyView === 'reasoning') {
+                const reasoningText = reasoning || '';
+                const reasoningLinesCount = reasoningText.split('\n').length;
+                const visibleLinesCount = 10;
+                return (
+                    <Box flexDirection="column">
+                        <ReasonScreen
+                            reasoning={reasoningText}
+                            scrollIndex={reasoningScrollIndex}
+                            visibleLinesCount={visibleLinesCount}
+                        />
+                        {reasoningLinesCount > visibleLinesCount && (
+                            <Text color="gray">
+                                Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                                of {reasoningLinesCount}
+                            </Text>
+                        )}
+                    </Box>
+                );
+            }
+            
+            if (bodyView === 'diff') {
+                const currentItem = navigableItems[selectedItemIndex];
+                const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+                if (!selectedFile) return null;
+                return (
+                    <DiffScreen
+                        filePath={selectedFile.path}
+                        diffContent={selectedFile.diff}
+                        isExpanded={isDiffExpanded}
+                    />
+                );
+            }
+
+            if (bodyView === 'script_output') {
+                 const currentItem = navigableItems[selectedItemIndex];
+                 const scriptItems = navigableItems.filter((i): i is { type: 'script'; id: string } => i.type === 'script');
+                 const scriptIndex = currentItem?.type === 'script'
+                    ? scriptItems.findIndex(i => i.id === currentItem.id)
+                    : -1;
+                 const selectedScript = scripts[scriptIndex] || null;
+                 if (!selectedScript) return null;
+                 
+                 const outputLines = selectedScript.output.split('\n');
+                 const errorLines = outputLines.filter((line: string) =>
+                    line.includes('Error') || line.includes('Warning'),
+                 );
+                 
+                 return (
+                    <Box flexDirection="column">
+                        <Text>{selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`</Text>
+                        <Box marginTop={1} flexDirection="column">
+                            {outputLines.map((line: string, index: number) => {
+                                const isError = line.includes('Error');
+                                const isWarning = line.includes('Warning');
+                                const isHighlighted = errorLines[scriptErrorIndex] === line;
+                                
+                                return (
+                                    <Text 
+                                        key={index} 
+                                        color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                        bold={isHighlighted}
+                                        backgroundColor={isHighlighted ? 'blue' : undefined}
+                                    >
+                                        {line}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                        {errorLines.length > 0 && (
+                            <Text color="gray">
+                                Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                            </Text>
+                        )}
+                    </Box>
+                 );
+            }
+
+            if (bodyView === 'confirm_handoff') {
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+                        <Box flexDirection="column">
+                            <Text>This action will:</Text>
+                            <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
+                            <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
+                            <Text>3. Assume that you and the external agent will complete the work.</Text>
+                        </Box>
+                        <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
+                        <Text bold color="yellow">Are you sure you want to proceed?</Text>
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'bulk_repair') {
+                const failedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'FAILED');
+                const repairOptions = [
+                    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+                    '(2) Bulk Change Strategy & Re-apply',
+                    '(3) Handoff to External Agent',
+                    '(4) Bulk Abandon All Failed Files',
+                    '(Esc) Cancel',
+                ];
+
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>BULK REPAIR ACTION</Text>
+
+                        <Box flexDirection="column">
+                            <Text>The following {failedFiles.length} files failed to apply:</Text>
+                            {failedFiles.map((file: FileItem) => (
+                                <Text key={file.id}>- {file.path}</Text>
+                            ))}
+                        </Box>
+
+                        <Text>How would you like to proceed?</Text>
+
+                        <Box flexDirection="column">
+                            {repairOptions.map((opt, i) => (
+                                <Text key={i} color={selectedBulkRepairOptionIndex === i ? 'cyan' : undefined}>
+                                    {selectedBulkRepairOptionIndex === i ? '> ' : '  '}
+                                    {opt}
+                                </Text>
+                            ))}
+                        </Box>
+                    </Box>
+                );
+            }
+
+            if (bodyView === 'bulk_instruct') {
+                const rejectedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'REJECTED');
+                const instructOptions = [
+                    '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
+                    '(2) Handoff to External Agent',
+                    '(3) Bulk Un-reject All Files (revert to original)',
+                    '(4) Cancel',
+                ];
+
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text bold>BULK INSTRUCTION ACTION</Text>
+
+                        <Box flexDirection="column">
+                            <Text>The following {rejectedFiles.length} files were rejected:</Text>
+                            {rejectedFiles.map((file: FileItem) => (
+                                <Text key={file.id}>- {file.path}</Text>
+                            ))}
+                        </Box>
+                        <Box flexDirection="column" marginTop={1}>
+                            {instructOptions.map((opt, i) => (
+                                <Text key={i} color={selectedBulkInstructOptionIndex === i ? 'cyan' : undefined}>
+                                    {selectedBulkInstructOptionIndex === i ? '> ' : '  '}
+                                    {opt}
+                                </Text>
+                            ))}
+                        </Box>
+                    </Box>
+                );
+            }
+
+            return null;
+        };
+
+        const renderFooter = () => {
+            // Contextual footer for body views
+            if (bodyView === 'diff') {
+                return <ActionFooter actions={[
+                    { key: '↑↓', label: 'Nav' },
+                    { key: 'X', label: 'Expand' },
+                    { key: 'D/Esc', label: 'Back' },
+                ]}/>;
+            }
+            if (bodyView === 'reasoning') {
+                return <ActionFooter actions={[
+                    { key: '↑↓', label: 'Scroll Text' },
+                    { key: 'R', label: 'Collapse View' },
+                    { key: 'C', label: 'Copy Mode' },
+                ]}/>;
+            }
+            if (bodyView === 'script_output') {
+                return <ActionFooter actions={[
+                    { key: '↑↓', label: 'Nav' },
+                    { key: 'J↓/K↑', label: 'Next/Prev Error' },
+                    { key: 'C', label: 'Copy Output' },
+                    { key: 'Ent/Esc', label: 'Back' },
+                ]}/>;
+            }
+            if (bodyView === 'bulk_repair') {
+                return <Text>Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel</Text>;
+            }
+            if (bodyView === 'bulk_instruct') {
+                return <Text>Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel</Text>;
+            }
+            if (bodyView === 'confirm_handoff') {
+                return <ActionFooter actions={[
+                    { key: 'Enter', label: 'Confirm Handoff' },
+                    { key: 'Esc', label: 'Cancel' },
+                ]}/>;
+            }
+
+            // Main footer
+            const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
+
+            const currentItem = navigableItems[selectedItemIndex];
+            
+            if (currentItem?.type === 'file') {
+                const selectedFile = files.find(f => f.id === currentItem.id);
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState?.status !== 'FAILED') {
+                    actions.push({ key: 'Spc', label: 'Toggle' });
+                }
+                actions.push({ key: 'D', label: 'Diff' });
+                
+                // Add repair options for failed files
+                if (selectedFile && fileState?.status === 'FAILED') {
+                    actions.push({ key: 'T', label: 'Try Repair' });
+                }
+                if (selectedFile && fileState?.status === 'REJECTED') {
+                    actions.push({ key: 'I', label: 'Instruct' });
+                }
+            } else if (currentItem?.type === 'script') {
+                actions.push({ key: 'Ent', label: 'Expand Details' });
+            } else { // Prompt or Reasoning
+                actions.push({ key: 'Ent', label: 'Expand' });
+            }
+
+            if (currentItem?.type !== 'reasoning') {
+                actions.push({ key: 'R', label: 'Reasoning' });
+            }
+
+            // Add bulk repair if there are failed files
+            const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+            if (hasFailedFiles) {
+                actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
+            }
+            // Add bulk instruct if there are rejected files
+            if (hasRejectedFiles) {
+                actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
+            }
+            
+            actions.push({ key: 'C', label: 'Copy' });
+
+            if (approvedFilesCount > 0) {
+                actions.push({ key: 'A', label: 'Approve' });
+            }
+
+            if (Array.from(fileReviewStates.values()).some(s => s.status === 'APPROVED' || s.status === 'FAILED')) {
+                actions.push({ key: 'Shift+R', label: 'Reject All' });
+            }
+            actions.push({ key: 'Q', label: 'Quit' });
+
+            return <ActionFooter actions={actions} />;
+        };
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text color="cyan">▲ relaycode review</Text>
+                <Separator />
+                
+                {/* Navigator Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Box flexDirection="column">
+                        <Text>{hash} · {message}</Text>
+                        <Text>
+                            (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>) · {numFiles} Files · {approvedFilesCount}/{numFiles} Approved
+                            {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+                            {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                        </Text>
+                    </Box>
+
+                    <Box flexDirection="column" marginTop={1}>
+                        <Text color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' : undefined}>
+                            {navigableItems[selectedItemIndex]?.type === 'prompt' ? '> ' : '  '}
+                            (P)rompt ▸ {(prompt || '').substring(0, 60)}...
+                        </Text>
+                        <Text color={navigableItems[selectedItemIndex]?.type === 'reasoning' ? 'cyan' : undefined}>
+                            {navigableItems[selectedItemIndex]?.type === 'reasoning' ? '> ' : '  '}
+                            (R)easoning ({(reasoning || '').split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
+                            {((reasoning || '').split('\n')[0] ?? '').substring(0, 50)}...
+                        </Text>
+                    </Box>
+                </Box>
+
+                <Separator />
+
+                {/* Script Results (if any) */}
+                {scripts.length > 0 && navigableItems.some(i => i.type === 'script') && (
+                    <>
+                        <Box flexDirection="column" marginY={1}>
+                            {scripts.map((script: ScriptResult) => (
+                                (() => {
+                                    const navItemIndex = navigableItems.findIndex(i => {
+                                        if (i.type === 'script') {
+                                            return i.id === script.command;
+                                        }
+                                        return false;
+                                    });
+                                    const isSelected = selectedItemIndex === navItemIndex;
+                                    return (
+                                        <ScriptItemRow
+                                            key={script.command}
+                                            script={script}
+                                            isSelected={isSelected}
+                                            isExpanded={bodyView === 'script_output' && isSelected}
+                                        />
+                                    );
+                                })()
+                            ))}
+                        </Box>
+                        <Separator />
+                    </>
+                )}
+
+                {/* Files Section */}
+                <Box flexDirection="column" marginY={1}>
+                    <Text bold>FILES</Text>
+                    {files.map((file: FileItem) => {
+                        const navItemIndex = navigableItems.findIndex(i => {
+                            if (i.type === 'file') {
+                                return i.id === file.id;
+                            }
+                            return false;
+                        });
+                        const isFocused = selectedItemIndex === navItemIndex;
+                        const reviewState = fileReviewStates.get(file.id);
+                        return (
+                            <FileItemRow
+                                key={file.id}
+                                file={file}
+                                isFocused={isFocused}
+                                reviewStatus={reviewState?.status || 'AWAITING'}
+                                reviewError={reviewState?.error}
+                                reviewDetails={reviewState?.details}
+                            />
+                        );
+                    })}
+                </Box>
+                
+                <Separator />
+                
+                {/* Body Viewport */}
+                {bodyView !== 'none' && (
+                    <>
+                        <Box marginY={1}>
+                            {renderBody()}
+                        </Box>
+                        <Separator />
+                    </>
+                )}
+
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default ReviewScreen;
+  src/components/TransactionHistoryScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import Spinner from 'ink-spinner';
+
+    import Separator from './Separator';
+
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    import { useTransactionHistoryScreen } from
+    '../hooks/useTransactionHistoryScreen';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import ActionFooter from './ActionFooter';
+
+    import type { ActionItem } from '../types/actions.types';
+
+
+    // --- Sub-components ---
+
+
+    const ContentRow = ({ title, content, isSelected, isExpanded, isLoading }: {
+        title: string;
+        content: string;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isLoading: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}{icon} {title}
+                </Text>
+                {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+                {isExpanded && !isLoading && (
+                    <Box paddingLeft={8} flexDirection="column">
+                        {(content || '').split('\n').map((line, i) => <Text key={i}>{line || ' '}</Text>)}
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    const DiffPreview = ({ diff }: { diff: string }) => {
+        const lines = diff.split('\n');
+        const previewLines = lines.slice(0, 5);
+        const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+        return (
+            <Box flexDirection="column" paddingLeft={8}>
+                {previewLines.map((line, i) => {
+                    let color = 'white';
+                    if (line.startsWith('+')) color = 'green';
+                    if (line.startsWith('-')) color = 'red';
+                    if (line.startsWith('@@')) color = 'cyan';
+                    return <Text key={i} color={color}>{line}</Text>;
+                })}
+                {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+            </Box>
+        );
+    };
+
+
+    const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
+        file: FileItem;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isLoading: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
+        
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {icon} {typeMap[file.type]} {file.path}
+                </Text>
+                {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+                {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
+            </Box>
+        );
+    };
+
+
+    const TransactionRow = ({
+        tx,
+        isSelected,
+        isExpanded,
+        isSelectedForAction,
+        hasSelection,
+    }: {
+        tx: Transaction;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isSelectedForAction: boolean;
+        hasSelection: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const statusMap = {
+            COMMITTED: <Text color="green">✓ Committed</Text>,
+            HANDOFF: <Text color="magenta">→ Handoff</Text>,
+            REVERTED: <Text color="gray">↩ Reverted</Text>,
+            APPLIED: <Text color="blue">✓ Applied</Text>,
+            PENDING: <Text color="yellow">? Pending</Text>,
+            FAILED: <Text color="red">✗ Failed</Text>,
+        };
+        const date = new Date(tx.timestamp).toISOString().split('T')[0];
+        const selectionIndicator = isSelectedForAction ? '[x] ' : '[ ] ';
+        
+        const statusDisplay = statusMap[tx.status as keyof typeof statusMap] || tx.status;
+
+        return (
+            <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {hasSelection && selectionIndicator}
+                    {icon} {statusDisplay} · {tx.hash} · {date} ·{' '}
+                    {tx.message}
+                </Text>
+                {isExpanded && (
+                    <Box flexDirection="column" paddingLeft={8}>
+                        {tx.stats && (
+                            <Text color="gray">
+                                Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}
+                            </Text>
+                        )}
+                        <Text>Files:</Text>
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    const BulkActionsMode = ({ selectedForActionCount }: {
+    selectedForActionCount: number }) => {
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
+                <Box marginY={1}>
+                    <Text>This action is often irreversible. Are you sure?</Text>
+                </Box>
+                <Text>(1) Revert Selected Transactions</Text>
+                <Text>(2) Mark as &apos;Git Committed&apos;</Text>
+                <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
+                <Text>(Esc) Cancel</Text>
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const TransactionHistoryScreen = () => {
+        const {
+            mode,
+            filterQuery,
+            selectedForAction,
+            selectedItemPath,
+            expandedIds,
+            loadingPaths,
+            actions,
+            transactions,
+            itemsInView,
+            filterStatus,
+            showingStatus,
+            statsStatus,
+            hasSelection,
+        } = useTransactionHistoryScreen({ reservedRows: UI_CONFIG.history.reservedRows });
+
+        const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
+
+        const renderFooter = () => {
+            if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
+            if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3] or (Esc) Cancel</Text>;
+            
+            const footerActions: ActionItem[] = [
+                { key: '↑↓', label: 'Nav' },
+                { key: '→', label: 'Expand' },
+                { key: '←', label: 'Collapse' },
+                { key: 'Spc', label: 'Select' },
+                { key: 'Ent', label: 'Details' },
+                { key: 'F', label: 'Filter' },
+            ];
+
+            if (selectedForAction.size > 0) {
+                footerActions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
+            }
+            return <ActionFooter actions={footerActions} />;
+        };
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode transaction history</Text>
+                <Separator />
+
+                <Box>
+                    <Text>Filter: </Text>
+                    {mode === 'FILTER' ? (
+                        <TextInput value={filterQuery} onChange={actions.setFilterQuery} />
+                    ) : (
+                        <Text>{filterStatus}</Text>
+                    )}
+                    <Text> · {showingStatus}</Text>
+                    {statsStatus && <Text> · {statsStatus}</Text>}
+                </Box>
+
+                <Box flexDirection="column" marginY={1}>
+                    {mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
+
+                    {mode === 'LIST' && itemsInView.map(path => {
+                        const txId = path.split('/')[0]!;
+                        const tx = transactionsById.get(txId);
+                        if (!tx) return <Text key={path}>Error: Missing TX {txId}</Text>;
+
+                        // Is a transaction row
+                        if (path === tx.id) {
+                            return (
+                                <TransactionRow
+                                    key={path}
+                                    tx={tx}
+                                    isSelected={selectedItemPath === path}
+                                    isExpanded={expandedIds.has(path)}
+                                    isSelectedForAction={selectedForAction.has(tx.id)}
+                                    hasSelection={hasSelection}
+                                />
+                            );
+                        }
+
+                        // Is a child row
+                        const itemType = path.split('/')[1]!;
+                        const isSelected = selectedItemPath === path;
+                        const isExpanded = expandedIds.has(path);
+                        const isLoading = loadingPaths.has(path);
+
+                        if (itemType === 'file') {
+                            const fileId = path.split('/')[2]!;
+                            const file = tx.files?.find(f => f.id === fileId);
+                            if (!file) return null;
+                            return (
+                                <FileRow
+                                    key={path} file={file} isSelected={isSelected}
+                                    isExpanded={isExpanded} isLoading={isLoading}
+                                />
+                            );
+                        }
+
+                        const contentMap = {
+                            message: { title: 'Commit Message', content: tx.message || '' },
+                            prompt: { title: 'Prompt', content: tx.prompt || '' },
+                            reasoning: { title: 'Reasoning', content: tx.reasoning || '' },
+                        };
+
+                        const item = contentMap[itemType as keyof typeof contentMap];
+                        if (!item) return null;
+
+                        return (
+                            <ContentRow
+                                key={path}
+                                {...item}
+                                isSelected={isSelected}
+                                isExpanded={isExpanded}
+                                isLoading={isLoading}
+                            />
+                        );
+                    })}
+                </Box>
+
+                <Separator />
+                {renderFooter()}
+            </Box>
+        );
+    };
+
+
+    export default TransactionHistoryScreen;
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 141

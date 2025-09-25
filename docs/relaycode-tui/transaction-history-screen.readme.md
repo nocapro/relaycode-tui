@@ -35,7 +35,7 @@ Upon launching `relay log`, the user is presented with a clean, compact, and rev
    ...
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (→) Expand · (Spc) Select · (Ent) Details · (F)ilter · (C)opy · (B)ulk
+ (↑↓) Nav · (→) Expand · (Spc) Select · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy · (B)ulk
 ```
 
 #### **State 2.2: Level 1 Drill-Down - The Content Overview**
@@ -58,7 +58,7 @@ Pressing `(→)` on the selected transaction expands it in-place, revealing its 
    ...
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (←) Collapse · (→) Expand · (Ent) Details · (F)ilter · (C)opy
+ (↑↓) Nav · (←) Collapse · (→) Expand · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy
 ```
 
 #### **State 2.3: Level 2 Drill-Down - In-place Content Preview**
@@ -84,7 +84,7 @@ With the transaction expanded, the user can navigate `(↓)` to a content item l
    ...
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (←→) Collapse/Expand · (Ent) Details · (F)ilter · (C)opy
+ (↑↓) Nav · (←→) Collapse/Expand · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy
 ```
 
 #### **State 2.4: Level 3 Drill-Down - The In-place Diff Preview**
@@ -113,7 +113,7 @@ By navigating to and expanding the `Files` item, the user can then select a spec
    ...
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav File/Tx · (←→) Collapse/Expand · (Ent) Full Diff · (X)pand Full Diff
+ (↑↓) Nav File/Tx · (←→) Collapse/Expand · (Ent) Full Diff · (O)pen File · (X)pand Full Diff
 ```
 
 ---
@@ -146,7 +146,7 @@ After pressing `(Enter)`, the filter is applied, the status bar is updated, and 
  > ▸ ✓ Committed · e4a7c112 · 2023-10-27 · fix: add missing error handling
    ▸ ✓ Committed · 1a2b3c4d · 2023-10-22 · feat: introduce structured logging
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (→) Expand · (Ent) Details · (F)ilter · (C)opy · (B)ulk Actions
+ (↑↓) Nav · (→) Expand · (Ent) Details · (O)pen YAML · (F)ilter · (C)opy · (B)ulk Actions
 ```
 
 #### **State 2.6: Advanced Copy Mode - Aggregating Data for Export**

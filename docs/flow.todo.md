@@ -1,8 +1,15 @@
-transaction history screen and transaction detail screen
 
-add feature , open transaction yaml file or files in their ide editor
+=== DONE
 
-===
+1. transaction history screen and transaction detail screen
+
+add feature , so user can open transaction yaml file or files in their ide editor
+
+2. dont forget to add to debug menu for any new screen state
+
+3. dont forget to update readme if you have updated design
+
+=== DONE
 
 transaction detail screen and review screen
 
@@ -10,15 +17,15 @@ the reasoning view should one column, so vertically spread text with scrollable 
 
 ===
 
-dashboard screen
+  dashboard screen
 
-show keystroke for user to view/edit system prompt, config file... so now we need
+  show keystroke for user to view/edit system prompt, config file... so now we need
 
-file-editor-screen
+  file-editor-screen
 
 ===
 
-beside debug menu of ctrl+b we want more screen named debug log so user can know the system debug log of what system activities behind is happening, so user has knowledge like why certain clipboard not detected etc
+we already have debug menu of ctrl+b, now we want more screen named debug log so user can know the system debug log of what system activities behind is happening, so user has knowledge like why certain clipboard not detected etc
 
 ===
 
