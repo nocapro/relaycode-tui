@@ -1,0 +1,152 @@
+uuid: f193561a-051f-4952-b88d-e13768393539
+projectId: relaycode-tui
+createdAt: '2025-09-25T22:32:35.953Z'
+gitCommitMsg: >-
+  feat(log): include clipboard excerpt in simulator logs
+
+  Updates the debug log simulator to provide more context when a clipboard
+  change event is fired.
+
+  - Adds an array of mock clipboard contents to `logger.service.ts`. - When a
+  "clipboard changed" event is simulated, it now includes a truncated excerpt of
+  the new mock content in the log message.
+promptSummary: Add an excerpt of clipboard content to the debug log.
+reasoning:
+  - >-
+    Of course. I will update the logger service to include an excerpt of the new
+    clipboard content in its log messages. This will involve adding some mock
+    clipboard data to the simulator and formatting it for the log output.
+  - >-
+    I'll modify `src/services/logger.service.ts` to include an array of mock
+    clipboard contents. The simulator will cycle through this array and, when it
+    logs a "Clipboard content changed" message, it will include a truncated
+    excerpt of the new content.
+  - >-
+    This change enhances the log simulator to provide more realistic and
+    informative output when demonstrating clipboard monitoring.
+operations:
+  - type: write
+    path: src/services/logger.service.ts
+    content: >+
+      --- src/services/logger.service.ts
+
+      +++ src/services/logger.service.ts
+
+      @@ -2,6 +2,17 @@
+       
+       let simulatorInterval: NodeJS.Timeout | null = null;
+       
+      +const mockClipboardContents = [
+
+      +    'feat(dashboard): implement new UI components',
+
+      +    'const clipboardy = require(\'clipboardy\');',
+
+      +    'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890
+      100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import
+      React from \'react\';',
+
+      +    'All changes have been applied successfully. You can now commit
+      them.',
+
+      +    '{\n  "id": "123",\n  "status": "PENDING"\n}',
+
+      +    'Can you refactor this to use a switch statement?',
+
+      +];
+
+      +let currentClipboardIndex = 0;
+
+      +
+       const startSimulator = () => {
+           if (simulatorInterval) return;
+       
+      @@ -16,8 +27,10 @@
+               } else if (random < 0.8) {
+                   LoggerService.debug('No clipboard change detected.');
+               } else {
+      -            LoggerService.info('Clipboard content changed.');
+
+      +            const newContent =
+      mockClipboardContents[currentClipboardIndex]!;
+
+      +            currentClipboardIndex = (currentClipboardIndex + 1) %
+      mockClipboardContents.length;
+
+      +            const excerpt = newContent.replace(/\n/g, ' ').substring(0,
+      50).trim();
+
+      +            LoggerService.info(`Clipboard content changed. Excerpt:
+      "${excerpt}..."`);
+               }
+           }, 2000);
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/logger.service.ts: >-
+    import { useLogStore } from '../stores/log.store';
+
+
+    let simulatorInterval: NodeJS.Timeout | null = null;
+
+
+    const startSimulator = () => {
+        if (simulatorInterval) return;
+
+        // Initial burst of logs to populate the view
+        LoggerService.info('Log simulator started.');
+        LoggerService.debug('Initializing clipboard watcher...');
+        setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
+
+        simulatorInterval = setInterval(() => {
+            const random = Math.random();
+            if (random < 0.6) {
+                LoggerService.debug('Clipboard watcher polling...');
+            } else if (random < 0.8) {
+                LoggerService.debug('No clipboard change detected.');
+            } else {
+                LoggerService.info('Clipboard content changed.');
+            }
+        }, 2000);
+    };
+
+
+    const stopSimulator = () => {
+        if (simulatorInterval) {
+            clearInterval(simulatorInterval);
+            simulatorInterval = null;
+            LoggerService.info('Log simulator stopped.');
+        }
+    };
+
+
+    const debug = (message: string) =>
+    useLogStore.getState().actions.addLog('DEBUG', message);
+
+    const info = (message: string) =>
+    useLogStore.getState().actions.addLog('INFO', message);
+
+    const warn = (message: string) =>
+    useLogStore.getState().actions.addLog('WARN', message);
+
+    const error = (message: string) =>
+    useLogStore.getState().actions.addLog('ERROR', message);
+
+
+
+    export const LoggerService = {
+        debug,
+        info,
+        warn,
+        error,
+        startSimulator,
+        stopSimulator,
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 151

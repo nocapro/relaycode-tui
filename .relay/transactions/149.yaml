@@ -1,0 +1,167 @@
+uuid: f15b4ebf-410a-429f-a2e4-9642647c2250
+projectId: relaycode-tui
+createdAt: '2025-09-25T22:22:38.063Z'
+gitCommitMsg: >-
+  feat(debug): Enhance colorization of debug log screen
+
+  The debug log has been updated for better readability and visual distinction
+  between log levels.
+
+  - Log level tags (e.g., INFO, ERROR) are now rendered with distinct background
+  colors, making them more prominent. - Log messages retain their severity-based
+  colors (yellow for WARN, red for ERROR), improving at-a-glance parsing of the
+  log stream.
+promptSummary: make the text log color full also the level
+reasoning:
+  - >-
+    Of course. I'll make the log levels more prominent with background colors
+    and ensure the log messages themselves are colored according to their
+    severity, which will make the debug log much more colorful and easier to
+    read at a glance.
+  - >-
+    I'll modify the `DebugLogScreen.tsx` file to introduce a new color
+    configuration for the log level tags and update the `LogEntryRow` component
+    to use it.
+  - >-
+    I've updated the `LogEntryRow` to render log levels as colorful, padded tags
+    (e.g., ` INFO  `, ` ERROR `) which makes them stand out significantly more.
+    The log messages will continue to be colored based on severity (gray for
+    debug, yellow for warnings, red for errors), fulfilling your request for a
+    more colorful log view.
+operations:
+  - type: write
+    path: src/components/DebugLogScreen.tsx
+    content: >+
+      --- src/components/DebugLogScreen.tsx
+
+      +++ src/components/DebugLogScreen.tsx
+
+      @@ -11,21 +11,29 @@
+           ERROR: 'red',
+       };
+       
+      +const LogLevelTag = {
+
+      +    DEBUG: { color: 'white', backgroundColor: 'gray' },
+
+      +    INFO: { color: 'black', backgroundColor: 'cyan' },
+
+      +    WARN: { color: 'black', backgroundColor: 'yellow' },
+
+      +    ERROR: { color: 'white', backgroundColor: 'red' },
+
+      +};
+
+      +
+       const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
+           const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+           const color = LogLevelColors[entry.level];
+      +    const tagColors = LogLevelTag[entry.level];
+       
+           return (
+               <Text color={color}>
+                   {isSelected ? '> ' : '  '}
+                   <Text color="gray">{time}</Text>
+                   {' '}
+      -            <Text bold color={color}>[{entry.level.padEnd(5, '
+      ')}]</Text>
+
+      +            <Text bold color={tagColors.color}
+      backgroundColor={tagColors.backgroundColor}>
+
+      +                {' '}{entry.level.padEnd(5, ' ')}{' '}
+
+      +            </Text>
+                   {' '}
+                   {entry.message}
+               </Text>
+           );
+       };
+       
+       const DebugLogScreen = () => {
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/DebugLogScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import ActionFooter from './ActionFooter';
+
+    import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+
+    import type { LogEntry } from '../types/log.types';
+
+    import { useStdoutDimensions } from '../utils';
+
+
+    const LogLevelColors = {
+        DEBUG: 'gray',
+        INFO: 'white',
+        WARN: 'yellow',
+        ERROR: 'red',
+    };
+
+
+    const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected:
+    boolean }) => {
+        const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+        const color = LogLevelColors[entry.level];
+
+        return (
+            <Text color={color}>
+                {isSelected ? '> ' : '  '}
+                <Text color="gray">{time}</Text>
+                {' '}
+                <Text bold color={color}>[{entry.level.padEnd(5, ' ')}]</Text>
+                {' '}
+                {entry.message}
+            </Text>
+        );
+    };
+
+
+    const DebugLogScreen = () => {
+        const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
+        const [width] = useStdoutDimensions();
+
+        return (
+            <Box
+                flexDirection="column"
+                width="100%"
+                height="100%"
+                paddingX={2}
+                paddingY={1}
+            >
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+                <Separator width={width - 4} />
+                <Box flexDirection="column" flexGrow={1} marginY={1}>
+                    {logsInView.map((entry, index) => (
+                        <LogEntryRow
+                            key={`${entry.timestamp}-${index}`}
+                            entry={entry}
+                            isSelected={selectedIndex === index}
+                        />
+                    ))}
+                    {logCount === 0 && <Text color="gray">No log entries yet. Waiting for system activity...</Text>}
+                </Box>
+                <Separator width={width - 4} />
+                <ActionFooter actions={[
+                    { key: '↑↓', label: 'Scroll' },
+                    { key: 'C', label: 'Clear' },
+                    { key: 'Esc/Ctrl+L', label: 'Close' },
+                ]}/>
+            </Box>
+        );
+    };
+
+
+    export default DebugLogScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 149

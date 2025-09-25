@@ -18,12 +18,11 @@ const DebugMenu = () => {
     return (
         <Box
             flexDirection="column"
-            borderStyle="round"
-            borderColor="yellow"
             width="100%"
             paddingX={2}
+            paddingY={1}
         >
-            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
             <Separator width={width - 4} />
             <Box flexDirection="column" marginY={1}>
                 {menuItems.map((item, index) => (

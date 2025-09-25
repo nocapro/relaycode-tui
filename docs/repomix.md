@@ -80,6 +80,90 @@ tsconfig.json
 
 # Files
 
+## File: src/components/ActionFooter.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useStdoutDimensions } from '../utils';
+import { UI_CONFIG } from '../config/ui.config';
+import type { ActionItem } from '../types/actions.types';
+
+interface ActionFooterProps {
+    actions: ActionItem[];
+}
+
+const Action = ({ item }: { item: ActionItem }) => (
+    <Text>
+        (<Text color="cyan" bold>{item.key}</Text>) {item.label}
+    </Text>
+);
+
+const ActionFooter = ({ actions }: ActionFooterProps) => {
+    const [width] = useStdoutDimensions();
+    const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
+    const separatorWidth = actionSeparator.length;
+
+    // Calculate required width for a single line
+    const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
+    const singleLineWidth = formattedActions.join(actionSeparator).length;
+
+    // 1. Render horizontally if it fits
+    if (singleLineWidth <= width - horizontalPadding * 2) {
+        return (
+            <Box>
+                {actions.map((item, index) => (
+                    <Text key={item.key}>
+                        <Action item={item} />
+                        {index < actions.length - 1 && <Text>{actionSeparator}</Text>}
+                    </Text>
+                ))}
+            </Box>
+        );
+    }
+
+    // 2. If it doesn't fit, calculate multi-column layout
+    const itemWidths = formattedActions.map(a => a.length);
+    const maxItemWidth = Math.max(...itemWidths);
+    
+    // Determine how many columns can fit, ensuring at least one
+    const availableWidth = width - horizontalPadding * 2;
+    // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
+    const numColumns = Math.min(
+        actions.length,
+        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth)))
+    );
+    
+    const itemsPerColumn = Math.ceil(actions.length / numColumns);
+    const columns: ActionItem[][] = Array.from({ length: numColumns }, () => []);
+
+    actions.forEach((action, index) => {
+        const columnIndex = Math.floor(index / itemsPerColumn);
+        if (columns[columnIndex]) {
+            columns[columnIndex].push(action);
+        }
+    });
+
+    return (
+        <Box flexDirection="row" width="100%">
+            {columns.map((column, colIndex) => (
+                <Box
+                    key={colIndex}
+                    flexDirection="column"
+                    // Use a flex-basis approach for more even distribution if needed,
+                    // but fixed width is better for alignment.
+                    width={maxItemWidth + separatorWidth}
+                >
+                    {column.map(item => (
+                        <Action key={item.key} item={item} />
+                    ))}
+                </Box>
+            ))}
+        </Box>
+    );
+};
+
+export default ActionFooter;
+```
+
 ## File: src/components/DebugLogScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -87,6 +171,7 @@ import Separator from './Separator';
 import ActionFooter from './ActionFooter';
 import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
 import type { LogEntry } from '../types/log.types';
+import { useStdoutDimensions } from '../utils';
 
 const LogLevelColors = {
     DEBUG: 'gray',
@@ -95,16 +180,26 @@ const LogLevelColors = {
     ERROR: 'red',
 };
 
+const LogLevelTag = {
+    DEBUG: { color: 'white', backgroundColor: 'gray' },
+    INFO: { color: 'black', backgroundColor: 'cyan' },
+    WARN: { color: 'black', backgroundColor: 'yellow' },
+    ERROR: { color: 'white', backgroundColor: 'red' },
+};
+
 const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
     const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
     const color = LogLevelColors[entry.level];
+    const tagColors = LogLevelTag[entry.level];
 
     return (
         <Text color={color}>
             {isSelected ? '> ' : '  '}
             <Text color="gray">{time}</Text>
             {' '}
-            <Text bold color={color}>[{entry.level.padEnd(5, ' ')}]</Text>
+            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
+                {' '}{entry.level.padEnd(5, ' ')}{' '}
+            </Text>
             {' '}
             {entry.message}
         </Text>
@@ -113,18 +208,18 @@ const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boole
 
 const DebugLogScreen = () => {
     const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
+    const [width] = useStdoutDimensions();
 
     return (
         <Box
             flexDirection="column"
-            borderStyle="round"
-            borderColor="yellow"
             width="100%"
             height="100%"
             paddingX={2}
+            paddingY={1}
         >
-            <Text bold color="yellow">▲ relaycode · DEBUG LOG</Text>
-            <Separator />
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+            <Separator width={width - 4} />
             <Box flexDirection="column" flexGrow={1} marginY={1}>
                 {logsInView.map((entry, index) => (
                     <LogEntryRow
@@ -135,7 +230,7 @@ const DebugLogScreen = () => {
                 ))}
                 {logCount === 0 && <Text color="gray">No log entries yet. Waiting for system activity...</Text>}
             </Box>
-            <Separator />
+            <Separator width={width - 4} />
             <ActionFooter actions={[
                 { key: '↑↓', label: 'Scroll' },
                 { key: 'C', label: 'Clear' },
@@ -146,6 +241,62 @@ const DebugLogScreen = () => {
 };
 
 export default DebugLogScreen;
+```
+
+## File: src/constants/detail.constants.ts
+```typescript
+/**
+ * Constants for the Transaction Detail screen.
+ */
+export const NAVIGATOR_SECTIONS = {
+    PROMPT: 'PROMPT',
+    REASONING: 'REASONING',
+    FILES: 'FILES',
+} as const;
+
+export const DETAIL_BODY_VIEWS = {
+    PROMPT: 'PROMPT',
+    REASONING: 'REASONING',
+    FILES_LIST: 'FILES_LIST',
+    DIFF_VIEW: 'DIFF_VIEW',
+    REVERT_CONFIRM: 'REVERT_CONFIRM',
+    NONE: 'NONE',
+} as const;
+```
+
+## File: src/constants/init.constants.ts
+```typescript
+import type { Task } from '../stores/init.store';
+
+/**
+ * Constants for the Initialization process.
+ */
+export const INITIAL_ANALYZE_TASKS: Task[] = [
+    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
+    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
+    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
+];
+
+export const INITIAL_CONFIGURE_TASKS: Task[] = [
+    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
+    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
+    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
+];
+```
+
+## File: src/constants/review.constants.ts
+```typescript
+import type { ApplyStep } from '../stores/review.store';
+
+/**
+ * Constants for the Review screen and process.
+ */
+export const INITIAL_APPLY_STEPS: ApplyStep[] = [
+    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+];
 ```
 
 ## File: src/hooks/useDebugLogScreen.tsx
@@ -203,6 +354,35 @@ export const useDebugLogScreen = () => {
         logCount: logs.length,
         selectedIndex,
     };
+};
+```
+
+## File: src/services/fs.service.ts
+```typescript
+import { sleep } from '../utils';
+
+/**
+ * Mock file system service.
+ * In a real application, this would interact with the actual filesystem.
+ */
+const readFileContent = async (filePath: string): Promise<string> => {
+    // Simulate async file read
+    await sleep(50 + Math.random() * 100);
+
+    const lang = filePath.split('.').pop() || '';
+    
+    return `// Mock content for ${filePath}
+// Language: ${lang}
+// In a real implementation, this would read from the filesystem.
+
+function helloWorld() {
+    console.log("Hello from ${filePath}!");
+}
+`;
+};
+
+export const FileSystemService = {
+    readFileContent,
 };
 ```
 
@@ -291,237 +471,6 @@ export const useLogStore = create<LogState>((set) => ({
 }));
 ```
 
-## File: src/types/log.types.ts
-```typescript
-/**
- * Log level for a log entry.
- */
-export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
-
-/**
- * Represents a single log entry in the system.
- */
-export interface LogEntry {
-    timestamp: number;
-    level: LogLevel;
-    message: string;
-}
-```
-
-## File: src/components/ActionFooter.tsx
-```typescript
-import { Box, Text } from 'ink';
-import { useStdoutDimensions } from '../utils';
-import { UI_CONFIG } from '../config/ui.config';
-import type { ActionItem } from '../types/actions.types';
-
-interface ActionFooterProps {
-    actions: ActionItem[];
-}
-
-const Action = ({ item }: { item: ActionItem }) => (
-    <Text>
-        (<Text color="cyan" bold>{item.key}</Text>) {item.label}
-    </Text>
-);
-
-const ActionFooter = ({ actions }: ActionFooterProps) => {
-    const [width] = useStdoutDimensions();
-    const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
-    const separatorWidth = actionSeparator.length;
-
-    // Calculate required width for a single line
-    const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
-    const singleLineWidth = formattedActions.join(actionSeparator).length;
-
-    // 1. Render horizontally if it fits
-    if (singleLineWidth <= width - horizontalPadding * 2) {
-        return (
-            <Box>
-                {actions.map((item, index) => (
-                    <Text key={item.key}>
-                        <Action item={item} />
-                        {index < actions.length - 1 && <Text>{actionSeparator}</Text>}
-                    </Text>
-                ))}
-            </Box>
-        );
-    }
-
-    // 2. If it doesn't fit, calculate multi-column layout
-    const itemWidths = formattedActions.map(a => a.length);
-    const maxItemWidth = Math.max(...itemWidths);
-    
-    // Determine how many columns can fit, ensuring at least one
-    const availableWidth = width - horizontalPadding * 2;
-    // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
-    const numColumns = Math.min(
-        actions.length,
-        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth)))
-    );
-    
-    const itemsPerColumn = Math.ceil(actions.length / numColumns);
-    const columns: ActionItem[][] = Array.from({ length: numColumns }, () => []);
-
-    actions.forEach((action, index) => {
-        const columnIndex = Math.floor(index / itemsPerColumn);
-        if (columns[columnIndex]) {
-            columns[columnIndex].push(action);
-        }
-    });
-
-    return (
-        <Box flexDirection="row" width="100%">
-            {columns.map((column, colIndex) => (
-                <Box
-                    key={colIndex}
-                    flexDirection="column"
-                    // Use a flex-basis approach for more even distribution if needed,
-                    // but fixed width is better for alignment.
-                    width={maxItemWidth + separatorWidth}
-                >
-                    {column.map(item => (
-                        <Action key={item.key} item={item} />
-                    ))}
-                </Box>
-            ))}
-        </Box>
-    );
-};
-
-export default ActionFooter;
-```
-
-## File: src/constants/detail.constants.ts
-```typescript
-/**
- * Constants for the Transaction Detail screen.
- */
-export const NAVIGATOR_SECTIONS = {
-    PROMPT: 'PROMPT',
-    REASONING: 'REASONING',
-    FILES: 'FILES',
-} as const;
-
-export const DETAIL_BODY_VIEWS = {
-    PROMPT: 'PROMPT',
-    REASONING: 'REASONING',
-    FILES_LIST: 'FILES_LIST',
-    DIFF_VIEW: 'DIFF_VIEW',
-    REVERT_CONFIRM: 'REVERT_CONFIRM',
-    NONE: 'NONE',
-} as const;
-```
-
-## File: src/constants/init.constants.ts
-```typescript
-import type { Task } from '../stores/init.store';
-
-/**
- * Constants for the Initialization process.
- */
-export const INITIAL_ANALYZE_TASKS: Task[] = [
-    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
-    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
-    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
-];
-
-export const INITIAL_CONFIGURE_TASKS: Task[] = [
-    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
-    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
-    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
-];
-```
-
-## File: src/constants/review.constants.ts
-```typescript
-import type { ApplyStep } from '../stores/review.store';
-
-/**
- * Constants for the Review screen and process.
- */
-export const INITIAL_APPLY_STEPS: ApplyStep[] = [
-    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
-    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
-    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
-    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
-];
-```
-
-## File: src/services/editor.service.ts
-```typescript
-import { LoggerService } from './logger.service';
-
-/**
- * Mock editor service.
- * In a real application, this would interact with the user's default editor.
- */
-const openFileInEditor = async (filePath: string): Promise<void> => {
-    LoggerService.debug(`[EDITOR MOCK] Opening file in default editor: ${filePath}`);
-};
-
-const getTransactionYamlPath = (transactionHash: string): string => {
-    return `.relay/transactions/${transactionHash}.yml`;
-};
-
-export const EditorService = {
-    openFileInEditor,
-    getTransactionYamlPath,
-};
-```
-
-## File: src/services/fs.service.ts
-```typescript
-import { sleep } from '../utils';
-
-/**
- * Mock file system service.
- * In a real application, this would interact with the actual filesystem.
- */
-const readFileContent = async (filePath: string): Promise<string> => {
-    // Simulate async file read
-    await sleep(50 + Math.random() * 100);
-
-    const lang = filePath.split('.').pop() || '';
-    
-    return `// Mock content for ${filePath}
-// Language: ${lang}
-// In a real implementation, this would read from the filesystem.
-
-function helloWorld() {
-    console.log("Hello from ${filePath}!");
-}
-`;
-};
-
-export const FileSystemService = {
-    readFileContent,
-};
-```
-
-## File: src/stores/view.store.ts
-```typescript
-import { create } from 'zustand';
-
-interface ViewState {
-    selectedTransactionId: string | null;
-    activeOverlay: 'none' | 'help' | 'copy' | 'debug' | 'log';
-    actions: {
-        setSelectedTransactionId: (id: string | null) => void;
-        setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
-    };
-}
-
-export const useViewStore = create<ViewState>((set) => ({
-    selectedTransactionId: null,
-    activeOverlay: 'none',
-    actions: {
-        setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
-        setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
-    },
-}));
-```
-
 ## File: src/types/actions.types.ts
 ```typescript
 /**
@@ -538,6 +487,23 @@ export interface ActionItem {
 export interface MenuItem {
     title: string;
     action: () => void;
+}
+```
+
+## File: src/types/log.types.ts
+```typescript
+/**
+ * Log level for a log entry.
+ */
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+/**
+ * Represents a single log entry in the system.
+ */
+export interface LogEntry {
+    timestamp: number;
+    level: LogLevel;
+    message: string;
 }
 ```
 
@@ -651,6 +617,51 @@ export const useViewport = ({ selectedIndex, reservedRows }: UseViewportOptions)
         width: columns,
     };
 };
+```
+
+## File: src/services/editor.service.ts
+```typescript
+import { LoggerService } from './logger.service';
+
+/**
+ * Mock editor service.
+ * In a real application, this would interact with the user's default editor.
+ */
+const openFileInEditor = async (filePath: string): Promise<void> => {
+    LoggerService.debug(`[EDITOR MOCK] Opening file in default editor: ${filePath}`);
+};
+
+const getTransactionYamlPath = (transactionHash: string): string => {
+    return `.relay/transactions/${transactionHash}.yml`;
+};
+
+export const EditorService = {
+    openFileInEditor,
+    getTransactionYamlPath,
+};
+```
+
+## File: src/stores/view.store.ts
+```typescript
+import { create } from 'zustand';
+
+interface ViewState {
+    selectedTransactionId: string | null;
+    activeOverlay: 'none' | 'help' | 'copy' | 'debug' | 'log';
+    actions: {
+        setSelectedTransactionId: (id: string | null) => void;
+        setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+    };
+}
+
+export const useViewStore = create<ViewState>((set) => ({
+    selectedTransactionId: null,
+    activeOverlay: 'none',
+    actions: {
+        setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
+        setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+    },
+}));
 ```
 
 ## File: src/types/domain.types.ts
@@ -949,35 +960,6 @@ const DiffScreen = ({ filePath, diffContent, isExpanded }: DiffScreenProps) => {
 export default DiffScreen;
 ```
 
-## File: src/services/dashboard.service.ts
-```typescript
-import { sleep } from '../utils';
-import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
-import { LoggerService } from './logger.service';
-
-const approveAll = async () => {
-    LoggerService.info('Starting bulk approval process...');
-    const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
-    const pendingTxIds = pendingTransactions.map(tx => tx.id);
-    LoggerService.debug(`Found ${pendingTxIds.length} pending transactions to approve.`);
-    const { updateTransactionStatus } = useTransactionStore.getState().actions;
-    pendingTxIds.forEach(id => {
-        updateTransactionStatus(id, 'IN-PROGRESS');
-        LoggerService.debug(`Transaction ${id} status set to IN-PROGRESS.`);
-    });
-
-    await sleep(2000); // Simulate approval process
-
-    // Mark them as applied
-    pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
-    LoggerService.info(`Bulk approval complete. ${pendingTxIds.length} transactions applied.`);
-};
-
-export const DashboardService = {
-    approveAll,
-};
-```
-
 ## File: src/stores/history.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -1225,180 +1207,33 @@ const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonS
 export default ReasonScreen;
 ```
 
-## File: src/services/commit.service.ts
+## File: src/services/dashboard.service.ts
 ```typescript
-import type { Transaction } from '../types/domain.types';
 import { sleep } from '../utils';
-import { useTransactionStore } from '../stores/transaction.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
 import { LoggerService } from './logger.service';
 
-const generateCommitMessage = (transactions: Transaction[]): string => {
-    LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
-    if (transactions.length === 0) {
-        LoggerService.warn('generateCommitMessage called with 0 transactions.');
-        return '';
-    }
-    // Using a more complex aggregation for better demo, based on the readme
-    const title = 'feat: implement new dashboard and clipboard logic';
-    const bodyPoints = [
-        '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
-        '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
-    ];
-
-    if (transactions.length === 1 && transactions[0]) {
-        LoggerService.debug('Using single transaction message for commit.');
-        return transactions[0].message;
-    }
-
-    LoggerService.debug('Using aggregated message for commit.');
-    return `${title}\n\n${bodyPoints.join('\n\n')}`;
-};
-
-const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
-    LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
-    // In a real app, this would run git commands.
-    // For simulation, we'll just update the transaction store.
+const approveAll = async () => {
+    LoggerService.info('Starting bulk approval process...');
+    const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
+    const pendingTxIds = pendingTransactions.map(tx => tx.id);
+    LoggerService.debug(`Found ${pendingTxIds.length} pending transactions to approve.`);
     const { updateTransactionStatus } = useTransactionStore.getState().actions;
-
-    const txIds = transactionsToCommit.map(tx => tx.id);
-
-    // A bit of simulation
-    await sleep(500);
-
-    txIds.forEach(id => {
-        updateTransactionStatus(id, 'COMMITTED');
+    pendingTxIds.forEach(id => {
+        updateTransactionStatus(id, 'IN-PROGRESS');
+        LoggerService.debug(`Transaction ${id} status set to IN-PROGRESS.`);
     });
-    LoggerService.info('Commit successful.');
+
+    await sleep(2000); // Simulate approval process
+
+    // Mark them as applied
+    pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+    LoggerService.info(`Bulk approval complete. ${pendingTxIds.length} transactions applied.`);
 };
 
-export const CommitService = {
-    generateCommitMessage,
-    commit,
+export const DashboardService = {
+    approveAll,
 };
-```
-
-## File: src/stores/copy.store.ts
-```typescript
-import { create } from 'zustand';
-import { moveIndex } from './navigation.utils';
-import { useViewStore } from './view.store';
-import { LoggerService } from '../services/logger.service';
-import { CopyService } from '../services/copy.service';
-import type { CopyItem } from '../types/copy.types';
-import type { Transaction, FileItem } from '../types/domain.types';
-
-export type { CopyItem };
-
-interface CopyState {
-    title: string;
-    items: CopyItem[];
-    selectedIndex: number;
-    selectedIds: Set<string>;
-    lastCopiedMessage: string | null;
-    onClose?: () => void;
-
-    actions: {
-        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
-        close: () => void;
-        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
-        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
-        openForHistory: (transactions: Transaction[]) => void;
-        navigateUp: () => void;
-        navigateDown: () => void;
-        toggleSelection: () => void;
-        toggleSelectionById: (id: string) => void;
-        executeCopy: () => void;
-    };
-}
-
-export const useCopyStore = create<CopyState>((set, get) => ({
-    title: '',
-    items: [],
-    selectedIndex: 0,
-    selectedIds: new Set(),
-    lastCopiedMessage: null,
-    onClose: undefined,
-
-    actions: {
-        open: (title, items, onClose) => {
-            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
-            useViewStore.getState().actions.setActiveOverlay('copy');
-            set({
-                title,
-                items,
-                selectedIndex: 0,
-                selectedIds: defaultSelectedIds,
-                lastCopiedMessage: null,
-                onClose,
-            });
-        },
-        close: () => {
-            useViewStore.getState().actions.setActiveOverlay('none');
-            get().onClose?.();
-            set({ items: [], onClose: undefined });
-        },
-        openForReview: (transaction, files, selectedFile) => {
-            const { actions } = get();
-            const title = 'Select data to copy from review:';
-            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
-            actions.open(title, items);
-        },
-        openForDetail: (transaction, selectedFile) => {
-            const { actions } = get();
-            const title = `Select data to copy from transaction ${transaction.hash}:`;
-            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
-            actions.open(title, items);
-        },
-        openForHistory: (transactions) => {
-            const { actions } = get();
-            const title = `Select data to copy from ${transactions.length} transactions:`;
-            const items = CopyService.getCopyItemsForHistory(transactions);
-            actions.open(title, items);
-        },
-        navigateUp: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
-        })),
-        navigateDown: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
-        })),
-        toggleSelection: () => set(state => {
-            const currentItem = state.items[state.selectedIndex];
-            if (!currentItem) return {};
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(currentItem.id)) {
-                newSelectedIds.delete(currentItem.id);
-            } else {
-                newSelectedIds.add(currentItem.id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        toggleSelectionById: (id: string) => set(state => {
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(id)) {
-                newSelectedIds.delete(id);
-            } else {
-                newSelectedIds.add(id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
-        executeCopy: async () => {
-            const { items, selectedIds } = get();
-            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
-            if (itemsToCopy.length === 0) return;
-
-            LoggerService.info(`Copying ${itemsToCopy.length} item(s) to clipboard.`);
-            const dataPromises = itemsToCopy.map(item => item.getData());
-            const resolvedData = await Promise.all(dataPromises);
-
-            const content = itemsToCopy
-                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
-                .join('\n\n');
-            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
-            LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
-            set({ lastCopiedMessage: message });
-        },
-    },
-}));
 ```
 
 ## File: src/stores/navigation.utils.ts
@@ -1652,124 +1487,180 @@ export const useGitCommitScreen = () => {
 };
 ```
 
-## File: src/hooks/useSplashScreen.tsx
+## File: src/services/commit.service.ts
 ```typescript
-import { useState, useEffect } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { UI_CONFIG } from '../config/ui.config';
-import { LoggerService } from '../services/logger.service';
+import type { Transaction } from '../types/domain.types';
+import { sleep } from '../utils';
+import { useTransactionStore } from '../stores/transaction.store';
+import { LoggerService } from './logger.service';
 
-export const useSplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+const generateCommitMessage = (transactions: Transaction[]): string => {
+    LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
+    if (transactions.length === 0) {
+        LoggerService.warn('generateCommitMessage called with 0 transactions.');
+        return '';
+    }
+    // Using a more complex aggregation for better demo, based on the readme
+    const title = 'feat: implement new dashboard and clipboard logic';
+    const bodyPoints = [
+        '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+        '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+    ];
 
-    const handleSkip = () => {
-        showInitScreen();
-    };
+    if (transactions.length === 1 && transactions[0]) {
+        LoggerService.debug('Using single transaction message for commit.');
+        return transactions[0].message;
+    }
 
-    useInput((input) => {
-        const lowerInput = input.toLowerCase();
-        if (lowerInput === 'v') {
-            LoggerService.info('[MOCK] Opening noca.pro in browser...');
-            return;
-        }
-        if (lowerInput === 'x') {
-            LoggerService.info('[MOCK] Opening X/Twitter in browser...');
-            return;
-        }
-        if (lowerInput === 'd') {
-            LoggerService.info('[MOCK] Opening Discord in browser...');
-            return;
-        }
-        if (lowerInput === 'g') {
-            LoggerService.info('[MOCK] Opening GitHub in browser...');
-            return;
-        }
+    LoggerService.debug('Using aggregated message for commit.');
+    return `${title}\n\n${bodyPoints.join('\n\n')}`;
+};
 
-        // Any other key skips
-        handleSkip(); 
+const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
+    LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+    // In a real app, this would run git commands.
+    // For simulation, we'll just update the transaction store.
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
+
+    const txIds = transactionsToCommit.map(tx => tx.id);
+
+    // A bit of simulation
+    await sleep(500);
+
+    txIds.forEach(id => {
+        updateTransactionStatus(id, 'COMMITTED');
     });
+    LoggerService.info('Commit successful.');
+};
 
-    useEffect(() => {
-        if (countdown === 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
-
-    return { countdown };
+export const CommitService = {
+    generateCommitMessage,
+    commit,
 };
 ```
 
-## File: src/services/init.service.ts
+## File: src/stores/copy.store.ts
 ```typescript
-import { useInitStore } from '../stores/init.store';
-import { sleep } from '../utils';
-import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
-import { LoggerService } from './logger.service';
+import { create } from 'zustand';
+import { moveIndex } from './navigation.utils';
+import { useViewStore } from './view.store';
+import { LoggerService } from '../services/logger.service';
+import { CopyService } from '../services/copy.service';
+import type { CopyItem } from '../types/copy.types';
+import type { Transaction, FileItem } from '../types/domain.types';
 
-const runInitializationProcess = async () => {
-    LoggerService.info('Starting initialization process...');
-    const { actions } = useInitStore.getState();
-    actions.resetInit();
-    actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+export type { CopyItem };
 
-    actions.setPhase('ANALYZE');
-    LoggerService.debug('Phase set to ANALYZE');
-    for (const task of INITIAL_ANALYZE_TASKS) {
-        actions.updateAnalyzeTask(task.id, 'active');
-        LoggerService.debug(`Analyzing task active: ${task.title}`);
-        await sleep(800);
-        actions.updateAnalyzeTask(task.id, 'done');
-    }
-    actions.setAnalysisResults('relaycode (from package.json)', true);
-    await sleep(500);
+interface CopyState {
+    title: string;
+    items: CopyItem[];
+    selectedIndex: number;
+    selectedIds: Set<string>;
+    lastCopiedMessage: string | null;
+    onClose?: () => void;
 
-    actions.setPhase('CONFIGURE');
-    LoggerService.debug('Phase set to CONFIGURE');
-    const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
-    for (const task of configTasksUntilInteractive) {
-        actions.updateConfigureTask(task.id, 'active');
-        LoggerService.debug(`Configuring task active: ${task.title}`);
-        await sleep(800);
-        actions.updateConfigureTask(task.id, 'done');
-    }
-    await sleep(500);
+    actions: {
+        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+        close: () => void;
+        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+        openForHistory: (transactions: Transaction[]) => void;
+        navigateUp: () => void;
+        navigateDown: () => void;
+        toggleSelection: () => void;
+        toggleSelectionById: (id: string) => void;
+        executeCopy: () => void;
+    };
+}
 
-    actions.setPhase('INTERACTIVE');
-    LoggerService.debug('Phase set to INTERACTIVE');
-};
+export const useCopyStore = create<CopyState>((set, get) => ({
+    title: '',
+    items: [],
+    selectedIndex: 0,
+    selectedIds: new Set(),
+    lastCopiedMessage: null,
+    onClose: undefined,
 
-const resumeInitializationProcess = async () => {
-    LoggerService.info('Resuming initialization process...');
-    const { actions } = useInitStore.getState();
-    
-    actions.setPhase('CONFIGURE');
-    LoggerService.debug('Phase set to CONFIGURE');
-    const lastTask = INITIAL_CONFIGURE_TASKS[INITIAL_CONFIGURE_TASKS.length - 1];
-    if (lastTask) {
-        actions.updateConfigureTask(lastTask.id, 'active');
-        LoggerService.debug(`Configuring task active: ${lastTask.title}`);
-        await sleep(800);
-        actions.updateConfigureTask(lastTask.id, 'done');
-        await sleep(500);
+    actions: {
+        open: (title, items, onClose) => {
+            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+            useViewStore.getState().actions.setActiveOverlay('copy');
+            set({
+                title,
+                items,
+                selectedIndex: 0,
+                selectedIds: defaultSelectedIds,
+                lastCopiedMessage: null,
+                onClose,
+            });
+        },
+        close: () => {
+            useViewStore.getState().actions.setActiveOverlay('none');
+            get().onClose?.();
+            set({ items: [], onClose: undefined });
+        },
+        openForReview: (transaction, files, selectedFile) => {
+            const { actions } = get();
+            const title = 'Select data to copy from review:';
+            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+            actions.open(title, items);
+        },
+        openForDetail: (transaction, selectedFile) => {
+            const { actions } = get();
+            const title = `Select data to copy from transaction ${transaction.hash}:`;
+            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+            actions.open(title, items);
+        },
+        openForHistory: (transactions) => {
+            const { actions } = get();
+            const title = `Select data to copy from ${transactions.length} transactions:`;
+            const items = CopyService.getCopyItemsForHistory(transactions);
+            actions.open(title, items);
+        },
+        navigateUp: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
+        })),
+        navigateDown: () => set(state => ({
+            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
+        })),
+        toggleSelection: () => set(state => {
+            const currentItem = state.items[state.selectedIndex];
+            if (!currentItem) return {};
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(currentItem.id)) {
+                newSelectedIds.delete(currentItem.id);
+            } else {
+                newSelectedIds.add(currentItem.id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        toggleSelectionById: (id: string) => set(state => {
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(id)) {
+                newSelectedIds.delete(id);
+            } else {
+                newSelectedIds.add(id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        executeCopy: async () => {
+            const { items, selectedIds } = get();
+            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+            if (itemsToCopy.length === 0) return;
 
-        actions.setPhase('FINALIZE');
-        LoggerService.info('Initialization process finalized.');
-    }
-};
+            LoggerService.info(`Copying ${itemsToCopy.length} item(s) to clipboard.`);
+            const dataPromises = itemsToCopy.map(item => item.getData());
+            const resolvedData = await Promise.all(dataPromises);
 
-export const InitService = {
-    runInitializationProcess,
-    resumeInitializationProcess,
-};
+            const content = itemsToCopy
+                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                .join('\n\n');
+            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+            LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            set({ lastCopiedMessage: message });
+        },
+    },
+}));
 ```
 
 ## File: src/stores/detail.store.ts
@@ -2017,69 +1908,6 @@ const Separator = ({ width: propWidth }: { width?: number }) => {
 export default Separator;
 ```
 
-## File: src/hooks/useGlobalHotkeys.tsx
-```typescript
-import { useApp, useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { useViewStore } from '../stores/view.store';
-import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
-
-export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
-    const { exit } = useApp();
-    const { currentScreen } = useAppStore(s => ({
-        currentScreen: s.currentScreen,
-    }));
-    const { navigateBack } = useAppStore(s => s.actions);
-    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
-        activeOverlay: s.activeOverlay,
-        setActiveOverlay: s.actions.setActiveOverlay,
-    }));
-
-    useInput((input, key) => {
-        // Debug Menu toggle is the highest priority global key
-        if (key.ctrl && input === 'b') {
-            setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
-            return;
-        }
-        if (key.ctrl && input === 'l') {
-            setActiveOverlay(activeOverlay === 'log' ? 'none' : 'log');
-            return;
-        }
-
-        // If an overlay with its own input is open, stop here.
-        if (activeOverlay === 'debug' || activeOverlay === 'log') {
-            return;
-        }
-
-        // Help screen takes precedence over other keys
-        if (activeOverlay === 'help') {
-            if (key.escape || input === '?') {
-                setActiveOverlay('none');
-            }
-            return;
-        }
-
-        // --- Global hotkeys when no modal/overlay is open ---
-        
-        // Open Help
-        if (input === '?') {
-            setActiveOverlay('help');
-            return;
-        }
-        
-        // Quit from main screens
-        if (input.toLowerCase() === 'q') {
-            if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
-                exit();
-            }
-            navigateBack();
-        } else if (key.escape) {
-            navigateBack();
-        }
-    }, { isActive });
-};
-```
-
 ## File: src/hooks/useInitializationScreen.tsx
 ```typescript
 import { useEffect } from 'react';
@@ -2145,6 +1973,126 @@ export const useInitializationScreen = () => {
         projectId,
         footerText,
     };
+};
+```
+
+## File: src/hooks/useSplashScreen.tsx
+```typescript
+import { useState, useEffect } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { UI_CONFIG } from '../config/ui.config';
+import { LoggerService } from '../services/logger.service';
+
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+
+    const handleSkip = () => {
+        showInitScreen();
+    };
+
+    useInput((input) => {
+        const lowerInput = input.toLowerCase();
+        if (lowerInput === 'v') {
+            LoggerService.info('[MOCK] Opening noca.pro in browser...');
+            return;
+        }
+        if (lowerInput === 'x') {
+            LoggerService.info('[MOCK] Opening X/Twitter in browser...');
+            return;
+        }
+        if (lowerInput === 'd') {
+            LoggerService.info('[MOCK] Opening Discord in browser...');
+            return;
+        }
+        if (lowerInput === 'g') {
+            LoggerService.info('[MOCK] Opening GitHub in browser...');
+            return;
+        }
+
+        // Any other key skips
+        handleSkip(); 
+    });
+
+    useEffect(() => {
+        if (countdown === 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen]);
+
+    return { countdown };
+};
+```
+
+## File: src/services/init.service.ts
+```typescript
+import { useInitStore } from '../stores/init.store';
+import { sleep } from '../utils';
+import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
+import { LoggerService } from './logger.service';
+
+const runInitializationProcess = async () => {
+    LoggerService.info('Starting initialization process...');
+    const { actions } = useInitStore.getState();
+    actions.resetInit();
+    actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+
+    actions.setPhase('ANALYZE');
+    LoggerService.debug('Phase set to ANALYZE');
+    for (const task of INITIAL_ANALYZE_TASKS) {
+        actions.updateAnalyzeTask(task.id, 'active');
+        LoggerService.debug(`Analyzing task active: ${task.title}`);
+        await sleep(800);
+        actions.updateAnalyzeTask(task.id, 'done');
+    }
+    actions.setAnalysisResults('relaycode (from package.json)', true);
+    await sleep(500);
+
+    actions.setPhase('CONFIGURE');
+    LoggerService.debug('Phase set to CONFIGURE');
+    const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
+    for (const task of configTasksUntilInteractive) {
+        actions.updateConfigureTask(task.id, 'active');
+        LoggerService.debug(`Configuring task active: ${task.title}`);
+        await sleep(800);
+        actions.updateConfigureTask(task.id, 'done');
+    }
+    await sleep(500);
+
+    actions.setPhase('INTERACTIVE');
+    LoggerService.debug('Phase set to INTERACTIVE');
+};
+
+const resumeInitializationProcess = async () => {
+    LoggerService.info('Resuming initialization process...');
+    const { actions } = useInitStore.getState();
+    
+    actions.setPhase('CONFIGURE');
+    LoggerService.debug('Phase set to CONFIGURE');
+    const lastTask = INITIAL_CONFIGURE_TASKS[INITIAL_CONFIGURE_TASKS.length - 1];
+    if (lastTask) {
+        actions.updateConfigureTask(lastTask.id, 'active');
+        LoggerService.debug(`Configuring task active: ${lastTask.title}`);
+        await sleep(800);
+        actions.updateConfigureTask(lastTask.id, 'done');
+        await sleep(500);
+
+        actions.setPhase('FINALIZE');
+        LoggerService.info('Initialization process finalized.');
+    }
+};
+
+export const InitService = {
+    runInitializationProcess,
+    resumeInitializationProcess,
 };
 ```
 
@@ -2235,6 +2183,69 @@ const GitCommitScreen = () => {
 };
 
 export default GitCommitScreen;
+```
+
+## File: src/hooks/useGlobalHotkeys.tsx
+```typescript
+import { useApp, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+
+export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+    const { exit } = useApp();
+    const { currentScreen } = useAppStore(s => ({
+        currentScreen: s.currentScreen,
+    }));
+    const { navigateBack } = useAppStore(s => s.actions);
+    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+        activeOverlay: s.activeOverlay,
+        setActiveOverlay: s.actions.setActiveOverlay,
+    }));
+
+    useInput((input, key) => {
+        // Debug Menu toggle is the highest priority global key
+        if (key.ctrl && input === 'b') {
+            setActiveOverlay(activeOverlay === 'debug' ? 'none' : 'debug');
+            return;
+        }
+        if (key.ctrl && input === 'l') {
+            setActiveOverlay(activeOverlay === 'log' ? 'none' : 'log');
+            return;
+        }
+
+        // If an overlay with its own input is open, stop here.
+        if (activeOverlay === 'debug' || activeOverlay === 'log') {
+            return;
+        }
+
+        // Help screen takes precedence over other keys
+        if (activeOverlay === 'help') {
+            if (key.escape || input === '?') {
+                setActiveOverlay('none');
+            }
+            return;
+        }
+
+        // --- Global hotkeys when no modal/overlay is open ---
+        
+        // Open Help
+        if (input === '?') {
+            setActiveOverlay('help');
+            return;
+        }
+        
+        // Quit from main screens
+        if (input.toLowerCase() === 'q') {
+            if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+                exit();
+            }
+            navigateBack();
+        } else if (key.escape) {
+            navigateBack();
+        }
+    }, { isActive });
+};
 ```
 
 ## File: src/services/copy.service.ts
@@ -2852,12 +2863,11 @@ const DebugMenu = () => {
     return (
         <Box
             flexDirection="column"
-            borderStyle="round"
-            borderColor="yellow"
             width="100%"
             paddingX={2}
+            paddingY={1}
         >
-            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
             <Separator width={width - 4} />
             <Box flexDirection="column" marginY={1}>
                 {menuItems.map((item, index) => (
@@ -4885,6 +4895,221 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 }));
 ```
 
+## File: src/components/DashboardScreen.tsx
+```typescript
+import React from 'react';
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
+import { useDashboardScreen } from '../hooks/useDashboardScreen';
+import { UI_CONFIG } from '../config/ui.config';
+import ActionFooter from './ActionFooter';
+import type { ActionItem } from '../types/actions.types';
+
+// --- Sub-components & Helpers ---
+
+const getStatusIcon = (status: TransactionStatus) => {
+    switch (status) {
+        case 'PENDING': return <Text color="yellow">?</Text>;
+        case 'APPLIED': return <Text color="green">✓</Text>;
+        case 'COMMITTED': return <Text color="blue">→</Text>;
+        case 'HANDOFF': return <Text color="magenta">→</Text>;
+        case 'FAILED': return <Text color="red">✗</Text>;
+        case 'REVERTED': return <Text color="gray">↩</Text>;
+        case 'IN-PROGRESS': return <Spinner type="dots" />;
+        default: return <Text> </Text>;
+    }
+};
+
+const getFileChangeTypeIcon = (type: FileChangeType) => {
+    switch (type) {
+        case 'MOD': return '[MOD]';
+        case 'ADD': return '[ADD]';
+        case 'DEL': return '[DEL]';
+        case 'REN': return '[REN]';
+    }
+};
+
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m`;
+};
+
+const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
+    const stats = transaction.stats;
+    const files = transaction.files || [];
+
+    return (
+        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
+            {stats && (
+                <Text color="gray">
+                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
+                </Text>
+            )}
+             <Box flexDirection="column" paddingLeft={1}>
+                {files.map(file => (
+                     <Text key={file.id}>
+                        <Text color="gray">{getFileChangeTypeIcon(file.type)}</Text> {file.path}
+                    </Text>
+                ))}
+             </Box>
+        </Box>
+    );
+};
+
+const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
+    const icon = getStatusIcon(transaction.status);
+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+    const statusText = transaction.status.padEnd(11, ' ');
+    const expandIcon = isExpanded ? '▾' : '▸';
+    
+    const messageNode = transaction.status === 'IN-PROGRESS'
+        ? <Text color="cyan">{transaction.message}</Text>
+        : transaction.message;
+    
+    const content = (
+        <Text>
+            {time} {expandIcon} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
+        </Text>
+    );
+
+    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+};
+
+const ConfirmationContent = ({
+    transactionsToConfirm,
+}: {
+    transactionsToConfirm: Transaction[];
+}) => {
+    const actionText = 'APPROVE';
+    
+    return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text>
+                The following {transactionsToConfirm.length} transaction(s) will be approved:
+            </Text>
+            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                {transactionsToConfirm.map(tx => (
+                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                ))}
+            </Box>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const DashboardScreen = () => {
+    const {
+        status,
+        transactions,
+        selectedTransactionIndex,
+        pendingApprovals,
+        pendingCommits,
+        isModal,
+        isProcessing,
+        viewOffset,
+        viewportHeight,
+        transactionsToConfirm,
+        expandedTransactionId,
+    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });
+
+    const renderStatusBar = () => {
+        let statusText: string;
+        let statusIcon: React.ReactNode;
+        switch (status) {
+            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
+        }
+
+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
+        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
+
+        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === 'CONFIRM_APPROVE') {
+            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        }
+        
+        return (
+            <Text>
+                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+            </Text>
+        );
+    };
+
+    const renderFooter = () => {
+        if (isModal) return (
+            <ActionFooter actions={[
+                { key: 'Enter', label: 'Confirm' },
+                { key: 'Esc', label: 'Cancel' },
+            ]}/>
+        );
+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+        const footerActions: ActionItem[] = [
+            { key: '↑↓', label: 'Nav' },
+            { key: '→/Ent', label: 'View' },
+            { key: '←', label: 'Collapse' },
+            { key: 'L', label: 'Log' },
+            { key: 'A', label: 'Approve All' },
+            { key: 'C', label: 'Commit' },
+            { key: 'P', label: status === 'PAUSED' ? 'Resume' : 'Pause' },
+            { key: 'Q', label: 'Quit' },
+        ];
+		return <ActionFooter actions={footerActions} />;
+    };
+    
+    return (
+        <Box flexDirection="column" height="100%">
+            <Text color="cyan">▲ relaycode dashboard</Text>
+            <Separator />
+            <Box marginY={1}>
+                {renderStatusBar()}
+            </Box>
+            
+            {isModal && (
+                <>
+                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
+                    <Separator />
+                </>
+            )}
+            
+            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {transactions.length === 0 && (
+                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+                )}
+                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                    const actualIndex = viewOffset + index;
+                    const isExpanded = expandedTransactionId === tx.id;
+                    return (
+                        <React.Fragment key={tx.id}>
+                            <EventStreamItem
+                                transaction={tx}
+                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                isExpanded={isExpanded}
+                            />
+                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                        </React.Fragment>
+                    );
+                })}
+            </Box>
+
+            <Box marginTop={1}><Separator /></Box>
+            {renderFooter()}
+        </Box>
+    );
+};
+
+export default DashboardScreen;
+```
+
 ## File: src/hooks/useDebugMenu.tsx
 ```typescript
 import { useState } from 'react';
@@ -5209,221 +5434,6 @@ export const useDebugMenu = () => {
         menuItems,
     };
 };
-```
-
-## File: src/components/DashboardScreen.tsx
-```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
-import { useDashboardScreen } from '../hooks/useDashboardScreen';
-import { UI_CONFIG } from '../config/ui.config';
-import ActionFooter from './ActionFooter';
-import type { ActionItem } from '../types/actions.types';
-
-// --- Sub-components & Helpers ---
-
-const getStatusIcon = (status: TransactionStatus) => {
-    switch (status) {
-        case 'PENDING': return <Text color="yellow">?</Text>;
-        case 'APPLIED': return <Text color="green">✓</Text>;
-        case 'COMMITTED': return <Text color="blue">→</Text>;
-        case 'HANDOFF': return <Text color="magenta">→</Text>;
-        case 'FAILED': return <Text color="red">✗</Text>;
-        case 'REVERTED': return <Text color="gray">↩</Text>;
-        case 'IN-PROGRESS': return <Spinner type="dots" />;
-        default: return <Text> </Text>;
-    }
-};
-
-const getFileChangeTypeIcon = (type: FileChangeType) => {
-    switch (type) {
-        case 'MOD': return '[MOD]';
-        case 'ADD': return '[ADD]';
-        case 'DEL': return '[DEL]';
-        case 'REN': return '[REN]';
-    }
-};
-
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}m`;
-};
-
-const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
-    const stats = transaction.stats;
-    const files = transaction.files || [];
-
-    return (
-        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
-            {stats && (
-                <Text color="gray">
-                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
-                </Text>
-            )}
-             <Box flexDirection="column" paddingLeft={1}>
-                {files.map(file => (
-                     <Text key={file.id}>
-                        <Text color="gray">{getFileChangeTypeIcon(file.type)}</Text> {file.path}
-                    </Text>
-                ))}
-             </Box>
-        </Box>
-    );
-};
-
-const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
-    const icon = getStatusIcon(transaction.status);
-    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
-    const statusText = transaction.status.padEnd(11, ' ');
-    const expandIcon = isExpanded ? '▾' : '▸';
-    
-    const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color="cyan">{transaction.message}</Text>
-        : transaction.message;
-    
-    const content = (
-        <Text>
-            {time} {expandIcon} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
-        </Text>
-    );
-
-    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
-};
-
-const ConfirmationContent = ({
-    transactionsToConfirm,
-}: {
-    transactionsToConfirm: Transaction[];
-}) => {
-    const actionText = 'APPROVE';
-    
-    return (
-        <Box flexDirection="column" marginY={1} paddingLeft={2}>
-            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
-            <Text>
-                The following {transactionsToConfirm.length} transaction(s) will be approved:
-            </Text>
-            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-                {transactionsToConfirm.map(tx => (
-                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-                ))}
-            </Box>
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const DashboardScreen = () => {
-    const {
-        status,
-        transactions,
-        selectedTransactionIndex,
-        pendingApprovals,
-        pendingCommits,
-        isModal,
-        isProcessing,
-        viewOffset,
-        viewportHeight,
-        transactionsToConfirm,
-        expandedTransactionId,
-    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });
-
-    const renderStatusBar = () => {
-        let statusText: string;
-        let statusIcon: React.ReactNode;
-        switch (status) {
-            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
-            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
-            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
-        }
-
-        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
-        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
-
-        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === 'CONFIRM_APPROVE') {
-            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
-        }
-        
-        return (
-            <Text>
-                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
-            </Text>
-        );
-    };
-
-    const renderFooter = () => {
-        if (isModal) return (
-            <ActionFooter actions={[
-                { key: 'Enter', label: 'Confirm' },
-                { key: 'Esc', label: 'Cancel' },
-            ]}/>
-        );
-        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
-
-        const footerActions: ActionItem[] = [
-            { key: '↑↓', label: 'Nav' },
-            { key: '→/Ent', label: 'View' },
-            { key: '←', label: 'Collapse' },
-            { key: 'L', label: 'Log' },
-            { key: 'A', label: 'Approve All' },
-            { key: 'C', label: 'Commit' },
-            { key: 'P', label: status === 'PAUSED' ? 'Resume' : 'Pause' },
-            { key: 'Q', label: 'Quit' },
-        ];
-		return <ActionFooter actions={footerActions} />;
-    };
-    
-    return (
-        <Box flexDirection="column" height="100%">
-            <Text color="cyan">▲ relaycode dashboard</Text>
-            <Separator />
-            <Box marginY={1}>
-                {renderStatusBar()}
-            </Box>
-            
-            {isModal && (
-                <>
-                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                    <Separator />
-                </>
-            )}
-            
-            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {transactions.length === 0 && (
-                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
-                )}
-                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
-                    const actualIndex = viewOffset + index;
-                    const isExpanded = expandedTransactionId === tx.id;
-                    return (
-                        <React.Fragment key={tx.id}>
-                            <EventStreamItem
-                                transaction={tx}
-                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                                isExpanded={isExpanded}
-                            />
-                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
-                        </React.Fragment>
-                    );
-                })}
-            </Box>
-
-            <Box marginTop={1}><Separator /></Box>
-            {renderFooter()}
-        </Box>
-    );
-};
-
-export default DashboardScreen;
 ```
 
 ## File: src/stores/review.store.ts

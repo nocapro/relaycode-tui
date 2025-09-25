@@ -1,0 +1,461 @@
+uuid: c2945d7a-18e3-4c9f-8633-8a306461d331
+projectId: relaycode-tui
+createdAt: '2025-09-25T22:30:20.579Z'
+gitCommitMsg: >-
+  feat(log): implement filter functionality in debug log screen
+
+  Adds a text-based filter to the Debug Log screen to allow users to search and
+  narrow down log entries.
+
+  - Updates `useDebugLogScreen` hook with state for filter query and mode
+  management ('LIST' vs 'FILTER'). - The hook now filters logs based on the
+  input query. - Modifies `DebugLogScreen` to render a `TextInput` for the
+  filter and updates the footer actions contextually based on the current mode.
+  - The screen now displays a count of visible logs versus the total.
+promptSummary: I want to add a filter feature to the debug log screen.
+reasoning:
+  - >-
+    Of course. I will add a filter feature to the debug log screen. This
+    involves updating the `useDebugLogScreen` hook to manage filter state and
+    logic, and modifying the `DebugLogScreen` component to include a text input
+    for filtering and display the results.
+  - '### 1. Update the `useDebugLogScreen` Hook'
+  - >-
+    I'll start by enhancing the `useDebugLogScreen` hook. I'll add state for
+    managing the filter query and the current mode (either 'LIST' or 'FILTER').
+    The hook will then filter logs based on the query and adjust its input
+    handling for different modes.
+  - '### 2. Update the `DebugLogScreen` Component'
+  - >-
+    Next, I'll modify the `DebugLogScreen` component to integrate the new
+    filtering functionality. This includes adding a `TextInput` component for
+    the filter query, displaying the filter status, and updating the action
+    footer to reflect the current mode.
+  - >-
+    These changes introduce a filtering capability to the debug log screen,
+    making it easier to search through log entries.
+operations:
+  - type: write
+    path: src/hooks/useDebugLogScreen.tsx
+    content: >+
+      --- src/hooks/useDebugLogScreen.tsx
+
+      +++ src/hooks/useDebugLogScreen.tsx
+
+      @@ -1,4 +1,4 @@
+
+      -import { useState, useEffect } from 'react';
+
+      +import { useState, useEffect, useMemo } from 'react';
+       import { useInput } from 'ink';
+       import { useLogStore } from '../stores/log.store';
+       import { useViewStore } from '../stores/view.store';
+      @@ -12,45 +12,75 @@
+           const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
+       
+           const [selectedIndex, setSelectedIndex] = useState(0);
+      +    const [mode, setMode] = useState<'LIST' | 'FILTER'>('LIST');
+
+      +    const [filterQuery, setFilterQuery] = useState('');
+
+      +
+
+      +    const filteredLogs = useMemo(() => logs.filter(log =>
+
+      +        log.message.toLowerCase().includes(filterQuery.toLowerCase()),
+
+      +    ), [logs, filterQuery]);
+
+      +
+
+      +    // Reset index if it's out of bounds after filtering
+
+      +    useEffect(() => {
+
+      +        if (selectedIndex >= filteredLogs.length) {
+
+      +            setSelectedIndex(Math.max(0, filteredLogs.length - 1));
+
+      +        }
+
+      +    }, [filteredLogs.length, selectedIndex]);
+       
+           const { viewOffset, viewportHeight } = useViewport({
+               selectedIndex,
+      -        reservedRows: 6, // Header, borders, footer
+
+      +        reservedRows: 8, // Header, borders, footer, filter line
+           });
+       
+           useInput((input, key) => {
+      +        if (mode === 'FILTER') {
+
+      +            if (key.escape || key.return) {
+
+      +                setMode('LIST');
+
+      +            }
+
+      +            return;
+
+      +        }
+
+      +
+               if (key.escape) {
+                   setActiveOverlay('none');
+                   return;
+               }
+               if (key.upArrow) {
+      -            setSelectedIndex(i => moveIndex(i, 'up', logs.length));
+
+      +            setSelectedIndex(i => moveIndex(i, 'up',
+      filteredLogs.length));
+                   return;
+               }
+               if (key.downArrow) {
+      -            setSelectedIndex(i => moveIndex(i, 'down', logs.length));
+
+      +            setSelectedIndex(i => moveIndex(i, 'down',
+      filteredLogs.length));
+                   return;
+               }
+               if (input.toLowerCase() === 'c') {
+                   clearLogs();
+      +            setFilterQuery('');
+                   setSelectedIndex(0);
+      +            return;
+
+      +        }
+
+      +        if (input.toLowerCase() === 'f') {
+
+      +            setMode('FILTER');
+               }
+           });
+       
+           useEffect(() => {
+               LoggerService.startSimulator();
+               return () => {
+                   LoggerService.stopSimulator();
+               };
+           }, []);
+       
+      -    const logsInView = logs.slice(viewOffset, viewOffset +
+      viewportHeight);
+
+      +    const logsInView = filteredLogs.slice(viewOffset, viewOffset +
+      viewportHeight);
+       
+           return {
+               logsInView,
+               logCount: logs.length,
+      +        filteredLogCount: filteredLogs.length,
+               selectedIndex,
+      +        mode,
+
+      +        filterQuery,
+
+      +        setFilterQuery,
+           };
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugLogScreen.tsx
+    content: >+
+      --- src/components/DebugLogScreen.tsx
+
+      +++ src/components/DebugLogScreen.tsx
+
+      @@ -1,4 +1,5 @@
+       import { Box, Text } from 'ink';
+      +import TextInput from 'ink-text-input';
+       import Separator from './Separator';
+       import ActionFooter from './ActionFooter';
+       import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+      @@ -37,8 +38,40 @@
+       };
+       
+       const DebugLogScreen = () => {
+      -    const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
+
+      +    const {
+
+      +        logsInView,
+
+      +        logCount,
+
+      +        filteredLogCount,
+
+      +        selectedIndex,
+
+      +        mode,
+
+      +        filterQuery,
+
+      +        setFilterQuery,
+
+      +    } = useDebugLogScreen();
+           const [width] = useStdoutDimensions();
+      +
+
+      +    const renderFilter = () => (
+
+      +        <Box>
+
+      +            <Text>Filter: </Text>
+
+      +            {mode === 'FILTER' ? (
+
+      +                <TextInput
+
+      +                    value={filterQuery}
+
+      +                    onChange={setFilterQuery}
+
+      +                    placeholder="Type to filter log messages..."
+
+      +                />
+
+      +            ) : (
+
+      +                <Text color="gray">{filterQuery || '(none)'}</Text>
+
+      +            )}
+
+      +            <Box flexGrow={1} />
+
+      +            <Text>
+
+      +                Showing {filteredLogCount} of {logCount} entries
+
+      +            </Text>
+
+      +        </Box>
+
+      +    );
+
+      +
+
+      +    const footerActions =
+
+      +        mode === 'FILTER'
+
+      +            ? [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }]
+
+      +            : [
+
+      +                  { key: '↑↓', label: 'Scroll' },
+
+      +                  { key: 'F', label: 'Filter' },
+
+      +                  { key: 'C', label: 'Clear' },
+
+      +                  { key: 'Esc/Ctrl+L', label: 'Close' },
+
+      +              ];
+       
+           return (
+               <Box
+      @@ -49,24 +82,25 @@
+                   paddingY={1}
+               >
+                   <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+                   <Separator width={width - 4} />
+      -            <Box flexDirection="column" flexGrow={1} marginY={1}>
+
+      +            <Box marginY={1}>{renderFilter()}</Box>
+
+      +            <Box flexDirection="column" flexGrow={1}>
+                       {logsInView.map((entry, index) => (
+                           <LogEntryRow
+                               key={`${entry.timestamp}-${index}`}
+                               entry={entry}
+                               isSelected={selectedIndex === index}
+                           />
+                       ))}
+      -                {logCount === 0 && <Text color="gray">No log entries yet.
+      Waiting for system activity...</Text>}
+
+      +                {logCount > 0 && filteredLogCount === 0 && (
+
+      +                    <Text color="gray">No logs match your filter.</Text>
+
+      +                )}
+
+      +                {logCount === 0 && (
+
+      +                    <Text color="gray">No log entries yet. Waiting for
+      system activity...</Text>
+
+      +                )}
+                   </Box>
+                   <Separator width={width - 4} />
+      -            <ActionFooter actions={[
+
+      -                { key: '↑↓', label: 'Scroll' },
+
+      -                { key: 'C', label: 'Clear' },
+
+      -                { key: 'Esc/Ctrl+L', label: 'Close' },
+
+      -            ]}/>
+
+      +            <ActionFooter actions={footerActions} />
+               </Box>
+           );
+       };
+       
+       export default DebugLogScreen;
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useDebugLogScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useLogStore } from '../stores/log.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useViewport } from './useViewport';
+    import { LoggerService } from '../services/logger.service';
+    import { moveIndex } from '../stores/navigation.utils';
+
+    export const useDebugLogScreen = () => {
+        const logs = useLogStore(s => s.logs);
+        const clearLogs = useLogStore(s => s.actions.clearLogs);
+        const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
+
+        const [selectedIndex, setSelectedIndex] = useState(0);
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            reservedRows: 6, // Header, borders, footer
+        });
+
+        useInput((input, key) => {
+            if (key.escape) {
+                setActiveOverlay('none');
+                return;
+            }
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', logs.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', logs.length));
+                return;
+            }
+            if (input.toLowerCase() === 'c') {
+                clearLogs();
+                setSelectedIndex(0);
+            }
+        });
+
+        useEffect(() => {
+            LoggerService.startSimulator();
+            return () => {
+                LoggerService.stopSimulator();
+            };
+        }, []);
+
+        const logsInView = logs.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            logsInView,
+            logCount: logs.length,
+            selectedIndex,
+        };
+    };
+  src/components/DebugLogScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import ActionFooter from './ActionFooter';
+
+    import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+
+    import type { LogEntry } from '../types/log.types';
+
+    import { useStdoutDimensions } from '../utils';
+
+
+    const LogLevelColors = {
+        DEBUG: 'gray',
+        INFO: 'white',
+        WARN: 'yellow',
+        ERROR: 'red',
+    };
+
+
+    const LogLevelTag = {
+        DEBUG: { color: 'white', backgroundColor: 'gray' },
+        INFO: { color: 'black', backgroundColor: 'cyan' },
+        WARN: { color: 'black', backgroundColor: 'yellow' },
+        ERROR: { color: 'white', backgroundColor: 'red' },
+    };
+
+
+    const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected:
+    boolean }) => {
+        const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+        const color = LogLevelColors[entry.level];
+        const tagColors = LogLevelTag[entry.level];
+
+        return (
+            <Text color={color}>
+                {isSelected ? '> ' : '  '}
+                <Text color="gray">{time}</Text>
+                {' '}
+                <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
+                    {' '}{entry.level.padEnd(5, ' ')}{' '}
+                </Text>
+                {' '}
+                {entry.message}
+            </Text>
+        );
+    };
+
+
+    const DebugLogScreen = () => {
+        const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
+        const [width] = useStdoutDimensions();
+
+        return (
+            <Box
+                flexDirection="column"
+                width="100%"
+                height="100%"
+                paddingX={2}
+                paddingY={1}
+            >
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+                <Separator width={width - 4} />
+                <Box flexDirection="column" flexGrow={1} marginY={1}>
+                    {logsInView.map((entry, index) => (
+                        <LogEntryRow
+                            key={`${entry.timestamp}-${index}`}
+                            entry={entry}
+                            isSelected={selectedIndex === index}
+                        />
+                    ))}
+                    {logCount === 0 && <Text color="gray">No log entries yet. Waiting for system activity...</Text>}
+                </Box>
+                <Separator width={width - 4} />
+                <ActionFooter actions={[
+                    { key: '↑↓', label: 'Scroll' },
+                    { key: 'C', label: 'Clear' },
+                    { key: 'Esc/Ctrl+L', label: 'Close' },
+                ]}/>
+            </Box>
+        );
+    };
+
+
+    export default DebugLogScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 150

@@ -1,0 +1,263 @@
+uuid: e49479b4-522f-4131-b4f7-7b61c92d057a
+projectId: relaycode-tui
+createdAt: '2025-09-25T22:21:02.592Z'
+gitCommitMsg: >-
+  style(debug): Make debug screens borderless and colorful
+
+  Updated the DebugLogScreen and DebugMenu components to be borderless by
+  removing the border styles from their root containers.
+
+  To add more color and improve visual hierarchy, the title text on both screens
+  has been styled with a yellow background and black foreground, giving it a
+  prominent, pill-like appearance.
+
+  Also fixed an issue in DebugLogScreen where separators were not
+  width-constrained, causing layout bugs in terminals of different sizes.
+promptSummary: Make the debug log menu screen and debug log screen borderless also colorful
+reasoning:
+  - >-
+    Based on your request, I'll modify the `DebugLogScreen` and `DebugMenu`
+    components to be borderless and more colorful. This involves removing the
+    border properties and applying a colorful, high-contrast background to the
+    title of each screen. I will also fix an alignment issue with the separators
+    in the `DebugLogScreen`.
+  - '### Step 1: Modify `DebugLogScreen.tsx`'
+  - >-
+    I'll start by editing the `DebugLogScreen` component. I will remove the
+    `borderStyle` and `borderColor` from the root `<Box>` component to make it
+    borderless. To make it more colorful, I'll change the title's `Text`
+    component to have a yellow background with black text, adding some padding
+    with spaces for a pill-like effect.
+  - >-
+    Additionally, I'll fix an existing bug where the `Separator` components were
+    not width-constrained, causing them to wrap on smaller terminal widths. I'll
+    import and use `useStdoutDimensions` to correctly size them within the
+    screen's padding.
+  - '### Step 2: Modify `DebugMenu.tsx`'
+  - >-
+    Next, I'll apply similar changes to the `DebugMenu` component. I'll remove
+    the border props and restyle the title to match the new colorful header
+    style. This component already correctly handles separator widths, so no
+    changes are needed there.
+  - >-
+    These changes will make both debug screens borderless and give them a more
+    vibrant, colorful header, as requested.
+operations:
+  - type: write
+    path: src/components/DebugLogScreen.tsx
+    content: >+
+      --- src/components/DebugLogScreen.tsx
+
+      +++ src/components/DebugLogScreen.tsx
+
+      @@ -1,6 +1,7 @@
+       import { Box, Text } from 'ink';
+       import Separator from './Separator';
+       import ActionFooter from './ActionFooter';
+       import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+       import type { LogEntry } from '../types/log.types';
+      +import { useStdoutDimensions } from '../utils';
+       
+       const LogLevelColors = {
+           DEBUG: 'gray',
+      @@ -28,24 +29,23 @@
+       };
+       
+       const DebugLogScreen = () => {
+           const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
+      +    const [width] = useStdoutDimensions();
+       
+           return (
+               <Box
+                   flexDirection="column"
+      -            borderStyle="round"
+
+      -            borderColor="yellow"
+                   width="100%"
+                   height="100%"
+                   paddingX={2}
+      +            paddingY={1}
+               >
+      -            <Text bold color="yellow">▲ relaycode · DEBUG LOG</Text>
+
+      -            <Separator />
+
+      +            <Text bold color="black" backgroundColor="yellow"> ▲
+      relaycode · DEBUG LOG </Text>
+
+      +            <Separator width={width - 4} />
+                   <Box flexDirection="column" flexGrow={1} marginY={1}>
+                       {logsInView.map((entry, index) => (
+                           <LogEntryRow
+                               key={`${entry.timestamp}-${index}`}
+                               entry={entry}
+                               isSelected={selectedIndex === index}
+                           />
+                       ))}
+                       {logCount === 0 && <Text color="gray">No log entries yet. Waiting for system activity...</Text>}
+                   </Box>
+      -            <Separator />
+
+      +            <Separator width={width - 4} />
+                   <ActionFooter actions={[
+                       { key: '↑↓', label: 'Scroll' },
+                       { key: 'C', label: 'Clear' },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugMenu.tsx
+    content: >+
+      --- src/components/DebugMenu.tsx
+
+      +++ src/components/DebugMenu.tsx
+
+      @@ -18,14 +18,14 @@
+           return (
+               <Box
+                   flexDirection="column"
+      -            borderStyle="round"
+
+      -            borderColor="yellow"
+                   width="100%"
+                   paddingX={2}
+      +            paddingY={1}
+               >
+      -            <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+
+      +            <Text bold color="black" backgroundColor="yellow"> ▲
+      relaycode · DEBUG MENU </Text>
+                   <Separator width={width - 4} />
+                   <Box flexDirection="column" marginY={1}>
+                       {menuItems.map((item, index) => (
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/DebugLogScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import ActionFooter from './ActionFooter';
+
+    import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+
+    import type { LogEntry } from '../types/log.types';
+
+
+    const LogLevelColors = {
+        DEBUG: 'gray',
+        INFO: 'white',
+        WARN: 'yellow',
+        ERROR: 'red',
+    };
+
+
+    const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected:
+    boolean }) => {
+        const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+        const color = LogLevelColors[entry.level];
+
+        return (
+            <Text color={color}>
+                {isSelected ? '> ' : '  '}
+                <Text color="gray">{time}</Text>
+                {' '}
+                <Text bold color={color}>[{entry.level.padEnd(5, ' ')}]</Text>
+                {' '}
+                {entry.message}
+            </Text>
+        );
+    };
+
+
+    const DebugLogScreen = () => {
+        const { logsInView, logCount, selectedIndex } = useDebugLogScreen();
+
+        return (
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="yellow"
+                width="100%"
+                height="100%"
+                paddingX={2}
+            >
+                <Text bold color="yellow">▲ relaycode · DEBUG LOG</Text>
+                <Separator />
+                <Box flexDirection="column" flexGrow={1} marginY={1}>
+                    {logsInView.map((entry, index) => (
+                        <LogEntryRow
+                            key={`${entry.timestamp}-${index}`}
+                            entry={entry}
+                            isSelected={selectedIndex === index}
+                        />
+                    ))}
+                    {logCount === 0 && <Text color="gray">No log entries yet. Waiting for system activity...</Text>}
+                </Box>
+                <Separator />
+                <ActionFooter actions={[
+                    { key: '↑↓', label: 'Scroll' },
+                    { key: 'C', label: 'Clear' },
+                    { key: 'Esc/Ctrl+L', label: 'Close' },
+                ]}/>
+            </Box>
+        );
+    };
+
+
+    export default DebugLogScreen;
+  src/components/DebugMenu.tsx: |-
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useDebugMenu } from '../hooks/useDebugMenu';
+    import { useStdoutDimensions } from '../utils';
+    import ActionFooter from './ActionFooter';
+
+    const getKeyForIndex = (index: number): string => {
+        if (index < 9) {
+            return (index + 1).toString();
+        }
+        return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+    };
+
+    const DebugMenu = () => {
+        const { selectedIndex, menuItems } = useDebugMenu();
+        const [width] = useStdoutDimensions();
+
+        return (
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="yellow"
+                width="100%"
+                paddingX={2}
+            >
+                <Text bold color="yellow">▲ relaycode · DEBUG MENU</Text>
+                <Separator width={width - 4} />
+                <Box flexDirection="column" marginY={1}>
+                    {menuItems.map((item, index) => (
+                        <Text key={item.title} color={selectedIndex === index ? 'cyan' : undefined}>
+                            {selectedIndex === index ? '> ' : '  '}
+                            ({getKeyForIndex(index)}) {item.title}
+                        </Text>
+                    ))}
+                </Box>
+                <Separator width={width - 4} />
+                <ActionFooter actions={[
+                    { key: '↑↓', label: 'Nav' },
+                    { key: '1-9,a-z', label: 'Jump' },
+                    { key: 'Enter', label: 'Select' },
+                    { key: 'Esc/Ctrl+B', label: 'Close' },
+                ]}/>
+            </Box>
+        );
+    };
+
+    export default DebugMenu;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 148
