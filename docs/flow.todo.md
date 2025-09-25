@@ -51,15 +51,19 @@ review screen
 
 on certain file patch failed user has options to repair or bulk repair.. I want on certain file patch rejected user should has options to `something` or bulk `something` so they can also get another clipboard to paste to llm and relaycode waiting for new patch for that particular.
 
-===
+=== DONE
 
-dashboard screen:
+1. dashboard screen:
 
 - remove - in timeago
 
 - add empty state of event stream screen to debug menu
 
 - just like transaction history screen, event stream item should also have drilling arrow left right feature to see useful stats, files, also actions can be take by user. only one event stream item can be expanded
+
+2. dont forget to add to debug menu for any new screen state
+
+3. dont forget to update readme if you have updated design
 
 === DONE
 

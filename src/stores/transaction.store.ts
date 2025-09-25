@@ -10,6 +10,7 @@ interface TransactionState {
     actions: {
         loadTransactions: () => void;
         updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        clearTransactions: () => void;
     };
 }
 
@@ -27,6 +28,7 @@ export const useTransactionStore = create<TransactionState>((set) => ({
                 ),
             }));
         },
+        clearTransactions: () => set({ transactions: [] }),
     },
 }));
 

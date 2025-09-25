@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import Separator from './Separator';
-import type { Transaction, TransactionStatus } from '../types/domain.types';
+import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 import { UI_CONFIG } from '../config/ui.config';
 
@@ -21,17 +21,49 @@ const getStatusIcon = (status: TransactionStatus) => {
     }
 };
 
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `-${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `-${minutes}m`;
+const getFileChangeTypeIcon = (type: FileChangeType) => {
+    switch (type) {
+        case 'MOD': return '[MOD]';
+        case 'ADD': return '[ADD]';
+        case 'DEL': return '[DEL]';
+        case 'REN': return '[REN]';
+    }
 };
 
-const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m`;
+};
+
+const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
+    const stats = transaction.stats;
+    const files = transaction.files || [];
+
+    return (
+        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
+            {stats && (
+                <Text color="gray">
+                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
+                </Text>
+            )}
+             <Box flexDirection="column" paddingLeft={1}>
+                {files.map(file => (
+                     <Text key={file.id}>
+                        <Text color="gray">{getFileChangeTypeIcon(file.type)}</Text> {file.path}
+                    </Text>
+                ))}
+             </Box>
+        </Box>
+    );
+};
+
+const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
     const icon = getStatusIcon(transaction.status);
     const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
     const statusText = transaction.status.padEnd(11, ' ');
+    const expandIcon = isExpanded ? '▾' : '▸';
     
     const messageNode = transaction.status === 'IN-PROGRESS'
         ? <Text color="cyan">{transaction.message}</Text>
@@ -39,7 +71,7 @@ const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction
     
     const content = (
         <Text>
-            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
+            {time} {expandIcon} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
         </Text>
     );
 
@@ -82,6 +114,7 @@ const DashboardScreen = () => {
         viewOffset,
         viewportHeight,
         transactionsToConfirm,
+        expandedTransactionId,
     } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });
 
     const renderStatusBar = () => {
@@ -122,7 +155,7 @@ const DashboardScreen = () => {
 			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
 		return (
             <Text color="gray">
-                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>L</Text>)og · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
+                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>→</Text>/Ent) View · (<Text color="cyan" bold>←</Text>) Collapse · (<Text color="cyan" bold>L</Text>)og · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
             </Text>
         );
     };
@@ -144,14 +177,21 @@ const DashboardScreen = () => {
             
             <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
             <Box flexDirection="column" marginTop={1}>
+                {transactions.length === 0 && (
+                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+                )}
                 {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
                     const actualIndex = viewOffset + index;
+                    const isExpanded = expandedTransactionId === tx.id;
                     return (
-                        <EventStreamItem
-                            key={tx.id}
-                            transaction={tx}
-                            isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                        />
+                        <React.Fragment key={tx.id}>
+                            <EventStreamItem
+                                transaction={tx}
+                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                isExpanded={isExpanded}
+                            />
+                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                        </React.Fragment>
                     );
                 })}
             </Box>

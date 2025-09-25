@@ -2,9 +2,7 @@
 ```
 docs/
   relaycode-tui/
-    reason-screen.readme.md
-    review-processing-screen.readme.md
-    review-screen.readme.md
+    dashboard-screen.readme.md
 src/
   components/
     CopyScreen.tsx
@@ -76,149 +74,154 @@ tsconfig.json
 
 # Files
 
-## File: docs/relaycode-tui/reason-screen.readme.md
+## File: docs/relaycode-tui/dashboard-screen.readme.md
 ````markdown
-# REASONING-VIEW.README.MD
+# DASHBOARD-SCREEN.README.MD
 
-## Relaycode TUI: The Reasoning View Component
+## Relaycode TUI: The Stateful Dashboard Screen
 
-This document specifies the design and behavior of the Reasoning View. This is a simple but essential **component** for displaying the AI's step-by-step thought process. It renders within the Body of parent screens like the **Review Screen** and **Transaction Details Screen**.
+This document specifies the design and behavior of the stateful Dashboard screen for Relaycode, triggered by the `relay watch` command. This is the primary, long-running interface for the application.
 
 ### 1. Core Philosophy
 
-The reasoning behind a change is as important as the change itself. The philosophy of this component is to present the AI's narrative with maximum **readability and clarity**.
+The Dashboard is the user's "Heads-Up Display" (HUD) for all Relaycode activity. It must be more than a simple log stream; it is an interactive and stateful command center.
 
--   **Readability:** The text should be formatted cleanly, respecting newlines and list structures from the source data to be easily digestible.
--   **Clarity:** The view should be uncluttered, presenting only the reasoning text under a clear header, free from other UI noise.
--   **Focus:** When active, the component should allow for focused interaction (scrolling) without interference from the parent screen's navigation.
+-   **High Information Density:** The screen is designed to present the most critical information—system status, pending actions, and recent history—in a compact, instantly scannable format.
+-   **Live & Dynamic:** Every part of the UI reflects the real-time state of the application. The status header updates, the event stream grows, and action counts change as events occur, even without user interaction.
+-   **Keyboard-First Command Center:** All primary user actions (reviewing, approving, committing, pausing) are accessible via single-keystroke shortcuts, making the workflow incredibly fast for power users.
+-   **Clear State Transitions:** The UI provides unambiguous feedback for its state, whether it's actively listening, paused, or in the middle of a blocking operation.
 
-### 2. Context of Use
+### 2. UI Layout Components
 
-The Reasoning View is activated and rendered within the Body of a parent screen when the user requests to see the AI's reasoning, typically by pressing `(R)`. It replaces any previous content in the Body.
+The screen maintains a consistent single-column layout, divided into three key regions:
 
-### 3. UI Layout & Components
+1.  **Header:** `▲ relaycode dashboard` - Static branding.
+2.  **Status Bar:** A high-level summary of the system's current state, including the watcher status and counts of pending approvals and commits.
+3.  **Body / Event Stream:** The main content area. This is a reverse-chronological list of the most recent transaction events. It is navigable and serves as the entry point for drilling down into specific transactions.
+4.  **Footer / Action Bar:** A single line at the bottom that dynamically displays the available keyboard shortcuts for the current state.
 
-1.  **Header:** A single, static line: `REASONING`.
-2.  **Content Area:** The main rendering surface for the reasoning text. It displays formatted, multi-line text.
+### 3. The State Machine & Visuals
 
-### 4. States & Interactions
+The Dashboard exists in several distinct states, each with a unique visual representation and set of available actions.
 
-The Reasoning View is simpler than the Diff View and has two primary interactive states.
+---
 
-#### **State 4.1: Expanded View**
+#### **State 3.1: Active & Listening (Default State)**
 
-This is the primary state of the component when it is active.
+This is the primary operational state. The system is actively monitoring the clipboard for new patches.
 
 ```
- ... (Parent Screen Navigator, Reasoning section shows '▾') ...
+ ▲ relaycode dashboard
  ──────────────────────────────────────────────────────────────────────────────
-  REASONING
+ STATUS: ● LISTENING · APPROVALS: 01 · COMMITS: 03
 
-  1. Identified a potential uncaught exception in the `restoreSnapshot` function
-     if a file operation fails midway through a loop of many files. This could
-     leave the project in a partially-reverted, inconsistent state.
+  EVENT STREAM (Last 15 minutes)
 
-  2. Wrapped the file restoration loop in a `Promise.all` and added a dedicated
-     error collection array. This ensures that all file operations are
-     attempted and that a comprehensive list of failures is available
-     afterward for better error reporting or partial rollback logic.
-
-  3. Improved the `getErrorMessage` utility to handle non-Error objects more
-     gracefully, as this was a related minor issue found during analysis of
-     the error handling pathways.
+  > -15s   ? PENDING   e4a7c112 · fix: add missing error handling
+    -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+    -5m    → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
+    -8m    ↩ REVERTED  b2c9e04d · Reverting transaction 9c2e1a05
+    -9m    ✗ FAILED    9c2e1a05 · style: update button component (Linter errors: 5)
+    -12m   → COMMITTED c7d6b5e0 · docs: update readme with TUI spec
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Scroll Text · (R)Collapse View · (C)opy Mode
+ (↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · (P)ause · (Q)uit
 ```
--   **Behavior:** The component renders the full reasoning text, preserving formatting like numbered lists and paragraph breaks from the transaction file.
--   **Footer Update:** The parent screen's footer updates to show that `(↑↓)` keys are now repurposed for scrolling.
+-   **Behavior:** The Event Stream updates in real-time as new patches are detected and processed. The `APPROVALS` and `COMMITS` counters increment or decrement accordingly.
+-   **Interactions:** All primary actions are available. `(Enter)` on a `PENDING` item transitions to the **Apply & Review Screen**. `(Enter)` on any other item transitions to the **Transaction Details Screen**.
 
-#### **State 4.2: Scrolling Content**
+---
 
-**Trigger:** The reasoning text is too long to fit in the available space, and the user presses `(↑)` or `(↓)`.
+#### **State 3.2: Paused**
 
--   **Behavior:** The text within the Content Area scrolls up or down. The rest of the UI (parent navigator, headers, footer) remains static. This provides a seamless reading experience for long explanations.
--   **Focus Management:** While the Reasoning View is active, it "captures" the arrow keys for scrolling. Pressing `(R)` again or `(Esc)` would release this capture, returning arrow key control to the parent screen's file navigator.
+The user has intentionally suspended clipboard monitoring. This is a clear, deliberate state.
+
+**Trigger:** User presses `(P)`.
+
+```
+ ▲ relaycode dashboard
+ ──────────────────────────────────────────────────────────────────────────────
+ STATUS: || PAUSED · APPROVALS: 01 · COMMITS: 03
+
+  EVENT STREAM ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Enter) Review · (R)esume · (A)pprove All · (C)ommit All · (Q)uit
+```
+-   **Behavior:** The `LISTENING` status and `●` icon change to `PAUSED` and `||`. No new events will appear in the stream.
+-   **Footer Changes:** The `(P)ause` action in the footer is replaced with `(R)esume`. All other management actions remain available. Pressing `(R)` returns to the **Active & Listening** state.
+
+---
+
+#### **State 3.3: Confirmation Overlay (Blocking Modal)**
+
+To prevent accidental bulk actions, a modal confirmation overlay appears.
+
+**Trigger:** User presses `(A)` to Approve All or `(C)` to Commit All.
+
+```
+ ▲ relaycode dashboard
+ ──────────────────────────────────────────────────────────────────────────────
+ STATUS: ● LISTENING · APPROVALS: ┌ 01 ┐ · COMMITS: 03
+                                 └────┘
+  APPROVE ALL PENDING TRANSACTIONS?
+
+  The following transaction will be approved:
+  - e4a7c112: fix: add missing error handling
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (Enter) Confirm      (Esc) Cancel
+ ──────────────────────────────────────────────────────────────────────────────
+  EVENT STREAM ... (pushed down but visible)
+```
+-   **Behavior:** This is a blocking modal. The main UI is frozen. The overlay clearly states the action and its scope. A subtle box `┌ ┐` highlights the relevant counter in the status bar.
+-   **Footer Changes:** The action bar is reduced to only `Confirm` and `Cancel`.
+-   **Transition:** `(Enter)` proceeds to the **In-Progress** state. `(Esc)` dismisses the overlay and returns to the previous state.
+
+---
+
+#### **State 3.4: In-Progress Operation**
+
+Provides critical feedback while a potentially long-running background task is executing.
+
+**Trigger:** User confirms an overlay or uses a force hotkey (e.g., `Shift+A`).
+
+```
+ ▲ relaycode dashboard
+ ──────────────────────────────────────────────────────────────────────────────
+ STATUS: ● APPROVING... · APPROVALS: (●) · COMMITS: 03
+
+  EVENT STREAM (Last 15 minutes)
+
+  > -15s   ● Approving... e4a7c112 · fix: add missing error handling
+    -2m    ✓ APPLIED      4b9d8f03 · refactor: simplify clipboard logic
+    ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Processing... This may take a moment.
+```
+-   **Behavior:** The main `STATUS` indicator changes to reflect the action (e.g., `APPROVING...`, `COMMITTING...`). The relevant counter is replaced with a spinner `(●)`. In the event stream, the status icon for the affected items also changes to a spinner. The footer displays a simple, non-interactive "Processing..." message.
+-   **Transition:** Upon completion, the screen returns to the **Active & Listening** state, with the counters and event stream updated to reflect the results of the operation.
+
+### 4. Event Stream Iconography
+
+The icons are critical for at-a-glance comprehension of the transaction history.
+
+| Symbol | Status | Meaning |
+| :--- | :--- | :--- |
+| `?` | **PENDING** | Patch applied, awaiting user approval. |
+| `✓` | **APPLIED** | Transaction approved and committed to local state. |
+| `→` | **COMMITTED** | Transaction has been included in a git commit. |
+| `✗` | **FAILED** | Patch failed to apply or was rejected by the user. |
+| `↩` | **REVERTED** | This is a revert transaction, undoing a previous one. |
+| `●` | **IN-PROGRESS** | An operation (e.g., approving, committing) is currently running on this item. |
 
 ### 5. Implementation Notes
 
--   **Data Formatting:** The component should expect the reasoning data as an array of strings or a single multi-line string and be responsible for rendering it with correct line breaks.
--   **Scrolling Logic:** A state variable will need to track the current scroll position (the top visible line). Re-rendering will slice the full text array/string to display the correct "viewport" of text.
--   **Copy Integration:** When the user enters `(C)opy Mode`, one of the available options must be to copy the *entire* reasoning text to the clipboard with a single keystroke.
-````
-
-## File: docs/relaycode-tui/review-processing-screen.readme.md
-````markdown
-# REVIEW-PROCESSING-SCREEN.README.MD
-
-## Relaycode TUI: The Live Patch Application Screen
-
-This document specifies the design and behavior of the **Live Patch Application Screen**. This is the initial, ephemeral screen shown immediately after a new patch is detected and while it is being processed. Its primary purpose is to provide a real-time, step-by-step feedback loop as Relaycode applies changes.
-
-This screen is not interactive. It is a transparent progress indicator that automatically transitions to the main interactive **Apply & Review Screen** upon completion or failure.
-
-### 1. Core Philosophy
-
--   **Live Feedback Loop:** The screen provides real-time progress during patch application, giving the user confidence that the system is working and transparency into its performance. Each step is clearly delineated with status updates and timings.
--   **Clarity on Failure:** It immediately and clearly communicates not just *what* failed, but the downstream consequences. By explicitly marking subsequent steps as `SKIPPED`, it prevents user confusion and saves system resources.
--   **Informative & Ephemeral:** The screen exists only as long as it needs to, presenting crucial information about the application process before seamlessly transitioning the user to the next logical step: interactive review and repair.
-
-### 2. The Workflow States
-
-The screen displays one of two primary states, depending on the outcome of the patch application process.
-
----
-
-#### **State 2.1: Live Application (Success Case)**
-
-This is the state shown while Relaycode processes a patch that applies cleanly without any errors.
-
-```
- ▲ relaycode apply
- ──────────────────────────────────────────────────────────────────────────────
- Applying patch 4b9d8f03... (refactor: simplify clipboard logic)
-
- (●) Reading initial file snapshot... (0.1s)
- (●) Applying operations to memory... (0.3s)
-     └─ [✓] write: src/core/clipboard.ts (strategy: replace)
-     └─ [✓] write: src/utils/shell.ts (strategy: standard-diff)
- (●) Running post-command script... (2.3s)
-     └─ `bun run test` ... Passed
- (●) Analyzing changes with linter... (1.2s)
-     └─ `bun run lint` ... 0 Errors
-
- ──────────────────────────────────────────────────────────────────────────────
- Elapsed: 3.9s · Processing... Please wait.
-```
--   **Behavior:** Each line updates its status symbol `( ) → (●) → [✓]`. Timings appear as each step completes. The specific patch strategy used for each file is displayed.
--   **Transition:** Upon completion, seamlessly transitions into the **Interactive Review Screen** for final approval.
-
----
-
-#### **State 2.2: Live Application (Partial Failure Case)**
-
-This state is shown when one or more file operations fail during the application process. It demonstrates the **Golden Rule**: post-application scripts are **skipped** if the patch does not apply cleanly.
-
-```
- ▲ relaycode apply
- ──────────────────────────────────────────────────────────────────────────────
- Applying patch e4a7c112... (refactor: rename core utility function)
-
- (●) Reading initial file snapshot... (0.1s)
- (●) Applying operations to memory... (0.5s)
-     └─ [✓] write: src/core/transaction.ts (strategy: replace)
-     └─ [!] failed: src/utils/logger.ts (Hunk #1 failed to apply)
-     └─ [!] failed: src/commands/apply.ts (Context mismatch at line 92)
- (-) SKIPPED Post-command script...
-     └─ Skipped due to patch application failure
- (-) SKIPPED Analyzing changes with linter...
-     └─ Skipped due to patch application failure
-
- ──────────────────────────────────────────────────────────────────────────────
- Elapsed: 0.6s · Transitioning to repair workflow...
-```
--   **Behavior:** Failed operations are marked with `[!]` and a concise error message. Subsequent dependent steps (scripts, linters) are marked `(-) SKIPPED` with a clear explanation, preventing false results and saving resources.
--   **Transition:** Immediately transitions to the **Interactive Review Screen** in its "Failed Application & Repair Workflow" state.
+-   **State Management:** The TUI must be driven by a central state object. Any change to this state (e.g., `status: 'listening'` to `status: 'paused'`) should trigger a re-render of the necessary components (Status Bar, Footer).
+-   **Event Bus:** The core logic (clipboard watcher, patch processor) should emit events (e.g., `new_patch_detected`, `transaction_approved`). The Dashboard UI subscribes to these events to update its state and re-render.
+-   **Component-based Rendering:** The screen should be thought of as components (`StatusBar`, `EventStream`, `ActionBar`). When state changes, only the affected components need to be redrawn to prevent flickering and improve performance.
+-   **Force Hotkeys:** `Shift+A` (Force Approve) and `Shift+C` (Force Commit) should bypass the **Confirmation Overlay** and go directly to the **In-Progress Operation** state. This provides a valuable shortcut for expert users.
 ````
 
 ## File: src/config/ui.config.ts
@@ -1427,441 +1430,6 @@ export interface CopyItem {
 }
 ````
 
-## File: docs/relaycode-tui/review-screen.readme.md
-````markdown
-# REVIEW-SCREEN.README.MD
-
-## Relaycode TUI: The Stateful Apply & Review Screen
-
-This document specifies the design and behavior of the stateful **Apply & Review Screen**. This screen is the interactive core of the Relaycode workflow, appearing immediately after a patch has been processed and applied to the filesystem. It is a command center for analysis, granular control, data extraction, and iterative repair.
-
-### 1. Core Philosophy
-
-The Review screen is not a simple "accept/reject" dialog. It is a strategic workspace designed to give the user complete control and insight over incoming code changes.
-
--   **Information Supremacy:** The UI provides all necessary context at a glance: high-level stats, the AI's reasoning, post-script results, the patch strategy used per file, and deep-dive diffs. Nothing is hidden.
--   **Granular Control:** The user is empowered to make decisions on a per-file basis. The UI dynamically recalculates and reflects the impact of these decisions in real-time.
--   **Iterative Repair Workflow:** Failure is treated as a temporary state, not an endpoint. The UI provides a powerful suite of tools—from AI-driven prompts to manual overrides—to handle even complex, multi-file failures gracefully.
--   **Data Accessibility:** Every piece of information (prompts, diffs, reasoning, script outputs) is easily copyable, respecting the user's need to use this data in other contexts.
-
-### 2. UI Layout Components
-
-1.  **Header:** `▲ relaycode review`.
-2.  **Navigator:** The top section, acting as a command-and-control center. It contains the transaction summary, global stats, expandable reasoning/prompt, script results, and the file list.
-3.  **Body:** A dynamic viewport that renders detailed content—like diffs or script outputs—based on the user's focus in the Navigator.
-4.  **Footer:** The contextual action bar, showing available keyboard shortcuts that change constantly based on the UI's state and focus.
-
-### 3. The Interactive States & Workflow
-
-This screen is the interactive workspace that appears after the initial patch application is complete (whether successful or not). It allows the user to review, repair, and resolve the transaction.
-
----
-
-#### **State 3.1: Interactive Review (Multi-File Failure)**
-
-This state appears after a partial failure during the live application phase. The screen is now waiting for user intervention.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
-  e4a7c112 · refactor: rename core utility function
-  (+18/-5) · 1/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
-
- (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
- (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
- ──────────────────────────────────────────────────────────────────────────────
- FILES
-   [✓] MOD src/core/transaction.ts (+18/-5) [replace]
- > [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
-   [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (D)iff · (T)ry Repair · (Shift+T) Bulk Repair · (Shift+R) Reject All · (Esc) Back
-```
--   **Behavior:** The header clearly indicates `MULTIPLE PATCHES FAILED`. The footer presents both single-file `(T)` and `(Shift+T)` bulk repair options.
-
----
-
-#### **State 3.2: Granular File Rejection & Dynamic Recalculation**
-
-The user decides one of the successful changes is undesirable and rejects it.
-
-**Trigger:** User navigates to `src/core/transaction.ts` and presses `(Space)`.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
-  e4a7c112 · refactor: rename core utility function
-  (0/0) · 0/3 Files · 0.6s · Scripts: SKIPPED · MULTIPLE PATCHES FAILED
-
- (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
- (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
- ──────────────────────────────────────────────────────────────────────────────
- FILES
- > [✗] MOD src/core/transaction.ts (+18/-5) [replace]
-   [!] FAILED src/utils/logger.ts    (Hunk #1 failed to apply)
-   [!] FAILED src/commands/apply.ts   (Context mismatch at line 92)
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (D)iff · (Shift+R) Reject All · (Esc) Back
-```
--   **Behavior:** The UI instantly recalculates. The file icon changes to `[✗]`, and the global stats in the navigator (`0/0`, `0/3 Files`) reflect the new reality. The footer updates as there are no longer any approved files to commit.
-
----
-
-#### **State 3.3: Interactive Review (Success Case with Script Results)**
-
-This is the state after a fully successful patch application.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
-  4b9d8f03 · refactor: simplify clipboard logic
-  (+22/-11) · 2 Files · 3.9s
-
- (P)rompt ▸ Simplify the clipboard logic using an external library...
- (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
- ──────────────────────────────────────────────────────────────────────────────
-  ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
-  ✗ Linter: `bun run lint` (1.2s) ▸ 1 Error, 3 Warnings
- ──────────────────────────────────────────────────────────────────────────────
- FILES
- > [✓] MOD src/core/clipboard.ts (+15/-8) [replace]
-   [✓] MOD src/utils/shell.ts     (+7/-3)  [diff]
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (D)iff · (Ent) Expand Details · (C)opy · (A)pprove · (Q)uit
-```
--   **Behavior:** New, expandable sections appear for each post-application script, providing an at-a-glance summary of their results (`✓`/`✗`).
-
----
-
-#### **State 3.4: Expanding Script Results (Body View)**
-
-**Trigger:** User navigates to the Linter line and presses `(Enter)`.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
-  4b9d8f03 · refactor: simplify clipboard logic
-  (+22/-11) · 2 Files · 3.9s
-
- (P)rompt ▸ Simplify the clipboard logic using an external library...
- (R)easoning (3 steps) ▸ 1. Added clipboardy dependency...
- ──────────────────────────────────────────────────────────────────────────────
-  ✓ Post-Command: `bun run test` (2.3s) ▸ Passed (37 tests)
-> ✗ Linter: `bun run lint` (1.2s) ▾ 1 Error, 3 Warnings
- ──────────────────────────────────────────────────────────────────────────────
-  LINTER OUTPUT: `bun run lint`
-
-  src/core/clipboard.ts
-    45:12  Error    'clipboardy' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
-    88:5   Warning  Unexpected console statement. (no-console)
-
-  src/utils/shell.ts
-    23:9   Warning  'result' is never reassigned. Use 'const' instead. (prefer-const)
-    25:1   Warning  Empty block statement. (no-empty)
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) Collapse · (J↓/K↑) Next/Prev Error · (C)opy Output · (Esc) Back
-```
--   **Behavior:** The Body viewport is replaced with the detailed, formatted output from the linter. The footer provides contextual navigation hotkeys (`J/K`) to jump between errors.
-
----
-
-#### **State 3.5: Copy Mode**
-
-**Trigger:** User presses `(C)` from any primary review state.
-
-```
- ▲ relaycode review · copy mode
- ──────────────────────────────────────────────────────────────────────────────
- Select item to copy to clipboard:
-
- > [U] UUID:        e4a7c112-a8b3-4f2c-9d1e-8a7c1b9d8f03
-   [M] Git Message: refactor: rename core utility function
-   [P] Prompt:      Rename the `calculateChanges` utility to...
-   [R] Reasoning:   1. Renamed the function in its definition...
- ──────────────────────────────────────────────────────────────────────────────
-   [F] Diff for:    src/core/transaction.ts
-   [A] All Diffs (3 files)
- ──────────────────────────────────────────────────────────────────────────────
-  ✓ Copied UUID to clipboard.
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) Copy Selected · (U,M,P,R,F,A) Hotkeys · (C, Esc) Exit
-```
--   **Behavior:** A modal overlay appears, allowing the user to copy any piece of metadata related to the transaction to their clipboard with single keystrokes.
-
-### 4. The Advanced Repair Workflow
-
----
-
-#### **State 4.1: Initiating Bulk Repair**
-
-**Trigger:** From the multi-failure state (3.1), the user presses `(Shift+T)`.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
- ... (Navigator remains the same) ...
- ──────────────────────────────────────────────────────────────────────────────
-  BULK REPAIR ACTION
-
-  The following 2 files failed to apply:
-  - src/utils/logger.ts
-  - src/commands/apply.ts
-
-  How would you like to proceed?
-
-> (1) Copy Bulk Re-apply Prompt (for single-shot AI)
-  (2) Bulk Change Strategy & Re-apply
-  (3) Handoff to External Agent
-  (4) Bulk Abandon All Failed Files
-  (Esc) Cancel
-
- ──────────────────────────────────────────────────────────────────────────────
- Choose an option [1-4, Esc]:
-```
--   **Behavior:** A blocking modal appears, presenting four distinct repair strategies that will apply to all failed files simultaneously.
-
----
-
-#### **Flow 4.2: The "Re-apply Prompt" (AI-driven Repair)**
-
-**Trigger:** User selects option `(1)`. A detailed prompt is copied to the clipboard, and the UI enters a waiting state.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
-  e4a7c112 · refactor: rename core utility function
-  (+18/-5) · 1/3 Files · 0.6s · AWAITING PATCH
-
- (P)rompt ▸ Rename the `calculateChanges` utility to `computeDelta`...
- (R)easoning (2 steps) ▸ 1. Renamed the function in its definition file...
- ──────────────────────────────────────────────────────────────────────────────
- FILES
-   [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
- > [●] AWAITING src/utils/logger.ts    (Bulk re-apply prompt copied!)
-   [●] AWAITING src/commands/apply.ts
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (D)iff · (C)opy · (Esc) Abandon & Commit Approved
-```
-
-**Generated Prompt (Copied to Clipboard):**
-```text
-The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
-
-IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
-
---- FILE: src/utils/logger.ts ---
-Strategy: standard-diff
-Error: Hunk #1 failed to apply
-
-ORIGINAL CONTENT:
----
-import chalk from 'chalk';
-// ... entire original content of logger.ts ...
----
-
-FAILED PATCH:
----
---- a/src/utils/logger.ts
-+++ b/src/utils/logger.ts
-// ... the failed diff block ...
----
-
-
---- FILE: src/commands/apply.ts ---
-Strategy: standard-diff
-Error: Context mismatch at line 92
-
-ORIGINAL CONTENT:
----
-import { applyPatch } from 'relaycode-core';
-// ... entire original content of apply.ts ...
----
-
-FAILED PATCH:
----
---- a/src/commands/apply.ts
-+++ b/src/commands/apply.ts
-// ... the second failed diff block ...
----
-
-Please analyze all failed files and provide a complete, corrected response.
-```
-
----
-
-#### **Flow 4.3: The "Change Strategy" (User-driven Repair)**
-
-**Trigger:** User selects option `(2)` and chooses a new strategy (e.g., `replace`). The system re-applies the original patches with the new strategy, providing live feedback.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
- ... (Navigator) ... · BULK RE-APPLYING...
- ──────────────────────────────────────────────────────────────────────────────
- FILES
-   [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
- > [●] RE-APPLYING... src/utils/logger.ts (using 'replace' strategy)
-   [ ] PENDING...     src/commands/apply.ts
-
- ──────────────────────────────────────────────────────────────────────────────
- Re-applying failed patches...
-```
-
-**Resolution (Mixed Result):**
-The re-application finishes with one success and one failure.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
-  e4a7c112 · refactor: rename core utility function
-  (+27/-7) · 2/3 Files · 0.6s · PATCH FAILED
-
- ... (Navigator) ...
- ──────────────────────────────────────────────────────────────────────────────
- FILES
-   [✓] MOD src/core/transaction.ts    (+18/-5) [replace]
- > [✓] MOD src/utils/logger.ts    (+9/-2) [replace]
-   [!] FAILED src/commands/apply.ts   ('replace' failed: markers not found)
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Spc) Toggle · (T)ry Repair · (C)opy · (Ent) Confirm & Commit
-```
-
----
-
-#### **Flow 4.4: The "Handoff" (Agentic Repair)**
-
-**Trigger:** User selects option `(3)`. A confirmation modal appears first. Upon confirmation, a specialized prompt is copied, and the transaction is finalized with a `Handoff` status.
-
-```
- ▲ relaycode review
- ──────────────────────────────────────────────────────────────────────────────
-  HANDOFF TO EXTERNAL AGENT
-
-  This action will:
-  1. Copy a detailed prompt to your clipboard for an agentic AI.
-  2. Mark the current transaction as 'Handoff' and close this review.
-  3. Assume that you and the external agent will complete the work.
-
-  Relaycode will NOT wait for a new patch. This is a final action.
-
-  Are you sure you want to proceed?
- ──────────────────────────────────────────────────────────────────────────────
- (Enter) Confirm Handoff      (Esc) Cancel
-```
-
-**Resolution (Dashboard View):**
-After handoff, the user is returned to the dashboard, which now logs the action.
-
-```
- ▲ relaycode dashboard
- ──────────────────────────────────────────────────────────────────────────────
- STATUS: ● LISTENING · APPROVALS: 00 · COMMITS: 04
-
-  EVENT STREAM (Last 15 minutes)
-
-  > -5s    → HANDOFF   e4a7c112 · refactor: rename core utility function
-    -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
-    ...
-
- ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) View Details · (P)ause · (Q)uit
-```
--   **Behavior:** A new `→ HANDOFF` icon and status provide a permanent record. The transaction is considered "done" by Relaycode's automated systems, and responsibility is now with the user and their external agent.
-
-### 5. The Handoff Prompt: Design & Specification
-
-The "Handoff Prompt" is a specialized, machine-generated text block copied to the user's clipboard during the Handoff workflow. It is not a simple error message; it is a carefully engineered "briefing document" designed to transfer the entire context of a failed Relaycode transaction to an external, conversational AI assistant (like Claude, GPT-4, or an IDE-integrated agent).
-
-#### Core Design Principles
-
-1.  **Context is King:** The prompt's primary goal is to eliminate the need for the user to manually explain the situation. It must contain the *goal*, the *plan*, the *partial results*, and the *failures* of the original transaction.
-2.  **Clear Separation of Concerns:** The prompt must unambiguously distinguish between what has already been successfully applied to the filesystem and what remains broken. This prevents the external agent from re-doing completed work.
-3.  **Actionable & Conversational:** It should not be a passive data dump. The prompt must end with a clear call to action that initiates a collaborative, turn-by-turn repair session.
-4.  **Pointer to the Source of Truth:** For maximum fidelity, it must reference the on-disk transaction YAML file. This allows an advanced agent (or the user) to consult the original, detailed plan if the summary is insufficient.
-
----
-
-#### Handoff Prompt Template
-
-This is the template used by Relaycode to generate the prompt. It dynamically fills in the placeholders with data from the current failed transaction.
-
-```text
-I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
-
-The full plan for this transaction is detailed in the YAML file located at: `.relay/transactions/{{TRANSACTION_UUID}}.yml`. Please use this file as your primary source of truth for the overall goal.
-
-Here is the current status of the transaction:
-
---- TRANSACTION SUMMARY ---
-Goal: {{GIT_COMMIT_MESSAGE}}
-Reasoning:
-{{AI_REASONING_STEPS}}
-
---- CURRENT FILE STATUS ---
-SUCCESSFUL CHANGES (already applied, no action needed):
-{{#each successful_files}}
-- {{operation}}: {{path}}
-{{/each}}
-
-FAILED CHANGES (these are the files you need to fix):
-{{#each failed_files}}
-- FAILED: {{path}} (Error: {{error_message}})
-{{/each}}
-
-Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.
-```
-
----
-
-#### Concrete Example
-
-Let's use the multi-file failure scenario from this document.
-
--   **Transaction UUID:** `e4a7c112`
--   **Goal:** `refactor: rename core utility function`
--   **Reasoning:**
-    1.  Renamed the function in its definition file, `src/core/transaction.ts`.
-    2.  Attempted to update all call sites for the renamed function.
--   **Successful Files:**
-    -   `MODIFIED: src/core/transaction.ts`
--   **Failed Files:**
-    -   `FAILED: src/utils/logger.ts` (Error: Hunk #1 failed to apply)
-    -   `FAILED: src/commands/apply.ts` (Error: Context mismatch at line 92)
-
-When the user confirms the Handoff action, the following text is copied directly to their clipboard:
-
-```text
-I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
-
-The full plan for this transaction is detailed in the YAML file located at: `.relay/transactions/e4a7c112.yml`. Please use this file as your primary source of truth for the overall goal.
-
-Here is the current status of the transaction:
-
---- TRANSACTION SUMMARY ---
-Goal: refactor: rename core utility function
-Reasoning:
-1. Renamed the function in its definition file, `src/core/transaction.ts`.
-2. Attempted to update all call sites for the renamed function.
-
---- CURRENT FILE STATUS ---
-SUCCESSFUL CHANGES (already applied, no action needed):
-- MODIFIED: src/core/transaction.ts
-
-FAILED CHANGES (these are the files you need to fix):
-- FAILED: src/utils/logger.ts (Error: Hunk #1 failed to apply)
-- FAILED: src/commands/apply.ts (Error: Context mismatch at line 92)
-
-Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.
-```
-````
-
 ## File: src/data/mocks.ts
 ````typescript
 import type { Transaction } from '../types/domain.types';
@@ -2434,6 +2002,7 @@ interface TransactionState {
     actions: {
         loadTransactions: () => void;
         updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        clearTransactions: () => void;
     };
 }
 
@@ -2451,6 +2020,7 @@ export const useTransactionStore = create<TransactionState>((set) => ({
                 ),
             }));
         },
+        clearTransactions: () => set({ transactions: [] }),
     },
 }));
 
@@ -2520,6 +2090,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
     const {
         status,
         selectedTransactionIndex,
+        expandedTransactionId,
     } = useDashboardStore();
     const transactions = useTransactionStore(s => s.transactions);
     const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
@@ -2537,6 +2108,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
         startApproveAll,
         confirmAction,
         cancelAction,
+        toggleExpand,
     } = useDashboardStore(s => s.actions);
     const appActions = useAppStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
@@ -2556,18 +2128,38 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
 
         if (isProcessing) return; // No input while processing
 
+        if (key.leftArrow) {
+            if (expandedTransactionId) {
+                toggleExpand();
+            }
+            return;
+        }
+        if (key.rightArrow) {
+            if (transactions[selectedTransactionIndex] && !expandedTransactionId) {
+                toggleExpand();
+            }
+            return;
+        }
+
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
         
         if (key.return) {
             const selectedTx = transactions[selectedTransactionIndex];
-            if (selectedTx?.status === 'PENDING') {
-                // For PENDING transactions, we still go to the review screen.
-                useReviewStore.getState().actions.load(selectedTx.id);
-                appActions.showReviewScreen();
-            } else if (selectedTx) {
-                useDetailStore.getState().actions.load(selectedTx.id);
-                appActions.showTransactionDetailScreen();
+            if (!selectedTx) return;
+            
+            const isExpanded = expandedTransactionId === selectedTx.id;
+
+            if (isExpanded) {
+                if (selectedTx.status === 'PENDING') {
+                    useReviewStore.getState().actions.load(selectedTx.id);
+                    appActions.showReviewScreen();
+                } else {
+                    useDetailStore.getState().actions.load(selectedTx.id);
+                    appActions.showTransactionDetailScreen();
+                }
+            } else {
+                toggleExpand();
             }
         }
         
@@ -2588,6 +2180,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
         status,
         transactions,
         selectedTransactionIndex,
+        expandedTransactionId,
         pendingApprovals,
         pendingCommits,
         isModal,
@@ -3218,6 +2811,123 @@ export const ReviewService = {
 };
 ````
 
+## File: src/stores/app.store.ts
+````typescript
+import { create } from 'zustand';
+import type { AppScreen } from '../types/view.types';
+import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
+
+interface AppState {
+    currentScreen: AppScreen;
+    actions: {
+        showInitScreen: () => void;
+        showReviewProcessingScreen: () => void;
+        showDashboardScreen: () => void;
+        showReviewScreen: () => void;
+        showGitCommitScreen: () => void;
+        showSplashScreen: () => void;
+        showTransactionHistoryScreen: () => void;
+        showTransactionDetailScreen: () => void;
+        navigateBack: () => void;
+    };
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
+    currentScreen: 'splash',
+    actions: {
+        showInitScreen: () => set({ currentScreen: 'init' }),
+        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+        showReviewScreen: () => set({ currentScreen: 'review' }),
+        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+        showSplashScreen: () => set({ currentScreen: 'splash' }),
+        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+        navigateBack: () => {
+            const { currentScreen } = get();
+            if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
+                get().actions.showDashboardScreen();
+            }
+        },
+    },
+}));
+````
+
+## File: index.tsx
+````typescript
+import { render } from 'ink';
+import App from './src/App';
+import { useAppStore } from './src/stores/app.store';
+import { useViewStore } from './src/stores/view.store';
+import { useDetailStore } from './src/stores/detail.store';
+import { useHistoryStore } from './src/stores/history.store';
+import { useReviewStore } from './src/stores/review.store';
+import { useTransactionStore } from './src/stores/transaction.store';
+import { useCommitStore } from './src/stores/commit.store';
+
+const main = () => {
+    // Initialize stores
+    useTransactionStore.getState().actions.loadTransactions();
+    const args = process.argv.slice(2);
+
+    if (args[0] === 'debug-screen' && args[1]) {
+        const screenName = args[1].replace(/\.tsx$/, '');
+        const { actions: appActions } = useAppStore.getState();
+
+        switch (screenName) {
+            case 'DashboardScreen':
+                appActions.showDashboardScreen();
+                break;
+            case 'GitCommitScreen':
+                useCommitStore.getState().actions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+                break;
+            case 'ReviewProcessingScreen':
+                useReviewStore.getState().actions.load('1');
+                appActions.showReviewProcessingScreen();
+                break;
+            case 'ReviewScreen':
+                useReviewStore.getState().actions.load('1');
+                appActions.showReviewScreen();
+                break;
+            case 'TransactionDetailScreen':
+                useDetailStore.getState().actions.load('3');
+                appActions.showTransactionDetailScreen();
+                break;
+            case 'TransactionHistoryScreen':
+                useHistoryStore.getState().actions.load();
+                appActions.showTransactionHistoryScreen();
+                break;
+            case 'InitializationScreen':
+                 appActions.showInitScreen();
+                 break;
+            case 'SplashScreen':
+                 appActions.showSplashScreen();
+                 break;
+            case 'DebugMenu':
+                appActions.showDashboardScreen();
+                useViewStore.getState().actions.setActiveOverlay('debug');
+                break;
+            default:
+                process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                process.exit(1);
+        }
+    }
+
+    // Check if we're running in an interactive terminal
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+        // eslint-disable-next-line no-console
+        console.clear();
+        render(<App />);
+    } else {
+        process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+        process.exit(1);
+    }
+};
+
+main();
+````
+
 ## File: src/hooks/useReviewScreen.tsx
 ````typescript
 import { useMemo } from 'react';
@@ -3462,123 +3172,6 @@ export const useReviewScreen = () => {
         ...reviewStats,
     };
 };
-````
-
-## File: src/stores/app.store.ts
-````typescript
-import { create } from 'zustand';
-import type { AppScreen } from '../types/view.types';
-import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
-
-interface AppState {
-    currentScreen: AppScreen;
-    actions: {
-        showInitScreen: () => void;
-        showReviewProcessingScreen: () => void;
-        showDashboardScreen: () => void;
-        showReviewScreen: () => void;
-        showGitCommitScreen: () => void;
-        showSplashScreen: () => void;
-        showTransactionHistoryScreen: () => void;
-        showTransactionDetailScreen: () => void;
-        navigateBack: () => void;
-    };
-}
-
-export const useAppStore = create<AppState>((set, get) => ({
-    currentScreen: 'splash',
-    actions: {
-        showInitScreen: () => set({ currentScreen: 'init' }),
-        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
-        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
-        showReviewScreen: () => set({ currentScreen: 'review' }),
-        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
-        showSplashScreen: () => set({ currentScreen: 'splash' }),
-        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
-        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
-        navigateBack: () => {
-            const { currentScreen } = get();
-            if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
-                get().actions.showDashboardScreen();
-            }
-        },
-    },
-}));
-````
-
-## File: index.tsx
-````typescript
-import { render } from 'ink';
-import App from './src/App';
-import { useAppStore } from './src/stores/app.store';
-import { useViewStore } from './src/stores/view.store';
-import { useDetailStore } from './src/stores/detail.store';
-import { useHistoryStore } from './src/stores/history.store';
-import { useReviewStore } from './src/stores/review.store';
-import { useTransactionStore } from './src/stores/transaction.store';
-import { useCommitStore } from './src/stores/commit.store';
-
-const main = () => {
-    // Initialize stores
-    useTransactionStore.getState().actions.loadTransactions();
-    const args = process.argv.slice(2);
-
-    if (args[0] === 'debug-screen' && args[1]) {
-        const screenName = args[1].replace(/\.tsx$/, '');
-        const { actions: appActions } = useAppStore.getState();
-
-        switch (screenName) {
-            case 'DashboardScreen':
-                appActions.showDashboardScreen();
-                break;
-            case 'GitCommitScreen':
-                useCommitStore.getState().actions.prepareCommitScreen();
-                appActions.showGitCommitScreen();
-                break;
-            case 'ReviewProcessingScreen':
-                useReviewStore.getState().actions.load('1');
-                appActions.showReviewProcessingScreen();
-                break;
-            case 'ReviewScreen':
-                useReviewStore.getState().actions.load('1');
-                appActions.showReviewScreen();
-                break;
-            case 'TransactionDetailScreen':
-                useDetailStore.getState().actions.load('3');
-                appActions.showTransactionDetailScreen();
-                break;
-            case 'TransactionHistoryScreen':
-                useHistoryStore.getState().actions.load();
-                appActions.showTransactionHistoryScreen();
-                break;
-            case 'InitializationScreen':
-                 appActions.showInitScreen();
-                 break;
-            case 'SplashScreen':
-                 appActions.showSplashScreen();
-                 break;
-            case 'DebugMenu':
-                appActions.showDashboardScreen();
-                useViewStore.getState().actions.setActiveOverlay('debug');
-                break;
-            default:
-                process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
-                process.exit(1);
-        }
-    }
-
-    // Check if we're running in an interactive terminal
-    if (process.stdin.isTTY && process.stdout.isTTY) {
-        // eslint-disable-next-line no-console
-        console.clear();
-        render(<App />);
-    } else {
-        process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
-        process.exit(1);
-    }
-};
-
-main();
 ````
 
 ## File: src/components/TransactionDetailScreen.tsx
@@ -4022,6 +3615,147 @@ const TransactionHistoryScreen = () => {
 };
 
 export default TransactionHistoryScreen;
+````
+
+## File: src/hooks/useTransactionHistoryScreen.tsx
+````typescript
+import { useMemo } from 'react';
+import { useInput, type Key } from 'ink';
+import { useHistoryStore } from '../stores/history.store';
+import { useAppStore } from '../stores/app.store';
+import { useTransactionStore } from '../stores/transaction.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useCopyStore } from '../stores/copy.store';
+import type { TransactionStatus } from '../types/domain.types';
+import { getVisibleItemPaths } from '../stores/navigation.utils';
+import { useViewport } from './useViewport';
+
+export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: number }) => {
+    const store = useHistoryStore();
+    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
+    const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
+    const transactions = useTransactionStore(s => s.transactions);
+
+    const visibleItemPaths = useMemo(
+        () => getVisibleItemPaths(transactions, expandedIds),
+        [transactions, expandedIds],
+    );
+    const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        reservedRows,
+    });
+
+    const openCopyMode = () => {
+        const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+
+        if (transactionsToCopy.length === 0) return;
+        useCopyStore.getState().actions.openForHistory(transactionsToCopy);
+    };
+
+    const handleFilterInput = (_input: string, key: Key): void => {
+        if (key.escape) actions.setMode('LIST');
+        if (key.return) actions.applyFilter();
+    };
+
+    const handleBulkActionsInput = (input: string, key: Key): void => {
+        if (key.escape) {
+            actions.setMode('LIST');
+            return;
+        }
+        if (input >= '1' && input <= '3') {
+            // eslint-disable-next-line no-console
+            console.log(`[MOCK] Bulk action #${input} selected.`);
+            actions.setMode('LIST');
+        }
+    };
+
+    const handleListInput = (input: string, key: Key): void => {
+        if (key.upArrow) actions.navigateUp();
+        if (key.downArrow) actions.navigateDown();
+        if (key.rightArrow) actions.expandOrDrillDown();
+        if (key.leftArrow) actions.collapseOrBubbleUp();
+        if (input === ' ') actions.toggleSelection();
+        if (key.return) {
+            const txId = selectedItemPath.split('/')[0];
+            if (txId && !selectedItemPath.includes('/')) {
+                useDetailStore.getState().actions.load(txId);
+                showTransactionDetailScreen();
+            }
+        }
+
+        if (input.toLowerCase() === 'f') actions.setMode('FILTER');
+        if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode('BULK_ACTIONS');
+        
+        if (key.escape || input.toLowerCase() === 'q') {
+            showDashboardScreen();
+        }
+    };
+
+    useInput((input: string, key: Key) => {
+        if (mode === 'FILTER') {
+            handleFilterInput(input, key);
+            return;
+        }
+        if (mode === 'BULK_ACTIONS') {
+            handleBulkActionsInput(input, key);
+            return;
+        }
+        handleListInput(input, key);
+    });
+
+    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+    const transactionsInView = useMemo(
+        () => transactions.filter(tx => txIdsInView.has(tx.id)),
+        [transactions, txIdsInView],
+    );
+    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+    const filterStatusText = filterQuery ? filterQuery : '(none)';
+    const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
+    
+    const hasSelection = selectedForAction.size > 0;
+
+    const statsStatus = useMemo(() => {
+        const stats = transactions.reduce((acc, tx) => {
+            acc[tx.status] = (acc[tx.status] || 0) + 1;
+            return acc;
+        }, {} as Record<TransactionStatus, number>);
+        
+        const parts = [];
+        if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
+        if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
+        if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
+        if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
+        if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
+        if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
+
+        return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
+    }, [transactions]);
+
+    return {
+        mode,
+        filterQuery,
+        selectedForAction,
+        selectedItemPath,
+        expandedIds,
+        actions,
+        transactions,
+        viewOffset,
+        itemsInView,
+        loadingPaths,
+        transactionsInView,
+        pathsInViewSet,
+        filterStatus: filterStatusText,
+        showingStatus: showingStatusText,
+        statsStatus,
+        hasSelection,
+        visibleItemPaths,
+    };
+};
 ````
 
 ## File: src/components/ReviewScreen.tsx
@@ -4474,147 +4208,6 @@ const ReviewScreen = () => {
 export default ReviewScreen;
 ````
 
-## File: src/hooks/useTransactionHistoryScreen.tsx
-````typescript
-import { useMemo } from 'react';
-import { useInput, type Key } from 'ink';
-import { useHistoryStore } from '../stores/history.store';
-import { useAppStore } from '../stores/app.store';
-import { useTransactionStore } from '../stores/transaction.store';
-import { useDetailStore } from '../stores/detail.store';
-import { useCopyStore } from '../stores/copy.store';
-import type { TransactionStatus } from '../types/domain.types';
-import { getVisibleItemPaths } from '../stores/navigation.utils';
-import { useViewport } from './useViewport';
-
-export const useTransactionHistoryScreen = ({ reservedRows }: { reservedRows: number }) => {
-    const store = useHistoryStore();
-    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
-    const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
-    const transactions = useTransactionStore(s => s.transactions);
-
-    const visibleItemPaths = useMemo(
-        () => getVisibleItemPaths(transactions, expandedIds),
-        [transactions, expandedIds],
-    );
-    const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
-
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex,
-        reservedRows,
-    });
-
-    const openCopyMode = () => {
-        const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
-
-        if (transactionsToCopy.length === 0) return;
-        useCopyStore.getState().actions.openForHistory(transactionsToCopy);
-    };
-
-    const handleFilterInput = (_input: string, key: Key): void => {
-        if (key.escape) actions.setMode('LIST');
-        if (key.return) actions.applyFilter();
-    };
-
-    const handleBulkActionsInput = (input: string, key: Key): void => {
-        if (key.escape) {
-            actions.setMode('LIST');
-            return;
-        }
-        if (input >= '1' && input <= '3') {
-            // eslint-disable-next-line no-console
-            console.log(`[MOCK] Bulk action #${input} selected.`);
-            actions.setMode('LIST');
-        }
-    };
-
-    const handleListInput = (input: string, key: Key): void => {
-        if (key.upArrow) actions.navigateUp();
-        if (key.downArrow) actions.navigateDown();
-        if (key.rightArrow) actions.expandOrDrillDown();
-        if (key.leftArrow) actions.collapseOrBubbleUp();
-        if (input === ' ') actions.toggleSelection();
-        if (key.return) {
-            const txId = selectedItemPath.split('/')[0];
-            if (txId && !selectedItemPath.includes('/')) {
-                useDetailStore.getState().actions.load(txId);
-                showTransactionDetailScreen();
-            }
-        }
-
-        if (input.toLowerCase() === 'f') actions.setMode('FILTER');
-        if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
-        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode('BULK_ACTIONS');
-        
-        if (key.escape || input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
-    };
-
-    useInput((input: string, key: Key) => {
-        if (mode === 'FILTER') {
-            handleFilterInput(input, key);
-            return;
-        }
-        if (mode === 'BULK_ACTIONS') {
-            handleBulkActionsInput(input, key);
-            return;
-        }
-        handleListInput(input, key);
-    });
-
-    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
-    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
-    const transactionsInView = useMemo(
-        () => transactions.filter(tx => txIdsInView.has(tx.id)),
-        [transactions, txIdsInView],
-    );
-    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
-
-    const filterStatusText = filterQuery ? filterQuery : '(none)';
-    const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
-    
-    const hasSelection = selectedForAction.size > 0;
-
-    const statsStatus = useMemo(() => {
-        const stats = transactions.reduce((acc, tx) => {
-            acc[tx.status] = (acc[tx.status] || 0) + 1;
-            return acc;
-        }, {} as Record<TransactionStatus, number>);
-        
-        const parts = [];
-        if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
-        if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
-        if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
-        if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
-        if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
-        if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
-
-        return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
-    }, [transactions]);
-
-    return {
-        mode,
-        filterQuery,
-        selectedForAction,
-        selectedItemPath,
-        expandedIds,
-        actions,
-        transactions,
-        viewOffset,
-        itemsInView,
-        loadingPaths,
-        transactionsInView,
-        pathsInViewSet,
-        filterStatus: filterStatusText,
-        showingStatus: showingStatusText,
-        statsStatus,
-        hasSelection,
-        visibleItemPaths,
-    };
-};
-````
-
 ## File: src/App.tsx
 ````typescript
 import { Box } from 'ink';
@@ -4672,6 +4265,85 @@ const App = () => {
 };
 
 export default App;
+````
+
+## File: src/stores/dashboard.store.ts
+````typescript
+import { create } from 'zustand';
+import { useTransactionStore } from './transaction.store';
+import { DashboardService } from '../services/dashboard.service';
+import { moveIndex } from './navigation.utils';
+
+export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'APPROVING';
+ 
+interface DashboardState {
+    status: DashboardStatus;
+    previousStatus: DashboardStatus;
+    selectedTransactionIndex: number;
+    expandedTransactionId: string | null;
+    actions: {
+        togglePause: () => void;
+        moveSelectionUp: () => void;
+        moveSelectionDown: () => void;
+        startApproveAll: () => void;
+        confirmAction: () => Promise<void>;
+        cancelAction: () => void;
+        setStatus: (status: DashboardStatus) => void;
+        toggleExpand: () => void;
+        setExpandedTransactionId: (id: string | null) => void;
+    };
+}
+
+export const useDashboardStore = create<DashboardState>((set, get) => ({
+    status: 'LISTENING',
+    previousStatus: 'LISTENING',
+    selectedTransactionIndex: 0,
+    expandedTransactionId: null,
+    actions: {
+        togglePause: () => set(state => ({
+            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+        })),
+        moveSelectionUp: () => set(state => {
+            const { transactions } = useTransactionStore.getState();
+            return {
+                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+                expandedTransactionId: null,
+            };
+        }),
+        moveSelectionDown: () => set(state => {
+            const { transactions } = useTransactionStore.getState();
+            return {
+                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+                expandedTransactionId: null,
+            };
+        }),
+        startApproveAll: () => set(state => ({
+            status: 'CONFIRM_APPROVE',
+            previousStatus: state.status,
+        })),
+        cancelAction: () => set(state => ({ status: state.previousStatus })),
+        setStatus: (status) => set({ status }),
+        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+            const previousStatus = get().previousStatus;
+            set({ status: 'APPROVING' });
+            await DashboardService.approveAll();
+            set({ status: previousStatus });
+        },
+        toggleExpand: () => {
+            const { selectedTransactionIndex, expandedTransactionId } = get();
+            const { transactions } = useTransactionStore.getState();
+            const selectedTx = transactions[selectedTransactionIndex];
+            if (!selectedTx) return;
+
+            if (expandedTransactionId === selectedTx.id) {
+                set({ expandedTransactionId: null });
+            } else {
+                set({ expandedTransactionId: selectedTx.id });
+            }
+        },
+        setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+    },
+}));
 ````
 
 ## File: src/hooks/useDebugMenu.tsx
@@ -4803,6 +4475,13 @@ const useDebugMenuActions = () => {
             title: 'Review: Bulk Repair',
             action: () => {
                 reviewActions.load('1', { bodyView: 'bulk_repair' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Bulk Repair (Navigable)',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
                 appActions.showReviewScreen();
             },
         },
@@ -4941,69 +4620,13 @@ export const useDebugMenu = () => {
 };
 ````
 
-## File: src/stores/dashboard.store.ts
-````typescript
-import { create } from 'zustand';
-import { useTransactionStore } from './transaction.store';
-import { DashboardService } from '../services/dashboard.service';
-import { moveIndex } from './navigation.utils';
-
-export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'APPROVING';
- 
-interface DashboardState {
-    status: DashboardStatus;
-    previousStatus: DashboardStatus;
-    selectedTransactionIndex: number;
-    actions: {
-        togglePause: () => void;
-        moveSelectionUp: () => void;
-        moveSelectionDown: () => void;
-        startApproveAll: () => void;
-        confirmAction: () => Promise<void>;
-        cancelAction: () => void;
-        setStatus: (status: DashboardStatus) => void;
-    };
-}
-
-export const useDashboardStore = create<DashboardState>((set, get) => ({
-    status: 'LISTENING',
-    previousStatus: 'LISTENING',
-    selectedTransactionIndex: 0,
-    actions: {
-        togglePause: () => set(state => ({
-            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
-        })),
-        moveSelectionUp: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length) };
-        }),
-        moveSelectionDown: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length) };
-        }),
-        startApproveAll: () => set(state => ({
-            status: 'CONFIRM_APPROVE',
-            previousStatus: state.status,
-        })),
-        cancelAction: () => set(state => ({ status: state.previousStatus })),
-        setStatus: (status) => set({ status }),
-        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
-            const previousStatus = get().previousStatus;
-            set({ status: 'APPROVING' });
-            await DashboardService.approveAll();
-            set({ status: previousStatus });
-        },
-    },
-}));
-````
-
 ## File: src/components/DashboardScreen.tsx
 ````typescript
 import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import Separator from './Separator';
-import type { Transaction, TransactionStatus } from '../types/domain.types';
+import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 import { UI_CONFIG } from '../config/ui.config';
 
@@ -5022,17 +4645,49 @@ const getStatusIcon = (status: TransactionStatus) => {
     }
 };
 
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `-${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `-${minutes}m`;
+const getFileChangeTypeIcon = (type: FileChangeType) => {
+    switch (type) {
+        case 'MOD': return '[MOD]';
+        case 'ADD': return '[ADD]';
+        case 'DEL': return '[DEL]';
+        case 'REN': return '[REN]';
+    }
 };
 
-const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m`;
+};
+
+const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
+    const stats = transaction.stats;
+    const files = transaction.files || [];
+
+    return (
+        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
+            {stats && (
+                <Text color="gray">
+                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
+                </Text>
+            )}
+             <Box flexDirection="column" paddingLeft={1}>
+                {files.map(file => (
+                     <Text key={file.id}>
+                        <Text color="gray">{getFileChangeTypeIcon(file.type)}</Text> {file.path}
+                    </Text>
+                ))}
+             </Box>
+        </Box>
+    );
+};
+
+const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
     const icon = getStatusIcon(transaction.status);
     const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
     const statusText = transaction.status.padEnd(11, ' ');
+    const expandIcon = isExpanded ? '▾' : '▸';
     
     const messageNode = transaction.status === 'IN-PROGRESS'
         ? <Text color="cyan">{transaction.message}</Text>
@@ -5040,7 +4695,7 @@ const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction
     
     const content = (
         <Text>
-            {time} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
+            {time} {expandIcon} {icon} {statusText} <Text color="gray">{transaction.hash}</Text> · {messageNode}
         </Text>
     );
 
@@ -5083,6 +4738,7 @@ const DashboardScreen = () => {
         viewOffset,
         viewportHeight,
         transactionsToConfirm,
+        expandedTransactionId,
     } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });
 
     const renderStatusBar = () => {
@@ -5123,7 +4779,7 @@ const DashboardScreen = () => {
 			: <Text>(<Text color="cyan" bold>P</Text>)ause</Text>;
 		return (
             <Text color="gray">
-                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>Enter</Text>) Review · (<Text color="cyan" bold>L</Text>)og · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit All · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
+                (<Text color="cyan" bold>↑↓</Text>) Nav · (<Text color="cyan" bold>→</Text>/Ent) View · (<Text color="cyan" bold>←</Text>) Collapse · (<Text color="cyan" bold>L</Text>)og · (<Text color="cyan" bold>A</Text>)pprove All · (<Text color="cyan" bold>C</Text>)ommit · {pauseAction} · (<Text color="cyan" bold>Q</Text>)uit
             </Text>
         );
     };
@@ -5145,14 +4801,21 @@ const DashboardScreen = () => {
             
             <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
             <Box flexDirection="column" marginTop={1}>
+                {transactions.length === 0 && (
+                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+                )}
                 {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
                     const actualIndex = viewOffset + index;
+                    const isExpanded = expandedTransactionId === tx.id;
                     return (
-                        <EventStreamItem
-                            key={tx.id}
-                            transaction={tx}
-                            isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                        />
+                        <React.Fragment key={tx.id}>
+                            <EventStreamItem
+                                transaction={tx}
+                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                isExpanded={isExpanded}
+                            />
+                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                        </React.Fragment>
                     );
                 })}
             </Box>

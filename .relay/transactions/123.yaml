@@ -1,0 +1,1196 @@
+uuid: e040c5e3-4d43-433b-8519-d9f75b7f2edb
+projectId: relaycode-tui
+createdAt: '2025-09-25T05:20:40.700Z'
+gitCommitMsg: >-
+  feat(dashboard): implement event stream drill-down
+
+  Adds an expandable view to each item in the Dashboard's event stream. Users
+  can now press the right arrow or Enter key to expand a transaction in-place,
+  revealing file statistics and a list of affected files without leaving the
+  dashboard.
+
+  Key changes include: - Updated dashboard store to manage expanded item state.
+  - Implemented keyboard controls (left/right/enter) for
+  expand/collapse/navigate actions. - Added the status icon to the event stream
+  for better at-a-glance comprehension. - Made the footer actions dynamic to
+  show/hide the collapse action. - Added debug menu entries for testing the
+  empty and expanded dashboard states. - Updated the
+  `dashboard-screen.readme.md` to document the new feature.
+promptSummary: >-
+  The user requested to add a drill-down feature to the dashboard's event
+  stream.
+reasoning:
+  - >-
+    Excellent. I will implement the requested enhancements to the dashboard,
+    including the drill-down feature for event stream items and the debug menu
+    additions.
+  - 'Here are the step-by-step changes:'
+  - >-
+    1.  **State Management**: I'll update `dashboard.store.ts` to manage the
+    expanded transaction state and `transaction.store.ts` to allow for clearing
+    transactions for debugging purposes.
+  - >-
+    2.  **Hook Logic**: The `useDashboardScreen.tsx` hook will be modified to
+    handle new keyboard inputs (`←`, `→`, `Enter`) for expanding, collapsing,
+    and navigating into transactions.
+  - >-
+    3.  **UI Components**: In `DashboardScreen.tsx`, I will add the status icon
+    to the event stream items, create a new sub-component to display expanded
+    transaction details, and make the footer dynamically show the "Collapse"
+    action only when an item is expanded.
+  - >-
+    4.  **Debuggability**: I will add two new states to the `useDebugMenu.tsx`
+    hook: one for the dashboard's empty state and another to show a pre-expanded
+    item.
+  - >-
+    5.  **Documentation**: Finally, I will update `dashboard-screen.readme.md`
+    to reflect the new UI state, interaction patterns, and updated keyboard
+    shortcuts.
+  - '### State Management'
+  - >-
+    First, I'll modify the dashboard store to track which transaction is
+    expanded.
+  - Next, I'll add a way to clear transactions for debugging the empty state.
+  - '### Hook & UI Implementation'
+  - Now I'll update the dashboard hook to manage the new interactions.
+  - >-
+    I'll update the `DashboardScreen` component to render the status icon, the
+    expanded view, and the dynamic footer.
+  - '### Debuggability'
+  - I'll add the new states to the debug menu for easy testing.
+  - '### Documentation'
+  - >-
+    Finally, I will update the design documentation to reflect the new
+    drill-down capability and interaction model.
+  - >-
+    -   **Behavior:** The Event Stream updates in real-time as new patches are
+    detected and processed. The `APPROVALS` and `COMMITS` counters increment or
+    decrement accordingly.
+  - >-
+    -   **Interactions:** All primary actions are available. `(Enter)` on a
+    `PENDING` item transitions to the **Apply & Review Screen**. `(Enter)` on
+    any other item transitions to the **Transaction Details Screen**.
+  - '@@ -98,6 +98,33 @@'
+  - '---'
+  - '+#### **State 3.5: Active with Expanded Item**'
+  - +
+  - +Provides a quick look at transaction details without leaving the dashboard.
+  - +
+  - +**Trigger:** User presses `(→)` or `(Enter)` on a selected event.
+  - +
+  - +
+  - >-
+    +-   **Behavior:** The selected event expands in-place to show file
+    statistics and a list of affected files. Only one item can be expanded at a
+    time. Navigating with `(↑↓)` collapses any expanded item.
+  - >-
+    +-   **Footer Changes:** The footer updates to show `(←) Collapse` and
+    clarifies that `(Enter)` is now for viewing/expanding.
+  - '#### **State 3.4: In-Progress Operation**'
+  - >-
+    Provides critical feedback while a potentially long-running background task
+    is executing.
+  - '@@ -109,8 +136,8 @@'
+  - EVENT STREAM (Last 15 minutes)
+  - '-  > -15s   ● Approving... e4a7c112 · fix: add missing error handling'
+  - '-    -2m    ✓ APPLIED      4b9d8f03 · refactor: simplify clipboard logic'
+  - '+  > -15s   ▸ ● Approving... e4a7c112 · fix: add missing error handling'
+  - '+    -2m    ▸ ✓ APPLIED      4b9d8f03 · refactor: simplify clipboard logic'
+  - ...
+  - >-
+    ──────────────────────────────────────────────────────────────────────────────
+  - '```'
+operations:
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: >+
+      --- src/stores/dashboard.store.ts
+
+      +++ src/stores/dashboard.store.ts
+
+      @@ -5,17 +5,20 @@
+       interface DashboardState {
+           status: DashboardStatus;
+           previousStatus: DashboardStatus;
+           selectedTransactionIndex: number;
+           expandedTransactionId: string | null;
+           actions: {
+               togglePause: () => void;
+               moveSelectionUp: () => void;
+               moveSelectionDown: () => void;
+               toggleExpand: () => void;
+               startApproveAll: () => void;
+               confirmAction: () => Promise<void>;
+               cancelAction: () => void;
+               setStatus: (status: DashboardStatus) => void;
+               setExpandedTransactionId: (id: string | null) => void;
+           };
+       }
+       
+       export const useDashboardStore = create<DashboardState>((set, get) => ({
+           status: 'LISTENING',
+           previousStatus: 'LISTENING',
+           selectedTransactionIndex: 0,
+           expandedTransactionId: null,
+           actions: {
+               togglePause: () => set(state => ({
+                   status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+      @@ -24,15 +27,24 @@
+                   const { transactions } = useTransactionStore.getState();
+                   return {
+                       selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+      +                expandedTransactionId: null,
+                   };
+               }),
+               moveSelectionDown: () => set(state => {
+                   const { transactions } = useTransactionStore.getState();
+                   return {
+                       selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+      +                expandedTransactionId: null,
+                   };
+               }),
+      +        toggleExpand: () => set(state => {
+
+      +            const { transactions } = useTransactionStore.getState();
+
+      +            const selectedTx =
+      transactions[state.selectedTransactionIndex];
+
+      +            if (!selectedTx) return {};
+
+      +            return { expandedTransactionId: state.expandedTransactionId
+      === selectedTx.id ? null : selectedTx.id };
+
+      +        }),
+               startApproveAll: () => set(state => ({
+                   status: 'CONFIRM_APPROVE',
+                   previousStatus: state.status,
+      @@ -44,6 +56,7 @@
+                   await DashboardService.approveAll();
+                   set({ status: previousStatus });
+               },
+      +        setExpandedTransactionId: (id) => set({ expandedTransactionId: id
+      }),
+           },
+       }));
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction.store.ts
+    content: |
+      --- src/stores/transaction.store.ts
+      +++ src/stores/transaction.store.ts
+      @@ -25,9 +25,7 @@
+                       ),
+                   }));
+               },
+      -        clearTransactions: () => {
+      -            set({ transactions: [] });
+      -        },
+      +        clearTransactions: () => set({ transactions: [] }),
+           },
+       }));
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDashboardScreen.tsx
+    content: >+
+      --- src/hooks/useDashboardScreen.tsx
+
+      +++ src/hooks/useDashboardScreen.tsx
+
+      @@ -40,18 +40,32 @@
+       
+               if (key.upArrow) moveSelectionUp();
+               if (key.downArrow) moveSelectionDown();
+      +        if (key.rightArrow) toggleExpand();
+
+      +        if (key.leftArrow) {
+
+      +            const selectedTx = transactions[selectedTransactionIndex];
+
+      +            if (selectedTx && expandedTransactionId === selectedTx.id) {
+
+      +                toggleExpand();
+
+      +            }
+
+      +        }
+               
+               if (key.return) {
+                   const selectedTx = transactions[selectedTransactionIndex];
+                   if (!selectedTx) return;
+       
+      -            if (expandedTransactionId === selectedTx.id) { // Already
+      expanded, navigate
+
+      -                if (selectedTx.status === 'PENDING') {
+
+      -                   
+      useReviewStore.getState().actions.load(selectedTx.id);
+
+      -                    appActions.showReviewScreen();
+
+      -                } else {
+
+      -                   
+      useDetailStore.getState().actions.load(selectedTx.id);
+
+      -                    appActions.showTransactionDetailScreen();
+
+      -                }
+
+      -            } else { // Not expanded, so expand it
+
+      +            if (expandedTransactionId === selectedTx.id) { // Already
+      expanded, navigate to detail/review
+
+      +                if (selectedTx.status === 'PENDING') {
+
+      +                   
+      useReviewStore.getState().actions.load(selectedTx.id);
+
+      +                    appActions.showReviewScreen();
+
+      +                } else {
+
+      +                   
+      useDetailStore.getState().actions.load(selectedTx.id);
+
+      +                    appActions.showTransactionDetailScreen();
+
+      +                }
+
+      +            } else { // Not expanded, so expand it
+                       toggleExpand();
+                   }
+               }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: "--- src/components/DashboardScreen.tsx\n+++ src/components/DashboardScreen.tsx\n@@ -52,7 +52,7 @@\n     \n     const content = (\n         <Text>\n-            {time} {expandIcon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n+            {time} {expandIcon} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n         </Text>\n     );\n \n@@ -124,11 +124,14 @@\n         const pauseAction = status === 'PAUSED'\n \t\t\t? <Text>(<Text color=\"cyan\" bold>P</Text>)resume</Text>\n \t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n+\n+        const collapseAction = expandedTransactionId ? <> · (<Text color=\"cyan\" bold>←</Text>) Collapse</> : null;\n+\n \t\treturn (\n             <Text color=\"gray\">\n-                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>→</Text>/Ent) View · (<Text color=\"cyan\" bold>←</Text>) Collapse · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n+                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>→</Text>/Ent) View{collapseAction} · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n             </Text>\n         );\n     };\n \n\n"
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >+
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -62,6 +62,20 @@
+                   },
+               },
+               {
+      +            title: 'Dashboard: Empty State',
+
+      +            action: () => {
+
+      +               
+      useTransactionStore.getState().actions.clearTransactions();
+
+      +                appActions.showDashboardScreen();
+
+      +            },
+
+      +        },
+
+      +        {
+
+      +            title: 'Dashboard: Expanded Item',
+
+      +            action: () => {
+
+      +                dashboardActions.setExpandedTransactionId('1');
+
+      +                appActions.showDashboardScreen();
+
+      +            },
+
+      +        },
+
+      +        {
+                   title: 'Review: Partial Failure (Default)',
+                   action: () => {
+                       reviewActions.load('1');
+
+    patchStrategy: standard-diff
+  - type: write
+    path: docs/relaycode-tui/dashboard-screen.readme.md
+    content: >-
+      --- docs/relaycode-tui/dashboard-screen.readme.md
+
+      +++ docs/relaycode-tui/dashboard-screen.readme.md
+
+      @@ -32,15 +32,15 @@
+       
+         EVENT STREAM (Last 15 minutes)
+       
+      -  > -15s   ? PENDING   e4a7c112 · fix: add missing error handling
+
+      -    -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+
+      -    -5m    → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
+
+      -    -8m    ↩ REVERTED  b2c9e04d · Reverting transaction 9c2e1a05
+
+      -    -9m    ✗ FAILED    9c2e1a05 · style: update button component (Linter
+      errors: 5)
+
+      -    -12m   → COMMITTED c7d6b5e0 · docs: update readme with TUI spec
+
+      +  > -15s   ▸ ? PENDING   e4a7c112 · fix: add missing error handling
+
+      +    -2m    ▸ ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+
+      +    -5m    ▸ → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
+
+      +    -8m    ▸ ↩ REVERTED  b2c9e04d · Reverting transaction 9c2e1a05
+
+      +    -9m    ▸ ✗ FAILED    9c2e1a05 · style: update button component
+      (Linter errors: 5)
+
+      +    -12m   ▸ → COMMITTED c7d6b5e0 · docs: update readme with TUI spec
+       
+        ──────────────────────────────────────────────────────────────────────────────
+      - (↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · (P)ause ·
+      (Q)uit
+
+      + (↑↓) Nav · (→/Ent) View · (L)og · (A)pprove All · (C)ommit All · (P)ause
+      · (Q)uit
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: + ▲ relaycode dashboard
+    content: >-
+      +
+      ──────────────────────────────────────────────────────────────────────────────
+
+      + STATUS: ● LISTENING · APPROVALS: 01 · COMMITS: 03
+
+      +
+
+      +  EVENT STREAM (Last 15 minutes)
+
+      +
+
+      +  > -15s   ▾ ? PENDING   e4a7c112 · fix: add missing error handling
+
+      +        Stats: 3 files, +18/-5 lines
+
+      +        Files:
+
+      +          [MOD] src/core/transaction.ts
+
+      +          [MOD] src/utils/logger.ts
+
+      +          [MOD] src/commands/apply.ts
+
+      +    -2m    ▸ ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+
+      +    -5m    ▸ → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
+
+      +
+
+      +
+      ──────────────────────────────────────────────────────────────────────────────
+
+      + (↑↓) Nav · (→/Ent) View · (←) Collapse · (L)og · (A)pprove All ·
+      (C)ommit All · (P)ause · (Q)uit
+
+      +
+    patchStrategy: replace
+snapshot:
+  + ▲ relaycode dashboard: null
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { moveIndex } from './navigation.utils';
+
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'APPROVING';
+     
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus;
+        selectedTransactionIndex: number;
+        expandedTransactionId: string | null;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            toggleExpand: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            setStatus: (status: DashboardStatus) => void;
+            setExpandedTransactionId: (id: string | null) => void;
+        };
+    }
+
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        selectedTransactionIndex: 0,
+        expandedTransactionId: null,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            toggleExpand: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                const selectedTx = transactions[state.selectedTransactionIndex];
+                if (!selectedTx) return {};
+                return { expandedTransactionId: state.expandedTransactionId === selectedTx.id ? null : selectedTx.id };
+            }),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            setStatus: (status) => set({ status }),
+            confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                const previousStatus = get().previousStatus;
+                set({ status: 'APPROVING' });
+                await DashboardService.approveAll();
+                set({ status: previousStatus });
+            },
+            setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+        },
+    }));
+  src/stores/transaction.store.ts: >
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { useViewStore } from './view.store';
+
+    import type { Transaction, TransactionStatus } from '../types/domain.types';
+
+
+    export type { Transaction };
+
+
+    interface TransactionState {
+        transactions: Transaction[];
+        actions: {
+            loadTransactions: () => void;
+            updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+            clearTransactions: () => void;
+        };
+    }
+
+
+    export const useTransactionStore = create<TransactionState>((set) => ({
+        transactions: [],
+        actions: {
+            loadTransactions: () => {
+                const transactions = TransactionService.getAllTransactions();
+                set({ transactions });
+            },
+            updateTransactionStatus: (id, status) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx =>
+                        tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                    ),
+                }));
+            },
+            clearTransactions: () => {
+                set({ transactions: [] });
+            },
+        },
+    }));
+
+
+    // --- Selectors ---
+
+
+    /** Selects transactions by their status. */
+
+    export const selectTransactionsByStatus = (status: TransactionStatus) =>
+    (state: TransactionState) =>
+        state.transactions.filter(tx => tx.status === status);
+
+    /** Selects the transaction currently targeted by the view store. */
+
+    export const selectSelectedTransaction = (state: TransactionState):
+    Transaction | undefined => {
+        const { selectedTransactionId } = useViewStore.getState();
+        return state.transactions.find(t => t.id === selectedTransactionId);
+    };
+  src/hooks/useDashboardScreen.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useViewport } from './useViewport';
+
+
+    export const useDashboardScreen = ({ reservedRows }: { reservedRows: number
+    }) => {
+        const {
+            status,
+            selectedTransactionIndex,
+            expandedTransactionId,
+        } = useDashboardStore();
+        const transactions = useTransactionStore(s => s.transactions);
+        const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
+        const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex: selectedTransactionIndex,
+            reservedRows,
+        });
+
+        const {
+            togglePause,
+            moveSelectionUp,
+            moveSelectionDown,
+            toggleExpand,
+            startApproveAll,
+            confirmAction,
+            cancelAction,
+        } = useDashboardStore(s => s.actions);
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+
+        const pendingApprovals = pendingTransactions.length;
+        const pendingCommits = appliedTransactions.length;
+
+        const isModal = status === 'CONFIRM_APPROVE';
+        const isProcessing = status === 'APPROVING';
+
+        useInput((input, key) => {
+            if (isModal) {
+                if (key.return) confirmAction();
+                if (key.escape) cancelAction();
+                return;
+            }
+
+            if (isProcessing) return; // No input while processing
+
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+            if (key.rightArrow) toggleExpand();
+            if (key.leftArrow) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (selectedTx && expandedTransactionId === selectedTx.id) {
+                    toggleExpand();
+                }
+            }
+            
+            if (key.return) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (!selectedTx) return;
+
+                if (expandedTransactionId === selectedTx.id) { // Already expanded, navigate
+                    if (selectedTx.status === 'PENDING') {
+                        useReviewStore.getState().actions.load(selectedTx.id);
+                        appActions.showReviewScreen();
+                    } else {
+                        useDetailStore.getState().actions.load(selectedTx.id);
+                        appActions.showTransactionDetailScreen();
+                    }
+                } else { // Not expanded, so expand it
+                    toggleExpand();
+                }
+            }
+            
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                useHistoryStore.getState().actions.load();
+                appActions.showTransactionHistoryScreen();
+            }
+        });
+        const transactionsToConfirm = status === 'CONFIRM_APPROVE' ? pendingTransactions : [];
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            expandedTransactionId,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/components/DashboardScreen.tsx: "import React from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport Separator from './Separator';\nimport type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';\nimport { useDashboardScreen } from '../hooks/useDashboardScreen';\nimport { UI_CONFIG } from '../config/ui.config';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'HANDOFF': return <Text color=\"magenta\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `${minutes}m`;\n};\n\nconst ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {\n    const fileStats = transaction.stats\n        ? `Stats: ${transaction.stats.files} files, +${transaction.stats.linesAdded}/-${transaction.stats.linesRemoved}`\n        : 'Stats: Not available';\n\n    const getFileChangeTypeIcon = (type: FileChangeType) => {\n        switch (type) {\n            case 'MOD': return '[MOD]';\n            case 'ADD': return '[ADD]';\n            case 'DEL': return '[DEL]';\n            case 'REN': return '[REN]';\n        }\n    };\n\n    return (\n        <Box flexDirection=\"column\" paddingLeft={4} marginBottom={1}>\n            <Text color=\"gray\">{fileStats}</Text>\n            <Text color=\"gray\">Files:</Text>\n            {(transaction.files || []).map(file => (\n                <Text key={file.id} color=\"gray\">  {getFileChangeTypeIcon(file.type)} {file.path}</Text>\n            ))}\n        </Box>\n    );\n};\n\nconst EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    const expandIcon = isExpanded ? '▾' : '▸';\n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {expandIcon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        expandedTransactionId,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <Text>\n                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n            </Text>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const pauseAction = status === 'PAUSED'\n\t\t\t? <Text>(<Text color=\"cyan\" bold>P</Text>)resume</Text>\n\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n\t\treturn (\n            <Text color=\"gray\">\n                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>→</Text>/Ent) View · (<Text color=\"cyan\" bold>←</Text>) Collapse · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n            </Text>\n        );\n    };\n\n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            <Text color=\"cyan\">▲ relaycode dashboard</Text>\n            <Separator />\n            <Box marginY={1}>\n                {renderStatusBar()}\n            </Box>\n            \n            {isModal && (\n                <>\n                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                    <Separator />\n                </>\n            )}\n            \n            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {transactions.slice(viewOffset, viewOffset + viewportHeight).map(tx => {\n                    const actualIndex = transactions.findIndex(t => t.id === tx.id);\n                    const isExpanded = tx.id === expandedTransactionId;\n                    return (\n                        <React.Fragment key={tx.id}>\n                            <EventStreamItem\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                                isExpanded={isExpanded}\n                            />\n                            {isExpanded && <ExpandedEventInfo transaction={tx} />}\n                        </React.Fragment>\n                    );\n                })}\n            </Box>\n\n            <Box marginTop={1}><Separator /></Box>\n            {renderFooter()}\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing',
+                action: () => {
+                    reviewActions.load('2'); // Use tx '2' which has scripts
+                    appActions.showReviewProcessingScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (File Diff)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    useViewStore.getState().actions.setActiveOverlay('none');
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay('none');
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        });
+
+        return {
+            selectedIndex,
+            menuItems,
+        };
+    };
+  docs/relaycode-tui/dashboard-screen.readme.md: >
+    # DASHBOARD-SCREEN.README.MD
+
+
+    ## Relaycode TUI: The Stateful Dashboard Screen
+
+
+    This document specifies the design and behavior of the stateful Dashboard
+    screen for Relaycode, triggered by the `relay watch` command. This is the
+    primary, long-running interface for the application.
+
+
+    ### 1. Core Philosophy
+
+
+    The Dashboard is the user's "Heads-Up Display" (HUD) for all Relaycode
+    activity. It must be more than a simple log stream; it is an interactive and
+    stateful command center.
+
+
+    -   **High Information Density:** The screen is designed to present the most
+    critical information—system status, pending actions, and recent history—in a
+    compact, instantly scannable format.
+
+    -   **Live & Dynamic:** Every part of the UI reflects the real-time state of
+    the application. The status header updates, the event stream grows, and
+    action counts change as events occur, even without user interaction.
+
+    -   **Keyboard-First Command Center:** All primary user actions (reviewing,
+    approving, committing, pausing) are accessible via single-keystroke
+    shortcuts, making the workflow incredibly fast for power users.
+
+    -   **Clear State Transitions:** The UI provides unambiguous feedback for
+    its state, whether it's actively listening, paused, or in the middle of a
+    blocking operation.
+
+
+    ### 2. UI Layout Components
+
+
+    The screen maintains a consistent single-column layout, divided into three
+    key regions:
+
+
+    1.  **Header:** `▲ relaycode dashboard` - Static branding.
+
+    2.  **Status Bar:** A high-level summary of the system's current state,
+    including the watcher status and counts of pending approvals and commits.
+
+    3.  **Body / Event Stream:** The main content area. This is a
+    reverse-chronological list of the most recent transaction events. It is
+    navigable and serves as the entry point for drilling down into specific
+    transactions.
+
+    4.  **Footer / Action Bar:** A single line at the bottom that dynamically
+    displays the available keyboard shortcuts for the current state.
+
+
+    ### 3. The State Machine & Visuals
+
+
+    The Dashboard exists in several distinct states, each with a unique visual
+    representation and set of available actions.
+
+
+    ---
+
+
+    #### **State 3.1: Active & Listening (Default State)**
+
+
+    This is the primary operational state. The system is actively monitoring the
+    clipboard for new patches.
+
+
+    ```
+     ▲ relaycode dashboard
+     ──────────────────────────────────────────────────────────────────────────────
+     STATUS: ● LISTENING · APPROVALS: 01 · COMMITS: 03
+
+      EVENT STREAM (Last 15 minutes)
+
+      > -15s   ? PENDING   e4a7c112 · fix: add missing error handling
+        -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+        -5m    → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
+        -8m    ↩ REVERTED  b2c9e04d · Reverting transaction 9c2e1a05
+        -9m    ✗ FAILED    9c2e1a05 · style: update button component (Linter errors: 5)
+        -12m   → COMMITTED c7d6b5e0 · docs: update readme with TUI spec
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · (P)ause · (Q)uit
+    ```
+
+    -   **Behavior:** The Event Stream updates in real-time as new patches are
+    detected and processed. The `APPROVALS` and `COMMITS` counters increment or
+    decrement accordingly.
+
+    -   **Interactions:** All primary actions are available. `(Enter)` on a
+    `PENDING` item transitions to the **Apply & Review Screen**. `(Enter)` on
+    any other item transitions to the **Transaction Details Screen**.
+
+
+    ---
+
+
+    #### **State 3.2: Paused**
+
+
+    The user has intentionally suspended clipboard monitoring. This is a clear,
+    deliberate state.
+
+
+    **Trigger:** User presses `(P)`.
+
+
+    ```
+     ▲ relaycode dashboard
+     ──────────────────────────────────────────────────────────────────────────────
+     STATUS: || PAUSED · APPROVALS: 01 · COMMITS: 03
+
+      EVENT STREAM ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (↑↓) Nav · (Enter) Review · (R)esume · (A)pprove All · (C)ommit All · (Q)uit
+    ```
+
+    -   **Behavior:** The `LISTENING` status and `●` icon change to `PAUSED` and
+    `||`. No new events will appear in the stream.
+
+    -   **Footer Changes:** The `(P)ause` action in the footer is replaced with
+    `(R)esume`. All other management actions remain available. Pressing `(R)`
+    returns to the **Active & Listening** state.
+
+
+    ---
+
+
+    #### **State 3.3: Confirmation Overlay (Blocking Modal)**
+
+
+    To prevent accidental bulk actions, a modal confirmation overlay appears.
+
+
+    **Trigger:** User presses `(A)` to Approve All or `(C)` to Commit All.
+
+
+    ```
+     ▲ relaycode dashboard
+     ──────────────────────────────────────────────────────────────────────────────
+     STATUS: ● LISTENING · APPROVALS: ┌ 01 ┐ · COMMITS: 03
+                                     └────┘
+      APPROVE ALL PENDING TRANSACTIONS?
+
+      The following transaction will be approved:
+      - e4a7c112: fix: add missing error handling
+
+     ──────────────────────────────────────────────────────────────────────────────
+     (Enter) Confirm      (Esc) Cancel
+     ──────────────────────────────────────────────────────────────────────────────
+      EVENT STREAM ... (pushed down but visible)
+    ```
+
+    -   **Behavior:** This is a blocking modal. The main UI is frozen. The
+    overlay clearly states the action and its scope. A subtle box `┌ ┐`
+    highlights the relevant counter in the status bar.
+
+    -   **Footer Changes:** The action bar is reduced to only `Confirm` and
+    `Cancel`.
+
+    -   **Transition:** `(Enter)` proceeds to the **In-Progress** state. `(Esc)`
+    dismisses the overlay and returns to the previous state.
+
+
+    ---
+
+
+    #### **State 3.4: In-Progress Operation**
+
+
+    Provides critical feedback while a potentially long-running background task
+    is executing.
+
+
+    **Trigger:** User confirms an overlay or uses a force hotkey (e.g.,
+    `Shift+A`).
+
+
+    ```
+     ▲ relaycode dashboard
+     ──────────────────────────────────────────────────────────────────────────────
+     STATUS: ● APPROVING... · APPROVALS: (●) · COMMITS: 03
+
+      EVENT STREAM (Last 15 minutes)
+
+      > -15s   ● Approving... e4a7c112 · fix: add missing error handling
+        -2m    ✓ APPLIED      4b9d8f03 · refactor: simplify clipboard logic
+        ...
+
+     ──────────────────────────────────────────────────────────────────────────────
+     Processing... This may take a moment.
+    ```
+
+    -   **Behavior:** The main `STATUS` indicator changes to reflect the action
+    (e.g., `APPROVING...`, `COMMITTING...`). The relevant counter is replaced
+    with a spinner `(●)`. In the event stream, the status icon for the affected
+    items also changes to a spinner. The footer displays a simple,
+    non-interactive "Processing..." message.
+
+    -   **Transition:** Upon completion, the screen returns to the **Active &
+    Listening** state, with the counters and event stream updated to reflect the
+    results of the operation.
+
+
+    ### 4. Event Stream Iconography
+
+
+    The icons are critical for at-a-glance comprehension of the transaction
+    history.
+
+
+    | Symbol | Status | Meaning |
+
+    | :--- | :--- | :--- |
+
+    | `?` | **PENDING** | Patch applied, awaiting user approval. |
+
+    | `✓` | **APPLIED** | Transaction approved and committed to local state. |
+
+    | `→` | **COMMITTED** | Transaction has been included in a git commit. |
+
+    | `✗` | **FAILED** | Patch failed to apply or was rejected by the user. |
+
+    | `↩` | **REVERTED** | This is a revert transaction, undoing a previous one.
+    |
+
+    | `●` | **IN-PROGRESS** | An operation (e.g., approving, committing) is
+    currently running on this item. |
+
+
+    ### 5. Implementation Notes
+
+
+    -   **State Management:** The TUI must be driven by a central state object.
+    Any change to this state (e.g., `status: 'listening'` to `status: 'paused'`)
+    should trigger a re-render of the necessary components (Status Bar, Footer).
+
+    -   **Event Bus:** The core logic (clipboard watcher, patch processor)
+    should emit events (e.g., `new_patch_detected`, `transaction_approved`). The
+    Dashboard UI subscribes to these events to update its state and re-render.
+
+    -   **Component-based Rendering:** The screen should be thought of as
+    components (`StatusBar`, `EventStream`, `ActionBar`). When state changes,
+    only the affected components need to be redrawn to prevent flickering and
+    improve performance.
+
+    -   **Force Hotkeys:** `Shift+A` (Force Approve) and `Shift+C` (Force
+    Commit) should bypass the **Confirmation Overlay** and go directly to the
+    **In-Progress Operation** state. This provides a valuable shortcut for
+    expert users.
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 123

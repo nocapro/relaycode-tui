@@ -1,0 +1,445 @@
+uuid: ccf11a6d-e99d-4874-a63e-40089e27c73a
+projectId: relaycode-tui
+createdAt: '2025-09-25T05:24:06.950Z'
+gitCommitMsg: >-
+  feat(dashboard): implement event stream drill-down
+
+  Adds an interactive drill-down feature to the dashboard's event stream. Users
+  can now expand a transaction item to view key stats and a list of affected
+  files without leaving the main screen.
+
+  - Updates the dashboard store to manage the expanded item state. - Implements
+  keyboard navigation with left/right arrows and Enter to expand, collapse, and
+  view details. - Adds a new `ExpandedEventInfo` sub-component to display file
+  lists and stats. - Updates the footer to reflect new keyboard shortcuts. -
+  Adds the 'HANDOFF' status icon for completeness.
+promptSummary: Implement dashboard drill-down feature.
+reasoning:
+  - >-
+    I will now execute the plan to refactor the Dashboard screen, focusing on
+    Parts 1, 2, and 3 as requested. This involves enhancing the state management
+    for expanded views, implementing the UI for this drill-down feature, and
+    wiring up the interaction logic.
+  - '### Part 1: State and Utility Modifications'
+  - >-
+    First, I'll update `dashboard.store.ts` to manage the state of expanded
+    items in the event stream. This includes adding a property to track the
+    expanded transaction and actions to control it. I will also add a
+    `clearTransactions` action to `transaction.store.ts` to facilitate testing
+    the empty state, as you requested.
+  - '### Part 2 & 3: UI Implementation and Interaction Logic'
+  - >-
+    Next, I'll update the interaction hook, `useDashboardScreen.tsx`, to handle
+    the new keyboard inputs (`left`/`right` arrows and `Enter` for expanding)
+    and to expose the new state to the UI component.
+  - >-
+    Finally, I will modify the `DashboardScreen.tsx` component. This includes
+    creating a new sub-component for the expanded view, updating the event
+    stream items to show an expansion arrow and the status icon, and revising
+    the footer to include the new keyboard shortcuts.
+  - >-
+    These changes introduce the requested drill-down functionality to the
+    dashboard, making it a more interactive and informative hub for the
+    application.
+operations:
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: >+
+      --- src/stores/dashboard.store.ts
+
+      +++ src/stores/dashboard.store.ts
+
+      @@ -6,17 +6,20 @@
+           status: DashboardStatus;
+           previousStatus: DashboardStatus;
+           selectedTransactionIndex: number;
+      +    expandedTransactionId: string | null;
+           actions: {
+               togglePause: () => void;
+               moveSelectionUp: () => void;
+               moveSelectionDown: () => void;
+      +        toggleExpand: () => void;
+               startApproveAll: () => void;
+               confirmAction: () => Promise<void>;
+               cancelAction: () => void;
+               setStatus: (status: DashboardStatus) => void;
+      +        setExpandedTransactionId: (id: string | null) => void;
+           };
+       }
+       
+       export const useDashboardStore = create<DashboardState>((set, get) => ({
+           status: 'LISTENING',
+           previousStatus: 'LISTENING',
+           selectedTransactionIndex: 0,
+      +    expandedTransactionId: null,
+           actions: {
+               togglePause: () => set(state => ({
+                   status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+               })),
+               moveSelectionUp: () => set(state => {
+                   const { transactions } = useTransactionStore.getState();
+                   return {
+                       selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+      +                expandedTransactionId: null,
+                   };
+               }),
+               moveSelectionDown: () => set(state => {
+                   const { transactions } = useTransactionStore.getState();
+                   return {
+                       selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+      +                expandedTransactionId: null,
+                   };
+               }),
+      +        toggleExpand: () => set(state => {
+
+      +            const { transactions } = useTransactionStore.getState();
+
+      +            const selectedTx =
+      transactions[state.selectedTransactionIndex];
+
+      +            if (!selectedTx) return {};
+
+      +            return { expandedTransactionId: state.expandedTransactionId
+      === selectedTx.id ? null : selectedTx.id };
+
+      +        }),
+               startApproveAll: () => set(state => ({
+                   status: 'CONFIRM_APPROVE',
+                   previousStatus: state.status,
+      @@ -29,5 +42,6 @@
+                   await DashboardService.approveAll();
+                   set({ status: previousStatus });
+               },
+      +        setExpandedTransactionId: (id) => set({ expandedTransactionId: id
+      }),
+           },
+       }));
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction.store.ts
+    content: |
+      --- src/stores/transaction.store.ts
+      +++ src/stores/transaction.store.ts
+      @@ -8,6 +8,7 @@
+           actions: {
+               loadTransactions: () => void;
+               updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+      +        clearTransactions: () => void;
+           };
+       }
+       
+      @@ -23,6 +24,9 @@
+                           tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                       ),
+                   }));
+      +        },
+      +        clearTransactions: () => {
+      +            set({ transactions: [] });
+               },
+           },
+       }));
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDashboardScreen.tsx
+    content: >
+      --- src/hooks/useDashboardScreen.tsx
+
+      +++ src/hooks/useDashboardScreen.tsx
+
+      @@ -19,8 +19,10 @@
+               togglePause,
+               moveSelectionUp,
+               moveSelectionDown,
+               toggleExpand,
+               startApproveAll,
+      +        confirmAction,
+
+      +        cancelAction,
+           } = useDashboardStore(s => s.actions);
+           const appActions = useAppStore(s => s.actions);
+           const commitActions = useCommitStore(s => s.actions);
+      @@ -34,31 +36,36 @@
+       
+           useInput((input, key) => {
+               if (isModal) {
+      -            if (key.return) confirmAction();
+
+      +            if (key.return) void confirmAction();
+                   if (key.escape) cancelAction();
+                   return;
+               }
+       
+               if (isProcessing) return; // No input while processing
+       
+               if (key.upArrow) moveSelectionUp();
+               if (key.downArrow) moveSelectionDown();
+      -        if (key.rightArrow) toggleExpand();
+
+      +        if (key.rightArrow) {
+
+      +            toggleExpand();
+
+      +        }
+               if (key.leftArrow) {
+                   const selectedTx = transactions[selectedTransactionIndex];
+                   if (selectedTx && expandedTransactionId === selectedTx.id) {
+                       toggleExpand();
+                   }
+               }
+               
+               if (key.return) {
+                   const selectedTx = transactions[selectedTransactionIndex];
+                   if (!selectedTx) return;
+       
+      -            if (expandedTransactionId === selectedTx.id) { // Already
+      expanded, navigate
+
+      +            if (expandedTransactionId === selectedTx.id) { // Already
+      expanded, navigate to details
+                       if (selectedTx.status === 'PENDING') {
+                           useReviewStore.getState().actions.load(selectedTx.id);
+                           appActions.showReviewScreen();
+                       } else {
+                           useDetailStore.getState().actions.load(selectedTx.id);
+                           appActions.showTransactionDetailScreen();
+                       }
+      -            } else { // Not expanded, so expand it
+
+      +            } else { // Not expanded, so expand it first
+                       toggleExpand();
+                   }
+               }
+               
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: "--- src/components/DashboardScreen.tsx\n+++ src/components/DashboardScreen.tsx\n@@ -1,5 +1,6 @@\n import React from 'react';\n import { Box, Text } from 'ink';\n import Spinner from 'ink-spinner';\n import Separator from './Separator';\n-import type { Transaction, TransactionStatus } from '../types/domain.types';\n+import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';\n import { useDashboardScreen } from '../hooks/useDashboardScreen';\n import { UI_CONFIG } from '../config/ui.config';\n \n@@ -9,6 +10,7 @@\n         case 'PENDING': return <Text color=\"yellow\">?</Text>;\n         case 'APPLIED': return <Text color=\"green\">✓</Text>;\n         case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n+        case 'HANDOFF': return <Text color=\"magenta\">→</Text>;\n         case 'FAILED': return <Text color=\"red\">✗</Text>;\n         case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n         case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n@@ -22,38 +24,53 @@\n     return `${minutes}m`;\n };\n \n-const EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {\n-    const icon = getStatusIcon(transaction.status);\n-    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n-    const statusText = transaction.status.padEnd(11, ' ');\n-    const messageNode = transaction.status === 'IN-PROGRESS'\n-        ? <Text color=\"cyan\">{transaction.message}</Text>\n-        : transaction.message;\n+const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {\n+    const fileStats = transaction.stats\n+        ? `Stats: ${transaction.stats.files} files, +${transaction.stats.linesAdded}/-${transaction.stats.linesRemoved}`\n+        : 'Stats: Not available';\n \n-    return isSelected\n-        ? <Text bold color=\"cyan\">{'> '}{time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}</Text>\n-        : <Text>{'  '}{time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}</Text>;\n+    const getFileChangeTypeIcon = (type: FileChangeType) => {\n+        switch (type) {\n+            case 'MOD': return '[MOD]';\n+            case 'ADD': return '[ADD]';\n+            case 'DEL': return '[DEL]';\n+            case 'REN': return '[REN]';\n+        }\n+    };\n+\n+    return (\n+        <Box flexDirection=\"column\" paddingLeft={4} marginBottom={1}>\n+            <Text color=\"gray\">{fileStats}</Text>\n+            <Text color=\"gray\">Files:</Text>\n+            {(transaction.files || []).map(file => (\n+                <Text key={file.id} color=\"gray\">  {getFileChangeTypeIcon(file.type)} {file.path}</Text>\n+            ))}\n+        </Box>\n+    );\n+};\n+\n+const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {\n+    const icon = getStatusIcon(transaction.status);\n+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n+    const statusText = transaction.status.padEnd(11, ' ');\n+    const expandIcon = isExpanded ? '▾' : '▸';\n+    const messageNode = transaction.status === 'IN-PROGRESS'\n+        ? <Text color=\"cyan\">{transaction.message}</Text>\n+        : transaction.message;\n+    \n+    const content = (\n+        <Text>\n+            {time} {expandIcon} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n+        </Text>\n+    );\n+\n+    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n };\n \n const ConfirmationContent = ({\n-    actionText,\n     transactionsToConfirm,\n }: {\n-    actionText: 'APPROVE' | 'COMMIT';\n     transactionsToConfirm: Transaction[];\n }) => {\n+    const actionText = 'APPROVE';\n     \n     return (\n         <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n@@ -105,17 +122,17 @@\n                 (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n             </Text>\n         );\n-        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n \n         const pauseAction = status === 'PAUSED'\n-\t\t\t? '(R)esume'\n-\t\t\t: '(P)ause';\n+\t\t\t? <Text>(<Text color=\"cyan\" bold>P</Text>)resume</Text>\n+\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n \t\treturn (\n-            <Text>\n-                (↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · {pauseAction} · (Q)uit\n+            <Text color=\"gray\">\n+                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>→</Text>/Ent) View · (<Text color=\"cyan\" bold>←</Text>) Collapse · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n             </Text>\n         );\n     };\n@@ -129,23 +146,26 @@\n             \n             {isModal && (\n                 <>\n-                    <ConfirmationContent actionText=\"APPROVE\" transactionsToConfirm={transactionsToConfirm} />\n+                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                     <Separator />\n                 </>\n             )}\n             \n-            <Text bold> EVENT STREAM (Last 15 minutes)</Text>\n+            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n             <Box flexDirection=\"column\" marginTop={1}>\n-                {transactions.slice(viewOffset, viewOffset + viewportHeight).map(tx => {\n-                    const actualIndex = transactions.findIndex(t => t.id === tx.id);\n-                    return (\n-                        <EventStreamItem\n-                            key={tx.id}\n-                            transaction={tx}\n-                            isSelected={!isModal && actualIndex === selectedTransactionIndex}\n-                        />\n-                    );\n-                })}\n+                {transactions.slice(viewOffset, viewOffset + viewportHeight).map(tx => {\n+                    const actualIndex = transactions.findIndex(t => t.id === tx.id);\n+                    const isExpanded = tx.id === expandedTransactionId;\n+                    return (\n+                        <React.Fragment key={tx.id}>\n+                            <EventStreamItem\n+                                transaction={tx}\n+                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n+                                isExpanded={isExpanded}\n+                            />\n+                            {isExpanded && <ExpandedEventInfo transaction={tx} />}\n+                        </React.Fragment>\n+                    );\n+                })}\n             </Box>\n \n             <Box marginTop={1}><Separator /></Box>\n"
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { moveIndex } from './navigation.utils';
+
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'APPROVING';
+     
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus;
+        selectedTransactionIndex: number;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            setStatus: (status: DashboardStatus) => void;
+        };
+    }
+
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        selectedTransactionIndex: 0,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length) };
+            }),
+            moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return { selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length) };
+            }),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            setStatus: (status) => set({ status }),
+            confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                const previousStatus = get().previousStatus;
+                set({ status: 'APPROVING' });
+                await DashboardService.approveAll();
+                set({ status: previousStatus });
+            },
+        },
+    }));
+  src/stores/transaction.store.ts: >
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { useViewStore } from './view.store';
+
+    import type { Transaction, TransactionStatus } from '../types/domain.types';
+
+
+    export type { Transaction };
+
+
+    interface TransactionState {
+        transactions: Transaction[];
+        actions: {
+            loadTransactions: () => void;
+            updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        };
+    }
+
+
+    export const useTransactionStore = create<TransactionState>((set) => ({
+        transactions: [],
+        actions: {
+            loadTransactions: () => {
+                const transactions = TransactionService.getAllTransactions();
+                set({ transactions });
+            },
+            updateTransactionStatus: (id, status) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx =>
+                        tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                    ),
+                }));
+            },
+        },
+    }));
+
+
+    // --- Selectors ---
+
+
+    /** Selects transactions by their status. */
+
+    export const selectTransactionsByStatus = (status: TransactionStatus) =>
+    (state: TransactionState) =>
+        state.transactions.filter(tx => tx.status === status);
+
+    /** Selects the transaction currently targeted by the view store. */
+
+    export const selectSelectedTransaction = (state: TransactionState):
+    Transaction | undefined => {
+        const { selectedTransactionId } = useViewStore.getState();
+        return state.transactions.find(t => t.id === selectedTransactionId);
+    };
+  src/hooks/useDashboardScreen.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useViewport } from './useViewport';
+
+
+    export const useDashboardScreen = ({ reservedRows }: { reservedRows: number
+    }) => {
+        const {
+            status,
+            selectedTransactionIndex,
+        } = useDashboardStore();
+        const transactions = useTransactionStore(s => s.transactions);
+        const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
+        const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex: selectedTransactionIndex,
+            reservedRows,
+        });
+
+        const {
+            togglePause,
+            moveSelectionUp,
+            moveSelectionDown,
+            startApproveAll,
+            confirmAction,
+            cancelAction,
+        } = useDashboardStore(s => s.actions);
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+
+        const pendingApprovals = pendingTransactions.length;
+        const pendingCommits = appliedTransactions.length;
+
+        const isModal = status === 'CONFIRM_APPROVE';
+        const isProcessing = status === 'APPROVING';
+
+        useInput((input, key) => {
+            if (isModal) {
+                if (key.return) confirmAction();
+                if (key.escape) cancelAction();
+                return;
+            }
+
+            if (isProcessing) return; // No input while processing
+
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+            
+            if (key.return) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (selectedTx?.status === 'PENDING') {
+                    // For PENDING transactions, we still go to the review screen.
+                    useReviewStore.getState().actions.load(selectedTx.id);
+                    appActions.showReviewScreen();
+                } else if (selectedTx) {
+                    useDetailStore.getState().actions.load(selectedTx.id);
+                    appActions.showTransactionDetailScreen();
+                }
+            }
+            
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                useHistoryStore.getState().actions.load();
+                appActions.showTransactionHistoryScreen();
+            }
+        });
+        const transactionsToConfirm = status === 'CONFIRM_APPROVE' ? pendingTransactions : [];
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/components/DashboardScreen.tsx: "import React from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport Separator from './Separator';\nimport type { Transaction, TransactionStatus } from '../types/domain.types';\nimport { useDashboardScreen } from '../hooks/useDashboardScreen';\nimport { UI_CONFIG } from '../config/ui.config';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    switch (status) {\n        case 'PENDING': return <Text color=\"yellow\">?</Text>;\n        case 'APPLIED': return <Text color=\"green\">✓</Text>;\n        case 'COMMITTED': return <Text color=\"blue\">→</Text>;\n        case 'HANDOFF': return <Text color=\"magenta\">→</Text>;\n        case 'FAILED': return <Text color=\"red\">✗</Text>;\n        case 'REVERTED': return <Text color=\"gray\">↩</Text>;\n        case 'IN-PROGRESS': return <Spinner type=\"dots\" />;\n        default: return <Text> </Text>;\n    }\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `-${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `-${minutes}m`;\n};\n\nconst EventStreamItem = ({ transaction, isSelected }: { transaction: Transaction, isSelected: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    \n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {icon} {statusText} <Text color=\"gray\">{transaction.hash}</Text> · {messageNode}\n        </Text>\n    );\n\n    return isSelected ? <Text bold color=\"cyan\">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n    } = useDashboardScreen({ reservedRows: UI_CONFIG.dashboard.reservedRows });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>;\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === 'APPROVING') approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === 'CONFIRM_APPROVE') {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <Text>\n                (<Text color=\"cyan\" bold>Enter</Text>) Confirm      (<Text color=\"cyan\" bold>Esc</Text>) Cancel\n            </Text>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n        const pauseAction = status === 'PAUSED'\n\t\t\t? <Text>(<Text color=\"cyan\" bold>P</Text>)resume</Text>\n\t\t\t: <Text>(<Text color=\"cyan\" bold>P</Text>)ause</Text>;\n\t\treturn (\n            <Text color=\"gray\">\n                (<Text color=\"cyan\" bold>↑↓</Text>) Nav · (<Text color=\"cyan\" bold>Enter</Text>) Review · (<Text color=\"cyan\" bold>L</Text>)og · (<Text color=\"cyan\" bold>A</Text>)pprove All · (<Text color=\"cyan\" bold>C</Text>)ommit All · {pauseAction} · (<Text color=\"cyan\" bold>Q</Text>)uit\n            </Text>\n        );\n    };\n    \n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            <Text color=\"cyan\">▲ relaycode dashboard</Text>\n            <Separator />\n            <Box marginY={1}>\n                {renderStatusBar()}\n            </Box>\n            \n            {isModal && (\n                <>\n                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                    <Separator />\n                </>\n            )}\n            \n            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                    const actualIndex = viewOffset + index;\n                    return (\n                        <EventStreamItem\n                            key={tx.id}\n                            transaction={tx}\n                            isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                        />\n                    );\n                })}\n            </Box>\n\n            <Box marginTop={1}><Separator /></Box>\n            {renderFooter()}\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 124

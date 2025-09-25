@@ -39,18 +39,18 @@ This is the primary operational state. The system is actively monitoring the cli
 
   EVENT STREAM (Last 15 minutes)
 
-  > -15s   ? PENDING   e4a7c112 · fix: add missing error handling
-    -2m    ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
-    -5m    → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
-    -8m    ↩ REVERTED  b2c9e04d · Reverting transaction 9c2e1a05
-    -9m    ✗ FAILED    9c2e1a05 · style: update button component (Linter errors: 5)
-    -12m   → COMMITTED c7d6b5e0 · docs: update readme with TUI spec
+  > -15s   ▸ ? PENDING   e4a7c112 · fix: add missing error handling
+    -2m    ▸ ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+    -5m    ▸ → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
+    -8m    ▸ ↩ REVERTED  b2c9e04d · Reverting transaction 9c2e1a05
+    -9m    ▸ ✗ FAILED    9c2e1a05 · style: update button component (Linter errors: 5)
+    -12m   ▸ → COMMITTED c7d6b5e0 · docs: update readme with TUI spec
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) Review · (A)pprove All · (C)ommit All · (P)ause · (Q)uit
+ (↑↓) Nav · (→/Ent) View · (←) Collapse · (A)pprove All · (C)ommit All · (P)ause · (Q)uit
 ```
 -   **Behavior:** The Event Stream updates in real-time as new patches are detected and processed. The `APPROVALS` and `COMMITS` counters increment or decrement accordingly.
--   **Interactions:** All primary actions are available. `(Enter)` on a `PENDING` item transitions to the **Apply & Review Screen**. `(Enter)` on any other item transitions to the **Transaction Details Screen**.
+-   **Interactions:** All primary actions are available. `(→)` or `(Enter)` expands an item. Pressing `(Enter)` on an *expanded* `PENDING` item transitions to the **Apply & Review Screen**. Pressing `(Enter)` on any other *expanded* item transitions to the **Transaction Details Screen**.
 
 ---
 
@@ -68,7 +68,7 @@ The user has intentionally suspended clipboard monitoring. This is a clear, deli
   EVENT STREAM ...
 
  ──────────────────────────────────────────────────────────────────────────────
- (↑↓) Nav · (Enter) Review · (R)esume · (A)pprove All · (C)ommit All · (Q)uit
+ (↑↓) Nav · (→/Ent) View · (←) Collapse · (R)esume · (A)pprove All · (C)ommit All · (Q)uit
 ```
 -   **Behavior:** The `LISTENING` status and `●` icon change to `PAUSED` and `||`. No new events will appear in the stream.
 -   **Footer Changes:** The `(P)ause` action in the footer is replaced with `(R)esume`. All other management actions remain available. Pressing `(R)` returns to the **Active & Listening** state.
@@ -116,7 +116,7 @@ Provides critical feedback while a potentially long-running background task is e
   EVENT STREAM (Last 15 minutes)
 
   > -15s   ● Approving... e4a7c112 · fix: add missing error handling
-    -2m    ✓ APPLIED      4b9d8f03 · refactor: simplify clipboard logic
+    -2m    ▸ ✓ APPLIED      4b9d8f03 · refactor: simplify clipboard logic
     ...
 
  ──────────────────────────────────────────────────────────────────────────────
@@ -124,6 +124,38 @@ Provides critical feedback while a potentially long-running background task is e
 ```
 -   **Behavior:** The main `STATUS` indicator changes to reflect the action (e.g., `APPROVING...`, `COMMITTING...`). The relevant counter is replaced with a spinner `(●)`. In the event stream, the status icon for the affected items also changes to a spinner. The footer displays a simple, non-interactive "Processing..." message.
 -   **Transition:** Upon completion, the screen returns to the **Active & Listening** state, with the counters and event stream updated to reflect the results of the operation.
+
+---
+
+#### **State 3.5: Active with Expanded Item**
+
+This state provides a quick look into a transaction's details without leaving the dashboard.
+
+**Trigger:** User presses `(→)` or `(Enter)` on a selected event.
+
+```
+ ▲ relaycode dashboard
+ ──────────────────────────────────────────────────────────────────────────────
+ STATUS: ● LISTENING · APPROVALS: 01 · COMMITS: 03
+
+  EVENT STREAM (Last 15 minutes)
+
+  > -15s   ▾ ? PENDING   e4a7c112 · fix: add missing error handling
+        Stats: 3 files, +18/-5 lines
+        Files:
+          [MOD] src/core/transaction.ts
+          [MOD] src/utils/logger.ts
+          [MOD] src/commands/apply.ts
+    -2m    ▸ ✓ APPLIED   4b9d8f03 · refactor: simplify clipboard logic
+    -5m    ▸ → COMMITTED 8a3f21b8 · feat: implement new dashboard UI
+    ...
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (↑↓) Nav · (Enter) Review · (←) Collapse · (A)pprove All · (C)ommit All · (Q)uit
+```
+-   **Behavior:** The event stream allows drilling into a single transaction to see a summary of stats and affected files. Only one item can be expanded at a time. Navigating with `(↑↓)` collapses the currently expanded item.
+-   **Footer Changes:** The `(→/Ent) View` action is replaced with context-specific actions like `(Enter) Review` or `(Enter) Details`, and `(←) Collapse` becomes prominent.
+-   **Transition:** `(Enter)` on an expanded `PENDING` item transitions to the **Apply & Review Screen**. `(Enter)` on any other expanded item goes to the **Transaction Details Screen**. `(←)` collapses the item, returning to the **Active & Listening** state.
 
 ### 4. Event Stream Iconography
 

@@ -1,0 +1,122 @@
+uuid: f191b5c4-7221-4f11-9a70-8e7c2f1fef06
+projectId: relaycode-tui
+createdAt: '2025-09-25T05:37:48.378Z'
+gitCommitMsg: >-
+  fix(store): correct syntax error in dashboard store
+
+  Removes a trailing comma within the `actions` object in `useDashboardStore`
+  that was causing TypeScript compilation to fail.
+promptSummary: >-
+  The user reported a TypeScript compilation error in
+  `src/stores/dashboard.store.ts` due to a syntax error. I am providing a patch
+  to fix it.
+reasoning:
+  - >-
+    I apologize for that syntax error. A stray comma snuck into the
+    `dashboard.store.ts` file. I have removed it.
+  - Here is the patch to fix the compilation issue.
+operations:
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: |
+      --- src/stores/dashboard.store.ts
+      +++ src/stores/dashboard.store.ts
+      @@ -69,7 +69,6 @@
+                   }
+               },
+               setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+      -        },
+           },
+       }));
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { moveIndex } from './navigation.utils';
+
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'APPROVING';
+     
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus;
+        selectedTransactionIndex: number;
+        expandedTransactionId: string | null;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            setStatus: (status: DashboardStatus) => void;
+            toggleExpand: () => void;
+            setExpandedTransactionId: (id: string | null) => void;
+        };
+    }
+
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        selectedTransactionIndex: 0,
+        expandedTransactionId: null,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            setStatus: (status) => set({ status }),
+            confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                const previousStatus = get().previousStatus;
+                set({ status: 'APPROVING' });
+                await DashboardService.approveAll();
+                set({ status: previousStatus });
+            },
+            toggleExpand: () => {
+                const { selectedTransactionIndex, expandedTransactionId } = get();
+                const { transactions } = useTransactionStore.getState();
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (!selectedTx) return;
+
+                if (expandedTransactionId === selectedTx.id) {
+                    set({ expandedTransactionId: null });
+                } else {
+                    set({ expandedTransactionId: selectedTx.id });
+                }
+            },
+            setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+            },
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 128

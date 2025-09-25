@@ -12,6 +12,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
     const {
         status,
         selectedTransactionIndex,
+        expandedTransactionId,
     } = useDashboardStore();
     const transactions = useTransactionStore(s => s.transactions);
     const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
@@ -29,6 +30,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
         startApproveAll,
         confirmAction,
         cancelAction,
+        toggleExpand,
     } = useDashboardStore(s => s.actions);
     const appActions = useAppStore(s => s.actions);
     const commitActions = useCommitStore(s => s.actions);
@@ -48,18 +50,38 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
 
         if (isProcessing) return; // No input while processing
 
+        if (key.leftArrow) {
+            if (expandedTransactionId) {
+                toggleExpand();
+            }
+            return;
+        }
+        if (key.rightArrow) {
+            if (transactions[selectedTransactionIndex] && !expandedTransactionId) {
+                toggleExpand();
+            }
+            return;
+        }
+
         if (key.upArrow) moveSelectionUp();
         if (key.downArrow) moveSelectionDown();
         
         if (key.return) {
             const selectedTx = transactions[selectedTransactionIndex];
-            if (selectedTx?.status === 'PENDING') {
-                // For PENDING transactions, we still go to the review screen.
-                useReviewStore.getState().actions.load(selectedTx.id);
-                appActions.showReviewScreen();
-            } else if (selectedTx) {
-                useDetailStore.getState().actions.load(selectedTx.id);
-                appActions.showTransactionDetailScreen();
+            if (!selectedTx) return;
+            
+            const isExpanded = expandedTransactionId === selectedTx.id;
+
+            if (isExpanded) {
+                if (selectedTx.status === 'PENDING') {
+                    useReviewStore.getState().actions.load(selectedTx.id);
+                    appActions.showReviewScreen();
+                } else {
+                    useDetailStore.getState().actions.load(selectedTx.id);
+                    appActions.showTransactionDetailScreen();
+                }
+            } else {
+                toggleExpand();
             }
         }
         
@@ -80,6 +102,7 @@ export const useDashboardScreen = ({ reservedRows }: { reservedRows: number }) =
         status,
         transactions,
         selectedTransactionIndex,
+        expandedTransactionId,
         pendingApprovals,
         pendingCommits,
         isModal,
