@@ -113,8 +113,6 @@ const ReviewScreen = () => {
         patchStatus,
         selectedItemIndex,
         bodyView,
-        isDiffExpanded,
-        reasoningScrollIndex,
         scriptErrorIndex,
         fileReviewStates,
         numFiles,
@@ -139,6 +137,20 @@ const ReviewScreen = () => {
     const renderBody = () => {
         if (bodyView === REVIEW_BODY_VIEWS.NONE) return null;
 
+        if (bodyView === REVIEW_BODY_VIEWS.PROMPT) {
+            const promptText = prompt || '';
+            return (
+                <Box flexDirection="column">
+                    <ContentView
+                        title="PROMPT"
+                        content={promptText}
+                        scrollIndex={contentScrollIndex}
+                        maxHeight={Math.max(1, availableBodyHeight)}
+                    />
+                </Box>
+            );
+        }
+
         if (bodyView === REVIEW_BODY_VIEWS.REASONING) {
             const reasoningText = reasoning || '';
             const reasoningLinesCount = reasoningText.split('\n').length;
@@ -153,7 +165,7 @@ const ReviewScreen = () => {
                     />
                     {reasoningLinesCount > visibleLinesCount && (
                         <Text color="gray">
-                            Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                            Showing lines {contentScrollIndex + 1}-{Math.min(contentScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
                             of {reasoningLinesCount}
                         </Text>
                     )}
@@ -170,7 +182,7 @@ const ReviewScreen = () => {
                     title={`DIFF: ${selectedFile.path}`}
                     content={selectedFile.diff}
                     highlight="diff"
-                    isExpanded={isDiffExpanded}
+                    isExpanded={true}
                     scrollIndex={contentScrollIndex}
                 />
             );
@@ -297,6 +309,8 @@ const ReviewScreen = () => {
     const renderFooter = () => {
         // Contextual footer for body views
         switch (bodyView) {
+            case REVIEW_BODY_VIEWS.PROMPT:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.PROMPT_VIEW} />;
             case REVIEW_BODY_VIEWS.DIFF:
                 return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.DIFF_VIEW}/>;
             case REVIEW_BODY_VIEWS.REASONING:

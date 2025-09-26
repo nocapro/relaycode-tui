@@ -4,9 +4,38 @@ chrome extension suggestion
 
 ===
 
+lets refactor user experience for all screens for consistency... so I want pair back nav of Q and Esc with arrow left for easier navigation... so at max depth expansion, should auto go back, so no need to press Q to navigate previous screen
+
+=== DONE
+
+review screen
+
+1. at max arrow left de expansion root, should auto go back, so no need to press Q to navigate previous screen
+
+2. we need reject transaction footer action
+
+
+=== DONE
+
+fix: review screen :
+
+1. enter key should expand and de expand, so no need X key?
+
+2. up/down navigation while of opening prompt, reasoning, script content shoul also work
+
+=== DONE
+
+1. fix: currently review screen cannot open diff while file status is all green, red/fail.
+
+2. clicking enter on event stream should not expand, but should navigate to another screen. only arrow left right for expand de expand
+
+3. fix: prompt cannot be open on review screen, only reasoning can
+
+=== DONE
+
 review screen;
 
-1. currently, I hate when cannot open diff while file status is green, red/fail.
+1. currently, I hate when cannot open diff while file status is all green, red/fail.
 2. opening diff should not only by `D`, but also enter
 3. we also want to navigate up down file diffs while diff open,
 

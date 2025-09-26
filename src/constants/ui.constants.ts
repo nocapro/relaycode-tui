@@ -2,6 +2,7 @@ export const TRANSACTION_STATUS_UI = {
     COMMITTED: { text: '✓ Committed', color: 'green' },
     HANDOFF: { text: '→ Handoff', color: 'magenta' },
     REVERTED: { text: '↩ Reverted', color: 'gray' },
+    REJECTED: { text: '✗ Rejected', color: 'red' },
     APPLIED: { text: '✓ Applied', color: 'blue' },
     COMMITTING: { text: '→ Committing', color: 'magenta' },
     PENDING: { text: '? Pending', color: 'yellow' },

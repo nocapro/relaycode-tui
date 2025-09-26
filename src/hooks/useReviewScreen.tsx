@@ -11,6 +11,7 @@ import { useContentViewport } from './useContentViewport';
 import { UI_CONFIG } from '../config/ui.config';
 import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
 import { useListNavigator } from './useListNavigator';
+import type { ReviewBodyView } from '../stores/review.store';
 import { useViewport } from './useViewport';
 
 type NavigableItem =
@@ -80,6 +81,8 @@ export const useReviewScreen = () => {
         switch (bodyView) { //
             case REVIEW_BODY_VIEWS.REASONING:
                 return (transaction?.reasoning || '').split('\n').length;
+            case REVIEW_BODY_VIEWS.PROMPT:
+                return (transaction?.prompt || '').split('\n').length;
             case REVIEW_BODY_VIEWS.DIFF: {
                 if (currentItem?.type !== 'file') return 0;
                 const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
@@ -124,29 +127,12 @@ export const useReviewScreen = () => {
     const scripts = transaction?.scripts || [];
 
     const {
-        setSelectedItemIndex,
-        expandDiff,
-        toggleBodyView,
-        setBodyView,
-        startApplySimulation,
-        approve,
-        tryRepairFile,
-        tryInstruct,
-        showBulkRepair,
-        showBulkInstruct,
-        executeBulkRepairOption,
-        executeBulkInstructOption,
-        confirmHandoff,
-        scrollReasoningUp,
-        scrollReasoningDown,
-        navigateScriptErrorUp,
-        navigateScriptErrorDown,
-        toggleFileApproval,
-        rejectAllFiles,
-        navigateBulkRepairUp,
-        navigateBulkRepairDown,
-        navigateBulkInstructUp,
-        navigateBulkInstructDown,
+        setSelectedItemIndex, toggleBodyView, setBodyView, startApplySimulation, approve,
+        rejectTransaction, tryRepairFile, tryInstruct, showBulkRepair, showBulkInstruct,
+        executeBulkRepairOption, executeBulkInstructOption, confirmHandoff,
+        navigateScriptErrorUp, navigateScriptErrorDown, toggleFileApproval,
+        rejectAllFiles, navigateBulkRepairUp, navigateBulkRepairDown,
+        navigateBulkInstructUp, navigateBulkInstructDown,
     } = store.actions;
 
     const openCopyMode = () => {
@@ -154,6 +140,20 @@ export const useReviewScreen = () => {
         const currentItem = navigableItems[selectedItemIndex];
         const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
         useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+    };
+
+    const navigateToNextItem = () => {
+        if (selectedItemIndex < navigableItems.length - 1) {
+            setSelectedItemIndex(selectedItemIndex + 1);
+            contentViewport.actions.resetScroll();
+        }
+    };
+
+    const navigateToPreviousItem = () => {
+        if (selectedItemIndex > 0) {
+            setSelectedItemIndex(selectedItemIndex - 1);
+            contentViewport.actions.resetScroll();
+        }
     };
 
     const navigateToNextFile = () => {
@@ -186,6 +186,12 @@ export const useReviewScreen = () => {
             startApplySimulation(transaction.id, 'failure'); return true;
         }
         // The 'q' (quit/back) is now handled by the global hotkey hook.
+
+        const currentItem = navigableItems[selectedItemIndex];
+        if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+            toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+            return true;
+        }
 
         if (key.escape) {
             switch (bodyView) {
@@ -236,36 +242,26 @@ export const useReviewScreen = () => {
     };
 
     const handleContentScrollInput = (key: Key): boolean => {
-        const contentViews = [
+        const contentViews: ReviewBodyView[] = [
             REVIEW_BODY_VIEWS.REASONING,
             REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
             REVIEW_BODY_VIEWS.DIFF,
-        ] as const;
-        if (!(contentViews as readonly string[]).includes(bodyView)) return false;
+            REVIEW_BODY_VIEWS.PROMPT,
+        ];
+        if (!contentViews.includes(bodyView)) return false;
 
-        if (key.upArrow && bodyView !== REVIEW_BODY_VIEWS.DIFF) {
-            contentViewport.actions.scrollUp();
-            return true;
-        }
-        if (key.downArrow && bodyView !== REVIEW_BODY_VIEWS.DIFF) {
-            contentViewport.actions.scrollDown();
-            return true;
-        }
         if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
         if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
         return false;
     };
 
     const handleReasoningInput = (input: string, key: Key): void => {
-        if (key.upArrow) scrollReasoningUp();
-        if (key.downArrow) scrollReasoningDown();
         if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
     };
 
     const handleScriptOutputInput = (input: string, key: Key): void => {
         if (input.toLowerCase() === 'j') navigateScriptErrorDown();
         if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-        if (key.return) toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
         if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
             const currentItem = navigableItems[selectedItemIndex];
             const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
@@ -288,11 +284,15 @@ export const useReviewScreen = () => {
             navigateToNextFile();
             return;
         }
-        if (input.toLowerCase() === 'x') expandDiff();
-        if (input.toLowerCase() === 'd' || key.escape) toggleBodyView('diff');
+        if (input.toLowerCase() === 'd') toggleBodyView('diff');
     };
 
     const handleMainNavigationInput = (input: string, key: Key): void => {
+        if (key.leftArrow) {
+            showDashboardScreen();
+            return;
+        }
+
         // Handle Shift+R for reject all
         if (key.shift && input.toLowerCase() === 'r') {
             if (approvedFilesCount > 0 && transaction) {
@@ -312,8 +312,8 @@ export const useReviewScreen = () => {
             }
         }
 
-        if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
-            toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+        if (input.toLowerCase() === 'p') {
+            toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
         }
 
         if (input.toLowerCase() === 'r') {
@@ -323,6 +323,8 @@ export const useReviewScreen = () => {
         if (key.return) { // Enter key
             if (currentItem?.type === 'file') {
                 toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+            } else if (currentItem?.type === 'prompt') {
+                toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
             } else if (currentItem?.type === 'reasoning') {
                 toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
             } else if (currentItem?.type === 'script') {
@@ -335,6 +337,10 @@ export const useReviewScreen = () => {
                 approve();
                 showDashboardScreen();
             }
+        }
+
+        if (input.toLowerCase() === 'x') {
+            rejectTransaction();
         }
 
         if (input.toLowerCase() === 'c') {
@@ -374,6 +380,37 @@ export const useReviewScreen = () => {
 
     useInput((input: string, key: Key) => {
         if (handleGlobalInput(input, key)) return;
+
+        if (key.leftArrow) {
+            // Allow left arrow to collapse any open body view
+            setBodyView(REVIEW_BODY_VIEWS.NONE);
+            return;
+        }
+
+        // Global "Enter to collapse" handler for non-modal views
+        if (key.return) {
+            if (
+                bodyView !== REVIEW_BODY_VIEWS.BULK_REPAIR &&
+                bodyView !== REVIEW_BODY_VIEWS.BULK_INSTRUCT &&
+                bodyView !== REVIEW_BODY_VIEWS.CONFIRM_HANDOFF &&
+                bodyView !== REVIEW_BODY_VIEWS.NONE
+            ) {
+                setBodyView(REVIEW_BODY_VIEWS.NONE);
+                return;
+            }
+        }
+
+        // Allow up/down list navigation even when a content view is open
+        const listNavigableBodyViews: ReviewBodyView[] = [
+            REVIEW_BODY_VIEWS.PROMPT, REVIEW_BODY_VIEWS.REASONING, REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+        ];
+
+        if (listNavigableBodyViews.includes(bodyView)) {
+            if (key.upArrow) { navigateToPreviousItem(); return; }
+            if (key.downArrow) { navigateToNextItem(); return; }
+        }
+
+        // Handle content scrolling (PgUp/PgDn)
         if (handleContentScrollInput(key)) return;
 
         switch (bodyView) {

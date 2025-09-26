@@ -29,8 +29,6 @@ interface ReviewState {
     applySteps: ApplyStep[];
     selectedItemIndex: number;
     bodyView: ReviewBodyView;
-    isDiffExpanded: boolean;
-    reasoningScrollIndex: number;
     scriptErrorIndex: number;
     processingStartTime: number | null;
     fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
@@ -43,13 +41,13 @@ interface ReviewState {
     actions: {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
         setSelectedItemIndex: (index: number) => void;
-        expandDiff: () => void;
         toggleBodyView: (view: Extract<
-            ReviewBodyView, 'bulk_instruct' |
+            ReviewBodyView, 'prompt' | 'bulk_instruct' |
             'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
         >) => void;
         setBodyView: (view: ReviewBodyView) => void;
         approve: () => void;
+        rejectTransaction: () => void;
         startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
         tryRepairFile: (fileId: string) => void;
         showBulkRepair: () => void;
@@ -61,8 +59,6 @@ interface ReviewState {
         showBulkInstruct: () => void;
         executeBulkInstructOption: (option: number) => Promise<void>;
         confirmHandoff: () => void;
-        scrollReasoningUp: () => void;
-        scrollReasoningDown: () => void;
         navigateScriptErrorUp: () => void;
         navigateScriptErrorDown: () => void;
         updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
@@ -83,8 +79,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     applySteps: INITIAL_APPLY_STEPS,
     selectedItemIndex: 0,
     bodyView: REVIEW_BODY_VIEWS.NONE,
-    isDiffExpanded: false,
-    reasoningScrollIndex: 0,
     scriptErrorIndex: 0,
     processingStartTime: null,
     fileReviewStates: new Map(),
@@ -121,8 +115,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 processingStartTime: null,
                 selectedItemIndex: 0,
                 bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
-                isDiffExpanded: false,
-                reasoningScrollIndex: 0,
                 scriptErrorIndex: 0,
                 applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
                 selectedBulkRepairOptionIndex: 0,
@@ -138,15 +130,20 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
             return {
                 bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
-                isDiffExpanded: false,
             };
         }),
         setBodyView: (view) => set({ bodyView: view }),
-        expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
         approve: () => {
             const { selectedTransactionId } = useViewStore.getState();
             if (selectedTransactionId) {
                 useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                useAppStore.getState().actions.showDashboardScreen();
+            }
+        },
+        rejectTransaction: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (selectedTransactionId) {
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REJECTED');
                 useAppStore.getState().actions.showDashboardScreen();
             }
         },
@@ -311,14 +308,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             ReviewService.generateHandoffPrompt(tx, fileReviewStates);
             ReviewService.performHandoff(tx.hash);
         },
-        scrollReasoningUp: () => set(state => ({ reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1) })),
-        scrollReasoningDown: () => set(state => {
-            const transactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            if (!tx?.reasoning) return {};
-            const maxLines = tx.reasoning.split('\n').length;
-            return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
-        }),
         navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
         navigateScriptErrorDown: () => set(state => {
             const transactionId = useViewStore.getState().selectedTransactionId;

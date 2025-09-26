@@ -35,7 +35,8 @@ export type TransactionStatus =
     | 'FAILED'
     | 'REVERTED'
     | 'IN-PROGRESS'
-    | 'HANDOFF';
+    | 'HANDOFF'
+    | 'REJECTED';
 
 /** The central data model for a code modification transaction. */
 export interface Transaction {

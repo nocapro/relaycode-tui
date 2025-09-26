@@ -99,19 +99,13 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
             if (key.return) {
                 const selectedTx = transactions[selectedTransactionIndex];
                 if (!selectedTx) return;
-                
-                const isExpanded = expandedTransactionId === selectedTx.id;
 
-                if (isExpanded) {
-                    if (selectedTx.status === 'PENDING') {
-                        useReviewStore.getState().actions.load(selectedTx.id);
-                        appActions.showReviewScreen();
-                    } else {
-                        useDetailStore.getState().actions.load(selectedTx.id);
-                        appActions.showTransactionDetailScreen();
-                    }
+                if (selectedTx.status === 'PENDING') {
+                    useReviewStore.getState().actions.load(selectedTx.id);
+                    appActions.showReviewScreen();
                 } else {
-                    toggleExpand();
+                    useDetailStore.getState().actions.load(selectedTx.id);
+                    appActions.showTransactionDetailScreen();
                 }
                 return;
             }
