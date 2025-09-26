@@ -96,17 +96,6 @@ tsconfig.json
 
 # Files
 
-## File: src/constants/splash.constants.ts
-```typescript
-export const SPLASH_TIPS = [
-    'Tip: Press Ctrl+V at any time to process a patch from your clipboard.',
-    'Tip: Use Ctrl+B to open the debug menu and explore different application states.',
-    'Tip: The "?" key opens a global hotkey reference screen.',
-    'Tip: On the Dashboard, use "L" to view the complete transaction history.',
-    'Tip: Use Ctrl+L to quickly view the debug log from any screen.',
-] as const;
-```
-
 ## File: src/components/NotificationScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -341,6 +330,17 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { color: string;
     info: { color: 'blue', title: 'ℹ INFO' },
     warning: { color: 'yellow', title: '⚠ WARNING' },
 };
+```
+
+## File: src/constants/splash.constants.ts
+```typescript
+export const SPLASH_TIPS = [
+    'Tip: Press Ctrl+V at any time to process a patch from your clipboard.',
+    'Tip: Use Ctrl+B to open the debug menu and explore different application states.',
+    'Tip: The "?" key opens a global hotkey reference screen.',
+    'Tip: On the Dashboard, use "L" to view the complete transaction history.',
+    'Tip: Use Ctrl+L to quickly view the debug log from any screen.',
+] as const;
 ```
 
 ## File: src/hooks/useLayout.ts
@@ -1300,80 +1300,6 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
 export default ActionFooter;
 ```
 
-## File: src/config/ui.config.ts
-```typescript
-/**
- * Centralized UI configuration.
- * This object is the single source of truth for layout constants, thresholds,
- * and other UI-related magic numbers.
- */
-export const UI_CONFIG = {
-    diffScreen: {
-        collapseThreshold: 20, // Lines before collapsing
-        collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
-    },
-    splash: {
-        initialCountdown: 6, // Seconds before auto-skip
-    },
-    footer: {
-        horizontalPadding: 2, // Minimum space from the left/right edges of the screen
-        actionSeparator: ' · ',
-    },
-    layout: {
-        dashboard: {
-            header: 1,
-            separators: 2,
-            fixedRows: 2, // status bar, event stream header
-            marginsY: 3, // for status bar, event stream list, separator
-            footer: 2,
-        },
-        transactionDetail: {
-            header: 2,
-            fixedRows: 4,
-            separators: 2,
-            marginsY: 1,
-            footer: 2,
-        },
-        copyScreen: {
-            header: 1,
-            separators: 2,
-            fixedRows: 2, // title, status
-            marginsY: 1,
-            footer: 1,
-        },
-        debugLog: {
-            paddingY: 2,
-            header: 1,
-            separators: 2,
-            fixedRows: 1, // filter line
-            marginsY: 1,
-            footer: 1,
-        },
-        debugMenu: {
-            paddingY: 2,
-            header: 1,
-            separators: 2,
-            footer: 1,
-        },
-        history: {
-            header: 1,
-            separators: 2,
-            fixedRows: 1, // filter row
-            marginsY: 1,
-            footer: 2,
-        },
-        review: {
-            header: 2,
-            fixedRows: 3, // meta, prompt, reasoning headers
-            marginsY: 2, // meta container, body
-            separators: 4, // after title, meta, scripts/files, body
-            footer: 2,
-            bodyHeightReservation: 10,
-        },
-    },
-} as const;
-```
-
 ## File: src/constants/copy.constants.ts
 ```typescript
 import type { ActionItem } from '../types/actions.types';
@@ -1738,64 +1664,6 @@ const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHei
 export default DiffScreen;
 ```
 
-## File: src/components/GlobalHelpScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-
-const GlobalHelpScreen = () => {
-    return (
-        <Box
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-            width="100%"
-            height="100%"
-        >
-            <Box
-                flexDirection="column"
-                borderStyle="round"
-                paddingX={2}
-                paddingY={1}
-                width="80%"
-            >
-                <Box justifyContent="center" marginBottom={1}>
-                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
-                </Box>
-                <Box flexDirection="column" gap={1}>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">GLOBAL</Text>
-                        <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
-                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">DASHBOARD (watch)</Text>
-                        <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
-                        <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
-                        <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
-                        <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
-                        <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
-                        <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
-                        <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
-                        <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
-                        <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
-                        <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
-                        <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
-                    </Box>
-                </Box>
-            </Box>
-            <Box marginTop={1}>
-                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
-            </Box>
-        </Box>
-    );
-};
-
-export default GlobalHelpScreen;
-```
-
 ## File: src/components/ReasonScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -1821,6 +1689,80 @@ const ReasonScreen = ({ reasoning, scrollIndex = 0, visibleLinesCount }: ReasonS
 };
 
 export default ReasonScreen;
+```
+
+## File: src/config/ui.config.ts
+```typescript
+/**
+ * Centralized UI configuration.
+ * This object is the single source of truth for layout constants, thresholds,
+ * and other UI-related magic numbers.
+ */
+export const UI_CONFIG = {
+    diffScreen: {
+        collapseThreshold: 20, // Lines before collapsing
+        collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
+    },
+    splash: {
+        initialCountdown: 6, // Seconds before auto-skip
+    },
+    footer: {
+        horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+        actionSeparator: ' · ',
+    },
+    layout: {
+        dashboard: {
+            header: 1,
+            separators: 2,
+            fixedRows: 2, // status bar, event stream header
+            marginsY: 3, // for status bar, event stream list, separator
+            footer: 2,
+        },
+        transactionDetail: {
+            header: 2,
+            fixedRows: 4,
+            separators: 2,
+            marginsY: 1,
+            footer: 2,
+        },
+        copyScreen: {
+            header: 1,
+            separators: 2,
+            fixedRows: 2, // title, status
+            marginsY: 1,
+            footer: 1,
+        },
+        debugLog: {
+            paddingY: 2,
+            header: 1,
+            separators: 2,
+            fixedRows: 1, // filter line
+            marginsY: 1,
+            footer: 1,
+        },
+        debugMenu: {
+            paddingY: 2,
+            header: 1,
+            separators: 2,
+            footer: 1,
+        },
+        history: {
+            header: 1,
+            separators: 2,
+            fixedRows: 1, // filter row
+            marginsY: 1,
+            footer: 2,
+        },
+        review: {
+            header: 2,
+            fixedRows: 3, // meta, prompt, reasoning headers
+            marginsY: 2, // meta container, body
+            separators: 4, // after title, meta, scripts/files, body
+            footer: 2,
+            bodyHeightReservation: 10,
+        },
+    },
+} as const;
 ```
 
 ## File: src/constants/view.constants.ts
@@ -2015,6 +1957,67 @@ export const getVisibleItemPaths = (
     }
     return paths;
 };
+```
+
+## File: src/components/GlobalHelpScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+
+const GlobalHelpScreen = () => {
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                borderStyle="round"
+                paddingX={2}
+                paddingY={1}
+                width="80%"
+            >
+                <Box justifyContent="center" marginBottom={1} >
+                    <Text bold>
+                        <Text color="yellow">▲ relaycode</Text>
+                        <Text color="cyan"> · keyboard shortcuts</Text>
+                    </Text>
+                </Box>
+                <Box flexDirection="column" gap={1}>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">GLOBAL</Text>
+                        <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
+                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">DASHBOARD (watch)</Text>
+                        <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                        <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
+                        <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
+                        <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                        <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                        <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
+                        <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
+                        <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
+                        <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
+                        <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
+                    </Box>
+                </Box>
+            </Box>
+            <Box marginTop={1}>
+                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default GlobalHelpScreen;
 ```
 
 ## File: src/data/mocks.ts
@@ -2782,138 +2785,6 @@ export const useDetailStore = create<DetailState>((set, get) => ({
 }
 ```
 
-## File: src/components/ReviewProcessingScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import { useEffect, useState } from 'react';
-import Spinner from 'ink-spinner';
-import { useTransactionStore } from '../stores/transaction.store';
-import { useViewStore } from '../stores/view.store';
-import { useReviewStore, type ApplyStep } from '../stores/review.store';
-import Separator from './Separator';
-
-const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep; isSubstep?: boolean }) => {
-    if (isSubstep) {
-        let color: string | undefined;
-        let symbol: React.ReactNode;
-
-        switch (step.status) {
-            case 'pending':
-                symbol = '○';
-                color = 'gray';
-                break;
-            case 'active':
-                symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
-                break;
-            case 'done':
-                symbol = '✓';
-                color = 'green';
-                break;
-            case 'failed':
-                symbol = '✗';
-                color = 'red';
-                break;
-            default:
-                symbol = ' ';
-        }
-
-        return (
-            <Text color={color}>
-                {'     └─ '}{symbol}{' '}{step.title}
-            </Text>
-        );
-    }
-
-    let symbol;
-    let color;
-    switch (step.status) {
-        case 'pending': symbol = '( )'; break;
-        case 'active': symbol = '(●)'; color = 'cyan'; break;
-        case 'done': symbol = '[✓]'; color = 'green'; break;
-        case 'failed': symbol = '[!]'; color = 'red'; break;
-        case 'skipped': symbol = '(-)'; color = 'gray'; break;
-    }
-
-    return (
-        <Box flexDirection="column">
-            <Text>
-                <Text color={color}>{symbol}</Text> {step.title} {step.duration && !isSubstep && `(${step.duration}s)`}
-            </Text>
-            {step.details && (
-                <Text color="gray">
-                    {'     └─ '}{step.details}
-                </Text>
-            )}
-            {step.substeps?.map((sub: ApplyStep, i: number) => (
-                <ApplyStepRow key={i} step={sub} isSubstep={true} />
-            ))}
-        </Box>
-    );
-};
-
-const ReviewProcessingScreen = () => {
-    const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
-    const { patchStatus, applySteps, processingStartTime } = useReviewStore(state => ({
-        patchStatus: state.patchStatus,
-        applySteps: state.applySteps,
-        processingStartTime: state.processingStartTime,
-    }));
-    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
-
-    const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
-    const [elapsedTime, setElapsedTime] = useState(0);
-
-    useEffect(() => {
-        let timerId: ReturnType<typeof setTimeout> | undefined;
-
-        if (isProcessing && processingStartTime) {
-            timerId = setInterval(() => {
-                setElapsedTime((Date.now() - processingStartTime) / 1000);
-            }, 50);
-        } else {
-            const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
-            setElapsedTime(totalDuration);
-        }
-
-        return () => {
-            if (timerId) clearInterval(timerId);
-        };
-    }, [isProcessing, processingStartTime, applySteps]);
-
-    const failureCase = patchStatus === 'PARTIAL_FAILURE';
-
-    let footerText;
-    if (isProcessing) {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing... Please wait.`;
-    } else if (failureCase) {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning to repair workflow...`;
-    } else {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...`;
-    }
-
-    if (!transaction) {
-        return <Text>Loading...</Text>;
-    }
-
-    return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column">
-                <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
-                <Box flexDirection="column" marginTop={1} gap={1}>
-                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} />)}
-                </Box>
-            </Box>
-            <Separator />
-            <Text>{footerText}</Text>
-        </Box>
-    );
-};
-
-export default ReviewProcessingScreen;
-```
-
 ## File: src/services/copy.service.ts
 ```typescript
 import type { Transaction, FileItem } from '../types/domain.types';
@@ -3183,247 +3054,136 @@ export const useCopyStore = create<CopyState>((set, get) => ({
 }));
 ```
 
-## File: src/components/CopyScreen.tsx
+## File: src/components/ReviewProcessingScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
-import { useCopyScreen } from '../hooks/useCopyScreen';
-import { COPY_SCREEN_FOOTER_ACTIONS } from '../constants/copy.constants';
-
-const CopyScreen = () => {
-    const {
-        title,
-        itemsInView,
-        selectedIndex,
-        selectedIds,
-        lastCopiedMessage,
-        viewOffset,
-    } = useCopyScreen();
-    const [width] = useStdoutDimensions();
-
-    return (
-        <Box 
-            width="100%"
-            height="100%"
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-        >
-            <Box 
-                flexDirection="column" 
-                paddingX={2}
-                width="80%"
-            >
-                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                <Box flexDirection="column" marginY={1}>
-                    <Text>{title}</Text>
-                    <Box flexDirection="column" marginTop={1}>
-                        {itemsInView.map((item, index) => {
-                            const isSelected = (index + viewOffset) === selectedIndex;
-                            const isChecked = selectedIds.has(item.id);
-                            return (
-                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
-                                    {isSelected ? '> ' : '  '}
-                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                </Box>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <ActionFooter actions={COPY_SCREEN_FOOTER_ACTIONS}/>
-            </Box>
-        </Box>
-    );
-};
-
-export default CopyScreen;
-```
-
-## File: src/components/GitCommitScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
+import { useEffect, useState } from 'react';
 import Spinner from 'ink-spinner';
+import { useTransactionStore } from '../stores/transaction.store';
+import { useViewStore } from '../stores/view.store';
+import { useReviewStore, type ApplyStep } from '../stores/review.store';
 import Separator from './Separator';
-import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
-import ActionFooter from './ActionFooter';
-import { COMMIT_SCREEN_FOOTER_ACTIONS } from '../constants/commit.constants';
 
-const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep; isSubstep?: boolean }) => {
+    if (isSubstep) {
+        let color: string | undefined;
+        let symbol: React.ReactNode;
+
+        switch (step.status) {
+            case 'pending':
+                symbol = '○';
+                color = 'gray';
+                break;
+            case 'active':
+                symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
+                break;
+            case 'done':
+                symbol = '✓';
+                color = 'green';
+                break;
+            case 'failed':
+                symbol = '✗';
+                color = 'red';
+                break;
+            default:
+                symbol = ' ';
+        }
+
+        return (
+            <Text color={color}>
+                {'     └─ '}{symbol}{' '}{step.title}
+            </Text>
+        );
+    }
+
+    let symbol;
+    let color;
+    switch (step.status) {
+        case 'pending': symbol = '( )'; break;
+        case 'active': symbol = '(●)'; color = 'cyan'; break;
+        case 'done': symbol = '[✓]'; color = 'green'; break;
+        case 'failed': symbol = '[!]'; color = 'red'; break;
+        case 'skipped': symbol = '(-)'; color = 'gray'; break;
+    }
 
     return (
         <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold>TRANSACTIONS INCLUDED</Text>
-                    {transactionsToCommit.map(tx => (
-                        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-                    ))}
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text bold>FINAL COMMIT MESSAGE</Text>
-                <Box marginTop={1}>
-                    <Text>{finalCommitMessage}</Text>
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} paddingX={2}>
-                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
-            </Box>
-            <Separator />
-            {isCommitting
-                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-                : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
-            }
+            <Text>
+                <Text color={color}>{symbol}</Text> {step.title} {step.duration && !isSubstep && `(${step.duration}s)`}
+            </Text>
+            {step.details && (
+                <Text color="gray">
+                    {'     └─ '}{step.details}
+                </Text>
+            )}
+            {step.substeps?.map((sub: ApplyStep, i: number) => (
+                <ApplyStepRow key={i} step={sub} isSubstep={true} />
+            ))}
         </Box>
     );
 };
 
-export default GitCommitScreen;
-```
+const ReviewProcessingScreen = () => {
+    const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
+    const { patchStatus, applySteps, processingStartTime } = useReviewStore(state => ({
+        patchStatus: state.patchStatus,
+        applySteps: state.applySteps,
+        processingStartTime: state.processingStartTime,
+    }));
+    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
 
-## File: src/hooks/useSplashScreen.tsx
-```typescript
-import { useState, useEffect, useRef } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { UI_CONFIG } from '../config/ui.config';
-import { SPLASH_TIPS } from '../constants/splash.constants';
-import { useNotificationStore } from '../stores/notification.store';
-
-export const useSplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
-    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
-    const [tip, setTip] = useState('');
-    const [updateStatus, setUpdateStatus] = useState('');
-    const [visibleSections, setVisibleSections] = useState(new Set<string>());
-    const [animationComplete, setAnimationComplete] = useState(false);
-
-    // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
-    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-    const clearAllTimeouts = () => {
-        timeouts.current.forEach(clearTimeout);
-        timeouts.current = [];
-    };
-
-    const handleSkip = () => {
-        clearAllTimeouts();
-        setAnimationComplete(true);
-        setVisibleLogoLines(100); // A high number to show all lines
-        setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
-        setUpdateStatus('✓ You are up to date.');
-        showInitScreen();
-    };
-
-    useInput((input) => {
-        const lowerInput = input.toLowerCase();
-        if (lowerInput === 'v') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening https://relay.noca.pro in your browser...',
-            });
-            return;
-        }
-        if (lowerInput === 'x') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening X/Twitter in your browser...',
-            });
-            return;
-        }
-        if (lowerInput === 'd') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening Discord invite in your browser...',
-            });
-            return;
-        }
-        if (lowerInput === 'g') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening GitHub repository in your browser...',
-            });
-            return;
-        }
-
-        // Any other key skips
-        handleSkip(); 
-    });
+    const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
+    const [elapsedTime, setElapsedTime] = useState(0);
 
     useEffect(() => {
-        const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+        let timerId: ReturnType<typeof setTimeout> | undefined;
 
-        // Pick a random tip on mount
-        if (!tip) {
-            setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+        if (isProcessing && processingStartTime) {
+            timerId = setInterval(() => {
+                setElapsedTime((Date.now() - processingStartTime) / 1000);
+            }, 50);
+        } else {
+            const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
+            setElapsedTime(totalDuration);
         }
 
-        // 1. Animate logo
-        const logoTimer = setInterval(() => {
-            setVisibleLogoLines(l => {
-                if (l >= 4) { // Fix: was 3, which cut off the last line of the logo
-                    clearInterval(logoTimer);
-                    
-                    // 2. Animate sections
-                    t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
-                    t(() => setVisibleSections(s => new Set(s).add('version')), 300);
-                    t(() => {
-                        setVisibleSections(s => new Set(s).add('updateCheck'));
-                        setUpdateStatus('Checking for updates...');
-                        t(() => setUpdateStatus('✓ You are up to date.'), 1500);
-                    }, 600);
-
-                    t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
-                    t(() => setVisibleSections(s => new Set(s).add('links')), 1000);
-                    t(() => setAnimationComplete(true), 1200);
-
-                    return l;
-                }
-                return l + 1;
-            });
-        }, 80);
-
-        // Cleanup
         return () => {
-            clearInterval(logoTimer);
-            clearAllTimeouts();
+            if (timerId) clearInterval(timerId);
         };
-    }, [tip]);
+    }, [isProcessing, processingStartTime, applySteps]);
 
-    useEffect(() => {
-        if (!animationComplete) return;
+    const failureCase = patchStatus === 'PARTIAL_FAILURE';
 
-        if (countdown <= 0) {
-            showInitScreen();
-            return;
-        }
+    let footerText;
+    if (isProcessing) {
+        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing... Please wait.`;
+    } else if (failureCase) {
+        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning to repair workflow...`;
+    } else {
+        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...`;
+    }
 
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-        timeouts.current.push(timer);
-        
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen, animationComplete]);
+    if (!transaction) {
+        return <Text>Loading...</Text>;
+    }
 
-    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
+    return (
+        <Box flexDirection="column">
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column">
+                <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
+                <Box flexDirection="column" marginTop={1} gap={1}>
+                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} />)}
+                </Box>
+            </Box>
+            <Separator />
+            <Text>{footerText}</Text>
+        </Box>
+    );
 };
+
+export default ReviewProcessingScreen;
 ```
 
 ## File: src/stores/commit.store.ts
@@ -3586,6 +3346,324 @@ export const selectSelectedTransaction = (state: TransactionState): Transaction 
 };
 ```
 
+## File: src/components/CopyScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
+import { useCopyScreen } from '../hooks/useCopyScreen';
+import { COPY_SCREEN_FOOTER_ACTIONS } from '../constants/copy.constants';
+
+const CopyScreen = () => {
+    const {
+        title,
+        itemsInView,
+        selectedIndex,
+        selectedIds,
+        lastCopiedMessage,
+        viewOffset,
+    } = useCopyScreen();
+    const [width] = useStdoutDimensions();
+
+    return (
+        <Box 
+            width="100%"
+            height="100%"
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+        >
+            <Box 
+                flexDirection="column" 
+                paddingX={2}
+                width="80%"
+            >
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                <Box flexDirection="column" marginY={1}>
+                    <Text>{title}</Text>
+                    <Box flexDirection="column" marginTop={1}>
+                        {itemsInView.map((item, index) => {
+                            const isSelected = (index + viewOffset) === selectedIndex;
+                            const isChecked = selectedIds.has(item.id);
+                            return (
+                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
+                                    {isSelected ? '> ' : '  '}
+                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                </Box>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+                <ActionFooter actions={COPY_SCREEN_FOOTER_ACTIONS}/>
+            </Box>
+        </Box>
+    );
+};
+
+export default CopyScreen;
+```
+
+## File: src/components/GitCommitScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+import ActionFooter from './ActionFooter';
+import { COMMIT_SCREEN_FOOTER_ACTIONS } from '../constants/commit.constants';
+
+const GitCommitScreen = () => {
+    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+    const messageParts = finalCommitMessage.split('\n');
+    const subject = messageParts[0] || '';
+    const body = messageParts.slice(1).join('\n');
+
+    return (
+        <Box flexDirection="column">
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text bold>TRANSACTIONS INCLUDED</Text>
+                    {transactionsToCommit.map(tx => (
+                        <Text key={tx.id}>- <Text color="gray">{tx.hash}</Text>: {tx.message}</Text>
+                    ))}
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text bold>FINAL COMMIT MESSAGE</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text color="yellow">{subject}</Text>
+                    {body ? <Text>{body}</Text> : null}
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} paddingX={2}>
+                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+            </Box>
+            <Separator />
+            {isCommitting
+                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
+            }
+        </Box>
+    );
+};
+
+export default GitCommitScreen;
+```
+
+## File: src/hooks/useGlobalHotkeys.tsx
+```typescript
+import { useApp, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+import { OVERLAYS } from '../constants/view.constants';
+import { ClipboardService } from '../services/clipboard.service';
+
+export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+    const { exit } = useApp();
+    const { currentScreen } = useAppStore(s => ({
+        currentScreen: s.currentScreen,
+    }));
+    const { navigateBack } = useAppStore(s => s.actions);
+    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+        activeOverlay: s.activeOverlay,
+        setActiveOverlay: s.actions.setActiveOverlay,
+    }));
+
+    useInput((input, key) => {
+        // Debug Menu toggle is the highest priority global key
+        if (key.ctrl && input === 'b') {
+            setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+            return;
+        }
+        if (key.ctrl && input === 'l') {
+            setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+            return;
+        }
+
+        if (key.ctrl && input === 'v') {
+            ClipboardService.processClipboardContent();
+            return;
+        }
+
+        // If an overlay with its own input is open, stop here.
+        if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+            return;
+        }
+
+        // Help screen takes precedence over other keys
+        if (activeOverlay === OVERLAYS.HELP) {
+            if (key.escape || input === '?') {
+                setActiveOverlay(OVERLAYS.NONE);
+            }
+            return;
+        }
+
+        // --- Global hotkeys when no modal/overlay is open ---
+        
+        // Open Help
+        if (input === '?') {
+            setActiveOverlay(OVERLAYS.HELP);
+            return;
+        }
+        
+        // Quit from main screens
+        if (input.toLowerCase() === 'q') {
+            if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+                exit();
+            }
+            navigateBack();
+        } else if (key.escape) {
+            navigateBack();
+        }
+    }, { isActive });
+};
+```
+
+## File: src/hooks/useSplashScreen.tsx
+```typescript
+import { useState, useEffect, useRef } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { UI_CONFIG } from '../config/ui.config';
+import { SPLASH_TIPS } from '../constants/splash.constants';
+import { useNotificationStore } from '../stores/notification.store';
+
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+    const [tip, setTip] = useState('');
+    const [updateStatus, setUpdateStatus] = useState('');
+    const [visibleSections, setVisibleSections] = useState(new Set<string>());
+    const [animationComplete, setAnimationComplete] = useState(false);
+
+    // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+    const clearAllTimeouts = () => {
+        timeouts.current.forEach(clearTimeout);
+        timeouts.current = [];
+    };
+
+    const handleSkip = () => {
+        clearAllTimeouts();
+        setAnimationComplete(true);
+        setVisibleLogoLines(100); // A high number to show all lines
+        setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+        setUpdateStatus('✓ You are up to date.');
+        showInitScreen();
+    };
+
+    useInput((input) => {
+        const lowerInput = input.toLowerCase();
+        if (lowerInput === 'v') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening https://relay.noca.pro in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'x') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening X/Twitter in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'd') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening Discord invite in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'g') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening GitHub repository in your browser...',
+            });
+            return;
+        }
+
+        // Any other key skips
+        handleSkip(); 
+    });
+
+    useEffect(() => {
+        const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+        // Pick a random tip on mount
+        if (!tip) {
+            setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+        }
+
+        // 1. Animate logo
+        const logoTimer = setInterval(() => {
+            setVisibleLogoLines(l => {
+                if (l >= 4) { // Fix: was 3, which cut off the last line of the logo
+                    clearInterval(logoTimer);
+                    
+                    // 2. Animate sections
+                    t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                    t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                    t(() => {
+                        setVisibleSections(s => new Set(s).add('updateCheck'));
+                        setUpdateStatus('Checking for updates...');
+                        t(() => setUpdateStatus('✓ You are up to date.'), 1500);
+                    }, 600);
+
+                    t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
+                    t(() => setVisibleSections(s => new Set(s).add('links')), 1000);
+                    t(() => setAnimationComplete(true), 1200);
+
+                    return l;
+                }
+                return l + 1;
+            });
+        }, 80);
+
+        // Cleanup
+        return () => {
+            clearInterval(logoTimer);
+            clearAllTimeouts();
+        };
+    }, [tip]);
+
+    useEffect(() => {
+        if (!animationComplete) return;
+
+        if (countdown <= 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+        timeouts.current.push(timer);
+        
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen, animationComplete]);
+
+    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
+};
+```
+
 ## File: src/components/SplashScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -3682,224 +3760,6 @@ const SplashScreen = () => {
 };
 
 export default SplashScreen;
-```
-
-## File: src/hooks/useGlobalHotkeys.tsx
-```typescript
-import { useApp, useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { useViewStore } from '../stores/view.store';
-import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
-import { OVERLAYS } from '../constants/view.constants';
-import { ClipboardService } from '../services/clipboard.service';
-
-export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
-    const { exit } = useApp();
-    const { currentScreen } = useAppStore(s => ({
-        currentScreen: s.currentScreen,
-    }));
-    const { navigateBack } = useAppStore(s => s.actions);
-    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
-        activeOverlay: s.activeOverlay,
-        setActiveOverlay: s.actions.setActiveOverlay,
-    }));
-
-    useInput((input, key) => {
-        // Debug Menu toggle is the highest priority global key
-        if (key.ctrl && input === 'b') {
-            setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
-            return;
-        }
-        if (key.ctrl && input === 'l') {
-            setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
-            return;
-        }
-
-        if (key.ctrl && input === 'v') {
-            ClipboardService.processClipboardContent();
-            return;
-        }
-
-        // If an overlay with its own input is open, stop here.
-        if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
-            return;
-        }
-
-        // Help screen takes precedence over other keys
-        if (activeOverlay === OVERLAYS.HELP) {
-            if (key.escape || input === '?') {
-                setActiveOverlay(OVERLAYS.NONE);
-            }
-            return;
-        }
-
-        // --- Global hotkeys when no modal/overlay is open ---
-        
-        // Open Help
-        if (input === '?') {
-            setActiveOverlay(OVERLAYS.HELP);
-            return;
-        }
-        
-        // Quit from main screens
-        if (input.toLowerCase() === 'q') {
-            if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
-                exit();
-            }
-            navigateBack();
-        } else if (key.escape) {
-            navigateBack();
-        }
-    }, { isActive });
-};
-```
-
-## File: src/components/InitializationScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import { useState, useEffect } from 'react';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import type { Task } from '../stores/init.store';
-import { useInitializationScreen } from '../hooks/useInitializationScreen';
-
-const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
-	const [isJustDone, setIsJustDone] = useState(false);
-
-	useEffect(() => {
-		if (task.status === 'done') {
-			setIsJustDone(true);
-			const timer = setTimeout(() => setIsJustDone(false), 300);
-			return () => clearTimeout(timer);
-		}
-	}, [task.status]);
-
-	let symbol: React.ReactNode;
-	switch (task.status) {
-		case 'pending': symbol = '( )'; break;
-		case 'active': symbol = <Text color="cyan"><Spinner type="dots" /></Text>; break;
-		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
-	}
-
-	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
-
-	return (
-		<Box flexDirection="column">
-			<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>
-				{symbol} {title}
-			</Text>
-			{task.subtext && task.status !== 'done' && (
-				<Text italic color="gray">
-					{'     └─ '}{task.subtext}
-				</Text>
-			)}
-		</Box>
-	);
-};
-
-const InitializationScreen = () => {
-    const {
-        phase,
-        analyzeTasks,
-        configureTasks,
-        interactiveChoice,
-        projectId,
-        footerText,
-    } = useInitializationScreen();
-
-    const renderAnalyze = () => (
-        <Box flexDirection="column">
-            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
-            <Box flexDirection="column" marginTop={1} gap={1}>
-                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
-            </Box>
-        </Box>
-    );
-
-    const renderContext = () => (
-        <Box flexDirection="column" marginBottom={1}>
-            <Text bold color="cyan">CONTEXT</Text>
-            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
-            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
-        </Box>
-    );
-
-    const renderConfigure = () => (
-        <Box flexDirection="column">
-            {renderContext()}
-            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
-            <Box flexDirection="column" marginTop={1} gap={1}>
-                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
-            </Box>
-        </Box>
-    );
-
-    const renderInteractive = () => (
-        <Box flexDirection="column">
-            {renderContext()}
-            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
-                <Box flexDirection="column" marginTop={1}>
-                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
-                    <Text>  Do you want to share its state with your team by committing it?</Text>
-                </Box>
-            </Box>
-        </Box>
-    );
-
-    const renderFinalize = () => {
-        const stateText = interactiveChoice === 'share'
-            ? '.relay/ directory initialized. It will be committed to git.'
-            : '.relay/ directory initialized and added to .gitignore.';
-        const stateSubText = interactiveChoice === 'share'
-            ? undefined
-            : 'Local transaction history will be stored here.';
-        
-        return (
-            <Box flexDirection="column">
-                <Text bold color="green"> SYSTEM READY</Text>
-                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
-                    <Box flexDirection="column">
-                        <Text><Text color="green">✓</Text> Config:   relay.config.json created.</Text>
-                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text><Text color="green">✓</Text> State:    {stateText}</Text>
-                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text><Text color="green">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>
-                        <Text color="gray" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
-                    </Box>
-                </Box>
-            </Box>
-        );
-    };
-
-    const renderPhase = () => {
-        switch (phase) {
-            case 'ANALYZE': return renderAnalyze();
-            case 'CONFIGURE': return renderConfigure();
-            case 'INTERACTIVE': return renderInteractive();
-            case 'FINALIZE': return renderFinalize();
-        }
-    };
-
-    return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow">
-                {phase === 'FINALIZE' ? ' ▲ relaycode · BOOTSTRAP COMPLETE ' : ' ▲ relaycode · BOOTSTRAP '}
-            </Text>
-            <Separator />
-            <Box marginY={1}>{renderPhase()}</Box>
-            <Separator />
-            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
-        </Box>
-    );
-};
-
-export default InitializationScreen;
 ```
 
 ## File: src/hooks/useDashboardScreen.tsx
@@ -4094,6 +3954,154 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
     },
 }));
+```
+
+## File: src/components/InitializationScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useState, useEffect } from 'react';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import type { Task } from '../stores/init.store';
+import { useInitializationScreen } from '../hooks/useInitializationScreen';
+
+const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	const [isJustDone, setIsJustDone] = useState(false);
+
+	useEffect(() => {
+		if (task.status === 'done') {
+			setIsJustDone(true);
+			const timer = setTimeout(() => setIsJustDone(false), 300);
+			return () => clearTimeout(timer);
+		}
+	}, [task.status]);
+
+	let symbol: React.ReactNode;
+	switch (task.status) {
+		case 'pending': symbol = '( )'; break;
+		case 'active': symbol = <Text color="cyan"><Spinner type="dots" /></Text>; break;
+		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
+	}
+
+	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
+
+	return (
+		<Box flexDirection="column">
+			<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>
+				{symbol} {title}
+			</Text>
+			{task.subtext && task.status !== 'done' && (
+				<Text italic color="gray">
+					{'     └─ '}{task.subtext}
+				</Text>
+			)}
+		</Box>
+	);
+};
+
+const InitializationScreen = () => {
+    const {
+        phase,
+        analyzeTasks,
+        configureTasks,
+        interactiveChoice,
+        projectId,
+        footerText,
+    } = useInitializationScreen();
+
+    const renderAnalyze = () => (
+        <Box flexDirection="column">
+            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
+            </Box>
+        </Box>
+    );
+
+    const renderContext = () => (
+        <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">CONTEXT</Text>
+            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
+            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
+        </Box>
+    );
+
+    const renderConfigure = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+            </Box>
+        </Box>
+    );
+
+    const renderInteractive = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+                <Box flexDirection="column" marginTop={1}>
+                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
+                    <Text color="yellow">  Do you want to share its state with your team by committing it?</Text>
+                </Box>
+            </Box>
+        </Box>
+    );
+
+    const renderFinalize = () => {
+        const stateText = interactiveChoice === 'share'
+            ? <Text><Text color="cyan">.relay/</Text> directory initialized. It will be committed to git.</Text>
+            : <Text><Text color="cyan">.relay/</Text> directory initialized and added to <Text color="cyan">.gitignore</Text>.</Text>;
+        const stateSubText = interactiveChoice === 'share'
+            ? undefined
+            : 'Local transaction history will be stored here.';
+        
+        return (
+            <Box flexDirection="column">
+                <Text bold color="green">✓ SYSTEM READY</Text>
+                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>Config:</Text>   <Text color="cyan">relay.config.json</Text> created.</Text>
+                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>State:</Text>    {stateText}</Text>
+                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>Prompt:</Text>   System prompt generated at <Text color="cyan">.relay/prompts/system-prompt.md</Text>.</Text>
+                        <Text color="green" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
+                    </Box>
+                </Box>
+            </Box>
+        );
+    };
+
+    const renderPhase = () => {
+        switch (phase) {
+            case 'ANALYZE': return renderAnalyze();
+            case 'CONFIGURE': return renderConfigure();
+            case 'INTERACTIVE': return renderInteractive();
+            case 'FINALIZE': return renderFinalize();
+        }
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text bold color="black" backgroundColor="yellow">
+                {phase === 'FINALIZE' ? ' ▲ relaycode · BOOTSTRAP COMPLETE ' : ' ▲ relaycode · BOOTSTRAP '}
+            </Text>
+            <Separator />
+            <Box marginY={1}>{renderPhase()}</Box>
+            <Separator />
+            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
+        </Box>
+    );
+};
+
+export default InitializationScreen;
 ```
 
 ## File: src/services/review.service.ts
@@ -4764,440 +4772,6 @@ const App = () => {
 export default App;
 ```
 
-## File: src/components/TransactionDetailScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import DiffScreen from './DiffScreen';
-import ReasonScreen from './ReasonScreen';
-import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
-import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
-import ActionFooter from './ActionFooter';
-
-const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
-    return (
-        <Box 
-            borderStyle="round"
-            borderColor="yellow"
-            flexDirection="column"
-            paddingX={2}
-            width="80%"
-            alignSelf='center'
-        >
-            <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
-            <Box height={1} />
-            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
-            <Box height={1} />
-            <Text wrap="wrap">Are you sure?</Text>
-        </Box>
-    );
-};
-
-const TransactionDetailScreen = () => {
-    const {
-        transaction, files,
-        focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
-    } = useTransactionDetailScreen();
-
-    if (!transaction) {
-        return <Text>Loading transaction...</Text>;
-    }
-
-    const renderNavigator = () => {
-        const isPromptFocused = focusedItemPath === 'PROMPT';
-        const isReasoningFocused = focusedItemPath === 'REASONING';
-        const isFilesFocused = focusedItemPath.startsWith('FILES');
-        
-        const isPromptExpanded = expandedItemPaths.has('PROMPT');
-        const isReasoningExpanded = expandedItemPaths.has('REASONING');
-        const isFilesExpanded = expandedItemPaths.has('FILES');
-        
-        return (
-            <Box flexDirection="column">
-                <Text color={isPromptFocused ? 'cyan' : undefined}>
-                    {isPromptFocused ? '> ' : '  '}
-                    {isPromptExpanded ? '▾' : '▸'} (P)rompt
-                </Text>
-                <Text color={isReasoningFocused ? 'cyan' : undefined}>
-                    {isReasoningFocused ? '> ' : '  '}
-                    {isReasoningExpanded ? '▾' : '▸'} (R)easoning{' '}
-                    ({transaction.reasoning?.split('\n\n').length || 0} steps)
-                </Text>
-                <Text color={isFilesFocused ? 'cyan' : undefined}>
-                    {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
-                    {isFilesExpanded ? '▾' : '▸'} (F)iles ({files.length})
-                </Text>
-                {isFilesExpanded && (
-                    <Box flexDirection="column" paddingLeft={2}>
-                        {files.map((file) => {
-                             const fileId = `FILES/${file.id}`;
-                             const isFileSelected = focusedItemPath === fileId;
-                             const stats = file.type === 'DEL' ? ''
-                                : ` (+${file.linesAdded}/-${file.linesRemoved})`;
-                             return (
-                                <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
-                                    {isFileSelected ? '> ' : '  '}
-                                    {FILE_CHANGE_TYPE_ICONS[file.type]} {file.path}{stats}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                )}
-            </Box>
-        );
-    };
-
-    const renderBody = () => {
-        if (bodyView === DETAIL_BODY_VIEWS.NONE) {
-            return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.PROMPT) {
-            return (
-                <Box flexDirection="column">
-                    <Text>PROMPT</Text>
-                    <Box marginTop={1} flexDirection="column">
-                        {(transaction.prompt || '').split('\n')
-                            .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
-                            .map((line, i) => <Text key={i}>{line}</Text>)
-                        }
-                    </Box>
-                </Box>
-            );
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
-            if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
-            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
-             return <Text color="gray">(Select a file and press → to view the diff)</Text>;
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
-            const fileId = focusedItemPath.split('/')[1];
-            const file = files.find(f => f.id === fileId);
-            if (!file) return null;
-            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
-        }
-        return null;
-    };
-
-    const renderFooter = () => {
-        if (bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM) {
-            return <ActionFooter actions={DETAIL_FOOTER_ACTIONS.REVERT_CONFIRM} />;
-        }
-        
-        const isFileFocused = focusedItemPath.includes('/');
-        const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
-        const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
-
-        if (isFileFocused) { // Is a file
-            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
-                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
-            } else {
-                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
-            }
-        }
-        
-        if (expandedItemPaths.has(focusedItemPath)) {
-            return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_EXPANDED, ...baseActions]} />;
-        }
-        return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_COLLAPSED, ...baseActions]} />;
-    };
-
-    const { message, timestamp, status } = transaction;
-    const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
-    const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
-
-    return (
-        <Box flexDirection="column">
-            {/* Header */}
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
-            <Separator />
-            
-            {/* Modal takeover for Revert */}
-            {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
-            
-            {/* Main view */}
-            <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
-                {/* Navigator Part A */}
-                <Box flexDirection="column" marginY={1}>
-                    <Text>UUID: {transaction.id}</Text>
-                    <Text>Git: {message}</Text>
-                    <Text>Date: {date} · Status: {status}</Text>
-                    <Text>Stats: {fileStats}</Text>
-                </Box>
-                
-                {/* Navigator Part B */}
-                {renderNavigator()}
-                
-                <Separator />
-                
-                {/* Body */}
-                <Box marginY={1}>
-                    {renderBody()}
-                </Box>
-                
-                <Separator />
-            </Box>
-            
-            {/* Footer */}
-            <Box>
-                {renderFooter()}
-            </Box>
-        </Box>
-    );
-};
-
-export default TransactionDetailScreen;
-```
-
-## File: src/components/TransactionHistoryScreen.tsx
-```typescript
-import { useMemo } from 'react';
-import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import type { Transaction, FileItem } from '../types/domain.types';
-import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
-import { HISTORY_FOOTER_ACTIONS, TRANSACTION_STATUS_UI, FILE_TYPE_MAP, BULK_ACTIONS_OPTIONS, HISTORY_VIEW_MODES } from '../constants/history.constants';
-import ActionFooter from './ActionFooter';
-
-// --- Sub-components ---
-
-const ContentRow = ({ title, content, isSelected, isExpanded, isLoading }: {
-    title: string;
-    content: string;
-    isSelected: boolean;
-    isExpanded: boolean;
-    isLoading: boolean;
-}) => {
-    const icon = isExpanded ? '▾' : '▸';
-    return (
-        <Box flexDirection="column" paddingLeft={6}>
-            <Text color={isSelected ? 'cyan' : undefined}>
-                {isSelected ? '> ' : '  '}{icon} {title}
-            </Text>
-            {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
-            {isExpanded && !isLoading && (
-                <Box paddingLeft={8} flexDirection="column">
-                    {(content || '').split('\n').map((line, i) => <Text key={i}>{line || ' '}</Text>)}
-                </Box>
-            )}
-        </Box>
-    );
-};
-
-const DiffPreview = ({ diff }: { diff: string }) => {
-    const lines = diff.split('\n');
-    const previewLines = lines.slice(0, 5);
-    const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
-
-    return (
-        <Box flexDirection="column" paddingLeft={8}>
-            {previewLines.map((line, i) => {
-                let color = 'white';
-                if (line.startsWith('+')) color = 'green';
-                if (line.startsWith('-')) color = 'red';
-                if (line.startsWith('@@')) color = 'cyan';
-                return <Text key={i} color={color}>{line}</Text>;
-            })}
-            {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
-        </Box>
-    );
-};
-
-const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
-    file: FileItem;
-    isSelected: boolean;
-    isExpanded: boolean;
-    isLoading: boolean;
-}) => {
-    const icon = isExpanded ? '▾' : '▸';
-
-    return (
-        <Box flexDirection="column" paddingLeft={6}>
-            <Text color={isSelected ? 'cyan' : undefined}>
-                {isSelected ? '> ' : '  '}{' '}
-                {icon} {FILE_TYPE_MAP[file.type]} {file.path}
-            </Text>
-            {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
-            {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
-        </Box>
-    );
-};
-
-const TransactionRow = ({
-    tx,
-    isSelected,
-    isExpanded,
-    isSelectedForAction,
-    hasSelection,
-}: {
-    tx: Transaction;
-    isSelected: boolean;
-    isExpanded: boolean;
-    isSelectedForAction: boolean;
-    hasSelection: boolean;
-}) => {
-    const icon = isExpanded ? '▾' : '▸';
-    const uiStatus = TRANSACTION_STATUS_UI[tx.status as keyof typeof TRANSACTION_STATUS_UI] || { text: tx.status, color: 'white' };
-
-    const date = new Date(tx.timestamp).toISOString().split('T')[0];
-    const selectionIndicator = isSelectedForAction ? '[x] ' : '[ ] ';
-    
-    return (
-        <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
-            <Text color={isSelected ? 'cyan' : undefined}>
-                {isSelected ? '> ' : '  '}
-                {hasSelection && selectionIndicator}
-                {icon} <Text color={uiStatus.color}>{uiStatus.text}</Text> · {tx.hash} · {date} ·{' '}
-                {tx.message}
-            </Text>
-            {isExpanded && (
-                <Box flexDirection="column" paddingLeft={8}>
-                    {tx.stats && (
-                        <Text color="gray">
-                            Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}
-                        </Text>
-                    )}
-                    <Text>Files:</Text>
-                </Box>
-            )}
-        </Box>
-    );
-};
-
-const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: number }) => {
-    return (
-        <Box flexDirection="column" marginY={1}>
-            <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
-            <Box marginY={1}>
-                <Text>This action is often irreversible. Are you sure?</Text>
-            </Box>
-            {BULK_ACTIONS_OPTIONS.map(opt => <Text key={opt}>{opt}</Text>)}
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const TransactionHistoryScreen = () => {
-    const {
-        mode,
-        filterQuery,
-        selectedForAction,
-        selectedItemPath,
-        expandedIds,
-        loadingPaths,
-        actions,
-        transactions,
-        itemsInView,
-        filterStatus,
-        showingStatus,
-        statsStatus,
-        hasSelection,
-    } = useTransactionHistoryScreen();
-
-    const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
-
-    const renderFooter = () => {
-        if (mode === HISTORY_VIEW_MODES.FILTER) {
-            return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.FILTER_MODE} />;
-        }
-        if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
-            return <Text>{HISTORY_FOOTER_ACTIONS.BULK_MODE.text}</Text>;
-        }
-        
-        const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
-        return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.LIST_MODE(openActionLabel, hasSelection)} />;
-    };
-
-    return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION HISTORY </Text>
-            <Separator />
-
-            <Box>
-                <Text>Filter: </Text>
-                {mode === HISTORY_VIEW_MODES.FILTER ? (
-                    <TextInput value={filterQuery} onChange={actions.setFilterQuery} />
-                ) : (
-                    <Text>{filterStatus}</Text>
-                )}
-                <Text> · {showingStatus}</Text>
-                {statsStatus && <Text> · {statsStatus}</Text>}
-            </Box>
-
-            <Box flexDirection="column" marginY={1}>
-                {mode === HISTORY_VIEW_MODES.BULK_ACTIONS && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
-
-                {mode === HISTORY_VIEW_MODES.LIST && itemsInView.map(path => {
-                    const txId = path.split('/')[0]!;
-                    const tx = transactionsById.get(txId);
-                    if (!tx) return <Text key={path}>Error: Missing TX {txId}</Text>;
-
-                    // Is a transaction row
-                    if (path === tx.id) {
-                        return (
-                            <TransactionRow
-                                key={path}
-                                tx={tx}
-                                isSelected={selectedItemPath === path}
-                                isExpanded={expandedIds.has(path)}
-                                isSelectedForAction={selectedForAction.has(tx.id)}
-                                hasSelection={hasSelection}
-                            />
-                        );
-                    }
-
-                    // Is a child row
-                    const itemType = path.split('/')[1]!;
-                    const isSelected = selectedItemPath === path;
-                    const isExpanded = expandedIds.has(path);
-                    const isLoading = loadingPaths.has(path);
-
-                    if (itemType === 'file') {
-                        const fileId = path.split('/')[2]!;
-                        const file = tx.files?.find(f => f.id === fileId);
-                        if (!file) return null;
-                        return (
-                            <FileRow
-                                key={path} file={file} isSelected={isSelected}
-                                isExpanded={isExpanded} isLoading={isLoading}
-                            />
-                        );
-                    }
-
-                    const contentMap = {
-                        message: { title: 'Commit Message', content: tx.message || '' },
-                        prompt: { title: 'Prompt', content: tx.prompt || '' },
-                        reasoning: { title: 'Reasoning', content: tx.reasoning || '' },
-                    };
-
-                    const item = contentMap[itemType as keyof typeof contentMap];
-                    if (!item) return null;
-
-                    return (
-                        <ContentRow
-                            key={path}
-                            {...item}
-                            isSelected={isSelected}
-                            isExpanded={isExpanded}
-                            isLoading={isLoading}
-                        />
-                    );
-                })}
-            </Box>
-
-            <Separator />
-            {renderFooter()}
-        </Box>
-    );
-};
-
-export default TransactionHistoryScreen;
-```
-
 ## File: src/hooks/useReviewScreen.tsx
 ```typescript
 import { useMemo } from 'react';
@@ -5575,6 +5149,450 @@ export const useReviewScreen = () => {
         hasRejectedFiles,
     };
 };
+```
+
+## File: src/components/TransactionDetailScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import DiffScreen from './DiffScreen';
+import ReasonScreen from './ReasonScreen';
+import type { FileChangeType } from '../types/domain.types';
+import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
+import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
+import ActionFooter from './ActionFooter';
+
+const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
+    return (
+        <Box 
+            borderStyle="round"
+            borderColor="yellow"
+            flexDirection="column"
+            paddingX={2}
+            width="80%"
+            alignSelf='center'
+        >
+            <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
+            <Box height={1} />
+            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
+            <Box height={1} />
+            <Text wrap="wrap">Are you sure?</Text>
+        </Box>
+    );
+};
+
+const typeColor = (type: FileChangeType) => {
+    switch (type) {
+        case 'ADD': return 'green';
+        case 'DEL': return 'red';
+        case 'REN': return 'yellow';
+        default: return 'white';
+    }
+};
+
+const TransactionDetailScreen = () => {
+    const {
+        transaction, files,
+        focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
+    } = useTransactionDetailScreen();
+
+    if (!transaction) {
+        return <Text>Loading transaction...</Text>;
+    }
+
+    const renderNavigator = () => {
+        const isPromptFocused = focusedItemPath === 'PROMPT';
+        const isReasoningFocused = focusedItemPath === 'REASONING';
+        const isFilesFocused = focusedItemPath.startsWith('FILES');
+        
+        const isPromptExpanded = expandedItemPaths.has('PROMPT');
+        const isReasoningExpanded = expandedItemPaths.has('REASONING');
+        const isFilesExpanded = expandedItemPaths.has('FILES');
+        
+        return (
+            <Box flexDirection="column">
+                <Text color={isPromptFocused ? 'cyan' : undefined}>
+                    {isPromptFocused ? '> ' : '  '}
+                    {isPromptExpanded ? '▾' : '▸'} (<Text color="cyan" bold>P</Text>)rompt
+                </Text>
+                <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                    {isReasoningFocused ? '> ' : '  '}
+                    {isReasoningExpanded ? '▾' : '▸'} (<Text color="cyan" bold>R</Text>)easoning{' '}
+                    ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                </Text>
+                <Text color={isFilesFocused ? 'cyan' : undefined}>
+                    {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
+                    {isFilesExpanded ? '▾' : '▸'} (<Text color="cyan" bold>F</Text>)iles ({files.length})
+                </Text>
+                {isFilesExpanded && (
+                    <Box flexDirection="column" paddingLeft={2}>
+                        {files.map((file) => {
+                             const fileId = `FILES/${file.id}`;
+                             const isFileSelected = focusedItemPath === fileId;
+                             const stats = file.type === 'DEL' ? ''
+                                : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                             return (
+                                <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                    {isFileSelected ? '> ' : '  '}
+                                    {FILE_CHANGE_TYPE_ICONS[file.type]} <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+    const renderBody = () => {
+        if (bodyView === DETAIL_BODY_VIEWS.NONE) {
+            return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.PROMPT) {
+            return (
+                <Box flexDirection="column">
+                    <Text>PROMPT</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        {(transaction.prompt || '').split('\n')
+                            .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
+                            .map((line, i) => <Text key={i}>{line}</Text>)
+                        }
+                    </Box>
+                </Box>
+            );
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
+            if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
+            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
+             return <Text color="gray">(Select a file and press → to view the diff)</Text>;
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+            const fileId = focusedItemPath.split('/')[1];
+            const file = files.find(f => f.id === fileId);
+            if (!file) return null;
+            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
+        }
+        return null;
+    };
+
+    const renderFooter = () => {
+        if (bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM) {
+            return <ActionFooter actions={DETAIL_FOOTER_ACTIONS.REVERT_CONFIRM} />;
+        }
+        
+        const isFileFocused = focusedItemPath.includes('/');
+        const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
+        const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
+
+        if (isFileFocused) { // Is a file
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
+            } else {
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
+            }
+        }
+        
+        if (expandedItemPaths.has(focusedItemPath)) {
+            return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_EXPANDED, ...baseActions]} />;
+        }
+        return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_COLLAPSED, ...baseActions]} />;
+    };
+
+    const { message, timestamp, status } = transaction;
+    const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
+    const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
+
+    return (
+        <Box flexDirection="column">
+            {/* Header */}
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
+            <Separator />
+            
+            {/* Modal takeover for Revert */}
+            {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
+            
+            {/* Main view */}
+            <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
+                {/* Navigator Part A */}
+                <Box flexDirection="column" marginY={1}>
+                    <Text><Text color="gray">UUID:</Text> {transaction.id}</Text>
+                    <Text><Text color="gray">Git:</Text> {message}</Text>
+                    <Text><Text color="gray">Date:</Text> {date} · <Text color="gray">Status:</Text> {status}</Text>
+                    <Text><Text color="gray">Stats:</Text> {fileStats}</Text>
+                </Box>
+                
+                {/* Navigator Part B */}
+                {renderNavigator()}
+                
+                <Separator />
+                
+                {/* Body */}
+                <Box marginY={1}>
+                    {renderBody()}
+                </Box>
+                
+                <Separator />
+            </Box>
+            
+            {/* Footer */}
+            <Box>
+                {renderFooter()}
+            </Box>
+        </Box>
+    );
+};
+
+export default TransactionDetailScreen;
+```
+
+## File: src/components/TransactionHistoryScreen.tsx
+```typescript
+import { useMemo } from 'react';
+import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import type { Transaction, FileItem } from '../types/domain.types';
+import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
+import { HISTORY_FOOTER_ACTIONS, TRANSACTION_STATUS_UI, FILE_TYPE_MAP, BULK_ACTIONS_OPTIONS, HISTORY_VIEW_MODES } from '../constants/history.constants';
+import ActionFooter from './ActionFooter';
+
+// --- Sub-components ---
+
+const ContentRow = ({ title, content, isSelected, isExpanded, isLoading }: {
+    title: string;
+    content: string;
+    isSelected: boolean;
+    isExpanded: boolean;
+    isLoading: boolean;
+}) => {
+    const icon = isExpanded ? '▾' : '▸';
+    return (
+        <Box flexDirection="column" paddingLeft={6}>
+            <Text color={isSelected ? 'cyan' : undefined}>
+                {isSelected ? '> ' : '  '}{icon} {title}
+            </Text>
+            {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+            {isExpanded && !isLoading && (
+                <Box paddingLeft={8} flexDirection="column">
+                    {(content || '').split('\n').map((line, i) => <Text key={i}>{line || ' '}</Text>)}
+                </Box>
+            )}
+        </Box>
+    );
+};
+
+const DiffPreview = ({ diff }: { diff: string }) => {
+    const lines = diff.split('\n');
+    const previewLines = lines.slice(0, 5);
+    const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+    return (
+        <Box flexDirection="column" paddingLeft={8}>
+            {previewLines.map((line, i) => {
+                let color = 'white';
+                if (line.startsWith('+')) color = 'green';
+                if (line.startsWith('-')) color = 'red';
+                if (line.startsWith('@@')) color = 'cyan';
+                return <Text key={i} color={color}>{line}</Text>;
+            })}
+            {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+        </Box>
+    );
+};
+
+const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
+    file: FileItem;
+    isSelected: boolean;
+    isExpanded: boolean;
+    isLoading: boolean;
+}) => {
+    const icon = isExpanded ? '▾' : '▸';
+
+    return (
+        <Box flexDirection="column" paddingLeft={6}>
+            <Text color={isSelected ? 'cyan' : undefined}>
+                {isSelected ? '> ' : '  '}{' '}
+                {icon} {FILE_TYPE_MAP[file.type]} {file.path}
+            </Text>
+            {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+            {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
+        </Box>
+    );
+};
+
+const TransactionRow = ({
+    tx,
+    isSelected,
+    isExpanded,
+    isSelectedForAction,
+    hasSelection,
+}: {
+    tx: Transaction;
+    isSelected: boolean;
+    isExpanded: boolean;
+    isSelectedForAction: boolean;
+    hasSelection: boolean;
+}) => {
+    const icon = isExpanded ? '▾' : '▸';
+    const uiStatus = TRANSACTION_STATUS_UI[tx.status as keyof typeof TRANSACTION_STATUS_UI] || { text: tx.status, color: 'white' };
+
+    const date = new Date(tx.timestamp).toISOString().split('T')[0];
+    const selectionIndicator = isSelectedForAction ? '[x] ' : '[ ] ';
+    
+    return (
+        <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+            <Text color={isSelected ? 'cyan' : undefined}>
+                {isSelected ? '> ' : '  '}
+                {hasSelection && selectionIndicator}
+                {icon} <Text color={uiStatus.color}>{uiStatus.text}</Text> · <Text color="gray">{tx.hash}</Text> · {date} ·{' '}
+                {tx.message}
+            </Text>
+            {isExpanded && (
+                <Box flexDirection="column" paddingLeft={8}>
+                    {tx.stats && (
+                        <Text color="gray">
+                            Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}
+                        </Text>
+                    )}
+                    <Text>Files:</Text>
+                </Box>
+            )}
+        </Box>
+    );
+};
+
+const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: number }) => {
+    return (
+        <Box flexDirection="column" marginY={1}>
+            <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
+            <Box marginY={1}>
+                <Text>This action is often irreversible. Are you sure?</Text>
+            </Box>
+            {BULK_ACTIONS_OPTIONS.map(opt => <Text key={opt}>{opt}</Text>)}
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const TransactionHistoryScreen = () => {
+    const {
+        mode,
+        filterQuery,
+        selectedForAction,
+        selectedItemPath,
+        expandedIds,
+        loadingPaths,
+        actions,
+        transactions,
+        itemsInView,
+        filterStatus,
+        showingStatus,
+        statsStatus,
+        hasSelection,
+    } = useTransactionHistoryScreen();
+
+    const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
+
+    const renderFooter = () => {
+        if (mode === HISTORY_VIEW_MODES.FILTER) {
+            return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.FILTER_MODE} />;
+        }
+        if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
+            return <Text>{HISTORY_FOOTER_ACTIONS.BULK_MODE.text}</Text>;
+        }
+        
+        const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
+        return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.LIST_MODE(openActionLabel, hasSelection)} />;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION HISTORY </Text>
+            <Separator />
+
+            <Box>
+                <Text>Filter: </Text>
+                {mode === HISTORY_VIEW_MODES.FILTER ? (
+                    <TextInput value={filterQuery} onChange={actions.setFilterQuery} />
+                ) : (
+                    <Text>{filterStatus}</Text>
+                )}
+                <Text> · {showingStatus}</Text>
+                {statsStatus && <Text> · <Text color="magenta">{statsStatus}</Text></Text>}
+            </Box>
+
+            <Box flexDirection="column" marginY={1}>
+                {mode === HISTORY_VIEW_MODES.BULK_ACTIONS && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
+
+                {mode === HISTORY_VIEW_MODES.LIST && itemsInView.map(path => {
+                    const txId = path.split('/')[0]!;
+                    const tx = transactionsById.get(txId);
+                    if (!tx) return <Text key={path}>Error: Missing TX {txId}</Text>;
+
+                    // Is a transaction row
+                    if (path === tx.id) {
+                        return (
+                            <TransactionRow
+                                key={path}
+                                tx={tx}
+                                isSelected={selectedItemPath === path}
+                                isExpanded={expandedIds.has(path)}
+                                isSelectedForAction={selectedForAction.has(tx.id)}
+                                hasSelection={hasSelection}
+                            />
+                        );
+                    }
+
+                    // Is a child row
+                    const itemType = path.split('/')[1]!;
+                    const isSelected = selectedItemPath === path;
+                    const isExpanded = expandedIds.has(path);
+                    const isLoading = loadingPaths.has(path);
+
+                    if (itemType === 'file') {
+                        const fileId = path.split('/')[2]!;
+                        const file = tx.files?.find(f => f.id === fileId);
+                        if (!file) return null;
+                        return (
+                            <FileRow
+                                key={path} file={file} isSelected={isSelected}
+                                isExpanded={isExpanded} isLoading={isLoading}
+                            />
+                        );
+                    }
+
+                    const contentMap = {
+                        message: { title: 'Commit Message', content: tx.message || '' },
+                        prompt: { title: 'Prompt', content: tx.prompt || '' },
+                        reasoning: { title: 'Reasoning', content: tx.reasoning || '' },
+                    };
+
+                    const item = contentMap[itemType as keyof typeof contentMap];
+                    if (!item) return null;
+
+                    return (
+                        <ContentRow
+                            key={path}
+                            {...item}
+                            isSelected={isSelected}
+                            isExpanded={isExpanded}
+                            isLoading={isLoading}
+                        />
+                    );
+                })}
+            </Box>
+
+            <Separator />
+            {renderFooter()}
+        </Box>
+    );
+};
+
+export default TransactionHistoryScreen;
 ```
 
 ## File: src/hooks/useTransactionHistoryScreen.tsx

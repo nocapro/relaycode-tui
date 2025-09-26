@@ -1,0 +1,417 @@
+uuid: c292a11b-c741-4775-b829-c81919420b75
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:21:57.140Z'
+gitCommitMsg: >-
+  refactor(ui): redesign and update global help screen
+
+  Refactored the `GlobalHelpScreen` component to use a more modular, structured
+  layout with `HelpSection` and `HelpItem` sub-components. This change improves
+  code readability and ensures consistent alignment of help text.
+
+  - Removed the border from the help screen container for a cleaner,
+    borderless UI aesthetic.
+  - Significantly expanded the list of documented keyboard shortcuts,
+    organizing them into logical sections: Global, Dashboard, History,
+    Review, and Modals/Overlays.
+  - Added previously undocumented hotkeys for clipboard processing,
+    debug overlays, bulk actions, and more.
+promptSummary: >-
+  I need to update the global help screen to have a borderless UI and to include
+  a more comprehensive list of keyboard shortcuts.
+reasoning:
+  - >-
+    This is an excellent request. I will execute a complete refactor of the
+    global help screen to implement a cleaner, borderless design and update it
+    with a comprehensive list of all keyboard shortcuts.
+  - >-
+    First, I will restructure the `GlobalHelpScreen` component by creating two
+    new internal components, `HelpSection` and `HelpItem`, to manage layout and
+    ensure perfect alignment. I will also remove the external border as
+    requested.
+  - >-
+    Second, I will use these new components to rebuild the content, organizing
+    all shortcuts into logical categories and adding many that were previously
+    undocumented. This will make the help screen a much more useful reference
+    for users.
+  - 'Here is the patch for `src/components/GlobalHelpScreen.tsx`:'
+operations:
+  - type: write
+    path: src/components/GlobalHelpScreen.tsx
+    content: >+
+      --- src/components/GlobalHelpScreen.tsx
+
+      +++ src/components/GlobalHelpScreen.tsx
+
+      @@ -1,68 +1,137 @@
+
+      -import { Box, Text } from 'ink';
+
+      +import { Box, Text } from 'ink';
+
+      +import React from 'react';
+
+      +
+
+      +const HelpSection = ({ title, children }: { title: string; children:
+      React.ReactNode }) => (
+
+      +    <Box flexDirection="column" gap={1} marginBottom={1}>
+
+      +        <Text bold color="cyan">{title}</Text>
+
+      +        {children}
+
+      +    </Box>
+
+      +);
+
+      +
+
+      +const HelpItem = ({ keys, description }: { keys: string[]; description:
+      string }) => (
+
+      +    <Box flexDirection="row">
+
+      +        <Box width={20}>
+
+      +            <Text>
+
+      +                {keys.map((key, index) => (
+
+      +                    <React.Fragment key={index}>
+
+      +                        <Text color="cyan" bold>{key}</Text>
+
+      +                        {index < keys.length - 1 && <Text> / </Text>}
+
+      +                    </React.Fragment>
+
+      +                ))}
+
+      +            </Text>
+
+      +        </Box>
+
+      +        <Box>
+
+      +            <Text>{description}</Text>
+
+      +        </Box>
+
+      +    </Box>
+
+      +);
+       
+       const GlobalHelpScreen = () => {
+           return (
+               <Box
+                   flexDirection="column"
+                   justifyContent="center"
+                   alignItems="center"
+                   width="100%"
+                   height="100%"
+               >
+                   <Box
+                       flexDirection="column"
+      -                borderStyle="round"
+                       paddingX={2}
+                       paddingY={1}
+                       width="80%"
+                   >
+      -                <Box justifyContent="center" marginBottom={1} >
+
+      +                <Box justifyContent="center" marginBottom={1}>
+                           <Text bold>
+                               <Text color="yellow">▲ relaycode</Text>
+                               <Text color="cyan"> · keyboard shortcuts</Text>
+                           </Text>
+                       </Box>
+      -                <Box flexDirection="column" gap={1}>
+
+      -                    <Box flexDirection="column">
+
+      -                        <Text bold color="cyan">GLOBAL</Text>
+
+      -                        <Text>  <Text color="cyan" bold>?</Text>       
+      Toggle this help screen</Text>
+
+      -                        <Text>  <Text color="cyan" bold>Q</Text>       
+      Quit to terminal (or go back)</Text>
+
+      -                    </Box>
+
+      -                    <Box flexDirection="column">
+
+      -                        <Text bold color="cyan">DASHBOARD (watch)</Text>
+
+      -                        <Text>  <Text color="cyan" bold>↑↓</Text>      
+      Navigate event stream</Text>
+
+      -                        <Text>  <Text color="cyan" bold>Enter</Text>   
+      View details of selected transaction</Text>
+
+      -                        <Text>  <Text color="cyan" bold>P</Text>       
+      Pause / Resume clipboard watcher</Text>
+
+      -                        <Text>  <Text color="cyan" bold>A</Text>       
+      Approve all pending transactions</Text>
+
+      -                        <Text>  <Text color="cyan" bold>C</Text>       
+      Commit all applied transactions to git</Text>
+
+      -                    </Box>
+
+      -                    <Box flexDirection="column">
+
+      -                        <Text bold color="cyan">REVIEW & DETAILS
+      SCREENS</Text>
+
+      -                        <Text>  <Text color="cyan" bold>D</Text>       
+      Show / Collapse file diff</Text>
+
+      -                        <Text>  <Text color="cyan" bold>←→</Text>      
+      Collapse / Expand sections or files</Text>
+
+      -                        <Text>  <Text color="cyan" bold>R</Text>       
+      Show / Collapse reasoning steps</Text>
+
+      -                        <Text>  <Text color="cyan" bold>C</Text>       
+      Enter / Exit Copy Mode (Details Screen)</Text>
+
+      -                        <Text>  <Text color="cyan" bold>U</Text>       
+      Undo / Revert Transaction</Text>
+
+      -                        <Text>  <Text color="cyan" bold>Space</Text>   
+      Toggle approval state of a file (Review Screen)</Text>
+
+      -                    </Box>
+
+      -                </Box>
+
+      +                <HelpSection title="GLOBAL CONTROLS">
+
+      +                    <HelpItem keys={['?']} description="Toggle this help
+      screen" />
+
+      +                    <HelpItem keys={['Q', 'Esc']} description="Quit
+      application or go back" />
+
+      +                    <HelpItem keys={['Ctrl', 'V']} description="Process
+      patch from clipboard" />
+
+      +                    <HelpItem keys={['Ctrl', 'B']} description="Toggle
+      debug menu" />
+
+      +                    <HelpItem keys={['Ctrl', 'L']} description="Toggle
+      debug log" />
+
+      +                </HelpSection>
+
+      +
+
+      +                <HelpSection title="DASHBOARD">
+
+      +                    <HelpItem keys={['↑', '↓']} description="Navigate
+      transactions" />
+
+      +                    <HelpItem keys={['→', 'Enter']} description="Expand
+      or view details" />
+
+      +                    <HelpItem keys={['←']} description="Collapse
+      transaction" />
+
+      +                    <HelpItem keys={['P']} description="Pause / Resume
+      clipboard watcher" />
+
+      +                    <HelpItem keys={['A']} description="Approve all
+      pending transactions" />
+
+      +                    <HelpItem keys={['C']} description="Commit all
+      applied transactions" />
+
+      +                    <HelpItem keys={['L']} description="View full
+      transaction history" />
+
+      +                </HelpSection>
+
+      +
+
+      +                <HelpSection title="HISTORY & DETAILS">
+
+      +                    <HelpItem keys={['↑', '↓']} description="Navigate
+      items" />
+
+      +                    <HelpItem keys={['PgUp', 'PgDn']} description="Page
+      up/down through lists" />
+
+      +                    <HelpItem keys={['→']} description="Expand item or
+      view diff" />
+
+      +                    <HelpItem keys={['←']} description="Collapse item or
+      go back" />
+
+      +                    <HelpItem keys={['Spc']} description="Select item for
+      bulk action (History)" />
+
+      +                    <HelpItem keys={['Enter']} description="View
+      transaction details (History)" />
+
+      +                    <HelpItem keys={['C']} description="Open copy-mode
+      menu" />
+
+      +                    <HelpItem keys={['O']} description="Open file or
+      transaction YAML in editor" />
+
+      +                    <HelpItem keys={['U']} description="Undo / Revert
+      transaction (Details)" />
+
+      +                    <HelpItem keys={['F']} description="Filter list
+      (History)" />
+
+      +                    <HelpItem keys={['B']} description="Open bulk actions
+      menu (History)" />
+
+      +                </HelpSection>
+
+      +
+
+      +                <HelpSection title="REVIEW SCREEN">
+
+      +                    <HelpItem keys={['↑', '↓']} description="Navigate
+      files, scripts, etc." />
+
+      +                    <HelpItem keys={['Spc']} description="Toggle approval
+      state of a file" />
+
+      +                    <HelpItem keys={['D', 'Enter']} description="View
+      diff or expand details" />
+
+      +                    <HelpItem keys={['R']} description="View/hide
+      reasoning" />
+
+      +                    <HelpItem keys={['A']} description="Approve and apply
+      all selected changes" />
+
+      +                    <HelpItem keys={['T']} description="Try single file
+      repair (on failed files)" />
+
+      +                    <HelpItem keys={['I']} description="Instruct new
+      change (on rejected files)" />
+
+      +                    <HelpItem keys={['Shift', 'T']} description="Open
+      Bulk Repair menu for all failed files" />
+
+      +                    <HelpItem keys={['Shift', 'I']} description="Open
+      Bulk Instruct menu for all rejected files" />
+
+      +                    <HelpItem keys={['J', 'K']} description="Navigate
+      errors (in script output view)" />
+
+      +                    <HelpItem keys={['X']} description="Expand diff to
+      full height (in diff view)" />
+
+      +                </HelpSection>
+
+      +
+
+      +                <HelpSection title="MODALS & OVERLAYS (Copy, Log, etc.)">
+
+      +                    <HelpItem keys={['↑', '↓']} description="Navigate /
+      Scroll list" />
+
+      +                    <HelpItem keys={['PgUp', 'PgDn']} description="Page
+      up/down" />
+
+      +                    <HelpItem keys={['Spc', 'a-z']} description="Toggle
+      selection (Copy Mode)" />
+
+      +                    <HelpItem keys={['Enter']} description="Confirm
+      action or close" />
+
+      +                    <HelpItem keys={['F']} description="Enter filter mode
+      (Log)" />
+
+      +                    <HelpItem keys={['C']} description="Clear all logs
+      (Log)" />
+
+      +                    <HelpItem keys={['Esc']} description="Close the
+      active overlay" />
+
+      +                </HelpSection>
+                   </Box>
+                   <Box marginTop={1}>
+                       <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+                   </Box>
+               </Box>
+           );
+       };
+       
+       export default GlobalHelpScreen;
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/GlobalHelpScreen.tsx: |-
+    import { Box, Text } from 'ink';
+
+    const GlobalHelpScreen = () => {
+        return (
+            <Box
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                width="100%"
+                height="100%"
+            >
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    paddingX={2}
+                    paddingY={1}
+                    width="80%"
+                >
+                    <Box justifyContent="center" marginBottom={1} >
+                        <Text bold>
+                            <Text color="yellow">▲ relaycode</Text>
+                            <Text color="cyan"> · keyboard shortcuts</Text>
+                        </Text>
+                    </Box>
+                    <Box flexDirection="column" gap={1}>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">GLOBAL</Text>
+                            <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
+                            <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">DASHBOARD (watch)</Text>
+                            <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                            <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
+                            <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
+                            <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
+                            <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                            <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                            <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
+                            <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
+                            <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
+                            <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
+                            <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
+                        </Box>
+                    </Box>
+                </Box>
+                <Box marginTop={1}>
+                    <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default GlobalHelpScreen;
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 191

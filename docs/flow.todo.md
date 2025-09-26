@@ -1,9 +1,16 @@
+git commit screen improvements
+
+1. add advanced copy mode feature
+2. add flow when git operation fails
+
+===
+
 help screen
 
 1. update the help screen with more items that has not been documented yet
 2. we want borderless UI
 
-===
+=== DONE
 
 splash screen:
 

@@ -1,0 +1,310 @@
+uuid: f197f26f-45b7-4a18-992a-360e58ec8b57
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:29:19.905Z'
+gitCommitMsg: >-
+  refactor(ui): make global help screen responsive
+
+  This commit refactors the GlobalHelpScreen component to be fully responsive to
+  the terminal width.
+
+  - The component now dynamically calculates the maximum possible number of
+  columns based on the available screen width and the measured width of the help
+  content. - Help content has been refactored into a data structure for easier
+  measurement and rendering. - Sections are automatically distributed among the
+  calculated columns, ensuring a balanced and readable layout on both wide and
+  narrow terminals. - This replaces the previous static two-column layout,
+  significantly improving the user experience across different terminal sizes.
+promptSummary: >-
+  The user wants to make the help screen responsive to terminal width, using 1,
+  2, or more columns as needed.
+reasoning:
+  - >-
+    Of course. A truly expert system must adapt to its environment. Hardcoding a
+    two-column layout is a temporary solution; a responsive design that
+    intelligently adjusts to the terminal's width is the mark of superior
+    architecture. I will now refactor the `GlobalHelpScreen` to be fully
+    responsive.
+  - >-
+    I will replace the previous implementation with a more sophisticated version
+    that calculates the optimal number of columns based on the available
+    terminal width. This involves:
+  - >-
+    1.  **Measuring Content**: The component will now programmatically measure
+    the width of the longest line in the help content.
+  - >-
+    2.  **Calculating Columns**: Using the terminal width from the
+    `useStdoutDimensions` hook, it will determine how many columns of content
+    can comfortably fit on screen, gracefully falling back to a single column on
+    narrow terminals.
+  - >-
+    3.  **Distributing Sections**: The help sections will be automatically and
+    evenly distributed among the calculated number of columns.
+  - >-
+    4.  **Refactoring to Data Structure**: The help content will be moved into a
+    more manageable data structure, separating the data from the presentation
+    logic and improving maintainability.
+  - >-
+    This new implementation ensures a clean, readable layout across a wide range
+    of terminal sizes.
+  - '---'
+operations:
+  - type: write
+    path: src/components/GlobalHelpScreen.tsx
+    content: >-
+      import { Box, Text } from 'ink';
+
+      import { useStdoutDimensions } from '../utils';
+
+
+      const HELP_SECTIONS = [
+          {
+              title: 'GLOBAL',
+              shortcuts: [
+                  { key: '?', label: 'Toggle this help screen' },
+                  { key: 'Q/Esc', label: 'Quit or Go Back' },
+                  { key: 'Ctrl+V', label: 'Process Clipboard' },
+                  { key: 'Ctrl+B', label: 'Toggle Debug Menu' },
+                  { key: 'Ctrl+L', label: 'Toggle Debug Log' },
+              ],
+          },
+          {
+              title: 'DASHBOARD',
+              shortcuts: [
+                  { key: '↑↓', label: 'Navigate event stream' },
+                  { key: '→/Enter', label: 'Expand / View Details' },
+                  { key: '←', label: 'Collapse Item' },
+                  { key: 'P', label: 'Pause / Resume clipboard watcher' },
+                  { key: 'A', label: 'Approve All Pending' },
+                  { key: 'C', label: 'Commit All Applied' },
+                  { key: 'L', label: 'View History Log' },
+              ],
+          },
+          {
+              title: 'HISTORY',
+              shortcuts: [
+                  { key: '↑↓', label: 'Navigate Items' },
+                  { key: '→/←', label: 'Expand / Collapse' },
+                  { key: 'Space', label: 'Select for Bulk Action' },
+                  { key: 'Enter', label: 'View Details' },
+                  { key: 'F', label: 'Filter History' },
+                  { key: 'B', label: 'Open Bulk Actions Menu' },
+                  { key: 'C', label: 'Copy Selected Items' },
+              ],
+          },
+          {
+              title: 'REVIEW SCREEN',
+              shortcuts: [
+                  { key: '↑↓', label: 'Navigate Items' },
+                  { key: 'D/Enter', label: 'View File Diff' },
+                  { key: 'R', label: 'Show / Collapse Reasoning' },
+                  { key: 'Space', label: 'Toggle Approval State' },
+                  { key: 'A', label: 'Apply Approved Changes' },
+                  { key: 'T/Shift+T', label: 'Repair / Bulk Repair Failed Files' },
+                  { key: 'I/Shift+I', label: 'Instruct / Bulk Instruct Rejected' },
+                  { key: 'C', label: 'Open Copy Menu' },
+              ],
+          },
+          {
+              title: 'DETAIL SCREEN',
+              shortcuts: [
+                  { key: '↑↓', label: 'Navigate Sections/Files' },
+                  { key: '→/←', label: 'Expand / Collapse' },
+                  { key: 'Enter', label: 'Drill-in / View Diff' },
+                  { key: 'U', label: 'Revert Transaction' },
+                  { key: 'C', label: 'Open Copy Menu' },
+                  { key: 'O', label: 'Open File/YAML in Editor' },
+              ],
+          },
+      ];
+
+
+      const KEY_PADDING = 12;
+
+
+      const Shortcut = ({ shortcut }: { shortcut: { key: string; label: string }
+      }) => (
+          <Text>
+              {'  '}
+              <Text color="cyan" bold>{shortcut.key.padEnd(KEY_PADDING)}</Text>
+              {shortcut.label}
+          </Text>
+      );
+
+
+      const GlobalHelpScreen = () => {
+          const [width] = useStdoutDimensions();
+
+          // 90% view width, minus 2 padding on each side.
+          const availableWidth = Math.floor(width * 0.9) - 4;
+
+          // Calculate max width needed for one column of content
+          const allShortcutLines = HELP_SECTIONS.flatMap(s => 
+              s.shortcuts.map(sc => `  ${sc.key.padEnd(KEY_PADDING)} ${sc.label}`)
+          );
+          const allLines = [...allShortcutLines, ...HELP_SECTIONS.map(s => s.title)];
+          const maxContentWidth = Math.max(...allLines.map(line => line.length));
+
+          const GAP = 4;
+          // Determine optimal number of columns
+          const numColumns = Math.max(1, Math.min(
+              HELP_SECTIONS.length, // Don't make more columns than sections
+              Math.floor(availableWidth / (maxContentWidth + GAP))
+          ));
+
+          // Distribute sections into columns
+          const columns: typeof HELP_SECTIONS[] = Array.from({ length: numColumns }, () => []);
+          const sectionsPerColumn = Math.ceil(HELP_SECTIONS.length / numColumns);
+
+          HELP_SECTIONS.forEach((section, index) => {
+              const columnIndex = Math.floor(index / sectionsPerColumn);
+              if (columns[columnIndex]) {
+                  columns[columnIndex].push(section);
+              }
+          });
+
+          return (
+              <Box
+                  flexDirection="column"
+                  justifyContent="center"
+                  alignItems="center"
+                  width="100%"
+                  height="100%"
+              >
+                  <Box
+                      flexDirection="column"
+                      paddingX={2}
+                      paddingY={2}
+                      width="90%"
+                  >
+                      <Box justifyContent="center" marginBottom={1}>
+                          <Text bold>
+                              <Text color="yellow">▲ relaycode</Text>
+                              <Text color="cyan"> · Keyboard Shortcuts</Text>
+                          </Text>
+                      </Box>
+
+                      <Box flexDirection="row" gap={GAP}>
+                          {columns.map((sectionList, i) => (
+                              <Box key={i} flexDirection="column" gap={1} flexGrow={1} flexShrink={1} flexBasis={0}>
+                                  {sectionList.map(section => (
+                                      <Box key={section.title} flexDirection="column">
+                                          <Text bold color="cyan">{section.title}</Text>
+                                          {section.shortcuts.map(shortcut => (
+                                              <Shortcut key={shortcut.label} shortcut={shortcut} />
+                                          ))}
+                                      </Box>
+                                  ))}
+                              </Box>
+                          ))}
+                      </Box>
+                  </Box>
+                  <Box marginTop={1}>
+                      <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+                  </Box>
+              </Box>
+          );
+      };
+
+
+      export default GlobalHelpScreen;
+    patchStrategy: replace
+snapshot:
+  src/components/GlobalHelpScreen.tsx: |-
+    import { Box, Text } from 'ink';
+
+    const GlobalHelpScreen = () => {
+        return (
+            <Box
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                width="100%"
+                height="100%"
+            >
+                <Box
+                    flexDirection="column"
+                    paddingX={2}
+                    paddingY={2}
+                    width="90%"
+                >
+                    <Box justifyContent="center" marginBottom={1}>
+                        <Text bold>
+                            <Text color="yellow">▲ relaycode</Text>
+                            <Text color="cyan"> · Keyboard Shortcuts</Text>
+                        </Text>
+                    </Box>
+
+                    <Box flexDirection="row" gap={4}>
+                        <Box flexDirection="column" gap={1} width="50%">
+                            <Box flexDirection="column">
+                                <Text bold color="cyan">GLOBAL</Text>
+                                <Text>  <Text color="cyan" bold>?</Text>          Toggle this help screen</Text>
+                                <Text>  <Text color="cyan" bold>Q</Text>/<Text color="cyan" bold>Esc</Text>      Quit or Go Back</Text>
+                                <Text>  <Text color="cyan" bold>Ctrl+V</Text>     Process Clipboard</Text>
+                                <Text>  <Text color="cyan" bold>Ctrl+B</Text>     Toggle Debug Menu</Text>
+                                <Text>  <Text color="cyan" bold>Ctrl+L</Text>     Toggle Debug Log</Text>
+                            </Box>
+
+                            <Box flexDirection="column">
+                                <Text bold color="cyan">DASHBOARD</Text>
+                                <Text>  <Text color="cyan" bold>↑↓</Text>         Navigate event stream</Text>
+                                <Text>  <Text color="cyan" bold>→</Text>/<Text color="cyan" bold>Enter</Text>    Expand / View Details</Text>
+                                <Text>  <Text color="cyan" bold>←</Text>          Collapse Item</Text>
+                                <Text>  <Text color="cyan" bold>P</Text>          Pause / Resume clipboard watcher</Text>
+                                <Text>  <Text color="cyan" bold>A</Text>          Approve All Pending</Text>
+                                <Text>  <Text color="cyan" bold>C</Text>          Commit All Applied</Text>
+                                <Text>  <Text color="cyan" bold>L</Text>          View History Log</Text>
+                            </Box>
+
+                            <Box flexDirection="column">
+                                <Text bold color="cyan">HISTORY</Text>
+                                <Text>  <Text color="cyan" bold>↑↓</Text>         Navigate Items</Text>
+                                <Text>  <Text color="cyan" bold>→</Text>/<Text color="cyan" bold>←</Text>        Expand / Collapse</Text>
+                                <Text>  <Text color="cyan" bold>Space</Text>      Select for Bulk Action</Text>
+                                <Text>  <Text color="cyan" bold>Enter</Text>      View Details</Text>
+                                <Text>  <Text color="cyan" bold>F</Text>          Filter History</Text>
+                                <Text>  <Text color="cyan" bold>B</Text>          Open Bulk Actions Menu</Text>
+                                <Text>  <Text color="cyan" bold>C</Text>          Copy Selected Items</Text>
+                            </Box>
+                        </Box>
+
+                        <Box flexDirection="column" gap={1} width="50%">
+                            <Box flexDirection="column">
+                                <Text bold color="cyan">REVIEW SCREEN</Text>
+                                <Text>  <Text color="cyan" bold>↑↓</Text>         Navigate Items</Text>
+                                <Text>  <Text color="cyan" bold>D</Text>/<Text color="cyan" bold>Enter</Text>      View File Diff</Text>
+                                <Text>  <Text color="cyan" bold>R</Text>          Show / Collapse Reasoning</Text>
+                                <Text>  <Text color="cyan" bold>Space</Text>      Toggle Approval State</Text>
+                                <Text>  <Text color="cyan" bold>A</Text>          Apply Approved Changes</Text>
+                                <Text>  <Text color="cyan" bold>T</Text>/<Text color="cyan" bold>Shift+T</Text>  Repair / Bulk Repair Failed Files</Text>
+                                <Text>  <Text color="cyan" bold>I</Text>/<Text color="cyan" bold>Shift+I</Text>  Instruct / Bulk Instruct Rejected</Text>
+                                <Text>  <Text color="cyan" bold>C</Text>          Open Copy Menu</Text>
+                            </Box>
+
+                            <Box flexDirection="column">
+                                <Text bold color="cyan">DETAIL SCREEN</Text>
+                                <Text>  <Text color="cyan" bold>↑↓</Text>         Navigate Sections/Files</Text>
+                                <Text>  <Text color="cyan" bold>→</Text>/<Text color="cyan" bold>←</Text>        Expand / Collapse</Text>
+                                <Text>  <Text color="cyan" bold>Enter</Text>      Drill-in / View Diff</Text>
+                                <Text>  <Text color="cyan" bold>U</Text>          Revert Transaction</Text>
+                                <Text>  <Text color="cyan" bold>C</Text>          Open Copy Menu</Text>
+                                <Text>  <Text color="cyan" bold>O</Text>          Open File/YAML in Editor</Text>
+                            </Box>
+                        </Box>
+                    </Box>
+                </Box>
+                <Box marginTop={1}>
+                    <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default GlobalHelpScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 193

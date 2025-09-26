@@ -1,0 +1,348 @@
+uuid: c25732fd-b40b-4e9b-90f7-548d1c998fdc
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:26:47.091Z'
+gitCommitMsg: >-
+  feat(ui): overhaul global help screen
+
+  This commit refactors the GlobalHelpScreen component to improve both its
+  visual design and content accuracy.
+
+  - Removes the border and adjusts padding to create a more modern, borderless
+  overlay appearance. - Reorganizes keyboard shortcuts into logical sections:
+  Global, Dashboard, History, Review, and Detail screens. - Adds numerous
+  previously undocumented shortcuts for features like debug menu, history
+  navigation, bulk actions, and file repair/instruct workflows. - Implements a
+  two-column layout to present the expanded list of shortcuts in a more readable
+  and information-dense format.
+promptSummary: >-
+  I need to update the global help screen with a borderless UI and more
+  comprehensive keyboard shortcuts.
+reasoning:
+  - >-
+    This is a masterful plan. I will now execute this multi-part refactoring in
+    a single, cohesive transaction. The help screen will be transformed to be
+    both more aesthetically pleasing with its borderless design and more
+    functionally complete with its comprehensive and reorganized keyboard
+    shortcut documentation.
+  - '### Step 1: UI Refinement and Content Overhaul'
+  - >-
+    I will modify `src/components/GlobalHelpScreen.tsx` to implement all the
+    specified changes. This includes removing the border, adjusting the layout
+    for a borderless aesthetic, and completely replacing the content with the
+    new, expanded, and reorganized shortcut list. To improve readability with
+    the increased amount of information, I will use a two-column layout.
+  - '---'
+operations:
+  - type: write
+    path: src/components/GlobalHelpScreen.tsx
+    content: >+
+      --- src/components/GlobalHelpScreen.tsx
+
+      +++ src/components/GlobalHelpScreen.tsx
+
+      @@ -8,50 +8,83 @@
+                   height="100%"
+               >
+                   <Box
+                       flexDirection="column"
+      -                borderStyle="round"
+                       paddingX={2}
+      -                paddingY={1}
+
+      -                width="80%"
+
+      +                paddingY={2}
+
+      +                width="90%"
+                   >
+      -                <Box justifyContent="center" marginBottom={1} >
+
+      +                <Box justifyContent="center" marginBottom={1}>
+                           <Text bold>
+                               <Text color="yellow">▲ relaycode</Text>
+      -                        <Text color="cyan"> · keyboard shortcuts</Text>
+
+      +                        <Text color="cyan"> · Keyboard Shortcuts</Text>
+                           </Text>
+                       </Box>
+      -                <Box flexDirection="column" gap={1}>
+
+      -                    <Box flexDirection="column">
+
+      -                        <Text bold color="cyan">GLOBAL</Text>
+
+      -                        <Text>  <Text color="cyan" bold>?</Text>       
+      Toggle this help screen</Text>
+
+      -                        <Text>  <Text color="cyan" bold>Q</Text>       
+      Quit to terminal (or go back)</Text>
+
+      +
+
+      +                <Box flexDirection="row" gap={4}>
+
+      +                    <Box flexDirection="column" gap={1} width="50%">
+
+      +                        <Box flexDirection="column">
+
+      +                            <Text bold color="cyan">GLOBAL</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>?</Text>          Toggle this help screen</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Q</Text>/<Text color="cyan" bold>Esc</Text>      Quit or Go
+      Back</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Ctrl+V</Text>     Process Clipboard</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Ctrl+B</Text>     Toggle Debug Menu</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Ctrl+L</Text>     Toggle Debug Log</Text>
+
+      +                        </Box>
+
+      +
+
+      +                        <Box flexDirection="column">
+
+      +                            <Text bold color="cyan">DASHBOARD</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>↑↓</Text>         Navigate event stream</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>→</Text>/<Text color="cyan" bold>Enter</Text>    Expand / View
+      Details</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>←</Text>          Collapse Item</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>P</Text>          Pause / Resume clipboard watcher</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>A</Text>          Approve All Pending</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>C</Text>          Commit All Applied</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>L</Text>          View History Log</Text>
+
+      +                        </Box>
+
+      +
+
+      +                        <Box flexDirection="column">
+
+      +                            <Text bold color="cyan">HISTORY</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>↑↓</Text>         Navigate Items</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>→</Text>/<Text color="cyan" bold>←</Text>        Expand /
+      Collapse</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Space</Text>      Select for Bulk Action</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Enter</Text>      View Details</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>F</Text>          Filter History</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>B</Text>          Open Bulk Actions Menu</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>C</Text>          Copy Selected Items</Text>
+
+      +                        </Box>
+                           </Box>
+      -                    <Box flexDirection="column">
+
+      -                        <Text bold color="cyan">DASHBOARD (watch)</Text>
+
+      -                        <Text>  <Text color="cyan" bold>↑↓</Text>      
+      Navigate event stream</Text>
+
+      -                        <Text>  <Text color="cyan" bold>Enter</Text>   
+      View details of selected transaction</Text>
+
+      -                        <Text>  <Text color="cyan" bold>P</Text>       
+      Pause / Resume clipboard watcher</Text>
+
+      -                        <Text>  <Text color="cyan" bold>A</Text>       
+      Approve all pending transactions</Text>
+
+      -                        <Text>  <Text color="cyan" bold>C</Text>       
+      Commit all applied transactions to git</Text>
+
+      -                    </Box>
+
+      -                    <Box flexDirection="column">
+
+      -                        <Text bold color="cyan">REVIEW & DETAILS
+      SCREENS</Text>
+
+      -                        <Text>  <Text color="cyan" bold>D</Text>       
+      Show / Collapse file diff</Text>
+
+      -                        <Text>  <Text color="cyan" bold>←→</Text>      
+      Collapse / Expand sections or files</Text>
+
+      -                        <Text>  <Text color="cyan" bold>R</Text>       
+      Show / Collapse reasoning steps</Text>
+
+      -                        <Text>  <Text color="cyan" bold>C</Text>       
+      Enter / Exit Copy Mode (Details Screen)</Text>
+
+      -                        <Text>  <Text color="cyan" bold>U</Text>       
+      Undo / Revert Transaction</Text>
+
+      -                        <Text>  <Text color="cyan" bold>Space</Text>   
+      Toggle approval state of a file (Review Screen)</Text>
+
+      +
+
+      +                    <Box flexDirection="column" gap={1} width="50%">
+
+      +                        <Box flexDirection="column">
+
+      +                            <Text bold color="cyan">REVIEW SCREEN</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>↑↓</Text>         Navigate Items</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>D</Text>/<Text color="cyan" bold>Enter</Text>      View File
+      Diff</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>R</Text>          Show / Collapse Reasoning</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Space</Text>      Toggle Approval State</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>A</Text>          Apply Approved Changes</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>T</Text>/<Text color="cyan" bold>Shift+T</Text>  Repair / Bulk Repair
+      Failed Files</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>I</Text>/<Text color="cyan" bold>Shift+I</Text>  Instruct / Bulk
+      Instruct Rejected</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>C</Text>          Open Copy Menu</Text>
+
+      +                        </Box>
+
+      +
+
+      +                        <Box flexDirection="column">
+
+      +                            <Text bold color="cyan">DETAIL SCREEN</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>↑↓</Text>         Navigate Sections/Files</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>→</Text>/<Text color="cyan" bold>←</Text>        Expand /
+      Collapse</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>Enter</Text>      Drill-in / View Diff</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>U</Text>          Revert Transaction</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>C</Text>          Open Copy Menu</Text>
+
+      +                            <Text>  <Text color="cyan"
+      bold>O</Text>          Open File/YAML in Editor</Text>
+
+      +                        </Box>
+                           </Box>
+                       </Box>
+                   </Box>
+                   <Box marginTop={1}>
+                       <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+                   </Box>
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/GlobalHelpScreen.tsx: |-
+    import { Box, Text } from 'ink';
+
+    const GlobalHelpScreen = () => {
+        return (
+            <Box
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                width="100%"
+                height="100%"
+            >
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    paddingX={2}
+                    paddingY={1}
+                    width="80%"
+                >
+                    <Box justifyContent="center" marginBottom={1} >
+                        <Text bold>
+                            <Text color="yellow">▲ relaycode</Text>
+                            <Text color="cyan"> · keyboard shortcuts</Text>
+                        </Text>
+                    </Box>
+                    <Box flexDirection="column" gap={1}>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">GLOBAL</Text>
+                            <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
+                            <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">DASHBOARD (watch)</Text>
+                            <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                            <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
+                            <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
+                            <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
+                            <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                            <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                            <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
+                            <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
+                            <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
+                            <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
+                            <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
+                        </Box>
+                    </Box>
+                </Box>
+                <Box marginTop={1}>
+                    <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default GlobalHelpScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 192
