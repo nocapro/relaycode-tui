@@ -121,6 +121,7 @@ export const useReviewScreen = () => {
     const {
         moveSelectionUp,
         moveSelectionDown,
+        setSelectedItemIndex,
         expandDiff,
         toggleBodyView,
         setBodyView,
@@ -150,6 +151,26 @@ export const useReviewScreen = () => {
         const currentItem = navigableItems[selectedItemIndex];
         const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
         useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+    };
+
+    const navigateToNextFile = () => {
+        const nextFileIndex = navigableItems.findIndex(
+            (item, index) => index > selectedItemIndex && item.type === 'file',
+        );
+        if (nextFileIndex !== -1) {
+            setSelectedItemIndex(nextFileIndex);
+        }
+    };
+
+    const navigateToPreviousFile = () => {
+        // Find the last index of a file before the current one
+        const prevFileIndex = navigableItems
+            .slice(0, selectedItemIndex)
+            .findLastIndex(item => item.type === 'file');
+
+        if (prevFileIndex !== -1) {
+            setSelectedItemIndex(prevFileIndex);
+        }
     };
 
     // --- Input Handlers ---
@@ -219,11 +240,14 @@ export const useReviewScreen = () => {
         ] as const;
         if (!(contentViews as readonly string[]).includes(bodyView)) return false;
 
-        if (key.upArrow) {
+        if (key.upArrow && bodyView !== REVIEW_BODY_VIEWS.DIFF) {
             contentViewport.actions.scrollUp();
             return true;
         }
-        if (key.downArrow) { contentViewport.actions.scrollDown(); return true; }
+        if (key.downArrow && bodyView !== REVIEW_BODY_VIEWS.DIFF) {
+            contentViewport.actions.scrollDown();
+            return true;
+        }
         if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
         if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
         return false;
@@ -252,10 +276,18 @@ export const useReviewScreen = () => {
         }
     };
 
-    const handleDiffInput = (input: string) => {
+    const handleDiffInput = (input: string, key: Key) => {
+        if (key.upArrow) {
+            navigateToPreviousFile();
+            return;
+        }
+        if (key.downArrow) {
+            navigateToNextFile();
+            return;
+        }
         if (input.toLowerCase() === 'x') expandDiff();
-        if (input.toLowerCase() === 'd') toggleBodyView('diff');
-    }; //
+        if (input.toLowerCase() === 'd' || key.escape) toggleBodyView('diff');
+    };
 
     const handleMainNavigationInput = (input: string, key: Key): void => {
         // Handle Shift+R for reject all
@@ -348,7 +380,7 @@ export const useReviewScreen = () => {
             case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
             case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
             case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
-            case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input);
+            case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input, key);
             default: return handleMainNavigationInput(input, key);
         }
     });

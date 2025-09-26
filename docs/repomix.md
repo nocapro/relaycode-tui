@@ -3,22 +3,19 @@
 src/
   components/
     ActionFooter.tsx
-    ReviewProcessingScreen.tsx
-    Separator.tsx
+    DiffScreen.tsx
+    ReviewScreen.tsx
   constants/
     review.constants.ts
   hooks/
+    useContentViewport.ts
     useReviewScreen.tsx
-  services/
-    review.service.ts
   stores/
-    app.store.ts
+    navigation.utils.ts
     review.store.ts
-    transaction.store.ts
-    view.store.ts
   types/
     actions.types.ts
-  App.tsx
+    domain.types.ts
 eslint.config.js
 index.tsx
 package.json
@@ -38,120 +35,92 @@ export interface ActionItem {
 }
 ```
 
-## File: src/constants/review.constants.ts
+## File: src/hooks/useContentViewport.ts
 ```typescript
-import type { ApplyStep } from '../stores/review.store';
-import type { ActionItem } from '../types/actions.types';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
-/**
- * Constants for the Review screen and process.
- */
-export const INITIAL_APPLY_STEPS: ApplyStep[] = [
-    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
-    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
-    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
-    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
-];
-
-export const REVIEW_BODY_VIEWS = {
-    DIFF: 'diff',
-    REASONING: 'reasoning',
-    SCRIPT_OUTPUT: 'script_output',
-    BULK_REPAIR: 'bulk_repair',
-    CONFIRM_HANDOFF: 'confirm_handoff',
-    BULK_INSTRUCT: 'bulk_instruct',
-    NONE: 'none',
-} as const;
-
-export const PATCH_STATUS = {
-    SUCCESS: 'SUCCESS',
-    PARTIAL_FAILURE: 'PARTIAL_FAILURE',
-} as const;
-
-export const FILE_STATUS_UI = {
-    APPROVED: { icon: '[✓]', color: 'green' },
-    REJECTED: { icon: '[✗]', color: 'red' },
-    FAILED: { icon: '[!]', color: 'red' },
-    AWAITING: { icon: '[●]', color: 'yellow' },
-    RE_APPLYING: { icon: '[●]', color: 'cyan' },
-} as const;
-
-export const BULK_REPAIR_OPTIONS = [
-    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
-    '(2) Bulk Change Strategy & Re-apply',
-    '(3) Handoff to External Agent',
-    '(4) Bulk Abandon All Failed Files',
-    '(Esc) Cancel',
-] as const;
-
-export const BULK_INSTRUCT_OPTIONS = [
-    '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
-    '(2) Handoff to External Agent',
-    '(3) Bulk Un-reject All Files (revert to original)',
-    '(4) Cancel',
-] as const;
-
-interface ReviewFooterConfig {
-    isFileSelected: boolean;
-    fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
-    currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
-    hasFailedFiles: boolean;
-    hasRejectedFiles: boolean;
-    hasApprovedFiles: boolean;
+interface ContentViewportConfig {
+    contentLineCount: number;
+    viewportHeight: number;
 }
 
-export const REVIEW_FOOTER_ACTIONS = {
-    DIFF_VIEW: [
-        { key: '↑↓', label: 'Nav' },
-        { key: 'X', label: 'Expand' },
-        { key: 'D/Esc', label: 'Back' },
-    ] as const,
-    REASONING_VIEW: [
-        { key: '↑↓', label: 'Scroll Text' },
-        { key: 'R', label: 'Collapse View' },
-        { key: 'C', label: 'Copy Mode' },
-    ] as const,
-    SCRIPT_OUTPUT_VIEW: [
-        { key: '↑↓', label: 'Nav' },
-        { key: 'J↓/K↑', label: 'Next/Prev Error' },
-        { key: 'C', label: 'Copy Output' },
-        { key: 'Ent/Esc', label: 'Back' },
-    ] as const,
-    BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
-    BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
-    HANDOFF_CONFIRM_VIEW: [
-        { key: 'Enter', label: 'Confirm Handoff' },
-        { key: 'Esc', label: 'Cancel' },
-    ] as const,
-    MAIN_VIEW: (config: ReviewFooterConfig): ActionItem[] => {
-        const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
+export interface ContentViewport {
+    scrollIndex: number;
+    canScrollUp: boolean;
+    canScrollDown: boolean;
+    actions: {
+        scrollUp: (lines?: number) => void;
+        scrollDown: (lines?: number) => void;
+        pageUp: () => void;
+        pageDown: () => void;
+        resetScroll: () => void;
+    };
+}
 
-        if (config.isFileSelected) {
-            if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
-            actions.push({ key: 'D', label: 'Diff' });
-            if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
-            if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
-        } else if (config.currentItemType === 'script') {
-            actions.push({ key: 'Ent', label: 'Expand Details' });
-        } else {
-            actions.push({ key: 'Ent', label: 'Expand' });
+/**
+ * Manages the scrolling state (index) for a block of content within a fixed viewport.
+ * @param config Configuration including total content lines and the height of the visible area.
+ * @returns State and actions for controlling the scroll position.
+ */
+export const useContentViewport = ({
+    contentLineCount,
+    viewportHeight,
+}: ContentViewportConfig): ContentViewport => {
+    const [scrollIndex, setScrollIndex] = useState(0);
+
+    const maxScrollIndex = useMemo(
+        () => Math.max(0, contentLineCount - viewportHeight),
+        [contentLineCount, viewportHeight],
+    );
+
+    const resetScroll = useCallback(() => {
+        setScrollIndex(0);
+    }, []);
+
+    // Effect to reset scroll when content changes, which is a good default.
+    useEffect(() => {
+        resetScroll();
+    }, [contentLineCount, resetScroll]);
+
+    // Effect to clamp scrollIndex if content or viewport size changes
+    useEffect(() => {
+        if (scrollIndex > maxScrollIndex) {
+            setScrollIndex(maxScrollIndex);
         }
+    }, [scrollIndex, maxScrollIndex]);
 
-        if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
-        if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
-        if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
+    const canScrollUp = useMemo(() => scrollIndex > 0, [scrollIndex]);
+    const canScrollDown = useMemo(() => scrollIndex < maxScrollIndex, [scrollIndex, maxScrollIndex]);
 
-        actions.push({ key: 'C', label: 'Copy' });
+    const scrollUp = useCallback((lines = 1) => {
+        setScrollIndex(i => Math.max(0, i - lines));
+    }, []);
 
-        if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
-        actions.push({ key: 'Q', label: 'Quit' });
-        return actions;
-    },
+    const scrollDown = useCallback((lines = 1) => {
+        setScrollIndex(i => Math.min(maxScrollIndex, i + lines));
+    }, [maxScrollIndex]);
+
+    const pageUp = useCallback(() => {
+        setScrollIndex(i => Math.max(0, i - viewportHeight));
+    }, [viewportHeight]);
+
+    const pageDown = useCallback(() => {
+        setScrollIndex(i => Math.min(maxScrollIndex, i + viewportHeight));
+    }, [maxScrollIndex, viewportHeight]);
+
+    return {
+        scrollIndex,
+        canScrollUp,
+        canScrollDown,
+        actions: {
+            scrollUp,
+            scrollDown,
+            pageUp,
+            pageDown,
+            resetScroll,
+        },
+    };
 };
-
-export const REVIEW_PROCESSING_FOOTER_ACTION: readonly ActionItem[] = [
-    { key: 'Ctrl+C', label: 'Cancel Process' },
-] as const;
 ```
 
 ## File: eslint.config.js
@@ -391,44 +360,302 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
 export default ActionFooter;
 ```
 
-## File: src/stores/view.store.ts
+## File: src/constants/review.constants.ts
 ```typescript
-import { create } from 'zustand';
-import { OVERLAYS } from '../constants/view.constants';
+import type { ApplyStep } from '../stores/review.store';
+import type { ActionItem } from '../types/actions.types';
 
-export type Overlay = (typeof OVERLAYS)[keyof typeof OVERLAYS];
+/**
+ * Constants for the Review screen and process.
+ */
+export const INITIAL_APPLY_STEPS: ApplyStep[] = [
+    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+];
 
-interface ViewState {
-    selectedTransactionId: string | null;
-    activeOverlay: Overlay;
-    actions: {
-        setSelectedTransactionId: (id: string | null) => void;
-        setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
-    };
+export const REVIEW_BODY_VIEWS = {
+    DIFF: 'diff',
+    REASONING: 'reasoning',
+    SCRIPT_OUTPUT: 'script_output',
+    BULK_REPAIR: 'bulk_repair',
+    CONFIRM_HANDOFF: 'confirm_handoff',
+    BULK_INSTRUCT: 'bulk_instruct',
+    NONE: 'none',
+} as const;
+
+export const PATCH_STATUS = {
+    SUCCESS: 'SUCCESS',
+    PARTIAL_FAILURE: 'PARTIAL_FAILURE',
+} as const;
+
+export const FILE_STATUS_UI = {
+    APPROVED: { icon: '[✓]', color: 'green' },
+    REJECTED: { icon: '[✗]', color: 'red' },
+    FAILED: { icon: '[!]', color: 'red' },
+    AWAITING: { icon: '[●]', color: 'yellow' },
+    RE_APPLYING: { icon: '[●]', color: 'cyan' },
+} as const;
+
+export const BULK_REPAIR_OPTIONS = [
+    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+    '(2) Bulk Change Strategy & Re-apply',
+    '(3) Handoff to External Agent',
+    '(4) Bulk Abandon All Failed Files',
+    '(Esc) Cancel',
+] as const;
+
+export const BULK_INSTRUCT_OPTIONS = [
+    '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
+    '(2) Handoff to External Agent',
+    '(3) Bulk Un-reject All Files (revert to original)',
+    '(4) Cancel',
+] as const;
+
+interface ReviewFooterConfig {
+    isFileSelected: boolean;
+    fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
+    currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
+    hasFailedFiles: boolean;
+    hasRejectedFiles: boolean;
+    hasApprovedFiles: boolean;
 }
 
-export const useViewStore = create<ViewState>((set) => ({
-    selectedTransactionId: null,
-    activeOverlay: OVERLAYS.NONE,
-    actions: {
-        setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
-        setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+export const REVIEW_FOOTER_ACTIONS = {
+    DIFF_VIEW: [
+        { key: '↑↓', label: 'Nav' },
+        { key: 'X', label: 'Expand' },
+        { key: 'D/Esc', label: 'Back' },
+    ] as const,
+    REASONING_VIEW: [
+        { key: '↑↓', label: 'Scroll Text' },
+        { key: 'R', label: 'Collapse View' },
+        { key: 'C', label: 'Copy Mode' },
+    ] as const,
+    SCRIPT_OUTPUT_VIEW: [
+        { key: '↑↓', label: 'Nav' },
+        { key: 'J↓/K↑', label: 'Next/Prev Error' },
+        { key: 'C', label: 'Copy Output' },
+        { key: 'Ent/Esc', label: 'Back' },
+    ] as const,
+    BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+    BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+    HANDOFF_CONFIRM_VIEW: [
+        { key: 'Enter', label: 'Confirm Handoff' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const,
+    MAIN_VIEW: (config: ReviewFooterConfig): ActionItem[] => {
+        const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
+
+        if (config.isFileSelected) {
+            if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
+            actions.push({ key: 'D', label: 'Diff' });
+            if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
+            if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
+        } else if (config.currentItemType === 'script') {
+            actions.push({ key: 'Ent', label: 'Expand Details' });
+        } else {
+            actions.push({ key: 'Ent', label: 'Expand' });
+        }
+
+        if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
+        if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
+        if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
+
+        actions.push({ key: 'C', label: 'Copy' });
+
+        if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
+        actions.push({ key: 'Q', label: 'Quit' });
+        return actions;
     },
-}));
-```
-
-## File: src/components/Separator.tsx
-```typescript
-import {Text} from 'ink';
-import { useStdoutDimensions } from '../utils';
-
-const Separator = ({ width: propWidth }: { width?: number }) => {
-	const [columns] = useStdoutDimensions();
-	const width = propWidth ?? columns;
-	return <Text>{'─'.repeat(width)}</Text>;
 };
 
-export default Separator;
+export const getReviewProcessingFooterActions = (
+    isSkippable: boolean,
+): readonly ActionItem[] => {
+    const actions: ActionItem[] = [{ key: 'Ctrl+C', label: 'Cancel Process' }];
+    if (isSkippable) {
+        actions.push({ key: 'S', label: 'Skip Script' });
+    }
+    return actions;
+};
+```
+
+## File: src/types/domain.types.ts
+```typescript
+// --- Core Domain Models ---
+
+/** The type of change applied to a file. */
+export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
+
+/** The review status of a file within a transaction. */
+export type FileReviewStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' | 'RE_APPLYING';
+
+/** The result of a script execution. */
+export interface ScriptResult {
+    command: string;
+    success: boolean;
+    duration: number;
+    summary: string;
+    output: string;
+}
+
+/** The unified representation of a file change within a transaction. */
+export interface FileItem {
+    id: string;
+    path: string;
+    diff: string;
+    linesAdded: number;
+    linesRemoved: number;
+    type: FileChangeType;
+    strategy?: 'replace' | 'standard-diff';
+}
+
+/** The lifecycle status of a transaction. */
+export type TransactionStatus =
+    | 'PENDING'
+    | 'APPLIED'
+    | 'COMMITTING'
+    | 'COMMITTED'
+    | 'FAILED'
+    | 'REVERTED'
+    | 'IN-PROGRESS'
+    | 'HANDOFF';
+
+/** The central data model for a code modification transaction. */
+export interface Transaction {
+    id: string;
+    timestamp: number;
+    status: TransactionStatus;
+    hash: string;
+    message: string;
+    prompt?: string;
+    reasoning?: string;
+    error?: string;
+    files?: FileItem[];
+    scripts?: ScriptResult[];
+    stats?: {
+        files: number;
+        linesAdded: number;
+        linesRemoved: number;
+    };
+}
+```
+
+## File: src/components/DiffScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { UI_CONFIG } from '../config/ui.config';
+
+interface DiffScreenProps {
+    filePath: string;
+    diffContent: string;
+    isExpanded: boolean;
+    scrollIndex?: number;
+    maxHeight?: number;
+}
+const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHeight }: DiffScreenProps) => {
+    const lines = diffContent.split('\n');
+    const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
+    const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
+
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
+        }
+        // Handle vertical scrolling for expanded view
+        if (isExpanded && maxHeight) {
+            const visibleLines = lines.slice(scrollIndex, scrollIndex + maxHeight);
+            return visibleLines.map((line, i) => renderLine(line, scrollIndex + i));
+        }
+        return lines.map((line, i) => renderLine(line, i));
+    };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (line.startsWith('+')) color = 'green';
+        if (line.startsWith('-')) color = 'red';
+        if (line.startsWith('@@')) color = 'cyan';
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>DIFF: {filePath}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
+};
+
+export default DiffScreen;
+```
+
+## File: src/stores/navigation.utils.ts
+```typescript
+import type { Transaction } from '../types/domain.types';
+
+export const moveIndex = (
+    currentIndex: number,
+    direction: 'up' | 'down',
+    listSize: number,
+): number => {
+    if (direction === 'up') {
+        return Math.max(0, currentIndex - 1);
+    }
+    return Math.min(listSize - 1, currentIndex + 1);
+};
+
+export const findNextPath = (currentPath: string, visiblePaths: string[]): string => {
+    const currentIndex = visiblePaths.indexOf(currentPath);
+    if (currentIndex < visiblePaths.length - 1) {
+        return visiblePaths[currentIndex + 1]!;
+    }
+    return currentPath;
+};
+
+export const findPrevPath = (currentPath: string, visiblePaths: string[]): string => {
+    const currentIndex = visiblePaths.indexOf(currentPath);
+    if (currentIndex > 0) {
+        return visiblePaths[currentIndex - 1]!;
+    }
+    return currentPath;
+};
+
+export const getParentPath = (path: string): string | null => path.includes('/') ? path.split('/')[0]! : null;
+
+export const getVisibleItemPaths = (
+    transactions: Transaction[],
+    expandedIds: Set<string>,
+): string[] => {
+    const paths: string[] = [];
+    for (const tx of transactions) {
+        paths.push(tx.id);
+        if (expandedIds.has(tx.id)) {
+            paths.push(`${tx.id}/message`);
+            paths.push(`${tx.id}/prompt`);
+            paths.push(`${tx.id}/reasoning`);
+            if (tx.files) {
+                for (const file of tx.files) {
+                    paths.push(`${tx.id}/file/${file.id}`);
+                }
+            }
+        }
+    }
+    return paths;
+};
 ```
 
 ## File: package.json
@@ -466,595 +693,6 @@ export default Separator;
     "typescript": "^5.9.2"
   }
 }
-```
-
-## File: src/components/ReviewProcessingScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import { type ApplyStep } from '../stores/review.store';
-import Separator from './Separator';
-import ActionFooter from './ActionFooter';
-import { useReviewProcessingScreen } from '../hooks/useReviewProcessingScreen';
-import { REVIEW_PROCESSING_FOOTER_ACTION } from '../constants/review.constants';
-
-const ApplyStepRow = ({ step, isSubstep = false, now }: {
-    step: ApplyStep;
-    isSubstep?: boolean;
-    now: number;
-}) => {
-    if (isSubstep) {
-        let color: string | undefined;
-        let symbol: React.ReactNode;
-
-        switch (step.status) {
-            case 'pending':
-                symbol = '○';
-                color = 'gray';
-                break;
-            case 'active':
-                symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
-                break;
-            case 'done':
-                symbol = '✓';
-                color = 'green';
-                break;
-            case 'failed':
-                symbol = '✗';
-                color = 'red';
-                break;
-            default:
-                symbol = ' ';
-        }
-
-        return (
-            <Text color={color}>
-                {'     └─ '}{symbol}{' '}{step.title}
-            </Text>
-        );
-    }
-
-    let symbol;
-    let color;
-    switch (step.status) {
-        case 'pending': symbol = '( )'; break;
-        case 'active': symbol = '(●)'; color = 'cyan'; break;
-        case 'done': symbol = '[✓]'; color = 'green'; break;
-        case 'failed': symbol = '[!]'; color = 'red'; break;
-        case 'skipped': symbol = '(-)'; color = 'gray'; break;
-    }
-
-    let durationText = '';
-    if (!isSubstep) {
-        if (step.status === 'active' && step.startTime) {
-            durationText = ` (${((now - step.startTime) / 1000).toFixed(1)}s)`;
-        } else if (step.duration) {
-            durationText = ` (${step.duration.toFixed(1)}s)`;
-        }
-    }
-
-    return (
-        <Box flexDirection="column">
-            <Text>
-                <Text color={color}>{symbol}</Text> {step.title}{durationText}
-            </Text>
-            {step.details && (
-                <Text color="gray">
-                    {'     └─ '}{step.details}
-                </Text>
-            )}
-            {step.substeps?.map((sub: ApplyStep, i: number) => (
-                <ApplyStepRow key={i} step={sub} isSubstep={true} now={now} />
-            ))}
-        </Box>
-    );
-};
-
-const ReviewProcessingScreen = () => {
-    const {
-        transaction,
-        applySteps,
-        isProcessing,
-        isCancelling,
-        patchStatus,
-        elapsedTime,
-        now,
-    } = useReviewProcessingScreen();
-
-    const failureCase = patchStatus === 'PARTIAL_FAILURE';
-
-    const renderFooter = () => {
-        if (isCancelling) {
-            return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Cancelling... Please wait.</Text>;
-        }
-        if (isProcessing) {
-            return (
-                <Box flexDirection="column" gap={1}>
-                    <Text>Elapsed: {elapsedTime.toFixed(1)}s · Processing... Please wait.</Text>
-                    <Separator />
-                    <ActionFooter actions={REVIEW_PROCESSING_FOOTER_ACTION} />
-                </Box>
-            );
-        }
-        if (failureCase) {
-            return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Transitioning to repair workflow...</Text>;
-        }
-        return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...</Text>;
-    };
-
-    if (!transaction) {
-        return <Text>Loading...</Text>;
-    }
-
-    return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column">
-                <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
-                <Box flexDirection="column" marginTop={1} gap={1}>
-                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} now={now} />)}
-                </Box>
-            </Box>
-            <Separator />
-            {renderFooter()}
-        </Box>
-    );
-};
-
-export default ReviewProcessingScreen;
-```
-
-## File: src/stores/transaction.store.ts
-```typescript
-import { create } from 'zustand';
-import { TransactionService } from '../services/transaction.service';
-import { useViewStore } from './view.store';
-import { useDashboardStore } from './dashboard.store';
-import type { Transaction, TransactionStatus } from '../types/domain.types';
-
-export type { Transaction };
-
-interface TransactionState {
-    transactions: Transaction[];
-    actions: {
-        loadTransactions: () => void;
-        updateTransactionStatus: (id: string, status: TransactionStatus) => void;
-        addTransaction: (transaction: Transaction) => void;
-        clearTransactions: () => void;
-    };
-}
-
-export const useTransactionStore = create<TransactionState>((set) => ({
-    transactions: [],
-    actions: {
-        loadTransactions: () => {
-            const transactions = TransactionService.getAllTransactions();
-            set({ transactions });
-        },
-        updateTransactionStatus: (id, status) => {
-            set(state => ({
-                transactions: state.transactions.map(tx =>
-                    tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
-                ),
-            }));
-        },
-        addTransaction: (transaction) => {
-            set(state => ({
-                transactions: [transaction, ...state.transactions],
-            }));
-            useDashboardStore.getState().actions.setSelectedIndex(0);
-        },
-        clearTransactions: () => set({ transactions: [] }),
-    },
-}));
-
-// --- Selectors ---
-
-/** Selects transactions by their status. */
-export const selectTransactionsByStatus = (status: TransactionStatus) => (state: TransactionState) =>
-    state.transactions.filter(tx => tx.status === status);
-
-/** Selects the transaction currently targeted by the view store. */
-export const selectSelectedTransaction = (state: TransactionState): Transaction | undefined => {
-    const { selectedTransactionId } = useViewStore.getState();
-    return state.transactions.find(t => t.id === selectedTransactionId);
-};
-```
-
-## File: src/stores/app.store.ts
-```typescript
-import { create } from 'zustand';
-import type { AppScreen } from '../types/view.types';
-import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
-
-interface AppState {
-    currentScreen: AppScreen;
-    actions: {
-        showInitScreen: () => void;
-        showReviewProcessingScreen: () => void;
-        showDashboardScreen: () => void;
-        showReviewScreen: () => void;
-        showGitCommitScreen: () => void;
-        showSplashScreen: () => void;
-        showTransactionHistoryScreen: () => void;
-        showTransactionDetailScreen: () => void;
-        navigateBack: () => void;
-    };
-}
-
-export const useAppStore = create<AppState>((set, get) => ({
-    currentScreen: 'splash',
-    actions: {
-        showInitScreen: () => set({ currentScreen: 'init' }),
-        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
-        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
-        showReviewScreen: () => set({ currentScreen: 'review' }),
-        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
-        showSplashScreen: () => set({ currentScreen: 'splash' }),
-        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
-        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
-        navigateBack: () => {
-            const { currentScreen } = get();
-            if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
-                get().actions.showDashboardScreen();
-            }
-        },
-    },
-}));
-```
-
-## File: src/services/review.service.ts
-```typescript
-import { useTransactionStore } from '../stores/transaction.store';
-import { useAppStore } from '../stores/app.store';
-import { useReviewStore } from '../stores/review.store';
-import { sleep } from '../utils';
-import { useNotificationStore } from '../stores/notification.store';
-import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
-import type { Transaction, FileItem, FileReviewStatus } from '../types/domain.types';
-
-export interface SimulationResult {
-    patchStatus: PatchStatus;
-    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
-}
-
-const mockSuccessFiles = [
-    'src/components/Button.tsx',
-    'src/components/Input.tsx',
-    'src/components/Modal.tsx',
-    'src/hooks/useForm.ts',
-    'src/hooks/useDebounce.ts',
-    'src/styles/theme.css',
-    'src/utils/formatters.ts',
-    'src/pages/HomePage.tsx',
-    'src/pages/AboutPage.tsx',
-    'src/services/api.ts',
-    'src/stores/user.store.ts',
-    'src/constants/routes.ts',
-    'src/assets/logo.svg',
-    'src/config/firebase.ts',
-    'src/types/domain.ts',
-    'src/features/auth/Login.tsx',
-    'src/features/auth/Signup.tsx',
-    'src/features/dashboard/Overview.tsx',
-    'src/features/settings/Profile.tsx',
-    'src/App.tsx',
-];
-
-const mockFailureFiles = [
-    'src/services/payment.gateway.ts',
-    'src/services/notification.service.ts',
-    'src/components/UserProfile.tsx',
-    'src/components/complex/DataTable.tsx',
-    'src/hooks/useInfiniteScroll.ts',
-    'src/hooks/useWebSocket.ts',
-    'src/utils/crypto.ts',
-    'src/utils/date.helper.ts',
-    'src/pages/admin/UserManagement.tsx',
-    'src/pages/admin/Analytics.tsx',
-    'src/stores/cart.store.ts',
-    'src/stores/products.store.ts',
-    'src/constants/permissions.ts',
-    'src/assets/icon-error.svg',
-    'src/config/sentry.ts',
-    'src/types/api.ts',
-    'src/features/checkout/AddressForm.tsx',
-    'src/features/checkout/PaymentForm.tsx',
-    'src/features/product/ProductDetail.tsx',
-    'src/features/product/ProductList.tsx',
-];
-
-const generateBulkRepairPrompt = (failedFiles: FileItem[]): string => {
-    return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
-
-IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
-
-${failedFiles.map(file => `--- FILE: ${file.path} ---
-Strategy: ${file.strategy}
-Error: Hunk #1 failed to apply // This is a mock error
-
-ORIGINAL CONTENT:
----
-// ... original content of ${file.path} ...
----
-
-FAILED PATCH:
----
-${file.diff || '// ... failed diff ...'}
----
-`).join('\n')}
-
-Please analyze all failed files and provide a complete, corrected response.`;
-};
-
-const generateHandoffPrompt = (
-    transaction: Transaction,
-    fileReviewStates: Map<
-        string, { status: FileReviewStatus; error?: string; details?: string }
-    >,
-): string => {
-    const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
-    const failedFiles = (transaction.files || []).filter(f => ['FAILED', 'REJECTED'].includes(fileReviewStates.get(f.id)?.status || ''));
-
-    return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
-
-The full plan for this transaction is detailed in the YAML file located at: .relay/transactions/${transaction.hash}.yml. Please use this file as your primary source of truth for the overall goal.
-
-Here is the current status of the transaction:
-
---- TRANSACTION SUMMARY ---
-Goal: ${transaction.message}
-Reasoning:
-${transaction.reasoning || ''}
-
---- CURRENT FILE STATUS ---
-SUCCESSFUL CHANGES (already applied, no action needed):
-${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || '  (None)'}
-
-FAILED CHANGES (these are the files you need to fix):
-${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${fileReviewStates.get(f.id)?.error})`).join('\n')}
-
-Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.`;
-};
-
-const performHandoff = (hash: string) => {
-    // This is a bit of a hack to find the right transaction to update in the demo
-    const txToUpdate = useTransactionStore.getState().transactions.find(tx => tx.hash === hash);
-    if (txToUpdate) {
-        useTransactionStore.getState().actions.updateTransactionStatus(txToUpdate.id, 'HANDOFF');
-    }
-
-    useAppStore.getState().actions.showDashboardScreen();
-};
-
-async function* runApplySimulation(
-    files: FileItem[],
-    scenario: 'success' | 'failure',
-): AsyncGenerator<ApplyUpdate, SimulationResult> {
-    if (scenario === 'success') {
-        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
-        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
-        if (useReviewStore.getState().isCancelling) { return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates: new Map() }; }
-
-        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
-        if (files.length > 0) {
-            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's1', title: `write: ${files[0]!.path} (strategy: replace)`, status: 'pending' } } };
-        }
-        if (files.length > 1) {
-            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's2', title: `write: ${files[1]!.path} (strategy: standard-diff)`, status: 'pending' } } };
-        }
-        await sleep(50);
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's1', status: 'active' } };
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'active' } };
-        for (let i = 0; i < mockSuccessFiles.length; i++) {
-            if (useReviewStore.getState().isCancelling) break;
-            const file = mockSuccessFiles[i]!;
-            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: `s${i + 3}`, title: `write: ${file}`, status: 'pending' } } };
-        }
-        await sleep(50);
-        for (let i = 0; i < mockSuccessFiles.length; i++) {
-            if (useReviewStore.getState().isCancelling) break;
-            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'active' } };
-            await sleep(50);
-        }
-
-        await sleep(200);
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's1', status: 'done' } };
-        await sleep(150);
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'done' } };
-        for (let i = 0; i < mockSuccessFiles.length; i++) {
-            if (useReviewStore.getState().isCancelling) break;
-            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'done' } };
-            await sleep(80);
-        }
-        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
-
-        const fileReviewStates = new Map<string, { status: FileReviewStatus }>();
-        files.forEach(file => {
-            fileReviewStates.set(file.id, { status: 'APPROVED' });
-        });
-
-        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'active' } }; await sleep(100);
-        if (useReviewStore.getState().isCancelling) {
-            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'failed', details: 'Cancelled by user' } };
-            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
-            return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
-        }
-        await sleep(1200);
-        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command', substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' } } };
-        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'done' } };
-
-        if (useReviewStore.getState().isCancelling) {
-             yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
-             return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
-        }
-        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'active' } }; await sleep(1200);
-        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'linter', substep: { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' } } };
-        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'done' } };
-
-        await sleep(500);
-
-        return { patchStatus: 'SUCCESS', fileReviewStates };
-
-    } else { // failure scenario
-        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
-        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
-
-        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
-        if (files.length > 0) {
-            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f1', title: `write: ${files[0]!.path} (strategy: replace)`, status: 'pending' } } };
-        }
-        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f2', title: `write: ${(files[1] || { path: '...' }).path}`, status: 'pending' } } };
-        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f3', title: `write: ${(files[2] || { path: '...' }).path}`, status: 'pending' } } };
-        await sleep(50);
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f1', status: 'active' } };
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f2', status: 'active' } };
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f3', status: 'active' } };
-        for (let i = 0; i < mockFailureFiles.length; i++) {
-            const file = mockFailureFiles[i]!;
-            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: `f${i + 4}`, title: `write: ${file}`, status: 'pending' } } };
-        }
-        await sleep(50);
-        for (let i = 0; i < mockFailureFiles.length; i++) {
-            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `f${i + 4}`, status: 'active' } };
-            await sleep(50);
-        }
-        await sleep(150);
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f1', status: 'done' } };
-        await sleep(100);
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f2', status: 'failed', title: `${(files[1] || { path: '...' }).path} (Hunk #1 failed to apply)` } };
-        await sleep(100);
-        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f3', status: 'failed', title: `${(files[2] || { path: '...' }).path} (Context mismatch at line 92)` } };
-        for (let i = 0; i < mockFailureFiles.length; i++) {
-            const file = mockFailureFiles[i]!;
-            const shouldFail = i % 4 === 0 || i === mockFailureFiles.length - 1; // fail a few, including the last one
-            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `f${i + 4}`, status: shouldFail ? 'failed' : 'done', title: shouldFail ? `${file} (Could not find insertion point)` : undefined } };
-            await sleep(80);
-        }
-        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
-
-        await sleep(100);
-        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped due to patch application failure' } };
-        await sleep(100);
-        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to patch application failure' } };
-
-        await sleep(500);
-
-        const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
-        files.forEach((file, index) => {
-            const isFailedFile = index > 0; // Fail all but the first file
-            const status = isFailedFile ? 'FAILED' : 'APPROVED';
-            const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
-            fileReviewStates.set(file.id, { status, error });
-        });
-
-        return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
-    }
-}
-
-const generateSingleFileRepairPrompt = (file: FileItem, error?: string): string => {
-    return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
-
-Error: ${error || 'Unknown error'}
-Strategy: ${file.strategy}
-
-ORIGINAL CONTENT:
----
-// ... original file content would be here ...
----
-
-FAILED PATCH:
----
-${file.diff || '// ... failed diff would be here ...'}
----
-
-Please provide a corrected patch that addresses the error.`;
-};
-
-const tryRepairFile = (file: FileItem, error?: string): FileItem => {
-    generateSingleFileRepairPrompt(file, error);
-    // Mock clipboard write and show notification
-    useNotificationStore.getState().actions.show({
-        type: 'success',
-        title: 'Copied Repair Prompt',
-        message: `A repair prompt for ${file.path} has been copied to your clipboard.`,
-    });
-    return file;
-};
-
-const generateSingleFileInstructPrompt = (file: FileItem, transaction: Transaction): string => {
-    return `The user REJECTED the last proposed change for the file \`${file.path}\`.
-
-The original high-level goal was:
----
-${transaction.prompt || transaction.message}
----
-
-The rejected change was:
----
-${file.diff || '// ... rejected diff would be here ...'}
----
-
-Please provide an alternative solution for \`${file.path}\` that still accomplishes the original goal.
-The response MUST be a complete, corrected patch for this file.`;
-};
-
-const tryInstructFile = (file: FileItem, transaction: Transaction): void => {
-    generateSingleFileInstructPrompt(file, transaction);
-    // Mock clipboard write and show notification
-    useNotificationStore.getState().actions.show({
-        type: 'success',
-        title: 'Copied Instruction Prompt',
-        message: `An instruction prompt for ${file.path} has been copied to your clipboard.`,
-    });
-};
-
-const generateBulkInstructPrompt = (rejectedFiles: FileItem[], transaction: Transaction): string => {
-    // Mock implementation for demo. In a real scenario, this would generate a more complex prompt.
-    const fileList = rejectedFiles.map(f => `- ${f.path}`).join('\n');
-    useNotificationStore.getState().actions.show({
-        type: 'success',
-        title: 'Copied to Clipboard',
-        message: `Copied bulk instruction prompt for ${rejectedFiles.length} files.`,
-        duration: 3,
-    });
-    return `The user has rejected changes in multiple files for the goal: "${transaction.message}".\n\nThe rejected files are:\n${fileList}\n\nPlease provide an alternative patch for all of them.`;
-};
-
-const runBulkReapply = async (
-    failedFiles: FileItem[],
-): Promise<{ id: string; status: FileReviewStatus; error?: string }[]> => {
-    await sleep(1500); // Simulate re-apply
-
-    // Mock a mixed result
-    let first = true;
-    return failedFiles.map(file => {
-        if (first) {
-            first = false;
-            return { id: file.id, status: 'APPROVED' as const };
-        } else {
-            return {
-                id: file.id,
-                status: 'FAILED' as const,
-                error: "'replace' failed: markers not found",
-            };
-        }
-    });
-};
-
-export const ReviewService = {
-    generateBulkRepairPrompt,
-    generateBulkInstructPrompt,
-    generateHandoffPrompt,
-    performHandoff,
-    runApplySimulation,
-    generateSingleFileRepairPrompt,
-    tryRepairFile,
-    generateSingleFileInstructPrompt,
-    tryInstructFile,
-    runBulkReapply,
-};
 ```
 
 ## File: index.tsx
@@ -1141,69 +779,6 @@ const main = () => {
 };
 
 main();
-```
-
-## File: src/App.tsx
-```typescript
-import { Box } from 'ink';
-import { useAppStore } from './stores/app.store';
-import SplashScreen from './components/SplashScreen';
-import InitializationScreen from './components/InitializationScreen';
-import DashboardScreen from './components/DashboardScreen';
-import ReviewScreen from './components/ReviewScreen';
-import ReviewProcessingScreen from './components/ReviewProcessingScreen';
-import GitCommitScreen from './components/GitCommitScreen';
-import TransactionDetailScreen from './components/TransactionDetailScreen';
-import TransactionHistoryScreen from './components/TransactionHistoryScreen';
-import DebugMenu from './components/DebugMenu'; 
-import DebugLogScreen from './components/DebugLogScreen';
-import GlobalHelpScreen from './components/GlobalHelpScreen';
-import CopyScreen from './components/CopyScreen';
-import NotificationScreen from './components/NotificationScreen';
-import { useViewStore } from './stores/view.store';
-import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
-
-const App = () => {
-    const currentScreen = useAppStore(state => state.currentScreen);
-    const activeOverlay = useViewStore(s => s.activeOverlay);
-    const isOverlayOpen = activeOverlay !== 'none';
-
-    // Global hotkeys are active if no modal-like component is open
-    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log' && activeOverlay !== 'notification'; // These overlays have their own input handlers
-    useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
-
-    const renderMainScreen = () => {
-        if (currentScreen === 'splash') return <SplashScreen />;
-        if (currentScreen === 'init') return <InitializationScreen />;
-        if (currentScreen === 'dashboard') return <DashboardScreen />;
-        if (currentScreen === 'review') return <ReviewScreen />;
-        if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
-        if (currentScreen === 'git-commit') return <GitCommitScreen />;
-        if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
-        if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
-        return null;
-    };
-
-    return (
-        <>
-            <Box
-                width="100%"
-                height="100%"
-                flexDirection="column"
-                display={isOverlayOpen ? 'none' : 'flex'}
-            >
-                {renderMainScreen()}
-            </Box>
-            {activeOverlay === 'help' && <GlobalHelpScreen />}
-            {activeOverlay === 'copy' && <CopyScreen />}
-            {activeOverlay === 'log' && <DebugLogScreen />}
-            {activeOverlay === 'debug' && <DebugMenu />}
-            {activeOverlay === 'notification' && <NotificationScreen />}
-        </>
-    );
-};
-
-export default App;
 ```
 
 ## File: src/hooks/useReviewScreen.tsx
@@ -1585,6 +1160,426 @@ export const useReviewScreen = () => {
 };
 ```
 
+## File: src/components/ReviewScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import DiffScreen from './DiffScreen';
+import ReasonScreen from './ReasonScreen';
+import type { ScriptResult, FileItem, FileChangeType } from '../types/domain.types';
+import { useReviewScreen } from '../hooks/useReviewScreen';
+import { REVIEW_BODY_VIEWS, REVIEW_FOOTER_ACTIONS, FILE_STATUS_UI, BULK_REPAIR_OPTIONS, BULK_INSTRUCT_OPTIONS } from '../constants/review.constants';
+import ActionFooter from './ActionFooter';
+
+// --- Sub-components ---
+
+const FileItemRow = ({ file, reviewState, isFocused }: {
+    file: FileItem;
+    reviewState: { status: string; error?: string; details?: string };
+    isFocused: boolean;
+}) => {
+    const ui = FILE_STATUS_UI[reviewState.status as keyof typeof FILE_STATUS_UI] || { icon: '[?]', color: 'gray' };
+
+    const typeColor = (type: FileChangeType) => {
+        switch (type) {
+            case 'ADD': return 'green';
+            case 'DEL': return 'red';
+            case 'REN': return 'yellow';
+            default: return 'white';
+        }
+    };
+
+    const diffStats = <Text>(+<Text color="green">{file.linesAdded}</Text>/-<Text color="red">{file.linesRemoved}</Text>)</Text>;
+    const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+    const prefix = isFocused ? '> ' : '  ';
+    const colorProps = isFocused ? { bold: true, color: 'cyan' } : {};
+
+    if (reviewState.status === 'FAILED') {
+        return (
+            <Box>
+                <Text {...colorProps}>
+                    {prefix}<Text color={ui.color}>{ui.icon} FAILED {file.path}</Text>
+                    <Text color="red">    ({reviewState.error})</Text>
+                </Text>
+            </Box>
+        );
+    }
+
+    if (reviewState.status === 'AWAITING') {
+        return (
+            <Box>
+                <Text {...colorProps}>
+                    {prefix}<Text color={ui.color}>{ui.icon} AWAITING {file.path}</Text>
+                    <Text color="yellow">    ({reviewState.details})</Text>
+                </Text>
+            </Box>
+        );
+    }
+
+    if (reviewState.status === 'RE_APPLYING') {
+        return (
+             <Box>
+                <Text {...colorProps}>
+                    {prefix}<Text color={ui.color}>{ui.icon} RE-APPLYING... {file.path}</Text>
+                    <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
+                </Text>
+            </Box>
+        );
+    }
+
+    return (
+        <Box>
+            <Text {...colorProps}>
+                {prefix}<Text color={ui.color}>{ui.icon}</Text> {file.type}{' '}
+                <Text color={typeColor(file.type)}>{file.path}</Text>{' '}
+                {diffStats} [{strategy}]
+            </Text>
+        </Box>
+    );
+};
+
+const ScriptItemRow = ({
+    script,
+    isSelected,
+    isExpanded,
+}: {
+    script: ScriptResult;
+    isSelected: boolean;
+    isExpanded: boolean;
+}) => {
+    const icon = script.success ? '✓' : '✗';
+    const iconColor = script.success ? 'green' : 'red';
+    const arrow = isExpanded ? '▾' : '▸';
+    const prefix = isSelected ? '> ' : '  ';
+    
+    // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+    const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                      script.command.includes('lint') ? 'Linter' : 
+                      'Script';
+
+    return (
+        <Box>
+            <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                {script.summary}
+            </Text>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const ReviewScreen = () => {
+    const {
+        transaction,
+        files,
+        scripts = [],
+        patchStatus,
+        selectedItemIndex,
+        bodyView,
+        isDiffExpanded,
+        reasoningScrollIndex,
+        scriptErrorIndex,
+        fileReviewStates,
+        numFiles,
+        approvedFilesCount,
+        totalLinesAdded,
+        totalLinesRemoved,
+        selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
+        navigableItems,
+        navigableItemsInView,
+        viewOffset,
+        contentScrollIndex,
+        availableBodyHeight,
+        hasRejectedFiles,
+    } = useReviewScreen();
+
+    if (!transaction) {
+        return <Text>Loading review...</Text>;
+    }
+    const { hash, message, prompt = '', reasoning = '' } = transaction;
+
+    const renderBody = () => {
+        if (bodyView === REVIEW_BODY_VIEWS.NONE) return null;
+
+        if (bodyView === REVIEW_BODY_VIEWS.REASONING) {
+            const reasoningText = reasoning || '';
+            const reasoningLinesCount = reasoningText.split('\n').length;
+            const visibleLinesCount = 10;
+            return (
+                <Box flexDirection="column">
+                    <ReasonScreen
+                        reasoning={reasoningText}
+                        scrollIndex={contentScrollIndex}
+                        visibleLinesCount={Math.max(1, availableBodyHeight)}
+                    />
+                    {reasoningLinesCount > visibleLinesCount && (
+                        <Text color="gray">
+                            Showing lines {reasoningScrollIndex + 1}-{Math.min(reasoningScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                            of {reasoningLinesCount}
+                        </Text>
+                    )}
+                </Box>
+            );
+        }
+        
+        if (bodyView === REVIEW_BODY_VIEWS.DIFF) {
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+            if (!selectedFile) return null;
+            return (
+                <DiffScreen
+                    filePath={selectedFile.path}
+                    diffContent={selectedFile.diff}
+                    isExpanded={isDiffExpanded}
+                    scrollIndex={contentScrollIndex}
+                    maxHeight={Math.max(1, availableBodyHeight)}
+                />
+            );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT) {
+             const currentItem = navigableItems[selectedItemIndex];
+             const scriptItems = navigableItems.filter((i): i is { type: 'script'; id: string } => i.type === 'script');
+             const scriptIndex = currentItem?.type === 'script'
+                ? scriptItems.findIndex(i => i.id === currentItem.id)
+                : -1;
+             const selectedScript = scripts[scriptIndex] || null;
+             if (!selectedScript) return null;
+             
+             const outputLines = selectedScript.output.split('\n');
+             const errorLines = outputLines.filter((line: string) =>
+                line.includes('Error') || line.includes('Warning'),
+             );
+             
+             return (
+                <Box flexDirection="column">
+                    <Text>
+                        {selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`
+                    </Text>
+                    <Box marginTop={1} flexDirection="column">
+                        {outputLines.map((line: string, index: number) => {
+                            const isError = line.includes('Error');
+                            const isWarning = line.includes('Warning');
+                            const isHighlighted = errorLines[scriptErrorIndex] === line;
+                            
+                            return (
+                                <Text 
+                                    key={index} 
+                                    color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                    bold={isHighlighted}
+                                    backgroundColor={isHighlighted ? 'blue' : undefined}
+                                >
+                                    {line}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                    {errorLines.length > 0 && (
+                        <Text color="gray">
+                            Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                        </Text>
+                    )}
+                </Box>
+             );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.CONFIRM_HANDOFF) {
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+                    <Box flexDirection="column">
+                        <Text>This action will:</Text>
+                        <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
+                        <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
+                        <Text>3. Assume that you and the external agent will complete the work.</Text>
+                    </Box>
+                    <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
+                    <Text bold color="yellow">Are you sure you want to proceed?</Text>
+                </Box>
+            );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_REPAIR) {
+            const failedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'FAILED');
+
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>BULK REPAIR ACTION</Text>
+
+                    <Box flexDirection="column">
+                        <Text>The following {failedFiles.length} files failed to apply:</Text>
+                        {failedFiles.map((file: FileItem) => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                    </Box>
+
+                    <Text>How would you like to proceed?</Text>
+
+                    <Box flexDirection="column">
+                        {BULK_REPAIR_OPTIONS.map((opt, i) => (
+                            <Text key={i} color={selectedBulkRepairOptionIndex === i ? 'cyan' : undefined}>
+                                {selectedBulkRepairOptionIndex === i ? '> ' : '  '}
+                                {opt}
+                            </Text>
+                        ))}
+                    </Box>
+                </Box>
+            );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_INSTRUCT) {
+            const rejectedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'REJECTED');
+
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>BULK INSTRUCTION ACTION</Text>
+
+                    <Box flexDirection="column">
+                        <Text>The following {rejectedFiles.length} files were rejected:</Text>
+                        {rejectedFiles.map((file: FileItem) => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                    </Box>
+                    <Box flexDirection="column" marginTop={1}>
+                        {BULK_INSTRUCT_OPTIONS.map((opt, i) => (
+                            <Text key={i} color={selectedBulkInstructOptionIndex === i ? 'cyan' : undefined}>
+                                {selectedBulkInstructOptionIndex === i ? '> ' : '  '}
+                                {opt}
+                            </Text>
+                        ))}
+                    </Box>
+                </Box>
+            );
+        }
+
+        return null;
+    };
+
+    const renderFooter = () => {
+        // Contextual footer for body views
+        if (bodyView === REVIEW_BODY_VIEWS.DIFF) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.DIFF_VIEW}/>;
+        if (bodyView === REVIEW_BODY_VIEWS.REASONING) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.REASONING_VIEW}/>;
+        if (bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.SCRIPT_OUTPUT_VIEW}/>;
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_REPAIR) return <Text>{REVIEW_FOOTER_ACTIONS.BULK_REPAIR_VIEW.text}</Text>;
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_INSTRUCT) return <Text>{REVIEW_FOOTER_ACTIONS.BULK_INSTRUCT_VIEW.text}</Text>;
+        if (bodyView === REVIEW_BODY_VIEWS.CONFIRM_HANDOFF) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.HANDOFF_CONFIRM_VIEW}/>;
+
+        // Dynamic Main footer
+        const currentItem = navigableItems[selectedItemIndex];
+        const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+        const fileState = currentItem?.type === 'file' ? fileReviewStates.get(currentItem.id) : undefined;
+
+        const footerConfig = {
+            isFileSelected: currentItem?.type === 'file',
+            fileStatus: fileState?.status as 'FAILED' | 'REJECTED' | 'OTHER' | undefined,
+            currentItemType: currentItem?.type as 'file' | 'script' | 'reasoning' | 'prompt' | undefined,
+            hasFailedFiles,
+            hasRejectedFiles,
+            hasApprovedFiles: approvedFilesCount > 0,
+        };
+        return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.MAIN_VIEW(footerConfig)} />;
+    };
+
+    return (
+        <Box flexDirection="column">
+            {/* Header */}
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · REVIEW </Text>
+            <Separator />
+            
+            {/* Navigator Section */}
+            <Box flexDirection="column" marginY={1}>
+                <Box flexDirection="column">
+                    <Text>{hash} · {message}</Text>
+                    <Box>
+                        <Text>
+                            (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>)
+                            {' '}| {numFiles} Files · ({approvedFilesCount}/{numFiles} Appr)
+                            {' '}| Showing {viewOffset + 1}-
+                            {Math.min(viewOffset + navigableItemsInView.length, navigableItems.length)}{' '}
+                            of {navigableItems.length}
+                        </Text>
+                        {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && (
+                            <Text> · Scripts: SKIPPED</Text>
+                        )}
+                        {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                    </Box>
+                </Box>
+
+                <Box flexDirection="column" marginTop={1}>
+                    <Text color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' : undefined}>
+                        {navigableItems[selectedItemIndex]?.type === 'prompt' ? '> ' : '  '}
+                        (P)rompt ▸ {(prompt || '').substring(0, 50)}...
+                    </Text>
+                    <Text color={navigableItems[selectedItemIndex]?.type === 'reasoning' ? 'cyan' : undefined}>
+                        {navigableItems[selectedItemIndex]?.type === 'reasoning' ? '> ' : '  '}
+                        (R)easoning ({(reasoning || '').split('\n\n').length} steps){' '}
+                        {bodyView === REVIEW_BODY_VIEWS.REASONING ? '▾' : '▸'}{' '}
+                        {((reasoning || '').split('\n')[0] ?? '').substring(0, 40)}...
+                    </Text>
+                </Box>
+            </Box>
+
+            <Separator />
+
+            {/* Script Results (if any) */}
+            {scripts.length > 0 && navigableItemsInView.some(i => i.type === 'script') && (
+                <>
+                    <Box flexDirection="column" marginY={1}>
+                        {scripts.map((script: ScriptResult) => {
+                            const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'script' && i.id === script.command);
+                            if (itemInViewIndex === -1) return null;
+                            
+                            const isSelected = selectedItemIndex === viewOffset + itemInViewIndex;
+                            return (
+                                <ScriptItemRow key={script.command} script={script} isSelected={isSelected} isExpanded={bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT && isSelected} />
+                            );
+                        })}
+                    </Box>
+                    <Separator />
+                </>
+            )}
+            
+            {/* Files Section */}
+            <Box flexDirection="column" marginY={1}>
+                <Text bold>FILES</Text>
+                {files.map((file: FileItem) => {
+                    const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'file' && i.id === file.id);
+                    if (itemInViewIndex === -1) return null; // Only render if visible
+
+                    const isFocused = selectedItemIndex === viewOffset + itemInViewIndex;
+                    const reviewState = fileReviewStates.get(file.id);
+                    
+                    return (
+                        <FileItemRow key={file.id} file={file} isFocused={isFocused} reviewState={reviewState || { status: 'AWAITING' }} />
+                    );
+                })}
+            </Box>
+            
+            <Separator />
+            
+            {/* Body Viewport */}
+            {bodyView !== REVIEW_BODY_VIEWS.NONE && (
+                <>
+                    <Box marginY={1}>
+                        {renderBody()}
+                    </Box>
+                    <Separator />
+                </>
+            )}
+
+            {/* Footer */}
+            <Box>
+                {renderFooter()}
+            </Box>
+        </Box>
+    );
+};
+
+export default ReviewScreen;
+```
+
 ## File: src/stores/review.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -1628,6 +1623,7 @@ interface ReviewState {
     selectedBulkRepairOptionIndex: number;
     selectedBulkInstructOptionIndex: number;
     isCancelling: boolean;
+    isSkipping: boolean;
 
     actions: {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
@@ -1644,6 +1640,8 @@ interface ReviewState {
         tryRepairFile: (fileId: string) => void;
         showBulkRepair: () => void;
         executeBulkRepairOption: (option: number) => Promise<void>;
+        skipCurrentStep: () => void;
+        resetSkip: () => void;
         tryInstruct: (fileId: string) => void;
         cancelProcessing: () => void;
         showBulkInstruct: () => void;
@@ -1679,6 +1677,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     selectedBulkRepairOptionIndex: 0,
     selectedBulkInstructOptionIndex: 0,
     isCancelling: false,
+    isSkipping: false,
 
     actions: {
         load: (transactionId, initialState) => {
@@ -1754,6 +1753,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
                 processingStartTime: Date.now(),
                 isCancelling: false,
+                isSkipping: false,
                 fileReviewStates: new Map(), // Clear previous states
             });
 
@@ -1817,6 +1817,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         },
         showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
         cancelProcessing: () => set({ isCancelling: true }),
+        skipCurrentStep: () => set({ isSkipping: true }),
+        resetSkip: () => set({ isSkipping: false }),
         executeBulkInstructOption: async (option) => {
             const selectedTransactionId = useViewStore.getState().selectedTransactionId;
             const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);

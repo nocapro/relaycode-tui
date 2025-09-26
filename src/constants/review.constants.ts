@@ -60,8 +60,9 @@ interface ReviewFooterConfig {
 
 export const REVIEW_FOOTER_ACTIONS = {
     DIFF_VIEW: [
-        { key: '↑↓', label: 'Nav' },
+        { key: '↑↓', label: 'Next/Prev File' },
         { key: 'X', label: 'Expand' },
+        { key: 'PgUp/PgDn', label: 'Scroll' },
         { key: 'D/Esc', label: 'Back' },
     ] as const,
     REASONING_VIEW: [
@@ -86,7 +87,7 @@ export const REVIEW_FOOTER_ACTIONS = {
 
         if (config.isFileSelected) {
             if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
-            actions.push({ key: 'D', label: 'Diff' });
+            actions.push({ key: 'D/Ent', label: 'Diff' });
             if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
             if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
         } else if (config.currentItemType === 'script') {

@@ -1,0 +1,1198 @@
+uuid: c6f5a3e1-d102-4638-b710-8b273d6b0b30
+projectId: relaycode-tui
+createdAt: '2025-09-26T07:55:28.607Z'
+gitCommitMsg: >-
+  feat(review): enable seamless file diff navigation
+
+  Improves the Review Screen user experience by implementing several key
+  enhancements for diff interaction:
+
+  - Users can now navigate directly from one file's diff to the next/previous
+  file's diff using the Up/Down arrow keys. - Diff view is now accessible for
+  any file via 'D' or 'Enter', regardless of its review status (Approved,
+  Rejected, Failed, etc.). - The action footer has been updated to clearly
+  communicate these new navigation controls and shortcuts to the user.
+promptSummary: Refactor the review screen to improve diff navigation and access.
+reasoning:
+  - >-
+    Based on your request, I will refactor the review screen to enhance user
+    experience when interacting with file diffs. This involves allowing diff
+    viewing for any file status, enabling navigation between diffs, and updating
+    UI elements to reflect these new capabilities.
+  - '### Part 1: Enhance State Management'
+  - >-
+    First, I'll add a new action to `review.store.ts` to allow direct setting of
+    the selected item index. This is a necessary primitive for the file-to-file
+    navigation logic that will be implemented in the `useReviewScreen` hook.
+  - '### Part 2: Update UI Constants'
+  - >-
+    Next, I'll update the action footer constants to provide clear instructions
+    to the user about the new and clarified functionalities. The diff view will
+    now show how to navigate between files, and the main view will indicate that
+    `Enter` can also be used to view a diff.
+  - '### Part 3: Implement Core Logic'
+  - >-
+    Finally, I'll refactor the `useReviewScreen` hook. This is where the main
+    logic for the new features resides. I'll add functions to navigate between
+    files, then update the input handlers to use these functions when the diff
+    view is active. This will allow seamless navigation between file diffs using
+    the up and down arrow keys.
+operations:
+  - type: write
+    path: src/stores/review.store.ts
+    content: >+
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ -28,6 +28,7 @@
+               load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+               moveSelectionUp: (listSize: number) => void;
+               moveSelectionDown: (listSize: number) => void;
+      +        setSelectedItemIndex: (index: number) => void;
+               expandDiff: () => void;
+               toggleBodyView: (view: Extract<
+                   ReviewBodyView, 'bulk_instruct' |
+      @@ -118,6 +119,7 @@
+                   return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
+               }),
+               moveSelectionDown: (listSize) => set(state => {
+                   return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
+               }),
+      +        setSelectedItemIndex: (index) => set({ selectedItemIndex: index
+      }),
+               toggleBodyView: (view) => set(state => {
+                   const transactionId = useViewStore.getState().selectedTransactionId;
+                   const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/review.constants.ts
+    content: |+
+      --- src/constants/review.constants.ts
+      +++ src/constants/review.constants.ts
+      @@ -69,8 +69,9 @@
+       
+       export const REVIEW_FOOTER_ACTIONS = {
+           DIFF_VIEW: [
+      -        { key: '↑↓', label: 'Nav' },
+      +        { key: '↑↓', label: 'Next/Prev File' },
+               { key: 'X', label: 'Expand' },
+      +        { key: 'PgUp/PgDn', label: 'Scroll' },
+               { key: 'D/Esc', label: 'Back' },
+           ] as const,
+           REASONING_VIEW: [
+      @@ -88,7 +89,7 @@
+       
+               if (config.isFileSelected) {
+                   if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
+      -            actions.push({ key: 'D', label: 'Diff' });
+      +            actions.push({ key: 'D/Ent', label: 'Diff' });
+                   if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
+                   if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
+               } else if (config.currentItemType === 'script') {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: >+
+      --- src/hooks/useReviewScreen.tsx
+
+      +++ src/hooks/useReviewScreen.tsx
+
+      @@ -155,6 +155,7 @@
+           const {
+               moveSelectionUp,
+               moveSelectionDown,
+      +        setSelectedItemIndex,
+               expandDiff,
+               toggleBodyView,
+               setBodyView,
+      @@ -194,6 +195,27 @@
+               useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+           };
+       
+      +    const navigateToNextFile = () => {
+
+      +        const nextFileIndex = navigableItems.findIndex(
+
+      +            (item, index) => index > selectedItemIndex && item.type ===
+      'file',
+
+      +        );
+
+      +        if (nextFileIndex !== -1) {
+
+      +            setSelectedItemIndex(nextFileIndex);
+
+      +        }
+
+      +    };
+
+      +
+
+      +    const navigateToPreviousFile = () => {
+
+      +        // Find the last index of a file before the current one
+
+      +        const prevFileIndex = navigableItems
+
+      +            .slice(0, selectedItemIndex)
+
+      +            .findLastIndex(item => item.type === 'file');
+
+      +
+
+      +        if (prevFileIndex !== -1) {
+
+      +            setSelectedItemIndex(prevFileIndex);
+
+      +        }
+
+      +    };
+
+      +
+           // --- Input Handlers ---
+       
+           const handleGlobalInput = (input: string, key: Key): boolean => {
+      @@ -253,12 +275,18 @@
+               ] as const;
+               if (!(contentViews as readonly string[]).includes(bodyView)) return false;
+       
+      -        if (key.upArrow) {
+
+      +        if (key.upArrow && bodyView !== REVIEW_BODY_VIEWS.DIFF) {
+                   contentViewport.actions.scrollUp();
+                   return true;
+               }
+      -        if (key.downArrow) { contentViewport.actions.scrollDown(); return
+      true; }
+
+      +        if (key.downArrow && bodyView !== REVIEW_BODY_VIEWS.DIFF) {
+
+      +            contentViewport.actions.scrollDown();
+
+      +            return true;
+
+      +        }
+               if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+               if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
+               return false;
+           };
+       
+           const handleReasoningInput = (input: string, key: Key): void => {
+      @@ -282,10 +310,18 @@
+               }
+           };
+       
+      -    const handleDiffInput = (input: string) => {
+
+      +    const handleDiffInput = (input: string, key: Key) => {
+
+      +        if (key.upArrow) {
+
+      +            navigateToPreviousFile();
+
+      +            return;
+
+      +        }
+
+      +        if (key.downArrow) {
+
+      +            navigateToNextFile();
+
+      +            return;
+
+      +        }
+               if (input.toLowerCase() === 'x') expandDiff();
+      -        if (input.toLowerCase() === 'd') toggleBodyView('diff');
+
+      -    }; //
+
+      +        if (input.toLowerCase() === 'd' || key.escape)
+      toggleBodyView('diff');
+
+      +    };
+       
+           const handleMainNavigationInput = (input: string, key: Key): void => {
+               // Handle Shift+R for reject all
+      @@ -377,7 +413,7 @@
+                   case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
+                   case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
+                   case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
+      -            case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input);
+
+      +            case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input,
+      key);
+                   default: return handleMainNavigationInput(input, key);
+               }
+           });
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useAppStore } from './app.store';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { ReviewService, type SimulationResult } from
+    '../services/review.service';
+
+    import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS } from
+    '../constants/review.constants';
+
+    import { moveIndex } from './navigation.utils';
+
+    import { sleep } from '../utils';
+
+    import type { FileReviewStatus } from '../types/domain.types';
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        startTime?: number;
+        duration?: number;
+    }
+
+
+    export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof
+    REVIEW_BODY_VIEWS];
+
+    export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
+
+    export type ApplyUpdate =
+        | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+        | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
+        | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
+
+    interface ReviewState {
+        patchStatus: PatchStatus;
+        applySteps: ApplyStep[];
+        selectedItemIndex: number;
+        bodyView: ReviewBodyView;
+        isDiffExpanded: boolean;
+        reasoningScrollIndex: number;
+        scriptErrorIndex: number;
+        processingStartTime: number | null;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
+
+        selectedBulkRepairOptionIndex: number;
+        selectedBulkInstructOptionIndex: number;
+        isCancelling: boolean;
+        isSkipping: boolean;
+
+        actions: {
+            load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+            moveSelectionUp: (listSize: number) => void;
+            moveSelectionDown: (listSize: number) => void;
+            expandDiff: () => void;
+            toggleBodyView: (view: Extract<
+                ReviewBodyView, 'bulk_instruct' |
+                'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+            >) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
+            tryRepairFile: (fileId: string) => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            skipCurrentStep: () => void;
+            resetSkip: () => void;
+            tryInstruct: (fileId: string) => void;
+            cancelProcessing: () => void;
+            showBulkInstruct: () => void;
+            executeBulkInstructOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void;
+            updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
+            addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+            updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+            updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
+            toggleFileApproval: (fileId: string) => void;
+            rejectAllFiles: () => void;
+            navigateBulkRepairUp: () => void;
+            navigateBulkRepairDown: () => void;
+            navigateBulkInstructUp: () => void;
+            navigateBulkInstructDown: () => void;
+        };
+    }
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        patchStatus: PATCH_STATUS.SUCCESS,
+        applySteps: INITIAL_APPLY_STEPS,
+        selectedItemIndex: 0,
+        bodyView: REVIEW_BODY_VIEWS.NONE,
+        isDiffExpanded: false,
+        reasoningScrollIndex: 0,
+        scriptErrorIndex: 0,
+        processingStartTime: null,
+        fileReviewStates: new Map(),
+        selectedBulkRepairOptionIndex: 0,
+        selectedBulkInstructOptionIndex: 0,
+        isCancelling: false,
+        isSkipping: false,
+
+        actions: {
+            load: (transactionId, initialState) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+
+                // This logic is preserved from the deleted `prepareTransactionForReview`
+                // to allow debug screens to jump directly to a pre-populated review state
+                // without running the full simulation.
+                const isFailureCase = transaction.id === '1';
+                const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+                (transaction.files || []).forEach((file, index) => {
+                    if (isFailureCase) {
+                        const isFailedFile = index > 0;
+                        const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                        const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                        fileReviewStates.set(file.id, { status, error });
+                    } else {
+                        fileReviewStates.set(file.id, { status: 'APPROVED' });
+                    }
+                });
+                const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    patchStatus,
+                    fileReviewStates,
+                    processingStartTime: null,
+                    selectedItemIndex: 0,
+                    bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
+                    isDiffExpanded: false,
+                    reasoningScrollIndex: 0,
+                    scriptErrorIndex: 0,
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    selectedBulkRepairOptionIndex: 0,
+                    selectedBulkInstructOptionIndex: 0,
+                    ...initialState,
+                });
+            },
+            moveSelectionUp: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
+            }),
+            moveSelectionDown: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
+            }),
+            toggleBodyView: (view) => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                const files = tx?.files || [];
+                if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+                return {
+                    bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
+                    isDiffExpanded: false,
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            startApplySimulation: async (transactionId, scenario) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction?.files) return;
+
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
+
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    processingStartTime: Date.now(),
+                    isCancelling: false,
+                    isSkipping: false,
+                    fileReviewStates: new Map(), // Clear previous states
+                });
+
+                showReviewProcessingScreen();
+                const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
+                let simulationResult: SimulationResult;
+
+                // Manually iterate to get the return value from the async generator
+                const iterator = simulationGenerator[Symbol.asyncIterator]();
+                while (true) {
+                    const { value, done } = await iterator.next();
+                    if (done) {
+                        simulationResult = value as SimulationResult;
+                        break;
+                    }
+                    const update = value;
+                    if (update.type === 'UPDATE_STEP') {
+                        updateApplyStep(update.payload.id, update.payload.status, update.payload.details);
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        addApplySubstep(update.payload.parentId, update.payload.substep);
+                    } else if (update.type === 'UPDATE_SUBSTEP') {
+                        updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                    }
+                }
+
+                await sleep(1000);
+                set({
+                    processingStartTime: null,
+                    fileReviewStates: simulationResult.fileReviewStates,
+                    patchStatus: simulationResult.patchStatus,
+                });
+                showReviewScreen();
+            },
+            tryRepairFile: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!file) return;
+
+                const { status, error } = fileReviewStates.get(file.id) || {};
+                if (status !== 'FAILED') return;
+                
+                ReviewService.tryRepairFile(file, error);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+            },
+            tryInstruct: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!tx || !file) return;
+
+                const { status } = fileReviewStates.get(file.id) || {};
+                if (status !== 'REJECTED') return;
+                
+                ReviewService.tryInstructFile(file, tx);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+            },
+            showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+            cancelProcessing: () => set({ isCancelling: true }),
+            skipCurrentStep: () => set({ isSkipping: true }),
+            resetSkip: () => set({ isSkipping: false }),
+            executeBulkInstructOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
+                if (rejectedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 3:
+                        rejectedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+                if (failedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkRepairPrompt(failedFiles);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2: {
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                        const results = await ReviewService.runBulkReapply(failedFiles);
+                        results.forEach(result =>
+                            get().actions.updateFileReviewStatus(
+                                result.id, result.status, result.error,
+                            ),
+                        );
+                        break;
+                    }
+                    case 3:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 4:
+                        failedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+            confirmHandoff: () => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.files) return;
+                const { fileReviewStates } = get();
+                ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+                ReviewService.performHandoff(tx.hash);
+            },
+            scrollReasoningUp: () => set(state => ({ reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1) })),
+            scrollReasoningDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.reasoning) return {};
+                const maxLines = tx.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+            navigateScriptErrorDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.scripts || !tx?.files) return {};
+                const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+                if (selectedScript?.output) {
+                    const errorLines = selectedScript.output
+                        .split('\n')
+                        .filter(line => line.includes('Error') || line.includes('Warning'));
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+            updateApplyStep: (id, status, details) => {
+                set(state => {
+                    const newSteps = state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep: ApplyStep = { ...s, status };
+                            if (status === 'active') {
+                                newStep.startTime = Date.now();
+                            } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                                newStep.duration = (Date.now() - s.startTime) / 1000;
+                            }
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    });
+                    return { applySteps: newSteps };
+                });
+            },
+            updateApplySubstep: (parentId, substepId, status, title) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId && s.substeps) {
+                            const newSubsteps = s.substeps.map(sub => {
+                                if (sub.id === substepId) {
+                                    const newSub: ApplyStep = { ...sub, status };
+                                    if (status === 'active') {
+                                        newSub.startTime = Date.now();
+                                    } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                        newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                    }
+                                    if (title) newSub.title = title;
+                                    return newSub;
+                                }
+                                return sub;
+                            });
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            addApplySubstep: (parentId, substep) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateFileReviewStatus: (fileId, status, error, details) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    newStates.set(fileId, { status, error, details });
+                    return { fileReviewStates: newStates };
+                });
+            },
+            toggleFileApproval: (fileId) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    const current = newStates.get(fileId);
+                    if (current) {
+                        const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                        newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            rejectAllFiles: () => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    for (const [fileId, reviewState] of newStates.entries()) {
+                        if (reviewState.status === 'APPROVED') {
+                            newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
+                        }
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            navigateBulkRepairUp: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'up', 4),
+            })),
+            navigateBulkRepairDown: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'down', 4),
+            })),
+            navigateBulkInstructUp: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'up', 4),
+            })),
+            navigateBulkInstructDown: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'down', 4),
+            })),
+        },
+    }));
+  src/constants/review.constants.ts: |-
+    import type { ApplyStep } from '../stores/review.store';
+    import type { ActionItem } from '../types/actions.types';
+
+    /**
+     * Constants for the Review screen and process.
+     */
+    export const INITIAL_APPLY_STEPS: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+    export const REVIEW_BODY_VIEWS = {
+        DIFF: 'diff',
+        REASONING: 'reasoning',
+        SCRIPT_OUTPUT: 'script_output',
+        BULK_REPAIR: 'bulk_repair',
+        CONFIRM_HANDOFF: 'confirm_handoff',
+        BULK_INSTRUCT: 'bulk_instruct',
+        NONE: 'none',
+    } as const;
+
+    export const PATCH_STATUS = {
+        SUCCESS: 'SUCCESS',
+        PARTIAL_FAILURE: 'PARTIAL_FAILURE',
+    } as const;
+
+    export const FILE_STATUS_UI = {
+        APPROVED: { icon: '[✓]', color: 'green' },
+        REJECTED: { icon: '[✗]', color: 'red' },
+        FAILED: { icon: '[!]', color: 'red' },
+        AWAITING: { icon: '[●]', color: 'yellow' },
+        RE_APPLYING: { icon: '[●]', color: 'cyan' },
+    } as const;
+
+    export const BULK_REPAIR_OPTIONS = [
+        '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+        '(2) Bulk Change Strategy & Re-apply',
+        '(3) Handoff to External Agent',
+        '(4) Bulk Abandon All Failed Files',
+        '(Esc) Cancel',
+    ] as const;
+
+    export const BULK_INSTRUCT_OPTIONS = [
+        '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
+        '(2) Handoff to External Agent',
+        '(3) Bulk Un-reject All Files (revert to original)',
+        '(4) Cancel',
+    ] as const;
+
+    interface ReviewFooterConfig {
+        isFileSelected: boolean;
+        fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
+        currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
+        hasFailedFiles: boolean;
+        hasRejectedFiles: boolean;
+        hasApprovedFiles: boolean;
+    }
+
+    export const REVIEW_FOOTER_ACTIONS = {
+        DIFF_VIEW: [
+            { key: '↑↓', label: 'Nav' },
+            { key: 'X', label: 'Expand' },
+            { key: 'D/Esc', label: 'Back' },
+        ] as const,
+        REASONING_VIEW: [
+            { key: '↑↓', label: 'Scroll Text' },
+            { key: 'R', label: 'Collapse View' },
+            { key: 'C', label: 'Copy Mode' },
+        ] as const,
+        SCRIPT_OUTPUT_VIEW: [
+            { key: '↑↓', label: 'Nav' },
+            { key: 'J↓/K↑', label: 'Next/Prev Error' },
+            { key: 'C', label: 'Copy Output' },
+            { key: 'Ent/Esc', label: 'Back' },
+        ] as const,
+        BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+        BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+        HANDOFF_CONFIRM_VIEW: [
+            { key: 'Enter', label: 'Confirm Handoff' },
+            { key: 'Esc', label: 'Cancel' },
+        ] as const,
+        MAIN_VIEW: (config: ReviewFooterConfig): ActionItem[] => {
+            const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
+
+            if (config.isFileSelected) {
+                if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
+                actions.push({ key: 'D', label: 'Diff' });
+                if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
+                if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
+            } else if (config.currentItemType === 'script') {
+                actions.push({ key: 'Ent', label: 'Expand Details' });
+            } else {
+                actions.push({ key: 'Ent', label: 'Expand' });
+            }
+
+            if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
+            if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
+            if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
+
+            actions.push({ key: 'C', label: 'Copy' });
+
+            if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
+            actions.push({ key: 'Q', label: 'Quit' });
+            return actions;
+        },
+    };
+
+    export const getReviewProcessingFooterActions = (
+        isSkippable: boolean,
+    ): readonly ActionItem[] => {
+        const actions: ActionItem[] = [{ key: 'Ctrl+C', label: 'Cancel Process' }];
+        if (isSkippable) {
+            actions.push({ key: 'S', label: 'Skip Script' });
+        }
+        return actions;
+    };
+  src/hooks/useReviewScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { useInput, type Key } from 'ink';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { useTransactionStore, selectSelectedTransaction } from
+    '../stores/transaction.store';
+
+    import type { FileItem } from '../types/domain.types';
+
+    import { useLayout } from './useLayout';
+
+    import { useContentViewport } from './useContentViewport';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
+
+    import { useViewport } from './useViewport';
+
+
+    type NavigableItem =
+        | { type: 'prompt' }
+        | { type: 'reasoning' }
+        | { type: 'script'; id: string }
+        | { type: 'file'; id: string };
+
+    export const useReviewScreen = () => {
+        const store = useReviewStore();
+        const {
+            selectedItemIndex,
+            bodyView,
+            patchStatus,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+        } = store;
+
+        const transaction = useTransactionStore(selectSelectedTransaction);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const scriptCount = transaction?.scripts?.length || 0;
+        const fileCount = transaction?.files?.length || 0;
+
+        const layout = UI_CONFIG.layout.review;
+
+        // Layout for the main navigable item list (prompt, reasoning, files, etc.)
+        const mainListLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            fixedRows: layout.fixedRows,
+            marginsY: layout.marginsY,
+            separators: layout.separators,
+            footer: layout.footer,
+            dynamicRows: {
+                count: bodyView !== REVIEW_BODY_VIEWS.NONE ? layout.bodyHeightReservation : 0,
+            },
+        }), [bodyView, layout]);
+
+        const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
+        const { viewOffset } = useViewport({ selectedIndex: selectedItemIndex, itemCount: 100, layoutConfig: mainListLayoutConfig });
+
+        // Layout for the body content (diff, reasoning, etc.)
+        const bodyLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            separators: layout.separators,
+            fixedRows: 2, // meta
+            marginsY: 1 + 1 + 1, // meta, scripts, files
+            footer: 2,
+            dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
+        }), [layout, scriptCount, fileCount]);
+
+        const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
+
+        const navigableItems = useMemo((): NavigableItem[] => {
+            if (!transaction) return [];
+            const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
+            const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
+            return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+        }, [transaction]);
+
+        const contentLineCount = useMemo(() => {
+            const currentItem = navigableItems[selectedItemIndex];
+            switch (bodyView) { //
+                case REVIEW_BODY_VIEWS.REASONING:
+                    return (transaction?.reasoning || '').split('\n').length;
+                case REVIEW_BODY_VIEWS.DIFF: {
+                    if (currentItem?.type !== 'file') return 0;
+                    const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
+                    return (selectedFile?.diff || '').split('\n').length;
+                }
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: {
+                    if (currentItem?.type !== 'script') return 0;
+                    const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
+                    return (selectedScript?.output || '').split('\n').length;
+                }
+                default: return 0;
+            }
+        }, [bodyView, navigableItems, selectedItemIndex, transaction]);
+        const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+        const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
+
+        // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
+        const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
+        const fileReviewStates = useReviewStore(s => s.fileReviewStates);
+
+        const reviewStats = useMemo(() => {
+            const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+            return {
+                totalFiles: files.length,
+                totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
+                totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+            };
+        }, [files, fileReviewStates]);
+
+        const hasRejectedFiles = useMemo(() => {
+            if (!fileReviewStates) return false;
+            return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
+        }, [fileReviewStates]);
+
+        const { approvedFilesCount } = reviewStats;
+
+        const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
+
+        const scripts = transaction?.scripts || [];
+
+        const {
+            moveSelectionUp,
+            moveSelectionDown,
+            expandDiff,
+            toggleBodyView,
+            setBodyView,
+            startApplySimulation,
+            approve,
+            tryRepairFile,
+            tryInstruct,
+            showBulkRepair,
+            showBulkInstruct,
+            executeBulkRepairOption,
+            executeBulkInstructOption,
+            confirmHandoff,
+            scrollReasoningUp,
+            scrollReasoningDown,
+            navigateScriptErrorUp,
+            navigateScriptErrorDown,
+            toggleFileApproval,
+            rejectAllFiles,
+            navigateBulkRepairUp,
+            navigateBulkRepairDown,
+            navigateBulkInstructUp,
+            navigateBulkInstructDown,
+        } = store.actions;
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+            useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+        };
+
+        // --- Input Handlers ---
+
+        const handleGlobalInput = (input: string, key: Key): boolean => {
+            if (input === '1' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'success'); return true;
+            }
+            if (input === '2' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'failure'); return true;
+            }
+            // The 'q' (quit/back) is now handled by the global hotkey hook.
+
+            if (key.escape) {
+                switch (bodyView) {
+                    case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                    case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                    case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                        toggleBodyView(bodyView);
+                        break;
+                    default:
+                        if (bodyView !== REVIEW_BODY_VIEWS.NONE) {
+                            setBodyView(REVIEW_BODY_VIEWS.NONE);
+                        }
+                        break;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        const handleHandoffConfirmInput = (_input: string, key: Key): void => {
+            if (key.return) confirmHandoff();
+        };
+
+        const handleBulkRepairInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkRepairUp();
+            if (key.downArrow) navigateBulkRepairDown();
+            if (key.return) {
+                executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '4') {
+                executeBulkRepairOption(parseInt(input));
+            }
+        };
+        
+        const handleBulkInstructInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkInstructUp();
+            if (key.downArrow) navigateBulkInstructDown();
+            if (key.return) {
+                executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '3') {
+                executeBulkInstructOption(parseInt(input));
+            }
+        };
+
+        const handleContentScrollInput = (key: Key): boolean => {
+            const contentViews = [
+                REVIEW_BODY_VIEWS.REASONING,
+                REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+                REVIEW_BODY_VIEWS.DIFF,
+            ] as const;
+            if (!(contentViews as readonly string[]).includes(bodyView)) return false;
+
+            if (key.upArrow) {
+                contentViewport.actions.scrollUp();
+                return true;
+            }
+            if (key.downArrow) { contentViewport.actions.scrollDown(); return true; }
+            if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+            if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
+            return false;
+        };
+
+        const handleReasoningInput = (input: string, key: Key): void => {
+            if (key.upArrow) scrollReasoningUp();
+            if (key.downArrow) scrollReasoningDown();
+            if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+        };
+
+        const handleScriptOutputInput = (input: string, key: Key): void => {
+            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+            if (key.return) toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
+            if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+                const currentItem = navigableItems[selectedItemIndex];
+                const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
+                if (selectedScript) {
+                    useNotificationStore.getState().actions.show({
+                        type: 'success',
+                        title: 'Copied to Clipboard',
+                        message: `Copied script output for: ${selectedScript.command}`,
+                    });
+                }
+            }
+        };
+
+        const handleDiffInput = (input: string) => {
+            if (input.toLowerCase() === 'x') expandDiff();
+            if (input.toLowerCase() === 'd') toggleBodyView('diff');
+        }; //
+
+        const handleMainNavigationInput = (input: string, key: Key): void => {
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0 && transaction) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            // Main View Navigation
+            if (key.upArrow) moveSelectionUp(navigableItems.length);
+            if (key.downArrow) moveSelectionDown(navigableItems.length);
+
+            const currentItem = navigableItems[selectedItemIndex];
+
+            if (input === ' ') {
+                if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState && fileState.status !== 'FAILED') {
+                        toggleFileApproval(currentItem.id);
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+                toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+            }
+
+            if (input.toLowerCase() === 'r') {
+                toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+            }
+
+            if (key.return) { // Enter key
+                if (currentItem?.type === 'file') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+                } else if (currentItem?.type === 'reasoning') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+                } else if (currentItem?.type === 'script') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+                    if (hasFailedFiles) showBulkRepair();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+                }
+            }
+
+            if (input.toLowerCase() === 'i') {
+                if (key.shift) {
+                    if (hasRejectedFiles) showBulkInstruct();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'REJECTED') {
+                        tryInstruct(currentItem.id);
+                    }
+                }
+            }
+        };
+
+        useInput((input: string, key: Key) => {
+            if (handleGlobalInput(input, key)) {
+                return;
+            }
+
+            // If we are in a scrollable body view, prioritize that input.
+            if (handleContentScrollInput(key)) {
+                return;
+            }
+
+            switch (bodyView) {
+                case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_REPAIR: return handleBulkRepairInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
+                case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
+                case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input);
+                default: return handleMainNavigationInput(input, key);
+            }
+        });
+
+        return {
+            ...store,
+            fileReviewStates,
+            selectedItemIndex,
+            transaction,
+            files,
+            scripts,
+            patchStatus,
+            navigableItems,
+            isFileSelected,
+            navigableItemsInView,
+            viewOffset,
+            contentScrollIndex: contentViewport.scrollIndex,
+            availableBodyHeight,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+            ...reviewStats,
+            hasRejectedFiles,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 205

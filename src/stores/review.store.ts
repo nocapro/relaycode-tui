@@ -45,6 +45,7 @@ interface ReviewState {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
         moveSelectionUp: (listSize: number) => void;
         moveSelectionDown: (listSize: number) => void;
+        setSelectedItemIndex: (index: number) => void;
         expandDiff: () => void;
         toggleBodyView: (view: Extract<
             ReviewBodyView, 'bulk_instruct' |
@@ -138,6 +139,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         moveSelectionDown: (listSize) => set(state => {
             return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
         }),
+        setSelectedItemIndex: (index) => set({ selectedItemIndex: index }),
         toggleBodyView: (view) => set(state => {
             const transactionId = useViewStore.getState().selectedTransactionId;
             const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);

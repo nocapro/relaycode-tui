@@ -2,6 +2,14 @@
 
 chrome extension suggestion
 
+===
+
+review screen;
+
+1. currently, I hate when cannot open diff while file status is green, red/fail.
+2. opening diff should not only by `D`, but also enter
+3. we also want to navigate up down file diffs while diff open,
+
 === DONE
 
 review processing:

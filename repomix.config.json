@@ -30,25 +30,15 @@
     "index.tsx",
     // "src"
     "src/stores/review.store.ts",
-    "src/services/review.service.ts",
-    "src/components/ReviewProcessingScreen.tsx",
-    "src/constants/review.constants.ts",
     "src/hooks/useReviewScreen.tsx",
-    "src/stores/transaction.store.ts",
+    "src/constants/review.constants.ts",
+    "src/components/ReviewScreen.tsx",
     "src/components/ActionFooter.tsx",
-    "src/types/actions.types.ts",
-    "src/stores/app.store.ts",
-    "src/stores/view.store.ts",
-    "src/components/Separator.tsx",
-    "src/App.tsx"
-    // "src/stores/review.store.ts",
-    // "src/services/review.service.ts",
-    // "src/components/ReviewProcessingScreen.tsx",
-    // "src/constants/review.constants.ts",
-    // "src/stores/app.store.ts",
-    // "src/stores/transaction.store.ts",
-    // "src/stores/view.store.ts",
-    // "src/App.tsx"
+    "src/types/domain.types.ts",
+    "src/stores/navigation.utils.ts",
+    "src/hooks/useContentViewport.ts",
+    "src/components/DiffScreen.tsx",
+    "src/types/actions.types.ts"
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"
     // "docs/relaycode-tui/dashboard-screen.readme.md"
