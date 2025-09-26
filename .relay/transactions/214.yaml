@@ -1,0 +1,944 @@
+uuid: c29ef712-4299-46e3-a75d-6c19f0de1a41
+projectId: relaycode-tui
+createdAt: '2025-09-26T14:44:35.784Z'
+gitCommitMsg: >-
+  feat(navigation): harmonize input handlers across screens
+
+  This commit aligns with Part 2 of the navigation refactor master plan,
+  focusing on harmonizing input controls for a more consistent user experience.
+
+  - In the Dashboard, the Right Arrow key now drills down into the detail view
+  if an item is already expanded, creating a more fluid workflow. - For all
+  list-based overlays (Copy, Debug Menu, Debug Log), the Left Arrow key is now
+  an alias for the Escape key, providing a consistent and intuitive way to close
+  them.
+promptSummary: >-
+  Refactor user experience for all screens for consistency, using Left Arrow for
+  back navigation. This is part 2 of the plan.
+reasoning:
+  - >-
+    Excellent. Part 1 established the foundation. Now, in Part 2, I will
+    harmonize the input handling across all relevant screens and hooks to
+    implement the new, consistent navigation patterns. I will focus on making
+    the `Left Arrow` a universal "back/collapse" key and enhancing the `Right
+    Arrow` for intelligent drill-down.
+  - '### `useDashboardScreen.tsx`'
+  - >-
+    I will refactor the `useListNavigator` input handler. A new `viewDetails`
+    function will be created to handle navigating to the Review or Detail
+    screen. This function will be triggered by the `Enter` key as before, but
+    now also by the `Right Arrow` key if the selected transaction is already
+    expanded, creating a fluid "expand then enter" workflow.
+  - '### `useCopyScreen.tsx`'
+  - >-
+    To make overlays consistent, I will update the `useListNavigator` input
+    handler to treat the `Left Arrow` key the same as the `Escape` key, allowing
+    the user to intuitively close the copy overlay.
+  - '### `useDebugMenu.tsx`'
+  - >-
+    Similarly, I will harmonize the Debug Menu overlay's controls. The `Left
+    Arrow` will now function identically to `Escape`, providing a consistent way
+    to close the menu.
+  - '### `useDebugLogScreen.tsx`'
+  - >-
+    Finally, I will apply the same consistency to the Debug Log overlay. The
+    `Left Arrow` key will be aliased to the `Escape` key's behavior, allowing
+    users to close the log screen with either key.
+operations:
+  - type: write
+    path: src/hooks/useDashboardScreen.tsx
+    content: >+
+      --- src/hooks/useDashboardScreen.tsx
+
+      +++ src/hooks/useDashboardScreen.tsx
+
+      @@ -74,6 +74,20 @@
+           const pendingCommits = appliedTransactions.length;
+       
+           const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
+           const isProcessing = status === DASHBOARD_STATUS.APPROVING;
+      +
+
+      +    const viewDetails = () => {
+
+      +        const selectedTx = transactions[selectedTransactionIndex];
+
+      +        if (!selectedTx) return;
+
+      +
+
+      +        if (selectedTx.status === 'PENDING') {
+
+      +            useReviewStore.getState().actions.load(selectedTx.id);
+
+      +            appActions.showReviewScreen();
+
+      +        } else {
+
+      +            useDetailStore.getState().actions.load(selectedTx.id);
+
+      +            appActions.showTransactionDetailScreen();
+
+      +        }
+
+      +    };
+       
+           useInput((_input, key) => {
+               if (key.return) confirmAction();
+      @@ -93,22 +107,13 @@
+                       return;
+                   }
+                   if (key.rightArrow) {
+      -                if (transactions[selectedTransactionIndex] &&
+      !expandedTransactionId) toggleExpand();
+
+      +                if (transactions[selectedTransactionIndex]) {
+
+      +                    if (!expandedTransactionId) toggleExpand();
+
+      +                    else viewDetails();
+
+      +                }
+                       return;
+                   }
+      -            if (key.return) {
+
+      -                const selectedTx =
+      transactions[selectedTransactionIndex];
+
+      -                if (!selectedTx) return;
+
+      -
+
+      -                if (selectedTx.status === 'PENDING') {
+
+      -                   
+      useReviewStore.getState().actions.load(selectedTx.id);
+
+      -                    appActions.showReviewScreen();
+
+      -                } else {
+
+      -                   
+      useDetailStore.getState().actions.load(selectedTx.id);
+
+      -                    appActions.showTransactionDetailScreen();
+
+      -                }
+
+      -                return;
+
+      -            }
+
+      +            if (key.return) viewDetails();
+                   if (input.toLowerCase() === 'p') togglePause();
+                   if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+                   if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useCopyScreen.tsx
+    content: |+
+      --- src/hooks/useCopyScreen.tsx
+      +++ src/hooks/useCopyScreen.tsx
+      @@ -28,7 +28,7 @@
+               onIndexChange: setSelectedIndex,
+               isActive: useViewStore.getState().activeOverlay === OVERLAYS.COPY,
+               onKey: (input, key) => {
+      -            if (key.escape) {
+      +            if (key.escape || key.leftArrow) {
+                       actions.close();
+                       return;
+                   }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -378,7 +378,7 @@
+                       }
+                       return;
+                   }
+      -            if (key.escape) {
+      +            if (key.escape || key.leftArrow) {
+                       useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                       return;
+                   }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugLogScreen.tsx
+    content: |+
+      --- src/hooks/useDebugLogScreen.tsx
+      +++ src/hooks/useDebugLogScreen.tsx
+      @@ -51,7 +51,7 @@
+               onIndexChange: setSelectedIndex,
+               isActive: isOverlayActive && mode === DEBUG_LOG_MODES.LIST,
+               onKey: (input, key) => {
+      -            if (key.escape) {
+      +            if (key.escape || key.leftArrow) {
+                       setActiveOverlay(OVERLAYS.NONE);
+                       return;
+                   }
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useDashboardScreen.tsx: >-
+    import { useState, useEffect, useRef } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import type { LayoutConfig } from './useLayout';
+
+    import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+
+    import { useViewport } from './useViewport';
+
+    import { useListNavigator } from './useListNavigator';
+
+
+    export const useDashboardScreen = ({ layoutConfig }: { layoutConfig:
+    LayoutConfig }) => {
+        const {
+            status,
+            selectedTransactionIndex,
+            expandedTransactionId,
+        } = useDashboardStore();
+        const transactions = useTransactionStore(s => s.transactions);
+        const [newTransactionIds, setNewTransactionIds] = useState(new Set<string>());
+        const prevTransactionIds = useRef(new Set(transactions.map(t => t.id)));
+
+        const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
+        const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex: selectedTransactionIndex,
+            itemCount: transactions.length,
+            layoutConfig,
+        });
+
+        useEffect(() => {
+            const currentIds = new Set(transactions.map(t => t.id));
+            const newIds = new Set<string>();
+
+            for (const id of currentIds) {
+                if (!prevTransactionIds.current.has(id)) {
+                    newIds.add(id);
+                }
+            }
+
+            if (newIds.size > 0) {
+                setNewTransactionIds(current => new Set([...current, ...newIds]));
+                newIds.forEach(id => {
+                    setTimeout(() => {
+                        setNewTransactionIds(current => {
+                            const next = new Set(current);
+                            next.delete(id);
+                            return next;
+                        });
+                    }, 1000);
+                });
+            }
+
+            prevTransactionIds.current = currentIds;
+        }, [transactions]);
+
+        const {
+            togglePause,
+            startApproveAll,
+            confirmAction,
+            cancelAction,
+            toggleExpand,
+        } = useDashboardStore(s => s.actions);
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+
+        const pendingApprovals = pendingTransactions.length;
+        const pendingCommits = appliedTransactions.length;
+
+        const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
+        const isProcessing = status === DASHBOARD_STATUS.APPROVING;
+
+        useInput((_input, key) => {
+            if (key.return) confirmAction();
+            if (key.escape) cancelAction();
+        }, { isActive: isModal });
+
+        useListNavigator({
+            itemCount: transactions.length,
+            viewportHeight,
+            selectedIndex: selectedTransactionIndex,
+            onIndexChange: (index) => {
+                useDashboardStore.getState().actions.setSelectedIndex(index);
+                useDashboardStore.getState().actions.setExpandedTransactionId(null);
+            },
+            isActive: !isModal && !isProcessing,
+            onKey: (input, key) => {
+                if (key.leftArrow) {
+                    if (expandedTransactionId) toggleExpand();
+                    return;
+                }
+                if (key.rightArrow) {
+                    if (transactions[selectedTransactionIndex] && !expandedTransactionId) toggleExpand();
+                    return;
+                }
+                if (key.return) {
+                    const selectedTx = transactions[selectedTransactionIndex];
+                    if (!selectedTx) return;
+
+                    if (selectedTx.status === 'PENDING') {
+                        useReviewStore.getState().actions.load(selectedTx.id);
+                        appActions.showReviewScreen();
+                    } else {
+                        useDetailStore.getState().actions.load(selectedTx.id);
+                        appActions.showTransactionDetailScreen();
+                    }
+                    return;
+                }
+                if (input.toLowerCase() === 'p') togglePause();
+                if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+                if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                }
+                if (input.toLowerCase() === 'l') {
+                    useHistoryStore.getState().actions.load();
+                    appActions.showTransactionHistoryScreen();
+                }
+            },
+        });
+
+        const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            expandedTransactionId,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            newTransactionIds,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/hooks/useCopyScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useCopyStore } from '../stores/copy.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useViewport } from './useViewport';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { useListNavigator } from './useListNavigator.js';
+
+    export const useCopyScreen = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+
+        const {
+            title, items, selectedIds, lastCopiedMessage,
+            actions,
+        } = useCopyStore(state => ({ ...state, actions: state.actions }));
+        
+        useEffect(() => setSelectedIndex(0), [items]);
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: items.length,
+            layoutConfig: UI_CONFIG.layout.copyScreen,
+        });
+
+        useListNavigator({
+            itemCount: items.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: useViewStore.getState().activeOverlay === OVERLAYS.COPY,
+            onKey: (input, key) => {
+                if (key.escape) {
+                    actions.close();
+                    return;
+                }
+                if (input === ' ') {
+                    const currentItem = items[selectedIndex];
+                    if (!currentItem) return;
+                    actions.toggleSelectionById(currentItem.id);
+                    return;
+                }
+                if (key.return) {
+                    actions.executeCopy();
+                    return;
+                }
+                const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
+                if (item) {
+                    actions.toggleSelectionById(item.id);
+                }
+            },
+        });
+
+        const itemsInView = items.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            title,
+            itemsInView,
+            selectedIndex,
+            selectedIds,
+            lastCopiedMessage,
+            viewOffset,
+        };
+    };
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { CopyService } from '../services/copy.service';
+
+    import type { MenuItem } from '../types/debug.types';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { ClipboardService } from '../services/clipboard.service';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { OVERLAYS } from '../constants/view.constants';
+
+    import { useViewport } from './useViewport';
+
+    import { useListNavigator } from './useListNavigator';
+
+    export type { MenuItem } from '../types/debug.types';
+
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: notificationActions } = useNotificationStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Simulate Pasting Valid Patch',
+                action: () => ClipboardService.processClipboardContent(true),
+            },
+            {
+                title: 'Simulate Pasting Invalid Text',
+                action: () => ClipboardService.processClipboardContent(false),
+            },
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Show Success Notification',
+                action: () => notificationActions.show({
+                    type: 'success',
+                    title: 'Operation Successful',
+                    message: 'The requested operation completed without errors.',
+                }),
+            },
+            {
+                title: 'Show Error Notification',
+                action: () => notificationActions.show({
+                    type: 'error',
+                    title: 'Operation Failed',
+                    message: 'An unexpected error occurred. Check the debug log for details.',
+                }),
+            },
+            {
+                title: 'Show Info Notification',
+                action: () => notificationActions.show({
+                    type: 'info',
+                    title: 'Information',
+                    message: 'This is an informational message for the user.',
+                }),
+            },
+            {
+                title: 'Show Warning Notification',
+                action: () => notificationActions.show({
+                    type: 'warning',
+                    title: 'Warning',
+                    message: 'This action may have unintended side effects.',
+                }),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('2', 'success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('1', 'failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen (Failure State)',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    // Fire-and-forget, the UI will update from the store
+                    commitActions.commit(true);
+                },
+            },
+            {
+                title: 'Git Commit: Copy Mode',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    const transactionsToCommit = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                    const { finalCommitMessage } = useCommitStore.getState();
+                    const items = CopyService.getCopyItemsForCommit(
+                        transactionsToCommit,
+                        finalCommitMessage,
+                    );
+                    useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useListNavigator({
+            itemCount: menuItems.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG,
+            onKey: (input, key) => {
+                if (key.return) {
+                    const item = menuItems[selectedIndex];
+                    if (item) {
+                        useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                        item.action();
+                    }
+                    return;
+                }
+                if (key.escape) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    return;
+                }
+
+                // No ctrl/meta keys for selection shortcuts, and only single characters
+                if (key.ctrl || key.meta || input.length !== 1) return;
+
+                if (input >= '1' && input <= '9') {
+                    const targetIndex = parseInt(input, 10) - 1;
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                    const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                }
+            },
+        });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+  src/hooks/useDebugLogScreen.tsx: |-
+    import { useState, useEffect, useMemo } from 'react';
+    import { useInput } from 'ink';
+    import { useLogStore } from '../stores/log.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useViewport } from './useViewport';
+    import { LoggerService } from '../services/logger.service';
+    import { DEBUG_LOG_MODES } from '../constants/log.constants';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { useListNavigator } from './useListNavigator';
+
+    export const useDebugLogScreen = () => {
+        const logs = useLogStore(s => s.logs);
+        const clearLogs = useLogStore(s => s.actions.clearLogs);
+        const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
+
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const [mode, setMode] = useState<keyof typeof DEBUG_LOG_MODES>('LIST');
+        const [filterQuery, setFilterQuery] = useState('');
+
+        const filteredLogs = useMemo(() => logs.filter(log =>
+            log.message.toLowerCase().includes(filterQuery.toLowerCase()),
+        ), [logs, filterQuery]);
+
+        // Reset index to top when filter changes
+        useEffect(() => {
+            setSelectedIndex(0);
+        }, [filterQuery]);
+
+        // Clamp index if it's out of bounds after logs change for other reasons
+        useEffect(() => {
+            if (selectedIndex >= filteredLogs.length) {
+                setSelectedIndex(Math.max(0, filteredLogs.length - 1));
+            }
+        }, [filteredLogs.length, selectedIndex]);
+
+        // Header, borders, footer, filter line
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: filteredLogs.length,
+            layoutConfig: UI_CONFIG.layout.debugLog,
+        });
+
+        const isOverlayActive = useViewStore.getState().activeOverlay === OVERLAYS.LOG;
+
+        useInput((_input, key) => {
+            if (mode === DEBUG_LOG_MODES.FILTER) {
+                if (key.escape || key.return) {
+                    setMode(DEBUG_LOG_MODES.LIST);
+                }
+            }
+        }, { isActive: isOverlayActive && mode === DEBUG_LOG_MODES.FILTER });
+
+        useListNavigator({
+            itemCount: filteredLogs.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: isOverlayActive && mode === DEBUG_LOG_MODES.LIST,
+            onKey: (input, key) => {
+                if (key.escape) {
+                    setActiveOverlay(OVERLAYS.NONE);
+                    return;
+                }
+                if (input.toLowerCase() === 'c') {
+                    clearLogs();
+                    setFilterQuery('');
+                    setSelectedIndex(0);
+                    return;
+                }
+                if (input.toLowerCase() === 'f') {
+                    setMode(DEBUG_LOG_MODES.FILTER);
+                }
+            }
+        });
+
+        useEffect(() => {
+            LoggerService.startSimulator();
+            return () => {
+                LoggerService.stopSimulator();
+            };
+        }, []);
+
+        const logsInView = filteredLogs.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            logsInView,
+            logCount: logs.length,
+            filteredLogCount: filteredLogs.length,
+            selectedIndex,
+            mode,
+            filterQuery,
+            setFilterQuery,
+            viewOffset,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 214

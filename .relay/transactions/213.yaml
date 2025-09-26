@@ -1,0 +1,497 @@
+uuid: c255de31-897d-41a8-8e6f-fc100a4b7d59
+projectId: relaycode-tui
+createdAt: '2025-09-26T14:42:53.939Z'
+gitCommitMsg: >-
+  refactor(state): Implement smart navigation in detail and history stores
+
+  Introduces a "go deeper, then go back" navigation paradigm within the core
+  state management logic.
+
+  - In `detail.store`, `expandOrDrillDown` now collapses an item if it cannot be
+  drilled into further, preventing navigational dead ends. - In `history.store`,
+  `expandOrDrillDown` now collapses an already-expanded item instead of being a
+  no-op.
+
+  This lays the foundation for a more fluid and consistent user experience with
+  arrow key navigation across different screens.
+promptSummary: >-
+  The user requested the execution of Part 1 of a multi-part plan to refactor
+  the application's navigation for better consistency. This part focused on
+  updating the core logic in `detail.store.ts` and `history.store.ts` to
+  implement a "smart drill-down/back-out" behavior.
+reasoning:
+  - >-
+    Excellent. I am executing Part 1 of the master plan to refactor the
+    application's navigation. This involves enhancing the core logic in the
+    state management stores to support a "go deeper, then go back" paradigm for
+    the `Right Arrow` and `Enter` keys.
+  - '### Part 1, Step 2: Refactor `detail.store.ts` for Smart Navigation'
+  - >-
+    I will modify the `expandOrDrillDown` action in `useDetailStore`. When this
+    action is triggered on an item that cannot be expanded or drilled into
+    further (e.g., an already-expanded "Prompt" section), instead of doing
+    nothing, it will now trigger the "collapse" logic. This creates a fluid
+    toggle-like behavior, preventing navigational dead ends.
+  - '### Part 1, Step 3: Refactor `history.store.ts` for Smart Navigation'
+  - >-
+    Similarly, I will update the `expandOrDrillDown` action in
+    `useHistoryStore`. Previously, triggering this on an already-expanded item
+    would do nothing. Now, it will collapse the item and its children, providing
+    the same smart navigation behavior as the detail screen.
+  - >-
+    These foundational changes complete Part 1 of the master plan, enabling the
+    subsequent UI and input handling modifications.
+operations:
+  - type: write
+    path: src/stores/detail.store.ts
+    content: >+
+      --- src/stores/detail.store.ts
+
+      +++ src/stores/detail.store.ts
+
+      @@ -69,32 +69,37 @@
+                   const visibleItems = getVisibleItemPaths(expandedItemPaths);
+                   set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
+               },
+      -        expandOrDrillDown: () => set(state => {
+
+      -            const { focusedItemPath, expandedItemPaths } = state;
+
+      +        expandOrDrillDown: () => set(state => { //
+
+      +            const { focusedItemPath, expandedItemPaths, bodyView } =
+      state;
+
+      +
+
+      +            // Smart back-out: If already in a terminal view (like diff),
+      go back.
+
+      +            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+
+      +                return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+
+      +            }
+
+      +
+                   const newExpandedPaths = new Set(expandedItemPaths);
+                   
+                   if (focusedItemPath.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)) { // Is a file
+                       return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
+                   }
+       
+                   // Is a section header
+                   if (newExpandedPaths.has(focusedItemPath)) {
+      -                // Already expanded, drill in if it's FILES
+
+      -                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) { //
+
+      +                // Already expanded, try to drill deeper (only for FILES
+      section)
+
+      +                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
+                           const visibleItems = getVisibleItemPaths(newExpandedPaths);
+      -                    const firstFile = visibleItems.find(item =>
+      item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)); //
+
+      +                    const firstFile = visibleItems.find(item =>
+      item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
+                           if (firstFile) {
+                               return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                           }
+                       }
+      -                return {}; // No-op for PROMPT/REASONING if already
+      expanded
+
+      +                // Cannot drill down further, so collapse (smart
+      back-out)
+
+      +                newExpandedPaths.delete(focusedItemPath);
+
+      +                return { expandedItemPaths: newExpandedPaths, bodyView:
+      DETAIL_BODY_VIEWS.NONE };
+                   } else {
+                       // Not expanded, so expand it
+                       newExpandedPaths.add(focusedItemPath);
+      -                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
+      //
+
+      +                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
+                       if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
+                       if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
+                       if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;
+                       return { expandedItemPaths: newExpandedPaths, bodyView: newBodyView };
+                   }
+               }),
+               collapseOrBubbleUp: () => set(state => {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/history.store.ts
+    content: |+
+      --- src/stores/history.store.ts
+      +++ src/stores/history.store.ts
+      @@ -83,8 +83,23 @@
+               },
+               expandOrDrillDown: async () => {
+                   const { selectedItemPath, expandedIds } = get();
+      -            if (expandedIds.has(selectedItemPath)) return;
+       
+      +            // Smart back-out: if already expanded, collapse it.
+      +            if (expandedIds.has(selectedItemPath)) {
+      +                set(state => {
+      +                    const newExpandedIds = new Set(state.expandedIds);
+      +                    newExpandedIds.delete(selectedItemPath);
+      +                    // Recursively collapse children
+      +                    for (const id of newExpandedIds) {
+      +                        if (id.startsWith(`${selectedItemPath}/`)) {
+      +                            newExpandedIds.delete(id);
+      +                        }
+      +                    }
+      +                    return { expandedIds: newExpandedIds };
+      +                });
+      +                return; // Stop execution
+      +            }
+      +            
+                   // Files and content items with potentially large data can show a loading state
+                   const isLoadable = selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE) ||
+                                      selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.PROMPT) ||
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/detail.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from
+    '../constants/detail.constants';
+
+    import { findNextPath, findPrevPath, getParentPath } from
+    './navigation.utils';
+
+
+    type ObjectValues<T> = T[keyof T];
+
+
+    export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
+
+    export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
+
+
+    // Omit 'actions' from state type for partial updates
+
+    type DetailStateData = Omit<DetailState, 'actions'>;
+     
+    interface DetailState {
+        focusedItemPath: string; // e.g., 'PROMPT', 'FILES', 'FILES/1-1'
+        expandedItemPaths: Set<string>;
+        bodyView: DetailBodyView;
+        actions: {
+            load: (transactionId: string, initialState?: Partial<DetailStateData>) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            expandOrDrillDown: () => void;
+            collapseOrBubbleUp: () => void;
+            toggleRevertConfirm: () => void;
+            confirmRevert: () => void;
+        };
+    }
+
+
+    const getVisibleItemPaths = (expandedItemPaths: Set<string>): string[] => {
+        const { selectedTransactionId } = useViewStore.getState();
+        const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+        if (!transaction) return [];
+
+        const paths: string[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
+        if (expandedItemPaths.has(NAVIGATOR_SECTIONS.FILES) && transaction.files) {
+            for (const file of transaction.files) {
+                paths.push(`${NAVIGATOR_SECTIONS.FILES}/${file.id}`);
+            }
+        }
+        return paths;
+    };
+
+
+    export const useDetailStore = create<DetailState>((set, get) => ({
+        focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+        expandedItemPaths: new Set(),
+        bodyView: DETAIL_BODY_VIEWS.NONE,
+        actions: {
+            load: (transactionId, initialState) => {
+                useViewStore.getState().actions.setSelectedTransactionId(transactionId);
+                set({
+                    focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+                    expandedItemPaths: new Set(),
+                    bodyView: DETAIL_BODY_VIEWS.NONE,
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { expandedItemPaths, focusedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(expandedItemPaths);
+                set({ focusedItemPath: findPrevPath(focusedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedItemPaths, focusedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(expandedItemPaths);
+                set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
+            },
+            expandOrDrillDown: () => set(state => {
+                const { focusedItemPath, expandedItemPaths } = state;
+                const newExpandedPaths = new Set(expandedItemPaths);
+                
+                if (focusedItemPath.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)) { // Is a file
+                    return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
+                }
+
+                // Is a section header
+                if (newExpandedPaths.has(focusedItemPath)) {
+                    // Already expanded, drill in if it's FILES
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) { //
+                        const visibleItems = getVisibleItemPaths(newExpandedPaths);
+                        const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)); //
+                        if (firstFile) {
+                            return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                        }
+                    }
+                    return {}; // No-op for PROMPT/REASONING if already expanded
+                } else {
+                    // Not expanded, so expand it
+                    newExpandedPaths.add(focusedItemPath);
+                    let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE; //
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;
+                    return { expandedItemPaths: newExpandedPaths, bodyView: newBodyView };
+                }
+            }),
+            collapseOrBubbleUp: () => set(state => {
+                const { focusedItemPath, expandedItemPaths, bodyView } = state;
+                
+                if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                    return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                }
+
+                if (getParentPath(focusedItemPath)) { // Is a file
+                    return { focusedItemPath: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                }
+                
+                // Is a section header
+                if (expandedItemPaths.has(focusedItemPath)) {
+                    const newExpandedPaths = new Set(expandedItemPaths);
+                    newExpandedPaths.delete(focusedItemPath);
+                    return { expandedItemPaths: newExpandedPaths, bodyView: DETAIL_BODY_VIEWS.NONE };
+                }
+                
+                return {}; // No-op if not expanded (global back will handle)
+            }),
+            toggleRevertConfirm: () => set(state => ({
+                bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
+                    ? DETAIL_BODY_VIEWS.NONE
+                    : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+            })),
+            confirmRevert: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (!selectedTransactionId) return;
+                TransactionService.revertTransaction(selectedTransactionId);
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
+                set({ bodyView: DETAIL_BODY_VIEWS.NONE });
+            },
+        },
+    }));
+  src/stores/history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath }
+    from './navigation.utils';
+
+    import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from
+    '../constants/history.constants';
+
+    import { sleep } from '../utils';
+
+
+    export type HistoryViewMode = (typeof HISTORY_VIEW_MODES)[keyof typeof
+    HISTORY_VIEW_MODES];
+     
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<HistoryState, 'actions'>;
+
+
+    interface HistoryState {
+        mode: HistoryViewMode;
+        selectedItemPath: string;
+        expandedIds: Set<string>;
+        loadingPaths: Set<string>;
+        filterQuery: string;
+        selectedForAction: Set<string>;
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            navigatePageUp: (viewportHeight: number) => void;
+            navigatePageDown: (viewportHeight: number) => void;
+            expandOrDrillDown: () => Promise<void>;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            prepareDebugState: (stateName: 'l1-drill-content' | 'l2-drill-reasoning' | 'l2-drill-diff' | 'filter' | 'copy' | 'bulk') => void;
+        };
+    }
+
+
+    export const useHistoryStore = create<HistoryState>((set, get) => ({
+        mode: HISTORY_VIEW_MODES.LIST,
+        selectedItemPath: '',
+        expandedIds: new Set(),
+        loadingPaths: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        actions: {
+            load: (initialState) => {
+                const { transactions } = useTransactionStore.getState();
+                set({
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: HISTORY_VIEW_MODES.LIST,
+                    expandedIds: new Set(),
+                    loadingPaths: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findPrevPath(selectedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+            },
+            navigatePageUp: (viewportHeight: number) => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex === -1) return;
+
+                const newIndex = Math.max(0, currentIndex - viewportHeight);
+                set({ selectedItemPath: visibleItems[newIndex]! });
+            },
+            navigatePageDown: (viewportHeight: number) => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex === -1) return;
+
+                const newIndex = Math.min(visibleItems.length - 1, currentIndex + viewportHeight);
+                set({ selectedItemPath: visibleItems[newIndex]! });
+            },
+            expandOrDrillDown: async () => {
+                const { selectedItemPath, expandedIds } = get();
+                if (expandedIds.has(selectedItemPath)) return;
+
+                // Files and content items with potentially large data can show a loading state
+                const isLoadable = selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE) ||
+                                   selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.PROMPT) ||
+                                   selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.REASONING);
+
+                if (isLoadable) {
+                    set(state => ({ loadingPaths: new Set(state.loadingPaths).add(selectedItemPath) }));
+                    await sleep(250); // Simulate loading
+                    set(state => {
+                        const newLoadingPaths = new Set(state.loadingPaths);
+                        newLoadingPaths.delete(selectedItemPath);
+                        const newExpandedIds = new Set(state.expandedIds).add(selectedItemPath);
+                        return { loadingPaths: newLoadingPaths, expandedIds: newExpandedIds };
+                    });
+                } else { // For transactions or simple items, expand immediately
+                    set(state => ({ expandedIds: new Set(state.expandedIds).add(selectedItemPath) }));
+                }
+            },
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.delete(selectedItemPath);
+                    // Recursively collapse children
+                    for (const id of newExpandedIds) { //
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+                    return { expandedIds: newExpandedIds };
+                }
+                const parentId = getParentPath(selectedItemPath);
+                if (parentId) {
+                    return { selectedItemPath: parentId };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = getParentPath(selectedItemPath) || selectedItemPath;
+                if (!txId) return {};
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                set({ mode: HISTORY_VIEW_MODES.LIST });
+            },
+            prepareDebugState: (stateName) => {
+                const { actions } = get();
+                switch (stateName) {
+                    case 'l1-drill-content':
+                        actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
+                        break;
+                    case 'l2-drill-reasoning':
+                        actions.load({ expandedIds: new Set(['3', '3/reasoning']), selectedItemPath: '3/reasoning' });
+                        break;
+                    case 'l2-drill-diff':
+                        actions.load({ expandedIds: new Set(['3', '3/file/3-1']), selectedItemPath: '3/file/3-1' });
+                        break;
+                    case 'filter':
+                        actions.load({ mode: HISTORY_VIEW_MODES.FILTER, filterQuery: 'logger.ts status:COMMITTED' });
+                        break;
+                    case 'copy':
+                        actions.load({ selectedForAction: new Set(['3', '6']) });
+                        break;
+                    case 'bulk':
+                        actions.load({ mode: HISTORY_VIEW_MODES.BULK_ACTIONS, selectedForAction: new Set(['3', '6']) });
+                        break;
+                }
+            },
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 213

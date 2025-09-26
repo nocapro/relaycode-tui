@@ -1,0 +1,987 @@
+uuid: c25cf9a9-3d23-4416-9052-a56763321590
+projectId: relaycode-tui
+createdAt: '2025-09-26T14:53:57.547Z'
+gitCommitMsg: >-
+  fix: Resolve navigation bug and build errors
+
+  - Refactors the input handler in `useTransactionDetailScreen` to prioritize
+  the left-arrow key for collapse/back actions, fixing a bug where it was
+  unresponsive. - Removes unused variables in `useGlobalHotkeys` and
+  `useTransactionHistoryScreen` to fix TypeScript compilation errors. - Prefixes
+  unused function parameters with underscores in `useReviewScreen` to resolve
+  ESLint errors.
+promptSummary: >-
+  The user wants to fix a navigation bug on the transaction detail screen and
+  resolve several TypeScript/ESLint errors that are causing the build to fail.
+reasoning:
+  - >-
+    Of course. It looks like the previous refactor introduced a logic issue in
+    the detail screen's input handler and left behind some unused variables,
+    causing build failures. I'll address all of these issues.
+  - >-
+    First, I'll fix the broken left-arrow navigation in the Transaction Detail
+    screen. The input handler's logic was a bit convoluted, causing the
+    `leftArrow` action to be missed in certain contexts. I'll refactor it to
+    prioritize the back/collapse action and make the code clearer.
+  - >-
+    Next, I'll clean up the TypeScript and ESLint errors. This involves removing
+    unused variable declarations and prefixing unused function parameters with
+    an underscore (`_`) as per convention, which will resolve the build
+    failures.
+  - '### Part 1: Fix Transaction Detail Navigation'
+  - >-
+    I'll refactor the `useInput` hook in `useTransactionDetailScreen.tsx` to
+    ensure `leftArrow` is always handled correctly for backing out of views.
+  - '### Part 2: Resolve Build Errors'
+  - >-
+    Now, I will fix the TypeScript and ESLint errors by removing unused
+    variables.
+  - >-
+    First, in `useGlobalHotkeys.tsx`, the `currentScreen` variable is declared
+    but never used.
+  - >-
+    In `useReviewScreen.tsx`, two helper functions have an unused `key`
+    parameter. I'll prefix them with an underscore to satisfy the linter.
+  - >-
+    Finally, `showDashboardScreen` is no longer used in
+    `useTransactionHistoryScreen.tsx` after the global hotkey refactor, so I
+    will remove it.
+  - >-
+    These changes will resolve the navigation bug and eliminate all the reported
+    build errors.
+operations:
+  - type: write
+    path: src/hooks/useTransactionDetailScreen.tsx
+    content: |+
+      --- src/hooks/useTransactionDetailScreen.tsx
+      +++ src/hooks/useTransactionDetailScreen.tsx
+      @@ -51,6 +51,12 @@
+                   return;
+               }
+               
+      +        // --- Back/Collapse action has priority ---
+      +        if (key.leftArrow) {
+      +            collapseOrBubbleUp();
+      +            return;
+      +        }
+      +
+               // --- Content Scrolling ---
+               if (['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
+                   if (key.upArrow) {
+      @@ -93,9 +99,7 @@
+                   if (key.upArrow) navigateUp();
+                   if (key.downArrow) navigateDown();
+               }
+      -        if (key.rightArrow) expandOrDrillDown();
+      -        if (key.leftArrow) collapseOrBubbleUp();
+      -        if (key.return) expandOrDrillDown();
+      +        if (key.rightArrow || key.return) expandOrDrillDown();
+           }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
+       
+           return {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: |+
+      --- src/hooks/useGlobalHotkeys.tsx
+      +++ src/hooks/useGlobalHotkeys.tsx
+      @@ -6,9 +6,6 @@
+       
+       export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+           const { exit } = useApp();
+      -    const { currentScreen } = useAppStore(s => ({
+      -        currentScreen: s.currentScreen,
+      -    }));
+           const { navigateBack } = useAppStore(s => s.actions);
+           const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+               activeOverlay: s.activeOverlay,
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: |+
+      --- src/hooks/useReviewScreen.tsx
+      +++ src/hooks/useReviewScreen.tsx
+      @@ -255,11 +255,11 @@
+               return false;
+           };
+       
+      -    const handleReasoningInput = (input: string, key: Key): void => {
+      +    const handleReasoningInput = (input: string, _key: Key): void => {
+               if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+           };
+       
+      -    const handleScriptOutputInput = (input: string, key: Key): void => {
+      +    const handleScriptOutputInput = (input: string, _key: Key): void => {
+               if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+               if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+               if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionHistoryScreen.tsx
+    content: >+
+      --- src/hooks/useTransactionHistoryScreen.tsx
+
+      +++ src/hooks/useTransactionHistoryScreen.tsx
+
+      @@ -10,7 +10,7 @@
+       export const useTransactionHistoryScreen = () => {
+           const store = useHistoryStore();
+           const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
+      -    const { showDashboardScreen, showTransactionDetailScreen } =
+      useAppStore(s => s.actions);
+
+      +    const { showTransactionDetailScreen } = useAppStore(s => s.actions);
+           const transactions = useTransactionStore(s => s.transactions);
+       
+           const visibleItemPaths = useMemo(
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useTransactionDetailScreen.tsx: >-
+    import { useInput, type Key } from 'ink';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useTransactionStore, selectSelectedTransaction } from
+    '../stores/transaction.store';
+
+    import { useMemo } from 'react';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { EditorService } from '../services/editor.service';
+
+    import { useLayout } from './useLayout';
+
+    import { useContentViewport } from './useContentViewport';
+
+    import { OVERLAYS } from '../constants/view.constants';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+
+    export const useTransactionDetailScreen = () => {
+        const store = useDetailStore();
+        const transaction = useTransactionStore(selectSelectedTransaction);
+        const files = useMemo(() => transaction?.files || [], [transaction]);
+
+        const {
+            navigateUp,
+            navigateDown,
+            expandOrDrillDown,
+            collapseOrBubbleUp,
+            toggleRevertConfirm,
+            confirmRevert,
+        } = store.actions;
+
+        const isFilesExpanded = store.expandedItemPaths.has('FILES');
+        const layoutConfig = useMemo(() => ({
+            ...UI_CONFIG.layout.transactionDetail,
+            dynamicRows: {
+                count: 3 + (isFilesExpanded ? (files.length || 0) : 0), // navigator items
+            },
+        }), [isFilesExpanded, files.length]); //
+
+        const { remainingHeight: availableBodyHeight } = useLayout(layoutConfig);
+        
+        const contentLineCount = useMemo(() => {
+            if (store.bodyView === 'PROMPT') return (transaction?.prompt || '').split('\n').length;
+            if (store.bodyView === 'REASONING') return (transaction?.reasoning || '').split('\n').length;
+            if (store.bodyView === 'DIFF_VIEW') { //
+                const fileId = store.focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                return (file?.diff || '').split('\n').length;
+            }
+            return 0;
+        }, [store.bodyView, store.focusedItemPath, transaction, files]);
+
+        const viewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const { focusedItemPath } = store;
+            const fileId = focusedItemPath.split('/')[1];
+            const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
+            useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
+        };
+
+        useInput((input: string, key: Key) => {
+            if (store.bodyView === 'REVERT_CONFIRM') {
+                if (key.escape) toggleRevertConfirm();
+                if (key.return) confirmRevert();
+                return;
+            }
+            
+            // --- Content Scrolling ---
+            if (['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
+                if (key.upArrow) {
+                    viewport.actions.scrollUp();
+                    return;
+                }
+                if (key.downArrow) {
+                    viewport.actions.scrollDown();
+                    return;
+                }
+                if (key.pageUp) { viewport.actions.pageUp(); return; }
+                if (key.pageDown) { viewport.actions.pageDown(); return; }
+            }
+
+            // --- Main Input ---
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+                return;
+            }
+            if (input.toLowerCase() === 'u') {
+                toggleRevertConfirm();
+                return;
+            }
+            if (input.toLowerCase() === 'o') {
+                if (!transaction) return;
+                const { focusedItemPath } = store;
+                if (focusedItemPath.includes('/')) { //
+                    const fileId = focusedItemPath.split('/')[1];
+                    const file = files.find(f => f.id === fileId);
+                    if (file) EditorService.openFileInEditor(file.path);
+                } else { // Is a section, open the transaction YAML
+                    const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
+                    EditorService.openFileInEditor(yamlPath);
+                }
+            }
+
+            // Navigator movement only if not scrolling content
+            if (!['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
+                if (key.upArrow) navigateUp();
+                if (key.downArrow) navigateDown();
+            }
+            if (key.rightArrow) expandOrDrillDown();
+            if (key.leftArrow) collapseOrBubbleUp();
+            if (key.return) expandOrDrillDown();
+        }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
+
+        return {
+            transaction,
+            files,
+            focusedItemPath: store.focusedItemPath,
+            expandedItemPaths: store.expandedItemPaths,
+            bodyView: store.bodyView,
+            contentScrollIndex: viewport.scrollIndex,
+            availableBodyHeight,
+        };
+    };
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { ClipboardService } from '../services/clipboard.service';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { currentScreen } = useAppStore(s => ({
+            currentScreen: s.currentScreen,
+        }));
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+                return;
+            }
+            if (key.ctrl && input === 'l') {
+                setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                return;
+            }
+
+            if (key.ctrl && input === 'v') {
+                ClipboardService.processClipboardContent();
+                return;
+            }
+
+            // If an overlay with its own input is open, stop here.
+            if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === OVERLAYS.HELP) {
+                if (key.escape || input === '?') {
+                    setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay(OVERLAYS.HELP);
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q' || key.escape) {
+                const screenBefore = useAppStore.getState().currentScreen;
+                navigateBack();
+                const screenAfter = useAppStore.getState().currentScreen;
+
+                // If navigateBack did not change the screen, it means we are on a root screen.
+                if (screenBefore === screenAfter) {
+                    exit();
+                }
+            }
+        }, { isActive });
+    };
+  src/hooks/useReviewScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { useInput, type Key } from 'ink';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { useTransactionStore, selectSelectedTransaction } from
+    '../stores/transaction.store';
+
+    import type { FileItem } from '../types/domain.types';
+
+    import { useLayout } from './useLayout';
+
+    import { useContentViewport } from './useContentViewport';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
+
+    import { useListNavigator } from './useListNavigator';
+
+    import type { ReviewBodyView } from '../stores/review.store';
+
+    import { useViewport } from './useViewport';
+
+
+    type NavigableItem =
+        | { type: 'prompt' }
+        | { type: 'reasoning' }
+        | { type: 'script'; id: string }
+        | { type: 'file'; id: string };
+
+    export const useReviewScreen = () => {
+        const store = useReviewStore();
+        const {
+            selectedItemIndex,
+            bodyView,
+            patchStatus,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+        } = store;
+
+        const transaction = useTransactionStore(selectSelectedTransaction);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const scriptCount = transaction?.scripts?.length || 0;
+        const fileCount = transaction?.files?.length || 0;
+
+        const layout = UI_CONFIG.layout.review;
+
+        // Layout for the main navigable item list (prompt, reasoning, files, etc.)
+        const mainListLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            fixedRows: layout.fixedRows,
+            marginsY: layout.marginsY,
+            separators: layout.separators,
+            footer: layout.footer,
+            dynamicRows: {
+                count: bodyView !== REVIEW_BODY_VIEWS.NONE ? layout.bodyHeightReservation : 0,
+            },
+        }), [bodyView, layout]);
+
+        const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
+        const { viewOffset } = useViewport({
+            selectedIndex: selectedItemIndex,
+            itemCount: 100,
+            layoutConfig: mainListLayoutConfig,
+        });
+
+        // Layout for the body content (diff, reasoning, etc.)
+        const bodyLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            separators: layout.separators,
+            fixedRows: 2, // meta
+            marginsY: 1 + 1 + 1, // meta, scripts, files
+            footer: 2,
+            dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
+        }), [layout, scriptCount, fileCount]);
+
+        const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
+
+        const navigableItems = useMemo((): NavigableItem[] => {
+            if (!transaction) return [];
+            const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
+            const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
+            return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+        }, [transaction]);
+
+        const contentLineCount = useMemo(() => {
+            const currentItem = navigableItems[selectedItemIndex];
+            switch (bodyView) { //
+                case REVIEW_BODY_VIEWS.REASONING:
+                    return (transaction?.reasoning || '').split('\n').length;
+                case REVIEW_BODY_VIEWS.PROMPT:
+                    return (transaction?.prompt || '').split('\n').length;
+                case REVIEW_BODY_VIEWS.DIFF: {
+                    if (currentItem?.type !== 'file') return 0;
+                    const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
+                    return (selectedFile?.diff || '').split('\n').length;
+                }
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: {
+                    if (currentItem?.type !== 'script') return 0;
+                    const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
+                    return (selectedScript?.output || '').split('\n').length;
+                }
+                default: return 0;
+            }
+        }, [bodyView, navigableItems, selectedItemIndex, transaction]);
+        const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+        const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
+
+        // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
+        const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
+        const fileReviewStates = useReviewStore(s => s.fileReviewStates);
+
+        const reviewStats = useMemo(() => {
+            const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+            return {
+                totalFiles: files.length,
+                totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
+                totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+            };
+        }, [files, fileReviewStates]);
+
+        const hasRejectedFiles = useMemo(() => {
+            if (!fileReviewStates) return false;
+            return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
+        }, [fileReviewStates]);
+
+        const { approvedFilesCount } = reviewStats;
+
+        const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
+
+        const scripts = transaction?.scripts || [];
+
+        const {
+            setSelectedItemIndex, toggleBodyView, setBodyView, startApplySimulation, approve,
+            rejectTransaction, tryRepairFile, tryInstruct, showBulkRepair, showBulkInstruct,
+            executeBulkRepairOption, executeBulkInstructOption, confirmHandoff,
+            navigateScriptErrorUp, navigateScriptErrorDown, toggleFileApproval,
+            rejectAllFiles, navigateBulkRepairUp, navigateBulkRepairDown,
+            navigateBulkInstructUp, navigateBulkInstructDown,
+        } = store.actions;
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+            useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+        };
+
+        const navigateToNextItem = () => {
+            if (selectedItemIndex < navigableItems.length - 1) {
+                setSelectedItemIndex(selectedItemIndex + 1);
+                contentViewport.actions.resetScroll();
+            }
+        };
+
+        const navigateToPreviousItem = () => {
+            if (selectedItemIndex > 0) {
+                setSelectedItemIndex(selectedItemIndex - 1);
+                contentViewport.actions.resetScroll();
+            }
+        };
+
+        const navigateToNextFile = () => {
+            const nextFileIndex = navigableItems.findIndex(
+                (item, index) => index > selectedItemIndex && item.type === 'file',
+            );
+            if (nextFileIndex !== -1) {
+                setSelectedItemIndex(nextFileIndex);
+            }
+        };
+
+        const navigateToPreviousFile = () => {
+            // Find the last index of a file before the current one
+            const prevFileIndex = navigableItems
+                .slice(0, selectedItemIndex)
+                .findLastIndex(item => item.type === 'file');
+
+            if (prevFileIndex !== -1) {
+                setSelectedItemIndex(prevFileIndex);
+            }
+        };
+
+        // --- Input Handlers ---
+
+        const handleGlobalInput = (input: string, key: Key): boolean => {
+            if (input === '1' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'success'); return true;
+            }
+            if (input === '2' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'failure'); return true;
+            }
+            // The 'q' (quit/back) is now handled by the global hotkey hook.
+
+            const currentItem = navigableItems[selectedItemIndex];
+            if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+                toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+                return true;
+            }
+
+            if (key.escape) {
+                switch (bodyView) {
+                    case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                    case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                    case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                        toggleBodyView(bodyView);
+                        break;
+                    default:
+                        if (bodyView !== REVIEW_BODY_VIEWS.NONE) {
+                            setBodyView(REVIEW_BODY_VIEWS.NONE);
+                        }
+                        break;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        const handleHandoffConfirmInput = (_input: string, key: Key): void => {
+            if (key.return) confirmHandoff();
+        };
+
+        const handleBulkRepairInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkRepairUp();
+            if (key.downArrow) navigateBulkRepairDown();
+            if (key.return) {
+                executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '4') {
+                executeBulkRepairOption(parseInt(input));
+            }
+        };
+        
+        const handleBulkInstructInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkInstructUp();
+            if (key.downArrow) navigateBulkInstructDown();
+            if (key.return) {
+                executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '3') {
+                executeBulkInstructOption(parseInt(input));
+            }
+        };
+
+        const handleContentScrollInput = (key: Key): boolean => {
+            const contentViews: ReviewBodyView[] = [
+                REVIEW_BODY_VIEWS.REASONING,
+                REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+                REVIEW_BODY_VIEWS.DIFF,
+                REVIEW_BODY_VIEWS.PROMPT,
+            ];
+            if (!contentViews.includes(bodyView)) return false;
+
+            if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+            if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
+            return false;
+        };
+
+        const handleReasoningInput = (input: string, key: Key): void => {
+            if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+        };
+
+        const handleScriptOutputInput = (input: string, key: Key): void => {
+            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+            if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+                const currentItem = navigableItems[selectedItemIndex];
+                const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
+                if (selectedScript) {
+                    useNotificationStore.getState().actions.show({
+                        type: 'success',
+                        title: 'Copied to Clipboard',
+                        message: `Copied script output for: ${selectedScript.command}`,
+                    });
+                }
+            }
+        };
+
+        const handleDiffInput = (input: string, key: Key) => {
+            if (key.upArrow) {
+                navigateToPreviousFile();
+                return;
+            }
+            if (key.downArrow) {
+                navigateToNextFile();
+                return;
+            }
+            if (input.toLowerCase() === 'd') toggleBodyView('diff');
+        };
+
+        const handleMainNavigationInput = (input: string, key: Key): void => {
+            if (key.leftArrow) {
+                showDashboardScreen();
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0 && transaction) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            const currentItem = navigableItems[selectedItemIndex];
+
+            if (input === ' ') {
+                if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState && fileState.status !== 'FAILED') {
+                        toggleFileApproval(currentItem.id);
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'p') {
+                toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+            }
+
+            if (input.toLowerCase() === 'r') {
+                toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+            }
+
+            if (key.return) { // Enter key
+                if (currentItem?.type === 'file') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+                } else if (currentItem?.type === 'prompt') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+                } else if (currentItem?.type === 'reasoning') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+                } else if (currentItem?.type === 'script') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'x') {
+                rejectTransaction();
+            }
+
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+                    if (hasFailedFiles) showBulkRepair();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+                }
+            }
+
+            if (input.toLowerCase() === 'i') {
+                if (key.shift) {
+                    if (hasRejectedFiles) showBulkInstruct();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'REJECTED') {
+                        tryInstruct(currentItem.id);
+                    }
+                }
+            }
+        };
+
+        useListNavigator({
+            itemCount: navigableItems.length,
+            viewportHeight: listViewportHeight,
+            selectedIndex: selectedItemIndex,
+            onIndexChange: setSelectedItemIndex,
+            isActive: bodyView === REVIEW_BODY_VIEWS.NONE,
+            onKey: handleMainNavigationInput,
+        });
+
+        useInput((input: string, key: Key) => {
+            if (handleGlobalInput(input, key)) return;
+
+            if (key.leftArrow) {
+                // Allow left arrow to collapse any open body view
+                setBodyView(REVIEW_BODY_VIEWS.NONE);
+                return;
+            }
+
+            // Global "Enter to collapse" handler for non-modal views
+            if (key.return) {
+                if (
+                    bodyView !== REVIEW_BODY_VIEWS.BULK_REPAIR &&
+                    bodyView !== REVIEW_BODY_VIEWS.BULK_INSTRUCT &&
+                    bodyView !== REVIEW_BODY_VIEWS.CONFIRM_HANDOFF &&
+                    bodyView !== REVIEW_BODY_VIEWS.NONE
+                ) {
+                    setBodyView(REVIEW_BODY_VIEWS.NONE);
+                    return;
+                }
+            }
+
+            // Allow up/down list navigation even when a content view is open
+            const listNavigableBodyViews: ReviewBodyView[] = [
+                REVIEW_BODY_VIEWS.PROMPT, REVIEW_BODY_VIEWS.REASONING, REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+            ];
+
+            if (listNavigableBodyViews.includes(bodyView)) {
+                if (key.upArrow) { navigateToPreviousItem(); return; }
+                if (key.downArrow) { navigateToNextItem(); return; }
+            }
+
+            // Handle content scrolling (PgUp/PgDn)
+            if (handleContentScrollInput(key)) return;
+
+            switch (bodyView) {
+                case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_REPAIR: return handleBulkRepairInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
+                case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
+                case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input, key);
+            }
+        }, { isActive: bodyView !== REVIEW_BODY_VIEWS.NONE });
+
+        return {
+            ...store,
+            fileReviewStates,
+            selectedItemIndex,
+            transaction,
+            files,
+            scripts,
+            patchStatus,
+            navigableItems,
+            isFileSelected,
+            navigableItemsInView,
+            viewOffset,
+            contentScrollIndex: contentViewport.scrollIndex,
+            availableBodyHeight,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+            ...reviewStats,
+            hasRejectedFiles,
+        };
+    };
+  src/hooks/useTransactionHistoryScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { useInput, type Key } from 'ink';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import type { TransactionStatus } from '../types/domain.types';
+
+    import { EditorService } from '../services/editor.service';
+
+    import { getVisibleItemPaths } from '../stores/navigation.utils';
+
+    import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from
+    '../constants/history.constants';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { useViewport } from './useViewport';
+
+
+    export const useTransactionHistoryScreen = () => {
+        const store = useHistoryStore();
+        const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
+        const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
+        const transactions = useTransactionStore(s => s.transactions);
+
+        const visibleItemPaths = useMemo(
+            () => getVisibleItemPaths(transactions, expandedIds),
+            [transactions, expandedIds],
+        );
+        const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: visibleItemPaths.length,
+            layoutConfig: UI_CONFIG.layout.history,
+        });
+
+        const openCopyMode = () => {
+            const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+
+            if (transactionsToCopy.length === 0) return;
+            useCopyStore.getState().actions.openForHistory(transactionsToCopy);
+        };
+
+        const handleFilterInput = (_input: string, key: Key): void => {
+            if (key.escape) actions.setMode(HISTORY_VIEW_MODES.LIST);
+            if (key.return) actions.applyFilter();
+        };
+
+        const handleBulkActionsInput = (input: string, key: Key): void => {
+            if (key.escape) { //
+                actions.setMode(HISTORY_VIEW_MODES.LIST);
+                return;
+            }
+            if (input >= '1' && input <= '3') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Mock Action',
+                    message: `Bulk action #${input} would be performed here.`,
+                });
+                actions.setMode(HISTORY_VIEW_MODES.LIST);
+            }
+        };
+
+        const handleListInput = (input: string, key: Key): void => {
+            if (key.upArrow) actions.navigateUp();
+            if (key.downArrow) actions.navigateDown();
+            if (key.rightArrow) actions.expandOrDrillDown();
+            if (key.leftArrow) actions.collapseOrBubbleUp();
+            if (key.pageUp) actions.navigatePageUp(viewportHeight);
+            if (key.pageDown) actions.navigatePageDown(viewportHeight);
+            if (input === ' ') actions.toggleSelection();
+            if (key.return) {
+                const txId = selectedItemPath.split('/')[0];
+                if (txId && !selectedItemPath.includes('/')) { //
+                    useDetailStore.getState().actions.load(txId);
+                    showTransactionDetailScreen();
+                }
+            }
+            if (input.toLowerCase() === 'o') {
+                const txId = selectedItemPath.split('/')[0];
+                const tx = transactions.find(t => t.id === txId);
+                if (!tx) return;
+
+                if (selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE)) {
+                    const fileId = selectedItemPath.split('/')[2];
+                    const file = tx.files?.find(f => f.id === fileId);
+                    if (file) EditorService.openFileInEditor(file.path);
+                } else {
+                    const yamlPath = EditorService.getTransactionYamlPath(tx.hash);
+                    EditorService.openFileInEditor(yamlPath);
+                }
+            }
+
+            if (input.toLowerCase() === 'f') actions.setMode(HISTORY_VIEW_MODES.FILTER);
+            if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+            if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode(HISTORY_VIEW_MODES.BULK_ACTIONS);
+        };
+
+        useInput((input: string, key: Key) => { //
+            if (mode === HISTORY_VIEW_MODES.FILTER) {
+                handleFilterInput(input, key);
+                return;
+            }
+            if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
+                handleBulkActionsInput(input, key);
+                return;
+            }
+            handleListInput(input, key);
+        });
+
+        const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+        const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+        const transactionsInView = useMemo(
+            () => transactions.filter(tx => txIdsInView.has(tx.id)),
+            [transactions, txIdsInView],
+        );
+        const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+        const filterStatusText = filterQuery ? filterQuery : '(none)';
+        const startItem = Math.min(viewOffset + 1, visibleItemPaths.length);
+        const endItem = Math.min(viewOffset + itemsInView.length, visibleItemPaths.length);
+        const showingStatusText = `Showing ${startItem}-${endItem} of ${visibleItemPaths.length} items`;
+        
+        const hasSelection = selectedForAction.size > 0;
+
+        const statsStatus = useMemo(() => {
+            const stats = transactions.reduce((acc, tx) => {
+                acc[tx.status] = (acc[tx.status] || 0) + 1;
+                return acc;
+            }, {} as Record<TransactionStatus, number>);
+            
+            const parts = [];
+            if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
+            if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
+            if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
+            if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
+            if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
+            if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
+
+            return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
+        }, [transactions]);
+
+        return {
+            mode,
+            filterQuery,
+            selectedForAction,
+            selectedItemPath,
+            expandedIds,
+            actions,
+            transactions,
+            viewOffset,
+            itemsInView,
+            loadingPaths,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus: filterStatusText,
+            showingStatus: showingStatusText,
+            statsStatus,
+            hasSelection,
+            visibleItemPaths,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 217

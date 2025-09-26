@@ -16,7 +16,7 @@ import { useViewport } from './useViewport';
 export const useTransactionHistoryScreen = () => {
     const store = useHistoryStore();
     const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
-    const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
+    const { showTransactionDetailScreen } = useAppStore(s => s.actions);
     const transactions = useTransactionStore(s => s.transactions);
 
     const visibleItemPaths = useMemo(
@@ -91,10 +91,6 @@ export const useTransactionHistoryScreen = () => {
         if (input.toLowerCase() === 'f') actions.setMode(HISTORY_VIEW_MODES.FILTER);
         if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
         if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode(HISTORY_VIEW_MODES.BULK_ACTIONS);
-        
-        if (key.escape || input.toLowerCase() === 'q') {
-            showDashboardScreen();
-        }
     };
 
     useInput((input: string, key: Key) => { //

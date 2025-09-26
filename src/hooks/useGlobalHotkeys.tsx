@@ -1,15 +1,11 @@
 import { useApp, useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
-import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
 import { OVERLAYS } from '../constants/view.constants';
 import { ClipboardService } from '../services/clipboard.service';
 
 export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
     const { exit } = useApp();
-    const { currentScreen } = useAppStore(s => ({
-        currentScreen: s.currentScreen,
-    }));
     const { navigateBack } = useAppStore(s => s.actions);
     const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
         activeOverlay: s.activeOverlay,
@@ -54,13 +50,15 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
         }
         
         // Quit from main screens
-        if (input.toLowerCase() === 'q') {
-            if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+        if (input.toLowerCase() === 'q' || key.escape) {
+            const screenBefore = useAppStore.getState().currentScreen;
+            navigateBack();
+            const screenAfter = useAppStore.getState().currentScreen;
+
+            // If navigateBack did not change the screen, it means we are on a root screen.
+            if (screenBefore === screenAfter) {
                 exit();
             }
-            navigateBack();
-        } else if (key.escape) {
-            navigateBack();
         }
     }, { isActive });
 };

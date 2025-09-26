@@ -1,0 +1,567 @@
+uuid: c258414b-2d7c-473d-9d7a-7deef0820f4c
+projectId: relaycode-tui
+createdAt: '2025-09-26T14:46:34.301Z'
+gitCommitMsg: >-
+  refactor(nav): simplify global hotkeys for consistent back/quit behavior
+
+  This commit refactors the global hotkey system to provide a consistent and
+  predictable user experience for navigating back or quitting the application.
+
+  - Centralized `Q` and `Escape` key handling in `useGlobalHotkeys`. These keys
+  now always attempt to navigate back one screen. If no backward navigation is
+  possible, the app exits. - Removed the `MAIN_SCREENS_FOR_QUIT` constant as it
+  is no longer needed. - Updated `SCREENS_WITH_DASHBOARD_BACK_ACTION` to include
+  the transaction history screen, allowing `navigateBack` to work correctly from
+  there. - Removed redundant local back/quit handlers from
+  `useTransactionHistoryScreen` and `useTransactionDetailScreen` to prevent
+  conflicts with the new global system.
+promptSummary: >-
+  Continue refactoring the app's navigation UX, focusing on Part 3 of the master
+  plan which involves simplifying global hotkeys.
+reasoning:
+  - Excellent. Executing Part 3 of the master plan.
+  - '### Part 3: Global Hotkey Simplification'
+  - >-
+    My focus now is to streamline the global `Q` and `Esc` hotkeys, making their
+    behavior predictable across the entire application. They will now
+    consistently attempt to navigate to the previous screen; if no "back" action
+    is possible, they will exit the application. This centralizes the back/quit
+    logic and removes redundant local handlers.
+  - >-
+    First, I will update our application constants to remove the now-obsolete
+    `MAIN_SCREENS_FOR_QUIT` and to teach the `navigateBack` action how to handle
+    the transaction history screen.
+  - >-
+    Next, I will implement the new "try back, then quit" logic in the global
+    hotkey hook. This change simplifies the code significantly by removing
+    conditional checks and relying on the application state to determine the
+    correct action.
+  - >-
+    To prevent conflicts with the new global handler, I am removing the local
+    `Esc`/`Q` handler from the Transaction History screen. The global hook will
+    now correctly manage this action.
+  - >-
+    Finally, to ensure a clear separation of concerns where `LeftArrow` handles
+    local collapsing and `Esc` handles global screen navigation, I am removing
+    the local `escape` key binding from the Transaction Detail screen's input
+    handler.
+  - >-
+    This completes the simplification of our global hotkey system, creating a
+    more consistent and intuitive user experience.
+operations:
+  - type: write
+    path: src/constants/app.constants.ts
+    content: |
+      --- src/constants/app.constants.ts
+      +++ src/constants/app.constants.ts
+      @@ -8,16 +8,11 @@
+           TRANSACTION_HISTORY: 'transaction-history',
+       } as const;
+       
+      -export const MAIN_SCREENS_FOR_QUIT = [
+      -    APP_SCREENS.DASHBOARD,
+      -    APP_SCREENS.INIT,
+      -    APP_SCREENS.TRANSACTION_HISTORY,
+      -];
+      -
+       export const SCREENS_WITH_DASHBOARD_BACK_ACTION = [
+           APP_SCREENS.REVIEW,
+           APP_SCREENS.GIT_COMMIT,
+           APP_SCREENS.TRANSACTION_DETAIL,
+      +    APP_SCREENS.TRANSACTION_HISTORY,
+       ];
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: >
+      --- src/hooks/useGlobalHotkeys.tsx
+
+      +++ src/hooks/useGlobalHotkeys.tsx
+
+      @@ -1,6 +1,5 @@
+       import { useApp, useInput } from 'ink';
+       import { useAppStore } from '../stores/app.store';
+       import { useViewStore } from '../stores/view.store';
+      -import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+       import { OVERLAYS } from '../constants/view.constants';
+       import { ClipboardService } from '../services/clipboard.service';
+       
+      @@ -43,14 +42,15 @@
+               }
+               
+               // Quit from main screens
+      -        if (input.toLowerCase() === 'q') {
+
+      -            if ((MAIN_SCREENS_FOR_QUIT as readonly
+      string[]).includes(currentScreen)) {
+
+      +        if (input.toLowerCase() === 'q' || key.escape) {
+
+      +            const screenBefore = useAppStore.getState().currentScreen;
+
+      +            navigateBack();
+
+      +            const screenAfter = useAppStore.getState().currentScreen;
+
+      +
+
+      +            // If navigateBack did not change the screen, it means we are
+      on a root screen.
+
+      +            if (screenBefore === screenAfter) {
+                       exit();
+                   }
+      -            navigateBack();
+
+      -        } else if (key.escape) {
+
+      -            navigateBack();
+               }
+           }, { isActive });
+       };
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionHistoryScreen.tsx
+    content: |
+      --- src/hooks/useTransactionHistoryScreen.tsx
+      +++ src/hooks/useTransactionHistoryScreen.tsx
+      @@ -86,10 +86,6 @@
+               if (input.toLowerCase() === 'f') actions.setMode(HISTORY_VIEW_MODES.FILTER);
+               if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+               if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode(HISTORY_VIEW_MODES.BULK_ACTIONS);
+      -        
+      -        if (key.escape || input.toLowerCase() === 'q') {
+      -            showDashboardScreen();
+      -        }
+           };
+       
+           useInput((input: string, key: Key) => { //
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useTransactionDetailScreen.tsx
+    content: |
+      --- src/hooks/useTransactionDetailScreen.tsx
+      +++ src/hooks/useTransactionDetailScreen.tsx
+      @@ -111,7 +111,6 @@
+               if (key.rightArrow) expandOrDrillDown();
+               if (key.leftArrow) collapseOrBubbleUp();
+               if (key.return) expandOrDrillDown();
+      -        if (key.escape) collapseOrBubbleUp();
+           }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
+       
+           return {
+    patchStrategy: standard-diff
+snapshot:
+  src/constants/app.constants.ts: |-
+    /**
+     * Application-level screens and navigation constants.
+     */
+    export const APP_SCREENS = {
+        SPLASH: 'splash',
+        INIT: 'init',
+        DASHBOARD: 'dashboard',
+        REVIEW: 'review',
+        REVIEW_PROCESSING: 'review-processing',
+        GIT_COMMIT: 'git-commit',
+        TRANSACTION_DETAIL: 'transaction-detail',
+        TRANSACTION_HISTORY: 'transaction-history',
+    } as const;
+
+    export const MAIN_SCREENS_FOR_QUIT = [
+        APP_SCREENS.DASHBOARD,
+        APP_SCREENS.INIT,
+        APP_SCREENS.TRANSACTION_HISTORY,
+    ];
+
+    export const SCREENS_WITH_DASHBOARD_BACK_ACTION = [
+        APP_SCREENS.REVIEW,
+        APP_SCREENS.GIT_COMMIT,
+        APP_SCREENS.TRANSACTION_DETAIL,
+    ];
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { ClipboardService } from '../services/clipboard.service';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { currentScreen } = useAppStore(s => ({
+            currentScreen: s.currentScreen,
+        }));
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+                return;
+            }
+            if (key.ctrl && input === 'l') {
+                setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                return;
+            }
+
+            if (key.ctrl && input === 'v') {
+                ClipboardService.processClipboardContent();
+                return;
+            }
+
+            // If an overlay with its own input is open, stop here.
+            if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === OVERLAYS.HELP) {
+                if (key.escape || input === '?') {
+                    setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay(OVERLAYS.HELP);
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q') {
+                if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+                    exit();
+                }
+                navigateBack();
+            } else if (key.escape) {
+                navigateBack();
+            }
+        }, { isActive });
+    };
+  src/hooks/useTransactionHistoryScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { useInput, type Key } from 'ink';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import type { TransactionStatus } from '../types/domain.types';
+
+    import { EditorService } from '../services/editor.service';
+
+    import { getVisibleItemPaths } from '../stores/navigation.utils';
+
+    import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from
+    '../constants/history.constants';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { useViewport } from './useViewport';
+
+
+    export const useTransactionHistoryScreen = () => {
+        const store = useHistoryStore();
+        const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
+        const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
+        const transactions = useTransactionStore(s => s.transactions);
+
+        const visibleItemPaths = useMemo(
+            () => getVisibleItemPaths(transactions, expandedIds),
+            [transactions, expandedIds],
+        );
+        const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: visibleItemPaths.length,
+            layoutConfig: UI_CONFIG.layout.history,
+        });
+
+        const openCopyMode = () => {
+            const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+
+            if (transactionsToCopy.length === 0) return;
+            useCopyStore.getState().actions.openForHistory(transactionsToCopy);
+        };
+
+        const handleFilterInput = (_input: string, key: Key): void => {
+            if (key.escape) actions.setMode(HISTORY_VIEW_MODES.LIST);
+            if (key.return) actions.applyFilter();
+        };
+
+        const handleBulkActionsInput = (input: string, key: Key): void => {
+            if (key.escape) { //
+                actions.setMode(HISTORY_VIEW_MODES.LIST);
+                return;
+            }
+            if (input >= '1' && input <= '3') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Mock Action',
+                    message: `Bulk action #${input} would be performed here.`,
+                });
+                actions.setMode(HISTORY_VIEW_MODES.LIST);
+            }
+        };
+
+        const handleListInput = (input: string, key: Key): void => {
+            if (key.upArrow) actions.navigateUp();
+            if (key.downArrow) actions.navigateDown();
+            if (key.rightArrow) actions.expandOrDrillDown();
+            if (key.leftArrow) actions.collapseOrBubbleUp();
+            if (key.pageUp) actions.navigatePageUp(viewportHeight);
+            if (key.pageDown) actions.navigatePageDown(viewportHeight);
+            if (input === ' ') actions.toggleSelection();
+            if (key.return) {
+                const txId = selectedItemPath.split('/')[0];
+                if (txId && !selectedItemPath.includes('/')) { //
+                    useDetailStore.getState().actions.load(txId);
+                    showTransactionDetailScreen();
+                }
+            }
+            if (input.toLowerCase() === 'o') {
+                const txId = selectedItemPath.split('/')[0];
+                const tx = transactions.find(t => t.id === txId);
+                if (!tx) return;
+
+                if (selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE)) {
+                    const fileId = selectedItemPath.split('/')[2];
+                    const file = tx.files?.find(f => f.id === fileId);
+                    if (file) EditorService.openFileInEditor(file.path);
+                } else {
+                    const yamlPath = EditorService.getTransactionYamlPath(tx.hash);
+                    EditorService.openFileInEditor(yamlPath);
+                }
+            }
+
+            if (input.toLowerCase() === 'f') actions.setMode(HISTORY_VIEW_MODES.FILTER);
+            if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+            if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode(HISTORY_VIEW_MODES.BULK_ACTIONS);
+            
+            if (key.escape || input.toLowerCase() === 'q') {
+                showDashboardScreen();
+            }
+        };
+
+        useInput((input: string, key: Key) => { //
+            if (mode === HISTORY_VIEW_MODES.FILTER) {
+                handleFilterInput(input, key);
+                return;
+            }
+            if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
+                handleBulkActionsInput(input, key);
+                return;
+            }
+            handleListInput(input, key);
+        });
+
+        const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+        const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+        const transactionsInView = useMemo(
+            () => transactions.filter(tx => txIdsInView.has(tx.id)),
+            [transactions, txIdsInView],
+        );
+        const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+        const filterStatusText = filterQuery ? filterQuery : '(none)';
+        const startItem = Math.min(viewOffset + 1, visibleItemPaths.length);
+        const endItem = Math.min(viewOffset + itemsInView.length, visibleItemPaths.length);
+        const showingStatusText = `Showing ${startItem}-${endItem} of ${visibleItemPaths.length} items`;
+        
+        const hasSelection = selectedForAction.size > 0;
+
+        const statsStatus = useMemo(() => {
+            const stats = transactions.reduce((acc, tx) => {
+                acc[tx.status] = (acc[tx.status] || 0) + 1;
+                return acc;
+            }, {} as Record<TransactionStatus, number>);
+            
+            const parts = [];
+            if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
+            if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
+            if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
+            if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
+            if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
+            if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
+
+            return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
+        }, [transactions]);
+
+        return {
+            mode,
+            filterQuery,
+            selectedForAction,
+            selectedItemPath,
+            expandedIds,
+            actions,
+            transactions,
+            viewOffset,
+            itemsInView,
+            loadingPaths,
+            transactionsInView,
+            pathsInViewSet,
+            filterStatus: filterStatusText,
+            showingStatus: showingStatusText,
+            statsStatus,
+            hasSelection,
+            visibleItemPaths,
+        };
+    };
+  src/hooks/useTransactionDetailScreen.tsx: >-
+    import { useInput, type Key } from 'ink';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useTransactionStore, selectSelectedTransaction } from
+    '../stores/transaction.store';
+
+    import { useMemo } from 'react';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { EditorService } from '../services/editor.service';
+
+    import { useLayout } from './useLayout';
+
+    import { useContentViewport } from './useContentViewport';
+
+    import { OVERLAYS } from '../constants/view.constants';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+
+    export const useTransactionDetailScreen = () => {
+        const store = useDetailStore();
+        const transaction = useTransactionStore(selectSelectedTransaction);
+        const files = useMemo(() => transaction?.files || [], [transaction]);
+
+        const {
+            navigateUp,
+            navigateDown,
+            expandOrDrillDown,
+            collapseOrBubbleUp,
+            toggleRevertConfirm,
+            confirmRevert,
+        } = store.actions;
+
+        const isFilesExpanded = store.expandedItemPaths.has('FILES');
+        const layoutConfig = useMemo(() => ({
+            ...UI_CONFIG.layout.transactionDetail,
+            dynamicRows: {
+                count: 3 + (isFilesExpanded ? (files.length || 0) : 0), // navigator items
+            },
+        }), [isFilesExpanded, files.length]); //
+
+        const { remainingHeight: availableBodyHeight } = useLayout(layoutConfig);
+        
+        const contentLineCount = useMemo(() => {
+            if (store.bodyView === 'PROMPT') return (transaction?.prompt || '').split('\n').length;
+            if (store.bodyView === 'REASONING') return (transaction?.reasoning || '').split('\n').length;
+            if (store.bodyView === 'DIFF_VIEW') { //
+                const fileId = store.focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                return (file?.diff || '').split('\n').length;
+            }
+            return 0;
+        }, [store.bodyView, store.focusedItemPath, transaction, files]);
+
+        const viewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const { focusedItemPath } = store;
+            const fileId = focusedItemPath.split('/')[1];
+            const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
+            useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
+        };
+
+        useInput((input: string, key: Key) => {
+            if (store.bodyView === 'REVERT_CONFIRM') {
+                if (key.escape) toggleRevertConfirm();
+                if (key.return) confirmRevert();
+                return;
+            }
+            
+            // --- Content Scrolling ---
+            if (['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
+                if (key.upArrow) {
+                    viewport.actions.scrollUp();
+                    return;
+                }
+                if (key.downArrow) {
+                    viewport.actions.scrollDown();
+                    return;
+                }
+                if (key.pageUp) { viewport.actions.pageUp(); return; }
+                if (key.pageDown) { viewport.actions.pageDown(); return; }
+            }
+
+            // --- Main Input ---
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+                return;
+            }
+            if (input.toLowerCase() === 'u') {
+                toggleRevertConfirm();
+                return;
+            }
+            if (input.toLowerCase() === 'o') {
+                if (!transaction) return;
+                const { focusedItemPath } = store;
+                if (focusedItemPath.includes('/')) { //
+                    const fileId = focusedItemPath.split('/')[1];
+                    const file = files.find(f => f.id === fileId);
+                    if (file) EditorService.openFileInEditor(file.path);
+                } else { // Is a section, open the transaction YAML
+                    const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
+                    EditorService.openFileInEditor(yamlPath);
+                }
+            }
+
+            // Navigator movement only if not scrolling content
+            if (!['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
+                if (key.upArrow) navigateUp();
+                if (key.downArrow) navigateDown();
+            }
+            if (key.rightArrow) expandOrDrillDown();
+            if (key.leftArrow) collapseOrBubbleUp();
+            if (key.return) expandOrDrillDown();
+            if (key.escape) collapseOrBubbleUp();
+        }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
+
+        return {
+            transaction,
+            files,
+            focusedItemPath: store.focusedItemPath,
+            expandedItemPaths: store.expandedItemPaths,
+            bodyView: store.bodyView,
+            contentScrollIndex: viewport.scrollIndex,
+            availableBodyHeight,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 215

@@ -55,18 +55,18 @@ export const REVIEW_FOOTER_ACTIONS = {
     DIFF_VIEW: [
         { key: '↑↓', label: 'Next/Prev File' },
         { key: 'PgUp/PgDn', label: 'Scroll' },
-        { key: 'D/Enter/Esc', label: 'Back' },
+        { key: '←/D/Esc', label: 'Back' },
     ] as const,
     PROMPT_VIEW: [
         { key: '↑↓', label: 'Next/Prev Item' },
         { key: 'PgUp/PgDn', label: 'Scroll' },
-        { key: 'P/Enter', label: 'Collapse' },
+        { key: '←/P/Ent', label: 'Collapse' },
         { key: 'C', label: 'Copy Mode' },
     ] as const,
     REASONING_VIEW: [
         { key: '↑↓', label: 'Next/Prev Item' },
         { key: 'PgUp/PgDn', label: 'Scroll' },
-        { key: 'R/Enter', label: 'Collapse' },
+        { key: '←/R/Ent', label: 'Collapse' },
         { key: 'C', label: 'Copy Mode' },
     ] as const,
     SCRIPT_OUTPUT_VIEW: [
@@ -74,7 +74,7 @@ export const REVIEW_FOOTER_ACTIONS = {
         { key: 'PgUp/PgDn', label: 'Scroll' },
         { key: 'J↓/K↑', label: 'Next/Prev Error' },
         { key: 'C', label: 'Copy Output' },
-        { key: 'Enter/Esc', label: 'Back' },
+        { key: '←/Ent/Esc', label: 'Back' },
     ] as const,
     BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
     BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
@@ -104,7 +104,7 @@ export const REVIEW_FOOTER_ACTIONS = {
 
         if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
         actions.push({ key: 'X', label: 'Reject Tx' });
-        actions.push({ key: 'Q', label: 'Quit' });
+        actions.push({ key: '←/Q/Esc', label: 'Back' });
         return actions;
     },
 };

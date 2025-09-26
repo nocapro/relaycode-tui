@@ -32,15 +32,15 @@ export const DETAIL_FOOTER_ACTIONS = {
         if (isRevertable) {
             actions.push({ key: 'U', label: 'Undo' });
         }
-        actions.push({ key: 'Q', label: 'Quit/Back' });
+        actions.push({ key: '←/Q/Esc', label: 'Back' });
         return actions;
     },
-    DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label: 'Back to List' }] as const,
+    DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←/Esc', label: 'Back to List' }] as const,
     FILE_LIST_VIEW: [
         { key: '↑↓', label: 'Nav Files' },
         { key: '→', label: 'View Diff' },
-        { key: '←', label: 'Back to Sections' },
+        { key: '←', label: 'Back' },
     ] as const,
-    SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→', label: 'Drill In' }, { key: '←', label: 'Collapse' }] as const,
+    SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→', label: 'Drill In' }, { key: '←', label: 'Collapse/Back' }] as const,
     SECTION_COLLAPSED: [{ key: '↑↓', label: 'Nav' }, { key: '→', label: 'Expand' }] as const,
 };

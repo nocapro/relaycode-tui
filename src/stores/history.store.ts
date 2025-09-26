@@ -88,8 +88,23 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         },
         expandOrDrillDown: async () => {
             const { selectedItemPath, expandedIds } = get();
-            if (expandedIds.has(selectedItemPath)) return;
 
+            // Smart back-out: if already expanded, collapse it.
+            if (expandedIds.has(selectedItemPath)) {
+                set(state => {
+                    const newExpandedIds = new Set(state.expandedIds);
+                    newExpandedIds.delete(selectedItemPath);
+                    // Recursively collapse children
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+                    return { expandedIds: newExpandedIds };
+                });
+                return; // Stop execution
+            }
+            
             // Files and content items with potentially large data can show a loading state
             const isLoadable = selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE) ||
                                selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.PROMPT) ||

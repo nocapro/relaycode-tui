@@ -255,11 +255,11 @@ export const useReviewScreen = () => {
         return false;
     };
 
-    const handleReasoningInput = (input: string, key: Key): void => {
+    const handleReasoningInput = (input: string, _key: Key): void => {
         if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
     };
 
-    const handleScriptOutputInput = (input: string, key: Key): void => {
+    const handleScriptOutputInput = (input: string, _key: Key): void => {
         if (input.toLowerCase() === 'j') navigateScriptErrorDown();
         if (input.toLowerCase() === 'k') navigateScriptErrorUp();
         if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.

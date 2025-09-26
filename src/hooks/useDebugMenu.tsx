@@ -376,7 +376,7 @@ export const useDebugMenu = () => {
                 }
                 return;
             }
-            if (key.escape) {
+            if (key.escape || key.leftArrow) {
                 useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
                 return;
             }

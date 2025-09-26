@@ -26,7 +26,7 @@ export const HISTORY_FOOTER_ACTIONS = {
         const actions: ActionItem[] = [
             { key: '↑↓/PgUp/PgDn', label: 'Nav' },
             { key: '→', label: 'Expand' },
-            { key: '←', label: 'Collapse' },
+            { key: '←', label: 'Collapse/Up' },
             { key: 'Spc', label: 'Select' },
             { key: 'Ent', label: 'Details' },
             { key: 'O', label: openActionLabel },

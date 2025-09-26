@@ -1,0 +1,368 @@
+uuid: c2584144-8025-4fc1-a1e4-b7787340e4ab
+projectId: relaycode-tui
+createdAt: '2025-09-26T14:49:24.691Z'
+gitCommitMsg: >-
+  refactor(ui): update footer actions to reflect new navigation controls
+
+  Harmonizes the footer action labels across all screens to align with the new,
+  consistent navigation scheme.
+
+  - The `Left Arrow` (←) is now consistently shown for "Back", "Collapse", or
+  "Up" actions. - Redundant or confusing labels like "Quit/Back" have been
+  simplified to "Back". - Keys like `Esc` are now explicitly included in
+  back/collapse actions for clarity.
+
+  This change ensures the on-screen instructions accurately guide the user
+  according to the refactored input handling logic, improving usability and
+  predictability.
+promptSummary: >-
+  I want to update the UI labels in the footers to match the new, consistent
+  navigation controls, focusing on the Left Arrow key for back/collapse actions.
+  This is Part 4 of the master plan.
+reasoning:
+  - >-
+    Excellent. I have executed the previous parts of the master plan. Now, I
+    will implement Part 4, which involves updating the UI action labels in the
+    application's footers to accurately reflect the new, consistent navigation
+    controls.
+  - '### Part 4: Updating UI Feedback (Footer Actions)'
+  - >-
+    I will now modify the constant files that define the footer actions to
+    ensure the on-screen hints align with our refactored navigation logic,
+    emphasizing the `Left Arrow` for "back" and "collapse" operations.
+  - >-
+    First, I am updating the Transaction Detail screen's footer actions. The
+    labels for "Back", "Collapse", and "Quit" are being consolidated and made
+    consistent across different views within the screen, prominently featuring
+    the `←` key.
+  - >-
+    Next, I'm adjusting the Transaction History screen's footer. The "Collapse"
+    action is being relabeled to "Collapse/Up" to better describe its dual
+    function of collapsing items and bubbling up the hierarchy.
+  - >-
+    Finally, I am updating the Review screen's footer actions. The `←` key is
+    being added to all "Back" and "Collapse" actions across various views (Diff,
+    Prompt, Reasoning, etc.) for consistency. The main view's "Quit" action is
+    now relabeled to "Back" to align with the global hotkey behavior.
+  - >-
+    With these changes, the user interface now accurately reflects the unified
+    and more intuitive navigation system, completing the final part of the
+    master plan.
+operations:
+  - type: write
+    path: src/constants/detail.constants.ts
+    content: >+
+      --- src/constants/detail.constants.ts
+
+      +++ src/constants/detail.constants.ts
+
+      @@ -28,17 +28,17 @@
+               if (isRevertable) {
+                   actions.push({ key: 'U', label: 'Undo' });
+               }
+      -        actions.push({ key: 'Q', label: 'Quit/Back' });
+
+      +        actions.push({ key: '←/Q/Esc', label: 'Back' });
+               return actions;
+           },
+      -    DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label:
+      'Back to List' }] as const,
+
+      +    DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←/Esc', label:
+      'Back to List' }] as const,
+           FILE_LIST_VIEW: [
+               { key: '↑↓', label: 'Nav Files' },
+               { key: '→', label: 'View Diff' },
+      -        { key: '←', label: 'Back to Sections' },
+
+      +        { key: '←', label: 'Back' },
+           ] as const,
+      -    SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→',
+      label: 'Drill In' }, { key: '←', label: 'Collapse' }] as const,
+
+      +    SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→',
+      label: 'Drill In' }, { key: '←', label: 'Collapse/Back' }] as const,
+           SECTION_COLLAPSED: [{ key: '↑↓', label: 'Nav' }, { key: '→', label: 'Expand' }] as const,
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/history.constants.ts
+    content: |+
+      --- src/constants/history.constants.ts
+      +++ src/constants/history.constants.ts
+      @@ -21,7 +21,7 @@
+               const actions: ActionItem[] = [
+                   { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                   { key: '→', label: 'Expand' },
+      -            { key: '←', label: 'Collapse' },
+      +            { key: '←', label: 'Collapse/Up' },
+                   { key: 'Spc', label: 'Select' },
+                   { key: 'Ent', label: 'Details' },
+                   { key: 'O', label: openActionLabel },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/review.constants.ts
+    content: |+
+      --- src/constants/review.constants.ts
+      +++ src/constants/review.constants.ts
+      @@ -53,27 +53,27 @@
+           DIFF_VIEW: [
+               { key: '↑↓', label: 'Next/Prev File' },
+               { key: 'PgUp/PgDn', label: 'Scroll' },
+      -        { key: 'D/Enter/Esc', label: 'Back' },
+      +        { key: '←/D/Esc', label: 'Back' },
+           ] as const,
+           PROMPT_VIEW: [
+               { key: '↑↓', label: 'Next/Prev Item' },
+               { key: 'PgUp/PgDn', label: 'Scroll' },
+      -        { key: 'P/Enter', label: 'Collapse' },
+      +        { key: '←/P/Ent', label: 'Collapse' },
+               { key: 'C', label: 'Copy Mode' },
+           ] as const,
+           REASONING_VIEW: [
+               { key: '↑↓', label: 'Next/Prev Item' },
+               { key: 'PgUp/PgDn', label: 'Scroll' },
+      -        { key: 'R/Enter', label: 'Collapse' },
+      +        { key: '←/R/Ent', label: 'Collapse' },
+               { key: 'C', label: 'Copy Mode' },
+           ] as const,
+           SCRIPT_OUTPUT_VIEW: [
+               { key: '↑↓', label: 'Next/Prev Item' },
+               { key: 'PgUp/PgDn', label: 'Scroll' },
+               { key: 'J↓/K↑', label: 'Next/Prev Error' },
+               { key: 'C', label: 'Copy Output' },
+      -        { key: 'Enter/Esc', label: 'Back' },
+      +        { key: '←/Ent/Esc', label: 'Back' },
+           ] as const,
+           BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+           BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+      @@ -101,8 +101,8 @@
+       
+               if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
+               actions.push({ key: 'X', label: 'Reject Tx' });
+      -        actions.push({ key: 'Q', label: 'Quit' });
+      +        actions.push({ key: '←/Q/Esc', label: 'Back' });
+               return actions;
+           },
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/constants/history.constants.ts: |-
+    import type { ActionItem } from '../types/actions.types';
+
+    export const HISTORY_VIEW_MODES = {
+        LIST: 'LIST',
+        FILTER: 'FILTER',
+        BULK_ACTIONS: 'BULK_ACTIONS',
+    } as const;
+
+    export const HISTORY_ITEM_PATH_SEGMENTS = {
+        FILE: '/file/',
+        PROMPT: '/prompt',
+        REASONING: '/reasoning',
+    } as const;
+
+    export const BULK_ACTIONS_OPTIONS = [
+        '(1) Revert Selected Transactions',
+        "(2) Mark as 'Git Committed'",
+        '(3) Delete Selected Transactions (from Relaycode history)',
+        '(Esc) Cancel',
+    ] as const;
+
+    export const HISTORY_FOOTER_ACTIONS = {
+        FILTER_MODE: [{ key: 'Enter', label: 'Apply Filter & Return' }, { key: 'Esc', label: 'Cancel' }] as const,
+        BULK_MODE: { text: 'Choose an option [1-3] or (Esc) Cancel' } as const,
+        LIST_MODE: (openActionLabel: string, hasSelection: boolean): ActionItem[] => {
+            const actions: ActionItem[] = [
+                { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                { key: '→', label: 'Expand' },
+                { key: '←', label: 'Collapse' },
+                { key: 'Spc', label: 'Select' },
+                { key: 'Ent', label: 'Details' },
+                { key: 'O', label: openActionLabel },
+                { key: 'F', label: 'Filter' },
+            ];
+            if (hasSelection) {
+                actions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
+            }
+            return actions;
+        },
+    };
+  src/constants/detail.constants.ts: |-
+    import type { ActionItem } from '../types/actions.types';
+
+    /**
+     * Constants for the Transaction Detail screen.
+     */
+    export const NAVIGATOR_SECTIONS = {
+        PROMPT: 'PROMPT',
+        REASONING: 'REASONING',
+        FILES: 'FILES',
+    } as const;
+
+    export const DETAIL_BODY_VIEWS = {
+        PROMPT: 'PROMPT',
+        REASONING: 'REASONING',
+        FILES_LIST: 'FILES_LIST',
+        DIFF_VIEW: 'DIFF_VIEW',
+        REVERT_CONFIRM: 'REVERT_CONFIRM',
+        NONE: 'NONE',
+    } as const;
+
+    export const DETAIL_FOOTER_ACTIONS = {
+        REVERT_CONFIRM: [
+            { key: 'Enter', label: 'Confirm Revert' },
+            { key: 'Esc', label: 'Cancel' },
+        ] as const,
+        BASE: (options: { openActionLabel: string; isRevertable: boolean }): ActionItem[] => {
+            const { openActionLabel, isRevertable } = options;
+            const actions: ActionItem[] = [
+                { key: 'C', label: 'Copy' },
+                { key: 'O', label: openActionLabel },
+            ];
+            if (isRevertable) {
+                actions.push({ key: 'U', label: 'Undo' });
+            }
+            actions.push({ key: 'Q', label: 'Quit/Back' });
+            return actions;
+        },
+        DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label: 'Back to List' }] as const,
+        FILE_LIST_VIEW: [
+            { key: '↑↓', label: 'Nav Files' },
+            { key: '→', label: 'View Diff' },
+            { key: '←', label: 'Back to Sections' },
+        ] as const,
+        SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→', label: 'Drill In' }, { key: '←', label: 'Collapse' }] as const,
+        SECTION_COLLAPSED: [{ key: '↑↓', label: 'Nav' }, { key: '→', label: 'Expand' }] as const,
+    };
+  src/constants/review.constants.ts: |-
+    import type { ApplyStep } from '../stores/review.store';
+    import type { ActionItem } from '../types/actions.types';
+
+    /**
+     * Constants for the Review screen and process.
+     */
+    export const INITIAL_APPLY_STEPS: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+    export const REVIEW_BODY_VIEWS = {
+        DIFF: 'diff',
+        PROMPT: 'prompt',
+        REASONING: 'reasoning',
+        SCRIPT_OUTPUT: 'script_output',
+        BULK_REPAIR: 'bulk_repair',
+        CONFIRM_HANDOFF: 'confirm_handoff',
+        BULK_INSTRUCT: 'bulk_instruct',
+        NONE: 'none',
+    } as const;
+
+    export const PATCH_STATUS = {
+        SUCCESS: 'SUCCESS',
+        PARTIAL_FAILURE: 'PARTIAL_FAILURE',
+    } as const;
+
+    export const BULK_REPAIR_OPTIONS = [
+        '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+        '(2) Bulk Change Strategy & Re-apply',
+        '(3) Handoff to External Agent',
+        '(4) Bulk Abandon All Failed Files',
+        '(Esc) Cancel',
+    ] as const;
+
+    export const BULK_INSTRUCT_OPTIONS = [
+        '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
+        '(2) Handoff to External Agent',
+        '(3) Bulk Un-reject All Files (revert to original)',
+        '(4) Cancel',
+    ] as const;
+
+    interface ReviewFooterConfig {
+        isFileSelected: boolean;
+        fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
+        currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
+        hasFailedFiles: boolean;
+        hasRejectedFiles: boolean;
+        hasApprovedFiles: boolean;
+    }
+
+    export const REVIEW_FOOTER_ACTIONS = {
+        DIFF_VIEW: [
+            { key: '↑↓', label: 'Next/Prev File' },
+            { key: 'PgUp/PgDn', label: 'Scroll' },
+            { key: 'D/Enter/Esc', label: 'Back' },
+        ] as const,
+        PROMPT_VIEW: [
+            { key: '↑↓', label: 'Next/Prev Item' },
+            { key: 'PgUp/PgDn', label: 'Scroll' },
+            { key: 'P/Enter', label: 'Collapse' },
+            { key: 'C', label: 'Copy Mode' },
+        ] as const,
+        REASONING_VIEW: [
+            { key: '↑↓', label: 'Next/Prev Item' },
+            { key: 'PgUp/PgDn', label: 'Scroll' },
+            { key: 'R/Enter', label: 'Collapse' },
+            { key: 'C', label: 'Copy Mode' },
+        ] as const,
+        SCRIPT_OUTPUT_VIEW: [
+            { key: '↑↓', label: 'Next/Prev Item' },
+            { key: 'PgUp/PgDn', label: 'Scroll' },
+            { key: 'J↓/K↑', label: 'Next/Prev Error' },
+            { key: 'C', label: 'Copy Output' },
+            { key: 'Enter/Esc', label: 'Back' },
+        ] as const,
+        BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+        BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+        HANDOFF_CONFIRM_VIEW: [
+            { key: 'Enter', label: 'Confirm Handoff' },
+            { key: 'Esc', label: 'Cancel' },
+        ] as const,
+        MAIN_VIEW: (config: ReviewFooterConfig): ActionItem[] => {
+            const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
+
+            if (config.isFileSelected) {
+                if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
+                actions.push({ key: 'D/Ent', label: 'Diff' });
+                if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
+                if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
+            } else if (config.currentItemType === 'script') {
+                actions.push({ key: 'Ent', label: 'Expand Details' });
+            } else {
+                actions.push({ key: 'Ent', label: 'Expand' });
+            }
+
+            if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
+            if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
+            if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
+
+            actions.push({ key: 'C', label: 'Copy' });
+
+            if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
+            actions.push({ key: 'X', label: 'Reject Tx' });
+            actions.push({ key: 'Q', label: 'Quit' });
+            return actions;
+        },
+    };
+
+    export const getReviewProcessingFooterActions = (
+        isSkippable: boolean,
+    ): readonly ActionItem[] => {
+        const actions: ActionItem[] = [{ key: 'Ctrl+C', label: 'Cancel Process' }];
+        if (isSkippable) {
+            actions.push({ key: 'S', label: 'Skip Script' });
+        }
+        return actions;
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 216

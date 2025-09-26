@@ -1,5 +1,6 @@
 import { useInput, type Key } from 'ink';
 import { useDetailStore } from '../stores/detail.store';
+import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import { useMemo } from 'react';
@@ -9,6 +10,7 @@ import { useLayout } from './useLayout';
 import { useContentViewport } from './useContentViewport';
 import { OVERLAYS } from '../constants/view.constants';
 import { UI_CONFIG } from '../config/ui.config';
+import { getParentPath } from '../stores/navigation.utils';
 
 export const useTransactionDetailScreen = () => {
     const store = useDetailStore();
@@ -62,6 +64,23 @@ export const useTransactionDetailScreen = () => {
             return;
         }
         
+        // --- Back/Collapse action has priority ---
+        if (key.leftArrow) {
+            const { focusedItemPath, expandedItemPaths, bodyView } = store;
+            const canCollapseLocally =
+                bodyView === 'DIFF_VIEW' ||
+                Boolean(getParentPath(focusedItemPath)) ||
+                expandedItemPaths.has(focusedItemPath);
+
+            if (canCollapseLocally) {
+                collapseOrBubbleUp();
+            } else {
+                // Nothing to collapse locally, so trigger screen back navigation.
+                useAppStore.getState().actions.navigateBack();
+            }
+            return;
+        }
+
         // --- Content Scrolling ---
         if (['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
             if (key.upArrow) {
@@ -103,10 +122,7 @@ export const useTransactionDetailScreen = () => {
             if (key.upArrow) navigateUp();
             if (key.downArrow) navigateDown();
         }
-        if (key.rightArrow) expandOrDrillDown();
-        if (key.leftArrow) collapseOrBubbleUp();
-        if (key.return) expandOrDrillDown();
-        if (key.escape) collapseOrBubbleUp();
+        if (key.rightArrow || key.return) expandOrDrillDown();
     }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
 
     return {

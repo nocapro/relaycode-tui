@@ -66,8 +66,14 @@ export const useDetailStore = create<DetailState>((set, get) => ({
             const visibleItems = getVisibleItemPaths(expandedItemPaths);
             set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
         },
-        expandOrDrillDown: () => set(state => {
-            const { focusedItemPath, expandedItemPaths } = state;
+        expandOrDrillDown: () => set(state => { //
+            const { focusedItemPath, expandedItemPaths, bodyView } = state;
+
+            // Smart back-out: If already in a terminal view (like diff), go back.
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+            }
+
             const newExpandedPaths = new Set(expandedItemPaths);
             
             if (focusedItemPath.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)) { // Is a file
@@ -76,19 +82,21 @@ export const useDetailStore = create<DetailState>((set, get) => ({
 
             // Is a section header
             if (newExpandedPaths.has(focusedItemPath)) {
-                // Already expanded, drill in if it's FILES
-                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) { //
+                // Already expanded, try to drill deeper (only for FILES section)
+                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
                     const visibleItems = getVisibleItemPaths(newExpandedPaths);
-                    const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)); //
+                    const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
                     if (firstFile) {
                         return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
                     }
                 }
-                return {}; // No-op for PROMPT/REASONING if already expanded
+                // Cannot drill down further, so collapse (smart back-out)
+                newExpandedPaths.delete(focusedItemPath);
+                return { expandedItemPaths: newExpandedPaths, bodyView: DETAIL_BODY_VIEWS.NONE };
             } else {
                 // Not expanded, so expand it
                 newExpandedPaths.add(focusedItemPath);
-                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE; //
+                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
                 if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
                 if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
                 if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;

@@ -73,6 +73,19 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
     const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
     const isProcessing = status === DASHBOARD_STATUS.APPROVING;
 
+    const viewDetails = () => {
+        const selectedTx = transactions[selectedTransactionIndex];
+        if (!selectedTx) return;
+
+        if (selectedTx.status === 'PENDING') {
+            useReviewStore.getState().actions.load(selectedTx.id);
+            appActions.showReviewScreen();
+        } else {
+            useDetailStore.getState().actions.load(selectedTx.id);
+            appActions.showTransactionDetailScreen();
+        }
+    };
+
     useInput((_input, key) => {
         if (key.return) confirmAction();
         if (key.escape) cancelAction();
@@ -93,22 +106,13 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
                 return;
             }
             if (key.rightArrow) {
-                if (transactions[selectedTransactionIndex] && !expandedTransactionId) toggleExpand();
-                return;
-            }
-            if (key.return) {
-                const selectedTx = transactions[selectedTransactionIndex];
-                if (!selectedTx) return;
-
-                if (selectedTx.status === 'PENDING') {
-                    useReviewStore.getState().actions.load(selectedTx.id);
-                    appActions.showReviewScreen();
-                } else {
-                    useDetailStore.getState().actions.load(selectedTx.id);
-                    appActions.showTransactionDetailScreen();
+                if (transactions[selectedTransactionIndex]) {
+                    if (!expandedTransactionId) toggleExpand();
+                    else viewDetails();
                 }
                 return;
             }
+            if (key.return) viewDetails();
             if (input.toLowerCase() === 'p') togglePause();
             if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
             if (input.toLowerCase() === 'c' && pendingCommits > 0) {

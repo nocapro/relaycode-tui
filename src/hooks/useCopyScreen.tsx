@@ -29,7 +29,7 @@ export const useCopyScreen = () => {
         onIndexChange: setSelectedIndex,
         isActive: useViewStore.getState().activeOverlay === OVERLAYS.COPY,
         onKey: (input, key) => {
-            if (key.escape) {
+            if (key.escape || key.leftArrow) {
                 actions.close();
                 return;
             }

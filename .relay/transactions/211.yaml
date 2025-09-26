@@ -1,0 +1,1905 @@
+uuid: c25a7251-5494-4ab2-b6d8-2b810d7a0494
+projectId: relaycode-tui
+createdAt: '2025-09-26T14:34:56.757Z'
+gitCommitMsg: >-
+  feat(navigation): Implement consistent left-arrow navigation and smart
+  drill-down
+
+  Refactors the core navigation experience across the application to establish a
+  more consistent and intuitive control scheme.
+
+  - **Smart Drill-Down:** The `expandOrDrillDown` actions in the history and
+  detail stores now intelligently handle repeated presses. If an item is already
+  fully expanded, pressing `Right Arrow` or `Enter` again will now collapse it,
+  preventing dead-end key presses. - **Left Arrow for Back/Collapse:** The `Left
+  Arrow` key is now consistently used to "go back" or "collapse" a view across
+  all screens and overlays, including Review, Dashboard, History, Detail, Copy,
+  and Debug screens. - **Dashboard Flow:** Pressing `Right Arrow` on an expanded
+  transaction in the dashboard now drills down into the detail/review screen,
+  mirroring the `Enter` key's behavior for a more fluid workflow.
+promptSummary: >-
+  Refactor navigation UX for consistency, focusing on making the Left Arrow the
+  primary 'back' action and making drill-down actions smarter. This involves
+  updating core store logic and harmonizing input handlers across multiple
+  screens.
+reasoning:
+  - >-
+    Executing the first two parts of the master plan to refactor the
+    application's navigation.
+  - '### Part 1: Core Logic Enhancement'
+  - >-
+    I will first update the state management stores to introduce "smart"
+    navigation logic. This makes the `expandOrDrillDown` action more intuitive:
+    if you try to drill down into something that's already fully expanded, it
+    will collapse instead, preventing dead-end key presses.
+  - >-
+    `detail.store.ts`: The `expandOrDrillDown` action is modified. When called
+    on an already-expanded section that has no further drill-down options (like
+    'Prompt' or 'Reasoning'), it will now collapse that section instead of doing
+    nothing.
+  - >-
+    `history.store.ts`: Similarly, the `expandOrDrillDown` action is updated. If
+    called on an item that is already expanded, it will now collapse it and its
+    children.
+  - '### Part 2: Screen & Hook Input Harmonization'
+  - >-
+    With the core logic in place, I will now update the input handlers across
+    various screen hooks to use the `Left Arrow` key for "back" or "collapse"
+    actions consistently.
+  - >-
+    `useDashboardScreen.tsx`: The `Right Arrow` key is enhanced. If a
+    transaction is already expanded, pressing `Right Arrow` again will now drill
+    down into the details view, creating a seamless "expand then enter" flow.
+  - >-
+    `useReviewScreen.tsx`: The `Left Arrow` is now used to collapse any open
+    content view (like a diff or reasoning panel), returning the user to the
+    main list. It's also used in the main list view to navigate back to the
+    dashboard screen.
+  - >-
+    `useCopyScreen.tsx`: The `Left Arrow` key now acts as a shortcut to close
+    the copy overlay, mirroring the `Escape` key's behavior.
+  - >-
+    `useDebugLogScreen.tsx`: Similarly, `Left Arrow` will now close the debug
+    log overlay.
+  - >-
+    `useDebugMenu.tsx`: The `Left Arrow` key is added as a way to close the
+    debug menu.
+  - >-
+    The hooks for `TransactionDetailScreen` and `TransactionHistoryScreen`
+    already correctly use `Left Arrow` for collapse/back actions and will
+    benefit from the store-level changes without modification.
+operations:
+  - type: write
+    path: src/stores/detail.store.ts
+    content: >+
+      --- src/stores/detail.store.ts
+
+      +++ src/stores/detail.store.ts
+
+      @@ -79,16 +79,16 @@
+       
+                   // Is a section header
+                   if (newExpandedPaths.has(focusedItemPath)) {
+      -                // Already expanded, drill in if it's FILES
+
+      -                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) { //
+
+      +                // Already expanded, try to drill in if it's FILES
+
+      +                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
+                           const visibleItems = getVisibleItemPaths(newExpandedPaths);
+      -                    const firstFile = visibleItems.find(item =>
+      item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)); //
+
+      +                    const firstFile = visibleItems.find(item =>
+      item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
+                           if (firstFile) {
+                               return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                           }
+                       }
+      -                return {}; // No-op for PROMPT/REASONING if already
+      expanded
+
+      +                // If no drill-down action is possible (e.g., expanded
+      Prompt), collapse instead.
+
+      +                const collapsedPaths = new Set(expandedItemPaths);
+
+      +                collapsedPaths.delete(focusedItemPath);
+
+      +                return { expandedItemPaths: collapsedPaths, bodyView:
+      DETAIL_BODY_VIEWS.NONE };
+                   } else {
+                       // Not expanded, so expand it
+                       newExpandedPaths.add(focusedItemPath);
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/history.store.ts
+    content: >+
+      --- src/stores/history.store.ts
+
+      +++ src/stores/history.store.ts
+
+      @@ -83,7 +83,21 @@
+               },
+               expandOrDrillDown: async () => {
+                   const { selectedItemPath, expandedIds } = get();
+      -            if (expandedIds.has(selectedItemPath)) return;
+
+      +            // If item is already expanded, collapse it instead of doing
+      nothing.
+
+      +            if (expandedIds.has(selectedItemPath)) {
+
+      +                set(state => {
+
+      +                    const newExpandedIds = new Set(state.expandedIds);
+
+      +                    newExpandedIds.delete(selectedItemPath);
+
+      +                    // Recursively collapse children
+
+      +                    for (const id of newExpandedIds) {
+
+      +                        if (id.startsWith(`${selectedItemPath}/`)) {
+
+      +                            newExpandedIds.delete(id);
+
+      +                        }
+
+      +                    }
+
+      +                    return { expandedIds: newExpandedIds };
+
+      +                });
+
+      +                return;
+
+      +            }
+       
+                   // Files and content items with potentially large data can show a loading state
+                   const isLoadable = selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE) ||
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDashboardScreen.tsx
+    content: >+
+      --- src/hooks/useDashboardScreen.tsx
+
+      +++ src/hooks/useDashboardScreen.tsx
+
+      @@ -9,6 +9,7 @@
+       import { useReviewStore } from '../stores/review.store';
+       import { useDetailStore } from '../stores/detail.store';
+       import { useHistoryStore } from '../stores/history.store';
+      +import type { Transaction } from '../types/domain.types';
+       import type { LayoutConfig } from './useLayout';
+       import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+       import { useViewport } from './useViewport';
+      @@ -87,27 +88,34 @@
+                   useDashboardStore.getState().actions.setExpandedTransactionId(null);
+               },
+               isActive: !isModal && !isProcessing,
+               onKey: (input, key) => {
+      -            if (key.leftArrow) {
+
+      -                if (expandedTransactionId) toggleExpand();
+
+      +            const selectedTx = transactions[selectedTransactionIndex];
+
+      +            if (!selectedTx) return;
+
+      +
+
+      +            const viewDetails = (tx: Transaction) => {
+
+      +                if (tx.status === 'PENDING') {
+
+      +                    useReviewStore.getState().actions.load(tx.id);
+
+      +                    appActions.showReviewScreen();
+
+      +                } else {
+
+      +                    useDetailStore.getState().actions.load(tx.id);
+
+      +                    appActions.showTransactionDetailScreen();
+
+      +                }
+
+      +            };
+
+      +
+
+      +            if (key.leftArrow && expandedTransactionId) {
+
+      +                toggleExpand();
+                       return;
+                   }
+                   if (key.rightArrow) {
+      -                if (transactions[selectedTransactionIndex] &&
+      !expandedTransactionId) toggleExpand();
+
+      +                if (expandedTransactionId === selectedTx.id) {
+
+      +                    viewDetails(selectedTx);
+
+      +                } else if (!expandedTransactionId) {
+
+      +                    toggleExpand();
+
+      +                }
+                       return;
+                   }
+                   if (key.return) {
+      -                const selectedTx =
+      transactions[selectedTransactionIndex];
+
+      -                if (!selectedTx) return;
+
+      -
+
+      -                if (selectedTx.status === 'PENDING') {
+
+      -                   
+      useReviewStore.getState().actions.load(selectedTx.id);
+
+      -                    appActions.showReviewScreen();
+
+      -                } else {
+
+      -                   
+      useDetailStore.getState().actions.load(selectedTx.id);
+
+      -                    appActions.showTransactionDetailScreen();
+
+      -                }
+
+      +                viewDetails(selectedTx);
+                       return;
+                   }
+                   if (input.toLowerCase() === 'p') togglePause();
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: |+
+      --- src/hooks/useReviewScreen.tsx
+      +++ src/hooks/useReviewScreen.tsx
+      @@ -298,6 +298,11 @@
+           };
+       
+           const handleMainNavigationInput = (input: string, key: Key): void => {
+      +        if (key.leftArrow) {
+      +            showDashboardScreen();
+      +            return;
+      +        }
+      +
+               // Handle Shift+R for reject all
+               if (key.shift && input.toLowerCase() === 'r') {
+                   if (approvedFilesCount > 0 && transaction) {
+      @@ -361,8 +366,8 @@
+           useInput((input: string, key: Key) => {
+               if (handleGlobalInput(input, key)) return;
+       
+      +        // Allow left arrow to collapse any open body view
+               if (key.leftArrow) {
+      -            // Allow left arrow to collapse any open body view
+                   setBodyView(REVIEW_BODY_VIEWS.NONE);
+                   return;
+               }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useCopyScreen.tsx
+    content: |+
+      --- src/hooks/useCopyScreen.tsx
+      +++ src/hooks/useCopyScreen.tsx
+      @@ -29,6 +29,10 @@
+               selectedIndex,
+               onIndexChange: setSelectedIndex,
+               isActive: useViewStore.getState().activeOverlay === OVERLAYS.COPY,
+               onKey: (input, key) => {
+      +            if (key.leftArrow) {
+      +                actions.close();
+      +                return;
+      +            }
+                   if (key.escape) {
+                       actions.close();
+                       return;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugLogScreen.tsx
+    content: |+
+      --- src/hooks/useDebugLogScreen.tsx
+      +++ src/hooks/useDebugLogScreen.tsx
+      @@ -52,6 +52,10 @@
+               selectedIndex,
+               onIndexChange: setSelectedIndex,
+               isActive: isOverlayActive && mode === DEBUG_LOG_MODES.LIST,
+               onKey: (input, key) => {
+      +            if (key.leftArrow) {
+      +                setActiveOverlay(OVERLAYS.NONE);
+      +                return;
+      +            }
+                   if (key.escape) {
+                       setActiveOverlay(OVERLAYS.NONE);
+                       return;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >+
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -308,6 +308,10 @@
+               selectedIndex,
+               onIndexChange: setSelectedIndex,
+               isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG,
+               onKey: (input, key) => {
+      +            if (key.leftArrow) {
+
+      +               
+      useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+
+      +                return;
+
+      +            }
+                   if (key.return) {
+                       const item = menuItems[selectedIndex];
+                       if (item) {
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/detail.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { NAVIGATOR_SECTIONS, DETAIL_BODY_VIEWS } from
+    '../constants/detail.constants';
+
+    import { findNextPath, findPrevPath, getParentPath } from
+    './navigation.utils';
+
+
+    type ObjectValues<T> = T[keyof T];
+
+
+    export type NavigatorSection = ObjectValues<typeof NAVIGATOR_SECTIONS>;
+
+    export type DetailBodyView = ObjectValues<typeof DETAIL_BODY_VIEWS>;
+
+
+    // Omit 'actions' from state type for partial updates
+
+    type DetailStateData = Omit<DetailState, 'actions'>;
+     
+    interface DetailState {
+        focusedItemPath: string; // e.g., 'PROMPT', 'FILES', 'FILES/1-1'
+        expandedItemPaths: Set<string>;
+        bodyView: DetailBodyView;
+        actions: {
+            load: (transactionId: string, initialState?: Partial<DetailStateData>) => void;
+            navigateUp: () => void;
+            navigateDown: () => void;
+            expandOrDrillDown: () => void;
+            collapseOrBubbleUp: () => void;
+            toggleRevertConfirm: () => void;
+            confirmRevert: () => void;
+        };
+    }
+
+
+    const getVisibleItemPaths = (expandedItemPaths: Set<string>): string[] => {
+        const { selectedTransactionId } = useViewStore.getState();
+        const transaction = useTransactionStore.getState().transactions.find(tx => tx.id === selectedTransactionId);
+        if (!transaction) return [];
+
+        const paths: string[] = [NAVIGATOR_SECTIONS.PROMPT, NAVIGATOR_SECTIONS.REASONING, NAVIGATOR_SECTIONS.FILES];
+        if (expandedItemPaths.has(NAVIGATOR_SECTIONS.FILES) && transaction.files) {
+            for (const file of transaction.files) {
+                paths.push(`${NAVIGATOR_SECTIONS.FILES}/${file.id}`);
+            }
+        }
+        return paths;
+    };
+
+
+    export const useDetailStore = create<DetailState>((set, get) => ({
+        focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+        expandedItemPaths: new Set(),
+        bodyView: DETAIL_BODY_VIEWS.NONE,
+        actions: {
+            load: (transactionId, initialState) => {
+                useViewStore.getState().actions.setSelectedTransactionId(transactionId);
+                set({
+                    focusedItemPath: NAVIGATOR_SECTIONS.PROMPT,
+                    expandedItemPaths: new Set(),
+                    bodyView: DETAIL_BODY_VIEWS.NONE,
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { expandedItemPaths, focusedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(expandedItemPaths);
+                set({ focusedItemPath: findPrevPath(focusedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedItemPaths, focusedItemPath } = get();
+                const visibleItems = getVisibleItemPaths(expandedItemPaths);
+                set({ focusedItemPath: findNextPath(focusedItemPath, visibleItems) });
+            },
+            expandOrDrillDown: () => set(state => {
+                const { focusedItemPath, expandedItemPaths } = state;
+                const newExpandedPaths = new Set(expandedItemPaths);
+                
+                if (focusedItemPath.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)) { // Is a file
+                    return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
+                }
+
+                // Is a section header
+                if (newExpandedPaths.has(focusedItemPath)) {
+                    // Already expanded, drill in if it's FILES
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) { //
+                        const visibleItems = getVisibleItemPaths(newExpandedPaths);
+                        const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)); //
+                        if (firstFile) {
+                            return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                        }
+                    }
+                    return {}; // No-op for PROMPT/REASONING if already expanded
+                } else {
+                    // Not expanded, so expand it
+                    newExpandedPaths.add(focusedItemPath);
+                    let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE; //
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
+                    if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;
+                    return { expandedItemPaths: newExpandedPaths, bodyView: newBodyView };
+                }
+            }),
+            collapseOrBubbleUp: () => set(state => {
+                const { focusedItemPath, expandedItemPaths, bodyView } = state;
+                
+                if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                    return { bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                }
+
+                if (getParentPath(focusedItemPath)) { // Is a file
+                    return { focusedItemPath: NAVIGATOR_SECTIONS.FILES, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
+                }
+                
+                // Is a section header
+                if (expandedItemPaths.has(focusedItemPath)) {
+                    const newExpandedPaths = new Set(expandedItemPaths);
+                    newExpandedPaths.delete(focusedItemPath);
+                    return { expandedItemPaths: newExpandedPaths, bodyView: DETAIL_BODY_VIEWS.NONE };
+                }
+                
+                return {}; // No-op if not expanded (global back will handle)
+            }),
+            toggleRevertConfirm: () => set(state => ({
+                bodyView: state.bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM
+                    ? DETAIL_BODY_VIEWS.NONE
+                    : DETAIL_BODY_VIEWS.REVERT_CONFIRM,
+            })),
+            confirmRevert: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (!selectedTransactionId) return;
+                TransactionService.revertTransaction(selectedTransactionId);
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REVERTED');
+                set({ bodyView: DETAIL_BODY_VIEWS.NONE });
+            },
+        },
+    }));
+  src/stores/history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath }
+    from './navigation.utils';
+
+    import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from
+    '../constants/history.constants';
+
+    import { sleep } from '../utils';
+
+
+    export type HistoryViewMode = (typeof HISTORY_VIEW_MODES)[keyof typeof
+    HISTORY_VIEW_MODES];
+     
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<HistoryState, 'actions'>;
+
+
+    interface HistoryState {
+        mode: HistoryViewMode;
+        selectedItemPath: string;
+        expandedIds: Set<string>;
+        loadingPaths: Set<string>;
+        filterQuery: string;
+        selectedForAction: Set<string>;
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            navigatePageUp: (viewportHeight: number) => void;
+            navigatePageDown: (viewportHeight: number) => void;
+            expandOrDrillDown: () => Promise<void>;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            prepareDebugState: (stateName: 'l1-drill-content' | 'l2-drill-reasoning' | 'l2-drill-diff' | 'filter' | 'copy' | 'bulk') => void;
+        };
+    }
+
+
+    export const useHistoryStore = create<HistoryState>((set, get) => ({
+        mode: HISTORY_VIEW_MODES.LIST,
+        selectedItemPath: '',
+        expandedIds: new Set(),
+        loadingPaths: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        actions: {
+            load: (initialState) => {
+                const { transactions } = useTransactionStore.getState();
+                set({
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: HISTORY_VIEW_MODES.LIST,
+                    expandedIds: new Set(),
+                    loadingPaths: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findPrevPath(selectedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+            },
+            navigatePageUp: (viewportHeight: number) => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex === -1) return;
+
+                const newIndex = Math.max(0, currentIndex - viewportHeight);
+                set({ selectedItemPath: visibleItems[newIndex]! });
+            },
+            navigatePageDown: (viewportHeight: number) => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex === -1) return;
+
+                const newIndex = Math.min(visibleItems.length - 1, currentIndex + viewportHeight);
+                set({ selectedItemPath: visibleItems[newIndex]! });
+            },
+            expandOrDrillDown: async () => {
+                const { selectedItemPath, expandedIds } = get();
+                if (expandedIds.has(selectedItemPath)) return;
+
+                // Files and content items with potentially large data can show a loading state
+                const isLoadable = selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE) ||
+                                   selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.PROMPT) ||
+                                   selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.REASONING);
+
+                if (isLoadable) {
+                    set(state => ({ loadingPaths: new Set(state.loadingPaths).add(selectedItemPath) }));
+                    await sleep(250); // Simulate loading
+                    set(state => {
+                        const newLoadingPaths = new Set(state.loadingPaths);
+                        newLoadingPaths.delete(selectedItemPath);
+                        const newExpandedIds = new Set(state.expandedIds).add(selectedItemPath);
+                        return { loadingPaths: newLoadingPaths, expandedIds: newExpandedIds };
+                    });
+                } else { // For transactions or simple items, expand immediately
+                    set(state => ({ expandedIds: new Set(state.expandedIds).add(selectedItemPath) }));
+                }
+            },
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.delete(selectedItemPath);
+                    // Recursively collapse children
+                    for (const id of newExpandedIds) { //
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+                    return { expandedIds: newExpandedIds };
+                }
+                const parentId = getParentPath(selectedItemPath);
+                if (parentId) {
+                    return { selectedItemPath: parentId };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = getParentPath(selectedItemPath) || selectedItemPath;
+                if (!txId) return {};
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                set({ mode: HISTORY_VIEW_MODES.LIST });
+            },
+            prepareDebugState: (stateName) => {
+                const { actions } = get();
+                switch (stateName) {
+                    case 'l1-drill-content':
+                        actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
+                        break;
+                    case 'l2-drill-reasoning':
+                        actions.load({ expandedIds: new Set(['3', '3/reasoning']), selectedItemPath: '3/reasoning' });
+                        break;
+                    case 'l2-drill-diff':
+                        actions.load({ expandedIds: new Set(['3', '3/file/3-1']), selectedItemPath: '3/file/3-1' });
+                        break;
+                    case 'filter':
+                        actions.load({ mode: HISTORY_VIEW_MODES.FILTER, filterQuery: 'logger.ts status:COMMITTED' });
+                        break;
+                    case 'copy':
+                        actions.load({ selectedForAction: new Set(['3', '6']) });
+                        break;
+                    case 'bulk':
+                        actions.load({ mode: HISTORY_VIEW_MODES.BULK_ACTIONS, selectedForAction: new Set(['3', '6']) });
+                        break;
+                }
+            },
+        },
+    }));
+  src/hooks/useDashboardScreen.tsx: >-
+    import { useState, useEffect, useRef } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import type { LayoutConfig } from './useLayout';
+
+    import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+
+    import { useViewport } from './useViewport';
+
+    import { useListNavigator } from './useListNavigator';
+
+
+    export const useDashboardScreen = ({ layoutConfig }: { layoutConfig:
+    LayoutConfig }) => {
+        const {
+            status,
+            selectedTransactionIndex,
+            expandedTransactionId,
+        } = useDashboardStore();
+        const transactions = useTransactionStore(s => s.transactions);
+        const [newTransactionIds, setNewTransactionIds] = useState(new Set<string>());
+        const prevTransactionIds = useRef(new Set(transactions.map(t => t.id)));
+
+        const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
+        const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex: selectedTransactionIndex,
+            itemCount: transactions.length,
+            layoutConfig,
+        });
+
+        useEffect(() => {
+            const currentIds = new Set(transactions.map(t => t.id));
+            const newIds = new Set<string>();
+
+            for (const id of currentIds) {
+                if (!prevTransactionIds.current.has(id)) {
+                    newIds.add(id);
+                }
+            }
+
+            if (newIds.size > 0) {
+                setNewTransactionIds(current => new Set([...current, ...newIds]));
+                newIds.forEach(id => {
+                    setTimeout(() => {
+                        setNewTransactionIds(current => {
+                            const next = new Set(current);
+                            next.delete(id);
+                            return next;
+                        });
+                    }, 1000);
+                });
+            }
+
+            prevTransactionIds.current = currentIds;
+        }, [transactions]);
+
+        const {
+            togglePause,
+            startApproveAll,
+            confirmAction,
+            cancelAction,
+            toggleExpand,
+        } = useDashboardStore(s => s.actions);
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+
+        const pendingApprovals = pendingTransactions.length;
+        const pendingCommits = appliedTransactions.length;
+
+        const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
+        const isProcessing = status === DASHBOARD_STATUS.APPROVING;
+
+        useInput((_input, key) => {
+            if (key.return) confirmAction();
+            if (key.escape) cancelAction();
+        }, { isActive: isModal });
+
+        useListNavigator({
+            itemCount: transactions.length,
+            viewportHeight,
+            selectedIndex: selectedTransactionIndex,
+            onIndexChange: (index) => {
+                useDashboardStore.getState().actions.setSelectedIndex(index);
+                useDashboardStore.getState().actions.setExpandedTransactionId(null);
+            },
+            isActive: !isModal && !isProcessing,
+            onKey: (input, key) => {
+                if (key.leftArrow) {
+                    if (expandedTransactionId) toggleExpand();
+                    return;
+                }
+                if (key.rightArrow) {
+                    if (transactions[selectedTransactionIndex] && !expandedTransactionId) toggleExpand();
+                    return;
+                }
+                if (key.return) {
+                    const selectedTx = transactions[selectedTransactionIndex];
+                    if (!selectedTx) return;
+
+                    if (selectedTx.status === 'PENDING') {
+                        useReviewStore.getState().actions.load(selectedTx.id);
+                        appActions.showReviewScreen();
+                    } else {
+                        useDetailStore.getState().actions.load(selectedTx.id);
+                        appActions.showTransactionDetailScreen();
+                    }
+                    return;
+                }
+                if (input.toLowerCase() === 'p') togglePause();
+                if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+                if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                }
+                if (input.toLowerCase() === 'l') {
+                    useHistoryStore.getState().actions.load();
+                    appActions.showTransactionHistoryScreen();
+                }
+            },
+        });
+
+        const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            expandedTransactionId,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            newTransactionIds,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/hooks/useReviewScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { useInput, type Key } from 'ink';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { useTransactionStore, selectSelectedTransaction } from
+    '../stores/transaction.store';
+
+    import type { FileItem } from '../types/domain.types';
+
+    import { useLayout } from './useLayout';
+
+    import { useContentViewport } from './useContentViewport';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
+
+    import { useListNavigator } from './useListNavigator';
+
+    import type { ReviewBodyView } from '../stores/review.store';
+
+    import { useViewport } from './useViewport';
+
+
+    type NavigableItem =
+        | { type: 'prompt' }
+        | { type: 'reasoning' }
+        | { type: 'script'; id: string }
+        | { type: 'file'; id: string };
+
+    export const useReviewScreen = () => {
+        const store = useReviewStore();
+        const {
+            selectedItemIndex,
+            bodyView,
+            patchStatus,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+        } = store;
+
+        const transaction = useTransactionStore(selectSelectedTransaction);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const scriptCount = transaction?.scripts?.length || 0;
+        const fileCount = transaction?.files?.length || 0;
+
+        const layout = UI_CONFIG.layout.review;
+
+        // Layout for the main navigable item list (prompt, reasoning, files, etc.)
+        const mainListLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            fixedRows: layout.fixedRows,
+            marginsY: layout.marginsY,
+            separators: layout.separators,
+            footer: layout.footer,
+            dynamicRows: {
+                count: bodyView !== REVIEW_BODY_VIEWS.NONE ? layout.bodyHeightReservation : 0,
+            },
+        }), [bodyView, layout]);
+
+        const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
+        const { viewOffset } = useViewport({
+            selectedIndex: selectedItemIndex,
+            itemCount: 100,
+            layoutConfig: mainListLayoutConfig,
+        });
+
+        // Layout for the body content (diff, reasoning, etc.)
+        const bodyLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            separators: layout.separators,
+            fixedRows: 2, // meta
+            marginsY: 1 + 1 + 1, // meta, scripts, files
+            footer: 2,
+            dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
+        }), [layout, scriptCount, fileCount]);
+
+        const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
+
+        const navigableItems = useMemo((): NavigableItem[] => {
+            if (!transaction) return [];
+            const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
+            const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
+            return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+        }, [transaction]);
+
+        const contentLineCount = useMemo(() => {
+            const currentItem = navigableItems[selectedItemIndex];
+            switch (bodyView) { //
+                case REVIEW_BODY_VIEWS.REASONING:
+                    return (transaction?.reasoning || '').split('\n').length;
+                case REVIEW_BODY_VIEWS.PROMPT:
+                    return (transaction?.prompt || '').split('\n').length;
+                case REVIEW_BODY_VIEWS.DIFF: {
+                    if (currentItem?.type !== 'file') return 0;
+                    const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
+                    return (selectedFile?.diff || '').split('\n').length;
+                }
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: {
+                    if (currentItem?.type !== 'script') return 0;
+                    const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
+                    return (selectedScript?.output || '').split('\n').length;
+                }
+                default: return 0;
+            }
+        }, [bodyView, navigableItems, selectedItemIndex, transaction]);
+        const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+        const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
+
+        // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
+        const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
+        const fileReviewStates = useReviewStore(s => s.fileReviewStates);
+
+        const reviewStats = useMemo(() => {
+            const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+            return {
+                totalFiles: files.length,
+                totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
+                totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+            };
+        }, [files, fileReviewStates]);
+
+        const hasRejectedFiles = useMemo(() => {
+            if (!fileReviewStates) return false;
+            return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
+        }, [fileReviewStates]);
+
+        const { approvedFilesCount } = reviewStats;
+
+        const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
+
+        const scripts = transaction?.scripts || [];
+
+        const {
+            setSelectedItemIndex, toggleBodyView, setBodyView, startApplySimulation, approve,
+            rejectTransaction, tryRepairFile, tryInstruct, showBulkRepair, showBulkInstruct,
+            executeBulkRepairOption, executeBulkInstructOption, confirmHandoff,
+            navigateScriptErrorUp, navigateScriptErrorDown, toggleFileApproval,
+            rejectAllFiles, navigateBulkRepairUp, navigateBulkRepairDown,
+            navigateBulkInstructUp, navigateBulkInstructDown,
+        } = store.actions;
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+            useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+        };
+
+        const navigateToNextItem = () => {
+            if (selectedItemIndex < navigableItems.length - 1) {
+                setSelectedItemIndex(selectedItemIndex + 1);
+                contentViewport.actions.resetScroll();
+            }
+        };
+
+        const navigateToPreviousItem = () => {
+            if (selectedItemIndex > 0) {
+                setSelectedItemIndex(selectedItemIndex - 1);
+                contentViewport.actions.resetScroll();
+            }
+        };
+
+        const navigateToNextFile = () => {
+            const nextFileIndex = navigableItems.findIndex(
+                (item, index) => index > selectedItemIndex && item.type === 'file',
+            );
+            if (nextFileIndex !== -1) {
+                setSelectedItemIndex(nextFileIndex);
+            }
+        };
+
+        const navigateToPreviousFile = () => {
+            // Find the last index of a file before the current one
+            const prevFileIndex = navigableItems
+                .slice(0, selectedItemIndex)
+                .findLastIndex(item => item.type === 'file');
+
+            if (prevFileIndex !== -1) {
+                setSelectedItemIndex(prevFileIndex);
+            }
+        };
+
+        // --- Input Handlers ---
+
+        const handleGlobalInput = (input: string, key: Key): boolean => {
+            if (input === '1' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'success'); return true;
+            }
+            if (input === '2' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'failure'); return true;
+            }
+            // The 'q' (quit/back) is now handled by the global hotkey hook.
+
+            const currentItem = navigableItems[selectedItemIndex];
+            if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+                toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+                return true;
+            }
+
+            if (key.escape) {
+                switch (bodyView) {
+                    case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                    case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                    case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                        toggleBodyView(bodyView);
+                        break;
+                    default:
+                        if (bodyView !== REVIEW_BODY_VIEWS.NONE) {
+                            setBodyView(REVIEW_BODY_VIEWS.NONE);
+                        }
+                        break;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        const handleHandoffConfirmInput = (_input: string, key: Key): void => {
+            if (key.return) confirmHandoff();
+        };
+
+        const handleBulkRepairInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkRepairUp();
+            if (key.downArrow) navigateBulkRepairDown();
+            if (key.return) {
+                executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '4') {
+                executeBulkRepairOption(parseInt(input));
+            }
+        };
+        
+        const handleBulkInstructInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkInstructUp();
+            if (key.downArrow) navigateBulkInstructDown();
+            if (key.return) {
+                executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '3') {
+                executeBulkInstructOption(parseInt(input));
+            }
+        };
+
+        const handleContentScrollInput = (key: Key): boolean => {
+            const contentViews: ReviewBodyView[] = [
+                REVIEW_BODY_VIEWS.REASONING,
+                REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+                REVIEW_BODY_VIEWS.DIFF,
+                REVIEW_BODY_VIEWS.PROMPT,
+            ];
+            if (!contentViews.includes(bodyView)) return false;
+
+            if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+            if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
+            return false;
+        };
+
+        const handleReasoningInput = (input: string, key: Key): void => {
+            if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+        };
+
+        const handleScriptOutputInput = (input: string, key: Key): void => {
+            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+            if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+                const currentItem = navigableItems[selectedItemIndex];
+                const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
+                if (selectedScript) {
+                    useNotificationStore.getState().actions.show({
+                        type: 'success',
+                        title: 'Copied to Clipboard',
+                        message: `Copied script output for: ${selectedScript.command}`,
+                    });
+                }
+            }
+        };
+
+        const handleDiffInput = (input: string, key: Key) => {
+            if (key.upArrow) {
+                navigateToPreviousFile();
+                return;
+            }
+            if (key.downArrow) {
+                navigateToNextFile();
+                return;
+            }
+            if (input.toLowerCase() === 'd') toggleBodyView('diff');
+        };
+
+        const handleMainNavigationInput = (input: string, key: Key): void => {
+            if (key.leftArrow) {
+                showDashboardScreen();
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0 && transaction) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            const currentItem = navigableItems[selectedItemIndex];
+
+            if (input === ' ') {
+                if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState && fileState.status !== 'FAILED') {
+                        toggleFileApproval(currentItem.id);
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'p') {
+                toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+            }
+
+            if (input.toLowerCase() === 'r') {
+                toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+            }
+
+            if (key.return) { // Enter key
+                if (currentItem?.type === 'file') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+                } else if (currentItem?.type === 'prompt') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+                } else if (currentItem?.type === 'reasoning') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+                } else if (currentItem?.type === 'script') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'x') {
+                rejectTransaction();
+            }
+
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+                    if (hasFailedFiles) showBulkRepair();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+                }
+            }
+
+            if (input.toLowerCase() === 'i') {
+                if (key.shift) {
+                    if (hasRejectedFiles) showBulkInstruct();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'REJECTED') {
+                        tryInstruct(currentItem.id);
+                    }
+                }
+            }
+        };
+
+        useListNavigator({
+            itemCount: navigableItems.length,
+            viewportHeight: listViewportHeight,
+            selectedIndex: selectedItemIndex,
+            onIndexChange: setSelectedItemIndex,
+            isActive: bodyView === REVIEW_BODY_VIEWS.NONE,
+            onKey: handleMainNavigationInput,
+        });
+
+        useInput((input: string, key: Key) => {
+            if (handleGlobalInput(input, key)) return;
+
+            if (key.leftArrow) {
+                // Allow left arrow to collapse any open body view
+                setBodyView(REVIEW_BODY_VIEWS.NONE);
+                return;
+            }
+
+            // Global "Enter to collapse" handler for non-modal views
+            if (key.return) {
+                if (
+                    bodyView !== REVIEW_BODY_VIEWS.BULK_REPAIR &&
+                    bodyView !== REVIEW_BODY_VIEWS.BULK_INSTRUCT &&
+                    bodyView !== REVIEW_BODY_VIEWS.CONFIRM_HANDOFF &&
+                    bodyView !== REVIEW_BODY_VIEWS.NONE
+                ) {
+                    setBodyView(REVIEW_BODY_VIEWS.NONE);
+                    return;
+                }
+            }
+
+            // Allow up/down list navigation even when a content view is open
+            const listNavigableBodyViews: ReviewBodyView[] = [
+                REVIEW_BODY_VIEWS.PROMPT, REVIEW_BODY_VIEWS.REASONING, REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+            ];
+
+            if (listNavigableBodyViews.includes(bodyView)) {
+                if (key.upArrow) { navigateToPreviousItem(); return; }
+                if (key.downArrow) { navigateToNextItem(); return; }
+            }
+
+            // Handle content scrolling (PgUp/PgDn)
+            if (handleContentScrollInput(key)) return;
+
+            switch (bodyView) {
+                case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_REPAIR: return handleBulkRepairInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
+                case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
+                case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input, key);
+            }
+        }, { isActive: bodyView !== REVIEW_BODY_VIEWS.NONE });
+
+        return {
+            ...store,
+            fileReviewStates,
+            selectedItemIndex,
+            transaction,
+            files,
+            scripts,
+            patchStatus,
+            navigableItems,
+            isFileSelected,
+            navigableItemsInView,
+            viewOffset,
+            contentScrollIndex: contentViewport.scrollIndex,
+            availableBodyHeight,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+            ...reviewStats,
+            hasRejectedFiles,
+        };
+    };
+  src/hooks/useCopyScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useCopyStore } from '../stores/copy.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useViewport } from './useViewport';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { useListNavigator } from './useListNavigator.js';
+
+    export const useCopyScreen = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+
+        const {
+            title, items, selectedIds, lastCopiedMessage,
+            actions,
+        } = useCopyStore(state => ({ ...state, actions: state.actions }));
+        
+        useEffect(() => setSelectedIndex(0), [items]);
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: items.length,
+            layoutConfig: UI_CONFIG.layout.copyScreen,
+        });
+
+        useListNavigator({
+            itemCount: items.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: useViewStore.getState().activeOverlay === OVERLAYS.COPY,
+            onKey: (input, key) => {
+                if (key.escape) {
+                    actions.close();
+                    return;
+                }
+                if (input === ' ') {
+                    const currentItem = items[selectedIndex];
+                    if (!currentItem) return;
+                    actions.toggleSelectionById(currentItem.id);
+                    return;
+                }
+                if (key.return) {
+                    actions.executeCopy();
+                    return;
+                }
+                const item = items.find(i => i.key.toLowerCase() === input.toLowerCase());
+                if (item) {
+                    actions.toggleSelectionById(item.id);
+                }
+            },
+        });
+
+        const itemsInView = items.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            title,
+            itemsInView,
+            selectedIndex,
+            selectedIds,
+            lastCopiedMessage,
+            viewOffset,
+        };
+    };
+  src/hooks/useDebugLogScreen.tsx: |-
+    import { useState, useEffect, useMemo } from 'react';
+    import { useInput } from 'ink';
+    import { useLogStore } from '../stores/log.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useViewport } from './useViewport';
+    import { LoggerService } from '../services/logger.service';
+    import { DEBUG_LOG_MODES } from '../constants/log.constants';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { useListNavigator } from './useListNavigator';
+
+    export const useDebugLogScreen = () => {
+        const logs = useLogStore(s => s.logs);
+        const clearLogs = useLogStore(s => s.actions.clearLogs);
+        const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
+
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const [mode, setMode] = useState<keyof typeof DEBUG_LOG_MODES>('LIST');
+        const [filterQuery, setFilterQuery] = useState('');
+
+        const filteredLogs = useMemo(() => logs.filter(log =>
+            log.message.toLowerCase().includes(filterQuery.toLowerCase()),
+        ), [logs, filterQuery]);
+
+        // Reset index to top when filter changes
+        useEffect(() => {
+            setSelectedIndex(0);
+        }, [filterQuery]);
+
+        // Clamp index if it's out of bounds after logs change for other reasons
+        useEffect(() => {
+            if (selectedIndex >= filteredLogs.length) {
+                setSelectedIndex(Math.max(0, filteredLogs.length - 1));
+            }
+        }, [filteredLogs.length, selectedIndex]);
+
+        // Header, borders, footer, filter line
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: filteredLogs.length,
+            layoutConfig: UI_CONFIG.layout.debugLog,
+        });
+
+        const isOverlayActive = useViewStore.getState().activeOverlay === OVERLAYS.LOG;
+
+        useInput((_input, key) => {
+            if (mode === DEBUG_LOG_MODES.FILTER) {
+                if (key.escape || key.return) {
+                    setMode(DEBUG_LOG_MODES.LIST);
+                }
+            }
+        }, { isActive: isOverlayActive && mode === DEBUG_LOG_MODES.FILTER });
+
+        useListNavigator({
+            itemCount: filteredLogs.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: isOverlayActive && mode === DEBUG_LOG_MODES.LIST,
+            onKey: (input, key) => {
+                if (key.escape) {
+                    setActiveOverlay(OVERLAYS.NONE);
+                    return;
+                }
+                if (input.toLowerCase() === 'c') {
+                    clearLogs();
+                    setFilterQuery('');
+                    setSelectedIndex(0);
+                    return;
+                }
+                if (input.toLowerCase() === 'f') {
+                    setMode(DEBUG_LOG_MODES.FILTER);
+                }
+            }
+        });
+
+        useEffect(() => {
+            LoggerService.startSimulator();
+            return () => {
+                LoggerService.stopSimulator();
+            };
+        }, []);
+
+        const logsInView = filteredLogs.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            logsInView,
+            logCount: logs.length,
+            filteredLogCount: filteredLogs.length,
+            selectedIndex,
+            mode,
+            filterQuery,
+            setFilterQuery,
+            viewOffset,
+        };
+    };
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { CopyService } from '../services/copy.service';
+
+    import type { MenuItem } from '../types/debug.types';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { ClipboardService } from '../services/clipboard.service';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { OVERLAYS } from '../constants/view.constants';
+
+    import { useViewport } from './useViewport';
+
+    import { useListNavigator } from './useListNavigator';
+
+    export type { MenuItem } from '../types/debug.types';
+
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: notificationActions } = useNotificationStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Simulate Pasting Valid Patch',
+                action: () => ClipboardService.processClipboardContent(true),
+            },
+            {
+                title: 'Simulate Pasting Invalid Text',
+                action: () => ClipboardService.processClipboardContent(false),
+            },
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Show Success Notification',
+                action: () => notificationActions.show({
+                    type: 'success',
+                    title: 'Operation Successful',
+                    message: 'The requested operation completed without errors.',
+                }),
+            },
+            {
+                title: 'Show Error Notification',
+                action: () => notificationActions.show({
+                    type: 'error',
+                    title: 'Operation Failed',
+                    message: 'An unexpected error occurred. Check the debug log for details.',
+                }),
+            },
+            {
+                title: 'Show Info Notification',
+                action: () => notificationActions.show({
+                    type: 'info',
+                    title: 'Information',
+                    message: 'This is an informational message for the user.',
+                }),
+            },
+            {
+                title: 'Show Warning Notification',
+                action: () => notificationActions.show({
+                    type: 'warning',
+                    title: 'Warning',
+                    message: 'This action may have unintended side effects.',
+                }),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('2', 'success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('1', 'failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen (Failure State)',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    // Fire-and-forget, the UI will update from the store
+                    commitActions.commit(true);
+                },
+            },
+            {
+                title: 'Git Commit: Copy Mode',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    const transactionsToCommit = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                    const { finalCommitMessage } = useCommitStore.getState();
+                    const items = CopyService.getCopyItemsForCommit(
+                        transactionsToCommit,
+                        finalCommitMessage,
+                    );
+                    useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useListNavigator({
+            itemCount: menuItems.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG,
+            onKey: (input, key) => {
+                if (key.return) {
+                    const item = menuItems[selectedIndex];
+                    if (item) {
+                        useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                        item.action();
+                    }
+                    return;
+                }
+                if (key.escape) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    return;
+                }
+
+                // No ctrl/meta keys for selection shortcuts, and only single characters
+                if (key.ctrl || key.meta || input.length !== 1) return;
+
+                if (input >= '1' && input <= '9') {
+                    const targetIndex = parseInt(input, 10) - 1;
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                    const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                }
+            },
+        });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 211

@@ -58,7 +58,7 @@ export const useDebugLogScreen = () => {
         onIndexChange: setSelectedIndex,
         isActive: isOverlayActive && mode === DEBUG_LOG_MODES.LIST,
         onKey: (input, key) => {
-            if (key.escape) {
+            if (key.escape || key.leftArrow) {
                 setActiveOverlay(OVERLAYS.NONE);
                 return;
             }

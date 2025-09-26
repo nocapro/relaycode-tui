@@ -4,6 +4,29 @@ chrome extension suggestion
 
 ===
 
+AI reapply
+
+===
+
+update UI docs
+
+===
+
+1. add new screen states to debug menu for initialization screen where github is not yet initialized for current working directory... so user can click to let relaycode initialize it
+
+2. add new screen states to debug menu for splash screen where there is new update to install...
+
+===
+
+1. add cwd and current active git branch info in dashboard screen
+2. review screen: we also need git commit message in content, not only prompt and reasoning
+
+===
+
+radically improve UI and UX consistency accross screens
+
+=== DONE
+
 lets refactor user experience for all screens for consistency... so I want pair back nav of Q and Esc with arrow left for easier navigation... so at max depth expansion, should auto go back, so no need to press Q to navigate previous screen
 
 === DONE
