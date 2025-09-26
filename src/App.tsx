@@ -12,6 +12,7 @@ import DebugMenu from './components/DebugMenu';
 import DebugLogScreen from './components/DebugLogScreen';
 import GlobalHelpScreen from './components/GlobalHelpScreen';
 import CopyScreen from './components/CopyScreen';
+import NotificationScreen from './components/NotificationScreen';
 import { useViewStore } from './stores/view.store';
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
 
@@ -21,7 +22,7 @@ const App = () => {
     const isOverlayOpen = activeOverlay !== 'none';
 
     // Global hotkeys are active if no modal-like component is open
-    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log'; // These overlays have their own input handlers
+    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log' && activeOverlay !== 'notification'; // These overlays have their own input handlers
     useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
 
     const renderMainScreen = () => {
@@ -50,6 +51,7 @@ const App = () => {
             {activeOverlay === 'copy' && <CopyScreen />}
             {activeOverlay === 'log' && <DebugLogScreen />}
             {activeOverlay === 'debug' && <DebugMenu />}
+            {activeOverlay === 'notification' && <NotificationScreen />}
         </>
     );
 };

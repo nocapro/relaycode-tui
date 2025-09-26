@@ -1,6 +1,23 @@
+===
+
+direct console.log statements interfering with the Ink renderer
+
+so we need notification screen that certain action is successful or failed. comes with further guidance for user.
+
+it should also auto dissapear on countdown
+
+should show notification screen after certain action like transaction history bulk copy action etc necessary actions areas
+
+dont forget to add to debug menu for any new screen state
+
+===
+
+on every screen, when user paste the patches manually using ctrl+v, it should process. even the listening is paused
+
 === DONE
 
-review screen: from processing screen upto review screen, the data should be the same.
+review screen: from processing screen upto review screen, the
+data should be the same.
 
 ==== DONE
 
@@ -30,11 +47,11 @@ the reasoning view should one column, so vertically spread text with scrollable 
 
 ===
 
-  dashboard screen
-
-  show keystroke for user to view/edit system prompt, config file... so now we need
+  add feature for user to view/edit system prompt, prompts, config file... so now we need
 
   file-editor-screen
+
+  dont forget to add to debug menu for any new screen state
 
 === DONE
 

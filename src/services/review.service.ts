@@ -1,6 +1,7 @@
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
+import { useNotificationStore } from '../stores/notification.store';
 import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
 import type { Transaction, FileItem, FileReviewStatus } from '../types/domain.types';
 
@@ -249,11 +250,13 @@ Please provide a corrected patch that addresses the error.`;
 };
 
 const tryRepairFile = (file: FileItem, error?: string): FileItem => {
-    const repairPrompt = generateSingleFileRepairPrompt(file, error);
-    // In a real app: clipboardy.writeSync(repairPrompt)
-    // eslint-disable-next-line no-console
-    console.log(`[CLIPBOARD MOCK] Copied repair prompt for: ${file.path}`, repairPrompt);
-
+    generateSingleFileRepairPrompt(file, error);
+    // Mock clipboard write and show notification
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied Repair Prompt',
+        message: `A repair prompt for ${file.path} has been copied to your clipboard.`,
+    });
     return file;
 };
 
@@ -275,17 +278,24 @@ The response MUST be a complete, corrected patch for this file.`;
 };
 
 const tryInstructFile = (file: FileItem, transaction: Transaction): void => {
-    const instructPrompt = generateSingleFileInstructPrompt(file, transaction);
-    // In a real app: clipboardy.writeSync(instructPrompt)
-    // eslint-disable-next-line no-console
-    console.log(`[CLIPBOARD MOCK] Copied instruction prompt for: ${file.path}`, instructPrompt);
+    generateSingleFileInstructPrompt(file, transaction);
+    // Mock clipboard write and show notification
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied Instruction Prompt',
+        message: `An instruction prompt for ${file.path} has been copied to your clipboard.`,
+    });
 };
 
 const generateBulkInstructPrompt = (rejectedFiles: FileItem[], transaction: Transaction): string => {
     // Mock implementation for demo. In a real scenario, this would generate a more complex prompt.
     const fileList = rejectedFiles.map(f => `- ${f.path}`).join('\n');
-    // eslint-disable-next-line no-console
-    console.log(`[CLIPBOARD] Copied bulk instruction prompt for ${rejectedFiles.length} files.`);
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied to Clipboard',
+        message: `Copied bulk instruction prompt for ${rejectedFiles.length} files.`,
+        duration: 3,
+    });
     return `The user has rejected changes in multiple files for the goal: "${transaction.message}".\n\nThe rejected files are:\n${fileList}\n\nPlease provide an alternative patch for all of them.`;
 };
 

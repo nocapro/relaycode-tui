@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useInput, type Key } from 'ink';
 import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
+import { useNotificationStore } from '../stores/notification.store';
 import { useCopyStore } from '../stores/copy.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
@@ -242,8 +243,11 @@ export const useReviewScreen = () => {
             const currentItem = navigableItems[selectedItemIndex];
             const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
             if (selectedScript) {
-                // eslint-disable-next-line no-console
-                console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`); //
+                useNotificationStore.getState().actions.show({
+                    type: 'success',
+                    title: 'Copied to Clipboard',
+                    message: `Copied script output for: ${selectedScript.command}`,
+                });
             }
         }
     };

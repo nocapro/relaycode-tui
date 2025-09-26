@@ -7,6 +7,7 @@ import { useReviewStore } from '../stores/review.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useHistoryStore } from '../stores/history.store';
 import { useInitStore } from '../stores/init.store';
+import { useNotificationStore } from '../stores/notification.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
@@ -20,6 +21,7 @@ export type { MenuItem } from '../types/debug.types';
 const useDebugMenuActions = () => {
     const { actions: appActions } = useAppStore();
     const { actions: initActions } = useInitStore();
+    const { actions: notificationActions } = useNotificationStore();
     const { actions: commitActions } = useCommitStore();
     const { actions: dashboardActions } = useDashboardStore();
     const { actions: reviewActions } = useReviewStore();
@@ -30,6 +32,38 @@ const useDebugMenuActions = () => {
         {
             title: 'View Debug Log',
             action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+        },
+        {
+            title: 'Show Success Notification',
+            action: () => notificationActions.show({
+                type: 'success',
+                title: 'Operation Successful',
+                message: 'The requested operation completed without errors.',
+            }),
+        },
+        {
+            title: 'Show Error Notification',
+            action: () => notificationActions.show({
+                type: 'error',
+                title: 'Operation Failed',
+                message: 'An unexpected error occurred. Check the debug log for details.',
+            }),
+        },
+        {
+            title: 'Show Info Notification',
+            action: () => notificationActions.show({
+                type: 'info',
+                title: 'Information',
+                message: 'This is an informational message for the user.',
+            }),
+        },
+        {
+            title: 'Show Warning Notification',
+            action: () => notificationActions.show({
+                type: 'warning',
+                title: 'Warning',
+                message: 'This action may have unintended side effects.',
+            }),
         },
         {
             title: 'Splash Screen',
@@ -315,8 +349,8 @@ export const useDebugMenu = () => {
         if (key.return) {
             const item = menuItems[selectedIndex];
             if (item) {
-                item.action();
                 useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                item.action();
             }
             return;
         }

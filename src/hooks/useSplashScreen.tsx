@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { UI_CONFIG } from '../config/ui.config';
-import { LoggerService } from '../services/logger.service';
+import { useNotificationStore } from '../stores/notification.store';
 
 export const useSplashScreen = () => {
     const showInitScreen = useAppStore(state => state.actions.showInitScreen);
@@ -15,19 +15,35 @@ export const useSplashScreen = () => {
     useInput((input) => {
         const lowerInput = input.toLowerCase();
         if (lowerInput === 'v') {
-            LoggerService.info('[MOCK] Opening noca.pro in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening https://relay.noca.pro in your browser...',
+            });
             return;
         }
         if (lowerInput === 'x') {
-            LoggerService.info('[MOCK] Opening X/Twitter in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening X/Twitter in your browser...',
+            });
             return;
         }
         if (lowerInput === 'd') {
-            LoggerService.info('[MOCK] Opening Discord in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening Discord invite in your browser...',
+            });
             return;
         }
         if (lowerInput === 'g') {
-            LoggerService.info('[MOCK] Opening GitHub in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening GitHub repository in your browser...',
+            });
             return;
         }
 

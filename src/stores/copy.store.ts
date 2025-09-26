@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { moveIndex } from './navigation.utils';
 import { useViewStore } from './view.store';
+import { useNotificationStore } from './notification.store';
 import { LoggerService } from '../services/logger.service';
 import { CopyService } from '../services/copy.service';
 import type { CopyItem } from '../types/copy.types';
@@ -122,6 +123,11 @@ export const useCopyStore = create<CopyState>((set, get) => ({
                 .join('\n\n');
             const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
             LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            useNotificationStore.getState().actions.show({
+                type: 'success',
+                title: 'Copied to Clipboard',
+                message,
+            });
             set({ lastCopiedMessage: message });
         },
     },

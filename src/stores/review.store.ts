@@ -169,7 +169,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
             // Manually iterate to get the return value from the async generator
             const iterator = simulationGenerator[Symbol.asyncIterator]();
-            // eslint-disable-next-line no-constant-condition
             while (true) {
                 const { value, done } = await iterator.next();
                 if (done) {

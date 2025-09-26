@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useInput, type Key } from 'ink';
 import { useHistoryStore } from '../stores/history.store';
 import { useAppStore } from '../stores/app.store';
+import { useNotificationStore } from '../stores/notification.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
@@ -48,8 +49,11 @@ export const useTransactionHistoryScreen = () => {
             return;
         }
         if (input >= '1' && input <= '3') {
-            // eslint-disable-next-line no-console
-            console.log(`[MOCK] Bulk action #${input} selected.`); //
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Mock Action',
+                message: `Bulk action #${input} would be performed here.`,
+            });
             actions.setMode(HISTORY_VIEW_MODES.LIST);
         }
     };

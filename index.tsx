@@ -7,6 +7,7 @@ import { useHistoryStore } from './src/stores/history.store';
 import { useReviewStore } from './src/stores/review.store';
 import { useTransactionStore } from './src/stores/transaction.store';
 import { useCommitStore } from './src/stores/commit.store';
+import { useNotificationStore } from './src/stores/notification.store';
 
 const main = () => {
     // Initialize stores
@@ -54,6 +55,12 @@ const main = () => {
             case 'DebugLogScreen':
                 appActions.showDashboardScreen();
                 useViewStore.getState().actions.setActiveOverlay('log');
+                break;
+            case 'NotificationScreen':
+                appActions.showDashboardScreen();
+                useNotificationStore.getState().actions.show({
+                    type: 'success', title: 'DEBUG', message: 'This is a test notification.',
+                });
                 break;
             default:
                 process.stderr.write(`Unknown debug screen: ${args[1]}\n`);

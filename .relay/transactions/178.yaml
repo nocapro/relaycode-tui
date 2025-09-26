@@ -1,0 +1,310 @@
+uuid: e4600109-8472-468e-a226-9d8ac858102d
+projectId: relaycode-tui
+createdAt: '2025-09-26T04:33:55.973Z'
+gitCommitMsg: >-
+  fix(notification): Stabilize notification hook and update UI
+
+  - Refactored `useNotificationScreen` to use a more stable, two-effect pattern
+  for the countdown timer. This resolves a "Cannot update a component while
+  rendering" error that was causing the TUI to crash and display incorrectly. -
+  Updated the `NotificationScreen` component to be borderless, using a
+  background color on the title to indicate notification type. - Clarified the
+  footer action label to 'Enter/Esc' to better reflect available hotkeys.
+promptSummary: >-
+  The user reported a crash, a display bug, and a UI styling request for the new
+  notification feature. I am fixing the crash by refactoring the countdown hook,
+  updating the UI component to be borderless, and improving a label for clarity.
+reasoning:
+  - >-
+    I understand the issues. The React error about updating a component during
+    render is the most critical one, and it's likely causing the visual bug
+    where the underlying screen remains visible. An error during the render
+    cycle can leave the UI in an inconsistent state.
+  - 'I''ll address all three points:'
+  - >-
+    1.  **Fix the React Error**: I will refactor the `useNotificationScreen.tsx`
+    hook to use a more stable pattern for managing the countdown timer. This
+    will prevent state updates during the render phase and resolve the crash.
+  - >-
+    2.  **Fix the Display Bug**: By fixing the React error, the component should
+    render correctly, and the logic in `App.tsx` (which hides the main screen
+    when an overlay is active) will execute as expected, hiding the underlying
+    screen.
+  - >-
+    3.  **Implement Borderless UI**: I will update `NotificationScreen.tsx` to
+    remove the border and use a colored background for the title, as requested.
+  - 'Here are the changes:'
+  - '### Step 1: Fix the Core Logic in `useNotificationScreen.tsx`'
+  - >-
+    I'll replace the problematic `useEffect` with two separate, more stable
+    effects. One will reset the countdown when a new notification arrives, and
+    the other will handle the ticking. This is a safer pattern that avoids the
+    "update during render" error.
+  - '### Step 2: Implement Borderless UI in `NotificationScreen.tsx`'
+  - >-
+    I'll modify the component to remove the border styles and use a background
+    color for the title to maintain the visual cue for the notification type.
+  - '### Step 3: Update Footer Actions for Clarity'
+  - >-
+    I'll update the hotkey label in the constants file to reflect that both
+    `Enter` and `Escape` can dismiss the notification.
+  - >-
+    These changes will resolve the reported issues, leading to a stable,
+    visually correct, and borderless notification system.
+  - '---'
+operations:
+  - type: write
+    path: src/hooks/useNotificationScreen.tsx
+    content: >-
+      import { useState, useEffect } from 'react';
+
+      import { useInput } from 'ink';
+
+      import { useNotificationStore } from '../stores/notification.store';
+
+      import { NOTIFICATION_DEFAULT_DURATION } from
+      '../constants/notification.constants';
+
+
+      export const useNotificationScreen = () => {
+          const { isVisible, notification, actions } = useNotificationStore(state => ({
+              isVisible: state.isVisible,
+              notification: state.notification,
+              actions: state.actions,
+          }));
+          const [countdown, setCountdown] = useState(notification?.duration || NOTIFICATION_DEFAULT_DURATION);
+
+          // This effect runs ONLY when the notification itself changes, resetting the countdown.
+          useEffect(() => {
+              if (notification) {
+                  setCountdown(notification.duration || NOTIFICATION_DEFAULT_DURATION);
+              }
+          }, [notification]);
+
+          // This effect handles the ticking and dismissal logic.
+          useEffect(() => {
+              if (isVisible) {
+                  if (countdown <= 0) {
+                      actions.hide();
+                      return;
+                  }
+
+                  const timer = setTimeout(() => {
+                      setCountdown(c => c - 1);
+                  }, 1000);
+
+                  return () => clearTimeout(timer);
+              }
+          }, [isVisible, countdown, actions]);
+
+          useInput((_, key) => {
+              if (key.return || key.escape) {
+                  actions.hide();
+              }
+          }, { isActive: isVisible });
+
+          return {
+              notification,
+              countdown,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/NotificationScreen.tsx
+    content: >+
+      --- src/components/NotificationScreen.tsx
+
+      +++ src/components/NotificationScreen.tsx
+
+      @@ -15,19 +15,21 @@
+               >
+                   <Box
+                       flexDirection="column"
+      -                borderStyle="round"
+
+      -                borderColor={config.color}
+
+      -                paddingX={2}
+                       paddingY={1}
+                       width="80%"
+      +                backgroundColor="black"
+                   >
+      -                <Box justifyContent="center" marginBottom={1}>
+
+      -                    <Text bold color={config.color}>{config.title}</Text>
+
+      +                <Box paddingX={2} marginBottom={1}
+      backgroundColor={config.color}>
+
+      +                    <Text bold color="black">{config.title}</Text>
+                       </Box>
+      -                <Text>{notification.message}</Text>
+
+      +                <Box paddingX={2}>
+
+      +                    <Text>{notification.message}</Text>
+
+      +                </Box>
+                       <Box marginTop={1}>
+      -                    <Text color="gray">(Dismissing in
+      {countdown}s...)</Text>
+
+      +                    <Box paddingX={2}>
+
+      +                        <Text color="gray">(Dismissing in
+      {countdown}s...)</Text>
+
+      +                    </Box>
+                       </Box>
+                       <Box marginTop={1}>
+                           <ActionFooter actions={NOTIFICATION_FOOTER_ACTIONS} />
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/notification.constants.ts
+    content: |+
+      --- src/constants/notification.constants.ts
+      +++ src/constants/notification.constants.ts
+      @@ -3,5 +3,5 @@
+       export const NOTIFICATION_DEFAULT_DURATION = 5; // seconds
+       
+       export const NOTIFICATION_FOOTER_ACTIONS: readonly ActionItem[] = [
+      -    { key: 'Enter/Esc', label: 'Dismiss' },
+      +    { key: 'Enter/Esc', label: 'Dismiss' },
+       ] as const;
+       
+       export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { color: string; title: string }> = {
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useNotificationScreen.tsx: >-
+    import { useState, useEffect } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { NOTIFICATION_DEFAULT_DURATION } from
+    '../constants/notification.constants';
+
+
+    export const useNotificationScreen = () => {
+        const { isVisible, notification, actions } = useNotificationStore(state => ({
+            isVisible: state.isVisible,
+            notification: state.notification,
+            actions: state.actions,
+        }));
+        const [countdown, setCountdown] = useState(notification?.duration || NOTIFICATION_DEFAULT_DURATION);
+
+        useEffect(() => {
+            if (isVisible && notification) {
+                const duration = notification.duration || NOTIFICATION_DEFAULT_DURATION;
+                setCountdown(duration);
+
+                const timer = setInterval(() => {
+                    setCountdown(prev => {
+                        if (prev <= 1) {
+                            clearInterval(timer);
+                            actions.hide();
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+
+                return () => clearInterval(timer);
+            }
+        }, [isVisible, notification, actions]);
+
+        useInput((_, key) => {
+            if (key.return || key.escape) {
+                actions.hide();
+            }
+        }, { isActive: isVisible });
+
+        return {
+            notification,
+            countdown,
+        };
+    };
+  src/components/NotificationScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import { useNotificationScreen } from '../hooks/useNotificationScreen';
+
+    import ActionFooter from './ActionFooter';
+
+    import { NOTIFICATION_FOOTER_ACTIONS, NOTIFICATION_TYPE_CONFIG } from
+    '../constants/notification.constants';
+
+
+    const NotificationScreen = () => {
+        const { notification, countdown } = useNotificationScreen();
+
+        if (!notification) {
+            return null;
+        }
+
+        const config = NOTIFICATION_TYPE_CONFIG[notification.type];
+
+        return (
+            <Box
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                width="100%"
+                height="100%"
+            >
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    borderColor={config.color}
+                    paddingX={2}
+                    paddingY={1}
+                    width="80%"
+                >
+                    <Box justifyContent="center" marginBottom={1}>
+                        <Text bold color={config.color}>{config.title}</Text>
+                    </Box>
+                    <Text>{notification.message}</Text>
+                    <Box marginTop={1}>
+                        <Text color="gray">(Dismissing in {countdown}s...)</Text>
+                    </Box>
+                    <Box marginTop={1}>
+                        <ActionFooter actions={NOTIFICATION_FOOTER_ACTIONS} />
+                    </Box>
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default NotificationScreen;
+  src/constants/notification.constants.ts: >-
+    import type { ActionItem } from '../types/actions.types';
+
+    import type { NotificationType } from '../types/notification.types';
+
+
+    export const NOTIFICATION_DEFAULT_DURATION = 5; // seconds
+
+
+    export const NOTIFICATION_FOOTER_ACTIONS: readonly ActionItem[] = [
+        { key: 'Enter/Esc', label: 'Dismiss' },
+    ] as const;
+
+
+    export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { color:
+    string; title: string }> = {
+        success: { color: 'green', title: '✓ SUCCESS' },
+        error: { color: 'red', title: '✗ ERROR' },
+        info: { color: 'blue', title: 'ℹ INFO' },
+        warning: { color: 'yellow', title: '⚠ WARNING' },
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 178

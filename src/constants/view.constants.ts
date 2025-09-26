@@ -4,4 +4,5 @@ export const OVERLAYS = {
     COPY: 'copy',
     DEBUG: 'debug',
     LOG: 'log',
+    NOTIFICATION: 'notification',
 } as const;

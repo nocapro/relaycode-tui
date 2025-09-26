@@ -11,6 +11,7 @@ src/
     GitCommitScreen.tsx
     GlobalHelpScreen.tsx
     InitializationScreen.tsx
+    NotificationScreen.tsx
     ReasonScreen.tsx
     ReviewProcessingScreen.tsx
     ReviewScreen.tsx
@@ -30,6 +31,7 @@ src/
     history.constants.ts
     init.constants.ts
     log.constants.ts
+    notification.constants.ts
     review.constants.ts
     view.constants.ts
   data/
@@ -44,6 +46,7 @@ src/
     useGlobalHotkeys.tsx
     useInitializationScreen.tsx
     useLayout.ts
+    useNotificationScreen.tsx
     useReviewScreen.tsx
     useSplashScreen.tsx
     useTransactionDetailScreen.tsx
@@ -69,6 +72,7 @@ src/
     init.store.ts
     log.store.ts
     navigation.utils.ts
+    notification.store.ts
     review.store.ts
     transaction.store.ts
     view.store.ts
@@ -78,6 +82,7 @@ src/
     debug.types.ts
     domain.types.ts
     log.types.ts
+    notification.types.ts
     view.types.ts
   App.tsx
   utils.ts
@@ -88,6 +93,177 @@ tsconfig.json
 ```
 
 # Files
+
+## File: src/components/NotificationScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useNotificationScreen } from '../hooks/useNotificationScreen';
+import ActionFooter from './ActionFooter';
+import { NOTIFICATION_FOOTER_ACTIONS, NOTIFICATION_TYPE_CONFIG } from '../constants/notification.constants';
+
+const NotificationScreen = () => {
+    const { notification, countdown } = useNotificationScreen();
+
+    if (!notification) {
+        return null;
+    }
+
+    const config = NOTIFICATION_TYPE_CONFIG[notification.type];
+
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                paddingY={1}
+                width="80%"
+                backgroundColor="black"
+            >
+                <Box paddingX={2} marginBottom={1} backgroundColor={config.color}>
+                    <Text bold color="black">{config.title}</Text>
+                </Box>
+                <Box paddingX={2}>
+                    <Text>{notification.message}</Text>
+                </Box>
+                <Box marginTop={1}>
+                    <Box paddingX={2}>
+                        <Text color="gray">(Dismissing in {countdown}s...)</Text>
+                    </Box>
+                </Box>
+                <Box marginTop={1}>
+                    <ActionFooter actions={NOTIFICATION_FOOTER_ACTIONS} />
+                </Box>
+            </Box>
+        </Box>
+    );
+};
+
+export default NotificationScreen;
+```
+
+## File: src/constants/notification.constants.ts
+```typescript
+import type { ActionItem } from '../types/actions.types';
+import type { NotificationType } from '../types/notification.types';
+
+export const NOTIFICATION_DEFAULT_DURATION = 5; // seconds
+
+export const NOTIFICATION_FOOTER_ACTIONS: readonly ActionItem[] = [
+    { key: 'Enter/Esc', label: 'Dismiss' },
+] as const;
+
+export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { color: string; title: string }> = {
+    success: { color: 'green', title: '✓ SUCCESS' },
+    error: { color: 'red', title: '✗ ERROR' },
+    info: { color: 'blue', title: 'ℹ INFO' },
+    warning: { color: 'yellow', title: '⚠ WARNING' },
+};
+```
+
+## File: src/hooks/useNotificationScreen.tsx
+```typescript
+import { useState, useEffect } from 'react';
+import { useInput } from 'ink';
+import { useNotificationStore } from '../stores/notification.store';
+import { NOTIFICATION_DEFAULT_DURATION } from '../constants/notification.constants';
+
+export const useNotificationScreen = () => {
+    const { isVisible, notification, actions } = useNotificationStore(state => ({
+        isVisible: state.isVisible,
+        notification: state.notification,
+        actions: state.actions,
+    }));
+    const [countdown, setCountdown] = useState(notification?.duration || NOTIFICATION_DEFAULT_DURATION);
+
+    // This effect runs ONLY when the notification itself changes, resetting the countdown.
+    useEffect(() => {
+        if (notification) {
+            setCountdown(notification.duration || NOTIFICATION_DEFAULT_DURATION);
+        }
+    }, [notification]);
+
+    // This effect handles the ticking and dismissal logic.
+    useEffect(() => {
+        if (isVisible) {
+            if (countdown <= 0) {
+                actions.hide();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [isVisible, countdown, actions]);
+
+    useInput((_, key) => {
+        if (key.return || key.escape) {
+            actions.hide();
+        }
+    }, { isActive: isVisible });
+
+    return {
+        notification,
+        countdown,
+    };
+};
+```
+
+## File: src/stores/notification.store.ts
+```typescript
+import { create } from 'zustand';
+import { useViewStore } from './view.store';
+import type { NotificationPayload } from '../types/notification.types';
+
+interface NotificationState {
+    isVisible: boolean;
+    notification: NotificationPayload | null;
+    actions: {
+        show: (payload: NotificationPayload) => void;
+        hide: () => void;
+    };
+}
+
+export const useNotificationStore = create<NotificationState>((set) => ({
+    isVisible: false,
+    notification: null,
+    actions: {
+        show: (payload) => {
+            set({ isVisible: true, notification: payload });
+            useViewStore.getState().actions.setActiveOverlay('notification');
+        },
+        hide: () => {
+            set({ isVisible: false, notification: null });
+            useViewStore.getState().actions.setActiveOverlay('none');
+        },
+    },
+}));
+```
+
+## File: src/types/notification.types.ts
+```typescript
+/**
+ * The type of notification to display.
+ */
+export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+
+/**
+ * The data payload for a notification.
+ */
+export interface NotificationPayload {
+    type: NotificationType;
+    title: string;
+    message: string;
+    duration?: number; // in seconds
+}
+```
 
 ## File: src/constants/commit.constants.ts
 ```typescript
@@ -1122,6 +1298,7 @@ export const OVERLAYS = {
     COPY: 'copy',
     DEBUG: 'debug',
     LOG: 'log',
+    NOTIFICATION: 'notification',
 } as const;
 ```
 
@@ -1192,69 +1369,6 @@ export const useCopyScreen = () => {
         lastCopiedMessage,
         viewOffset,
     };
-};
-```
-
-## File: src/services/logger.service.ts
-```typescript
-import { useLogStore } from '../stores/log.store';
-
-let simulatorInterval: ReturnType<typeof setInterval> | null = null;
-
-const mockClipboardContents = [
-    'feat(dashboard): implement new UI components',
-    'const clipboardy = require(\'clipboardy\');',
-    'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890 100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import React from \'react\';',
-    'All changes have been applied successfully. You can now commit them.',
-    '{\n  "id": "123",\n  "status": "PENDING"\n}',
-    'Can you refactor this to use a switch statement?',
-];
-let currentClipboardIndex = 0;
-
-const startSimulator = () => {
-    if (simulatorInterval) return;
-
-    // Initial burst of logs to populate the view
-    LoggerService.info('Log simulator started.');
-    LoggerService.debug('Initializing clipboard watcher...');
-    setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
-
-    simulatorInterval = setInterval(() => {
-        const random = Math.random();
-        if (random < 0.6) {
-            LoggerService.debug('Clipboard watcher polling...');
-        } else if (random < 0.8) {
-            LoggerService.debug('No clipboard change detected.');
-        } else {
-            const newContent = mockClipboardContents[currentClipboardIndex]!;
-            currentClipboardIndex = (currentClipboardIndex + 1) % mockClipboardContents.length;
-            const excerpt = newContent.replace(/\n/g, ' ').substring(0, 50).trim();
-            LoggerService.info(`Clipboard content changed. Excerpt: "${excerpt}..."`);
-        }
-    }, 2000);
-};
-
-const stopSimulator = () => {
-    if (simulatorInterval) {
-        clearInterval(simulatorInterval);
-        simulatorInterval = null;
-        LoggerService.info('Log simulator stopped.');
-    }
-};
-
-const debug = (message: string) => useLogStore.getState().actions.addLog('DEBUG', message);
-const info = (message: string) => useLogStore.getState().actions.addLog('INFO', message);
-const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
-const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
-
-
-export const LoggerService = {
-    debug,
-    info,
-    warn,
-    error,
-    startSimulator,
-    stopSimulator,
 };
 ```
 
@@ -1667,6 +1781,68 @@ const approveAll = async () => {
 
 export const DashboardService = {
     approveAll,
+};
+```
+
+## File: src/services/logger.service.ts
+```typescript
+import { useLogStore } from '../stores/log.store';
+
+let simulatorInterval: ReturnType<typeof setInterval> | null = null;
+
+const mockClipboardContents = [
+    'feat(dashboard): implement new UI components',
+    'const clipboardy = require(\'clipboardy\');',
+    'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890 100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import React from \'react\';',
+    'All changes have been applied successfully. You can now commit them.',
+    '{\n  "id": "123",\n  "status": "PENDING"\n}',
+    'Can you refactor this to use a switch statement?',
+];
+let currentClipboardIndex = 0;
+
+const startSimulator = () => {
+    if (simulatorInterval) return;
+
+    // Initial burst of logs to populate the view
+    LoggerService.info('Log simulator started.');
+    LoggerService.debug('Initializing clipboard watcher...');
+    setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
+
+    simulatorInterval = setInterval(() => {
+        const random = Math.random();
+        if (random < 0.6) {
+            LoggerService.debug('Clipboard watcher polling...');
+        } else if (random < 0.8) {
+            LoggerService.debug('No clipboard change detected.');
+        } else {
+            const newContent = mockClipboardContents[currentClipboardIndex]!;
+            currentClipboardIndex = (currentClipboardIndex + 1) % mockClipboardContents.length;
+            const excerpt = newContent.replace(/\n/g, ' ').substring(0, 50).trim();
+            LoggerService.info(`Clipboard content changed. Excerpt: "${excerpt}..."`);
+        }
+    }, 2000);
+};
+
+const stopSimulator = () => {
+    if (simulatorInterval) {
+        clearInterval(simulatorInterval);
+        simulatorInterval = null;
+        LoggerService.info('Log simulator stopped.');
+    }
+};
+
+const debug = (message: string) => useLogStore.getState().actions.addLog('DEBUG', message);
+const info = (message: string) => useLogStore.getState().actions.addLog('INFO', message);
+const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
+const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
+
+export const LoggerService = {
+    debug,
+    info,
+    warn,
+    error,
+    startSimulator,
+    stopSimulator,
 };
 ```
 
@@ -2172,138 +2348,6 @@ export interface CopyItem {
 }
 ```
 
-## File: src/components/ReviewProcessingScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import { useEffect, useState } from 'react';
-import Spinner from 'ink-spinner';
-import { useTransactionStore } from '../stores/transaction.store';
-import { useViewStore } from '../stores/view.store';
-import { useReviewStore, type ApplyStep } from '../stores/review.store';
-import Separator from './Separator';
-
-const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep; isSubstep?: boolean }) => {
-    if (isSubstep) {
-        let color: string | undefined;
-        let symbol: React.ReactNode;
-
-        switch (step.status) {
-            case 'pending':
-                symbol = '○';
-                color = 'gray';
-                break;
-            case 'active':
-                symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
-                break;
-            case 'done':
-                symbol = '✓';
-                color = 'green';
-                break;
-            case 'failed':
-                symbol = '✗';
-                color = 'red';
-                break;
-            default:
-                symbol = ' ';
-        }
-
-        return (
-            <Text color={color}>
-                {'     └─ '}{symbol}{' '}{step.title}
-            </Text>
-        );
-    }
-
-    let symbol;
-    let color;
-    switch (step.status) {
-        case 'pending': symbol = '( )'; break;
-        case 'active': symbol = '(●)'; color = 'cyan'; break;
-        case 'done': symbol = '[✓]'; color = 'green'; break;
-        case 'failed': symbol = '[!]'; color = 'red'; break;
-        case 'skipped': symbol = '(-)'; color = 'gray'; break;
-    }
-
-    return (
-        <Box flexDirection="column">
-            <Text>
-                <Text color={color}>{symbol}</Text> {step.title} {step.duration && !isSubstep && `(${step.duration}s)`}
-            </Text>
-            {step.details && (
-                <Text color="gray">
-                    {'     └─ '}{step.details}
-                </Text>
-            )}
-            {step.substeps?.map((sub: ApplyStep, i: number) => (
-                <ApplyStepRow key={i} step={sub} isSubstep={true} />
-            ))}
-        </Box>
-    );
-};
-
-const ReviewProcessingScreen = () => {
-    const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
-    const { patchStatus, applySteps, processingStartTime } = useReviewStore(state => ({
-        patchStatus: state.patchStatus,
-        applySteps: state.applySteps,
-        processingStartTime: state.processingStartTime,
-    }));
-    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
-
-    const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
-    const [elapsedTime, setElapsedTime] = useState(0);
-
-    useEffect(() => {
-        let timerId: NodeJS.Timeout | undefined;
-
-        if (isProcessing && processingStartTime) {
-            timerId = setInterval(() => {
-                setElapsedTime((Date.now() - processingStartTime) / 1000);
-            }, 50);
-        } else {
-            const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
-            setElapsedTime(totalDuration);
-        }
-
-        return () => {
-            if (timerId) clearInterval(timerId);
-        };
-    }, [isProcessing, processingStartTime, applySteps]);
-
-    const failureCase = patchStatus === 'PARTIAL_FAILURE';
-
-    let footerText;
-    if (isProcessing) {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing... Please wait.`;
-    } else if (failureCase) {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning to repair workflow...`;
-    } else {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...`;
-    }
-
-    if (!transaction) {
-        return <Text>Loading...</Text>;
-    }
-
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode apply</Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column">
-                <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
-                <Box flexDirection="column" marginTop={1} gap={1}>
-                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} />)}
-                </Box>
-            </Box>
-            <Separator />
-            <Text>{footerText}</Text>
-        </Box>
-    );
-};
-
-export default ReviewProcessingScreen;
-```
-
 ## File: src/components/Separator.tsx
 ```typescript
 import {Text} from 'ink';
@@ -2392,7 +2436,7 @@ import { useState, useEffect } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { UI_CONFIG } from '../config/ui.config';
-import { LoggerService } from '../services/logger.service';
+import { useNotificationStore } from '../stores/notification.store';
 
 export const useSplashScreen = () => {
     const showInitScreen = useAppStore(state => state.actions.showInitScreen);
@@ -2405,19 +2449,35 @@ export const useSplashScreen = () => {
     useInput((input) => {
         const lowerInput = input.toLowerCase();
         if (lowerInput === 'v') {
-            LoggerService.info('[MOCK] Opening noca.pro in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening https://relay.noca.pro in your browser...',
+            });
             return;
         }
         if (lowerInput === 'x') {
-            LoggerService.info('[MOCK] Opening X/Twitter in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening X/Twitter in your browser...',
+            });
             return;
         }
         if (lowerInput === 'd') {
-            LoggerService.info('[MOCK] Opening Discord in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening Discord invite in your browser...',
+            });
             return;
         }
         if (lowerInput === 'g') {
-            LoggerService.info('[MOCK] Opening GitHub in browser...');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening GitHub repository in your browser...',
+            });
             return;
         }
 
@@ -2511,6 +2571,7 @@ export const InitService = {
 import { create } from 'zustand';
 import { moveIndex } from './navigation.utils';
 import { useViewStore } from './view.store';
+import { useNotificationStore } from './notification.store';
 import { LoggerService } from '../services/logger.service';
 import { CopyService } from '../services/copy.service';
 import type { CopyItem } from '../types/copy.types';
@@ -2632,6 +2693,11 @@ export const useCopyStore = create<CopyState>((set, get) => ({
                 .join('\n\n');
             const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
             LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            useNotificationStore.getState().actions.show({
+                type: 'success',
+                title: 'Copied to Clipboard',
+                message,
+            });
             set({ lastCopiedMessage: message });
         },
     },
@@ -2808,6 +2874,138 @@ export const useDetailStore = create<DetailState>((set, get) => ({
     "typescript": "^5.9.2"
   }
 }
+```
+
+## File: src/components/ReviewProcessingScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useEffect, useState } from 'react';
+import Spinner from 'ink-spinner';
+import { useTransactionStore } from '../stores/transaction.store';
+import { useViewStore } from '../stores/view.store';
+import { useReviewStore, type ApplyStep } from '../stores/review.store';
+import Separator from './Separator';
+
+const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep; isSubstep?: boolean }) => {
+    if (isSubstep) {
+        let color: string | undefined;
+        let symbol: React.ReactNode;
+
+        switch (step.status) {
+            case 'pending':
+                symbol = '○';
+                color = 'gray';
+                break;
+            case 'active':
+                symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
+                break;
+            case 'done':
+                symbol = '✓';
+                color = 'green';
+                break;
+            case 'failed':
+                symbol = '✗';
+                color = 'red';
+                break;
+            default:
+                symbol = ' ';
+        }
+
+        return (
+            <Text color={color}>
+                {'     └─ '}{symbol}{' '}{step.title}
+            </Text>
+        );
+    }
+
+    let symbol;
+    let color;
+    switch (step.status) {
+        case 'pending': symbol = '( )'; break;
+        case 'active': symbol = '(●)'; color = 'cyan'; break;
+        case 'done': symbol = '[✓]'; color = 'green'; break;
+        case 'failed': symbol = '[!]'; color = 'red'; break;
+        case 'skipped': symbol = '(-)'; color = 'gray'; break;
+    }
+
+    return (
+        <Box flexDirection="column">
+            <Text>
+                <Text color={color}>{symbol}</Text> {step.title} {step.duration && !isSubstep && `(${step.duration}s)`}
+            </Text>
+            {step.details && (
+                <Text color="gray">
+                    {'     └─ '}{step.details}
+                </Text>
+            )}
+            {step.substeps?.map((sub: ApplyStep, i: number) => (
+                <ApplyStepRow key={i} step={sub} isSubstep={true} />
+            ))}
+        </Box>
+    );
+};
+
+const ReviewProcessingScreen = () => {
+    const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
+    const { patchStatus, applySteps, processingStartTime } = useReviewStore(state => ({
+        patchStatus: state.patchStatus,
+        applySteps: state.applySteps,
+        processingStartTime: state.processingStartTime,
+    }));
+    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
+
+    const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
+    const [elapsedTime, setElapsedTime] = useState(0);
+
+    useEffect(() => {
+        let timerId: ReturnType<typeof setTimeout> | undefined;
+
+        if (isProcessing && processingStartTime) {
+            timerId = setInterval(() => {
+                setElapsedTime((Date.now() - processingStartTime) / 1000);
+            }, 50);
+        } else {
+            const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
+            setElapsedTime(totalDuration);
+        }
+
+        return () => {
+            if (timerId) clearInterval(timerId);
+        };
+    }, [isProcessing, processingStartTime, applySteps]);
+
+    const failureCase = patchStatus === 'PARTIAL_FAILURE';
+
+    let footerText;
+    if (isProcessing) {
+        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing... Please wait.`;
+    } else if (failureCase) {
+        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning to repair workflow...`;
+    } else {
+        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...`;
+    }
+
+    if (!transaction) {
+        return <Text>Loading...</Text>;
+    }
+
+    return (
+        <Box flexDirection="column">
+            <Text color="cyan">▲ relaycode apply</Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column">
+                <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
+                <Box flexDirection="column" marginTop={1} gap={1}>
+                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} />)}
+                </Box>
+            </Box>
+            <Separator />
+            <Text>{footerText}</Text>
+        </Box>
+    );
+};
+
+export default ReviewProcessingScreen;
 ```
 
 ## File: src/services/copy.service.ts
@@ -3581,11 +3779,54 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
 };
 ```
 
+## File: src/stores/app.store.ts
+```typescript
+import { create } from 'zustand';
+import type { AppScreen } from '../types/view.types';
+import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
+
+interface AppState {
+    currentScreen: AppScreen;
+    actions: {
+        showInitScreen: () => void;
+        showReviewProcessingScreen: () => void;
+        showDashboardScreen: () => void;
+        showReviewScreen: () => void;
+        showGitCommitScreen: () => void;
+        showSplashScreen: () => void;
+        showTransactionHistoryScreen: () => void;
+        showTransactionDetailScreen: () => void;
+        navigateBack: () => void;
+    };
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
+    currentScreen: 'splash',
+    actions: {
+        showInitScreen: () => set({ currentScreen: 'init' }),
+        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+        showReviewScreen: () => set({ currentScreen: 'review' }),
+        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+        showSplashScreen: () => set({ currentScreen: 'splash' }),
+        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+        navigateBack: () => {
+            const { currentScreen } = get();
+            if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
+                get().actions.showDashboardScreen();
+            }
+        },
+    },
+}));
+```
+
 ## File: src/services/review.service.ts
 ```typescript
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
 import { sleep } from '../utils';
+import { useNotificationStore } from '../stores/notification.store';
 import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
 import type { Transaction, FileItem, FileReviewStatus } from '../types/domain.types';
 
@@ -3834,11 +4075,13 @@ Please provide a corrected patch that addresses the error.`;
 };
 
 const tryRepairFile = (file: FileItem, error?: string): FileItem => {
-    const repairPrompt = generateSingleFileRepairPrompt(file, error);
-    // In a real app: clipboardy.writeSync(repairPrompt)
-    // eslint-disable-next-line no-console
-    console.log(`[CLIPBOARD MOCK] Copied repair prompt for: ${file.path}`, repairPrompt);
-
+    generateSingleFileRepairPrompt(file, error);
+    // Mock clipboard write and show notification
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied Repair Prompt',
+        message: `A repair prompt for ${file.path} has been copied to your clipboard.`,
+    });
     return file;
 };
 
@@ -3860,17 +4103,24 @@ The response MUST be a complete, corrected patch for this file.`;
 };
 
 const tryInstructFile = (file: FileItem, transaction: Transaction): void => {
-    const instructPrompt = generateSingleFileInstructPrompt(file, transaction);
-    // In a real app: clipboardy.writeSync(instructPrompt)
-    // eslint-disable-next-line no-console
-    console.log(`[CLIPBOARD MOCK] Copied instruction prompt for: ${file.path}`, instructPrompt);
+    generateSingleFileInstructPrompt(file, transaction);
+    // Mock clipboard write and show notification
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied Instruction Prompt',
+        message: `An instruction prompt for ${file.path} has been copied to your clipboard.`,
+    });
 };
 
 const generateBulkInstructPrompt = (rejectedFiles: FileItem[], transaction: Transaction): string => {
     // Mock implementation for demo. In a real scenario, this would generate a more complex prompt.
     const fileList = rejectedFiles.map(f => `- ${f.path}`).join('\n');
-    // eslint-disable-next-line no-console
-    console.log(`[CLIPBOARD] Copied bulk instruction prompt for ${rejectedFiles.length} files.`);
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied to Clipboard',
+        message: `Copied bulk instruction prompt for ${rejectedFiles.length} files.`,
+        duration: 3,
+    });
     return `The user has rejected changes in multiple files for the goal: "${transaction.message}".\n\nThe rejected files are:\n${fileList}\n\nPlease provide an alternative patch for all of them.`;
 };
 
@@ -3909,48 +4159,6 @@ export const ReviewService = {
 };
 ```
 
-## File: src/stores/app.store.ts
-```typescript
-import { create } from 'zustand';
-import type { AppScreen } from '../types/view.types';
-import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
-
-interface AppState {
-    currentScreen: AppScreen;
-    actions: {
-        showInitScreen: () => void;
-        showReviewProcessingScreen: () => void;
-        showDashboardScreen: () => void;
-        showReviewScreen: () => void;
-        showGitCommitScreen: () => void;
-        showSplashScreen: () => void;
-        showTransactionHistoryScreen: () => void;
-        showTransactionDetailScreen: () => void;
-        navigateBack: () => void;
-    };
-}
-
-export const useAppStore = create<AppState>((set, get) => ({
-    currentScreen: 'splash',
-    actions: {
-        showInitScreen: () => set({ currentScreen: 'init' }),
-        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
-        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
-        showReviewScreen: () => set({ currentScreen: 'review' }),
-        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
-        showSplashScreen: () => set({ currentScreen: 'splash' }),
-        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
-        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
-        navigateBack: () => {
-            const { currentScreen } = get();
-            if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
-                get().actions.showDashboardScreen();
-            }
-        },
-    },
-}));
-```
-
 ## File: index.tsx
 ```typescript
 import { render } from 'ink';
@@ -3962,6 +4170,7 @@ import { useHistoryStore } from './src/stores/history.store';
 import { useReviewStore } from './src/stores/review.store';
 import { useTransactionStore } from './src/stores/transaction.store';
 import { useCommitStore } from './src/stores/commit.store';
+import { useNotificationStore } from './src/stores/notification.store';
 
 const main = () => {
     // Initialize stores
@@ -3982,7 +4191,7 @@ const main = () => {
                 break;
             case 'ReviewProcessingScreen':
                 useReviewStore.getState().actions.load('1'); // Tx '1' is failure case
-                useReviewStore.getState().actions.startApplySimulation('failure');
+                useReviewStore.getState().actions.startApplySimulation('1', 'failure');
                 break;
             case 'ReviewScreen':
                 useReviewStore.getState().actions.load('1');
@@ -4009,6 +4218,12 @@ const main = () => {
             case 'DebugLogScreen':
                 appActions.showDashboardScreen();
                 useViewStore.getState().actions.setActiveOverlay('log');
+                break;
+            case 'NotificationScreen':
+                appActions.showDashboardScreen();
+                useNotificationStore.getState().actions.show({
+                    type: 'success', title: 'DEBUG', message: 'This is a test notification.',
+                });
                 break;
             default:
                 process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
@@ -4211,12 +4426,76 @@ export const useTransactionDetailScreen = () => {
 };
 ```
 
+## File: src/App.tsx
+```typescript
+import { Box } from 'ink';
+import { useAppStore } from './stores/app.store';
+import SplashScreen from './components/SplashScreen';
+import InitializationScreen from './components/InitializationScreen';
+import DashboardScreen from './components/DashboardScreen';
+import ReviewScreen from './components/ReviewScreen';
+import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+import GitCommitScreen from './components/GitCommitScreen';
+import TransactionDetailScreen from './components/TransactionDetailScreen';
+import TransactionHistoryScreen from './components/TransactionHistoryScreen';
+import DebugMenu from './components/DebugMenu'; 
+import DebugLogScreen from './components/DebugLogScreen';
+import GlobalHelpScreen from './components/GlobalHelpScreen';
+import CopyScreen from './components/CopyScreen';
+import NotificationScreen from './components/NotificationScreen';
+import { useViewStore } from './stores/view.store';
+import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+const App = () => {
+    const currentScreen = useAppStore(state => state.currentScreen);
+    const activeOverlay = useViewStore(s => s.activeOverlay);
+    const isOverlayOpen = activeOverlay !== 'none';
+
+    // Global hotkeys are active if no modal-like component is open
+    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log' && activeOverlay !== 'notification'; // These overlays have their own input handlers
+    useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+    const renderMainScreen = () => {
+        if (currentScreen === 'splash') return <SplashScreen />;
+        if (currentScreen === 'init') return <InitializationScreen />;
+        if (currentScreen === 'dashboard') return <DashboardScreen />;
+        if (currentScreen === 'review') return <ReviewScreen />;
+        if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+        if (currentScreen === 'git-commit') return <GitCommitScreen />;
+        if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+        if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+        return null;
+    };
+
+    return (
+        <>
+            <Box
+                width="100%"
+                height="100%"
+                flexDirection="column"
+                display={isOverlayOpen ? 'none' : 'flex'}
+            >
+                {renderMainScreen()}
+            </Box>
+            {activeOverlay === 'help' && <GlobalHelpScreen />}
+            {activeOverlay === 'copy' && <CopyScreen />}
+            {activeOverlay === 'log' && <DebugLogScreen />}
+            {activeOverlay === 'debug' && <DebugMenu />}
+            {activeOverlay === 'notification' && <NotificationScreen />}
+        </>
+    );
+};
+
+export default App;
+```
+
 ## File: src/hooks/useReviewScreen.tsx
 ```typescript
 import { useMemo } from 'react';
 import { useInput, type Key } from 'ink';
 import { useReviewStore } from '../stores/review.store';
 import { useAppStore } from '../stores/app.store';
+import { useNotificationStore } from '../stores/notification.store';
 import { useCopyStore } from '../stores/copy.store';
 import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
 import type { FileItem } from '../types/domain.types';
@@ -4457,8 +4736,11 @@ export const useReviewScreen = () => {
             const currentItem = navigableItems[selectedItemIndex];
             const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
             if (selectedScript) {
-                // eslint-disable-next-line no-console
-                console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`); //
+                useNotificationStore.getState().actions.show({
+                    type: 'success',
+                    title: 'Copied to Clipboard',
+                    message: `Copied script output for: ${selectedScript.command}`,
+                });
             }
         }
     };
@@ -4584,67 +4866,6 @@ export const useReviewScreen = () => {
         hasRejectedFiles,
     };
 };
-```
-
-## File: src/App.tsx
-```typescript
-import { Box } from 'ink';
-import { useAppStore } from './stores/app.store';
-import SplashScreen from './components/SplashScreen';
-import InitializationScreen from './components/InitializationScreen';
-import DashboardScreen from './components/DashboardScreen';
-import ReviewScreen from './components/ReviewScreen';
-import ReviewProcessingScreen from './components/ReviewProcessingScreen';
-import GitCommitScreen from './components/GitCommitScreen';
-import TransactionDetailScreen from './components/TransactionDetailScreen';
-import TransactionHistoryScreen from './components/TransactionHistoryScreen';
-import DebugMenu from './components/DebugMenu'; 
-import DebugLogScreen from './components/DebugLogScreen';
-import GlobalHelpScreen from './components/GlobalHelpScreen';
-import CopyScreen from './components/CopyScreen';
-import { useViewStore } from './stores/view.store';
-import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
-
-const App = () => {
-    const currentScreen = useAppStore(state => state.currentScreen);
-    const activeOverlay = useViewStore(s => s.activeOverlay);
-    const isOverlayOpen = activeOverlay !== 'none';
-
-    // Global hotkeys are active if no modal-like component is open
-    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log'; // These overlays have their own input handlers
-    useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
-
-    const renderMainScreen = () => {
-        if (currentScreen === 'splash') return <SplashScreen />;
-        if (currentScreen === 'init') return <InitializationScreen />;
-        if (currentScreen === 'dashboard') return <DashboardScreen />;
-        if (currentScreen === 'review') return <ReviewScreen />;
-        if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
-        if (currentScreen === 'git-commit') return <GitCommitScreen />;
-        if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
-        if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
-        return null;
-    };
-
-    return (
-        <>
-            <Box
-                width="100%"
-                height="100%"
-                flexDirection="column"
-                display={isOverlayOpen ? 'none' : 'flex'}
-            >
-                {renderMainScreen()}
-            </Box>
-            {activeOverlay === 'help' && <GlobalHelpScreen />}
-            {activeOverlay === 'copy' && <CopyScreen />}
-            {activeOverlay === 'log' && <DebugLogScreen />}
-            {activeOverlay === 'debug' && <DebugMenu />}
-        </>
-    );
-};
-
-export default App;
 ```
 
 ## File: src/components/TransactionDetailScreen.tsx
@@ -5087,6 +5308,7 @@ import { useMemo } from 'react';
 import { useInput, type Key } from 'ink';
 import { useHistoryStore } from '../stores/history.store';
 import { useAppStore } from '../stores/app.store';
+import { useNotificationStore } from '../stores/notification.store';
 import { useTransactionStore } from '../stores/transaction.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useCopyStore } from '../stores/copy.store';
@@ -5133,8 +5355,11 @@ export const useTransactionHistoryScreen = () => {
             return;
         }
         if (input >= '1' && input <= '3') {
-            // eslint-disable-next-line no-console
-            console.log(`[MOCK] Bulk action #${input} selected.`); //
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Mock Action',
+                message: `Bulk action #${input} would be performed here.`,
+            });
             actions.setMode(HISTORY_VIEW_MODES.LIST);
         }
     };
@@ -5917,7 +6142,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
             // Manually iterate to get the return value from the async generator
             const iterator = simulationGenerator[Symbol.asyncIterator]();
-            // eslint-disable-next-line no-constant-condition
             while (true) {
                 const { value, done } = await iterator.next();
                 if (done) {
@@ -6366,6 +6590,7 @@ import { useReviewStore } from '../stores/review.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useHistoryStore } from '../stores/history.store';
 import { useInitStore } from '../stores/init.store';
+import { useNotificationStore } from '../stores/notification.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
@@ -6379,6 +6604,7 @@ export type { MenuItem } from '../types/debug.types';
 const useDebugMenuActions = () => {
     const { actions: appActions } = useAppStore();
     const { actions: initActions } = useInitStore();
+    const { actions: notificationActions } = useNotificationStore();
     const { actions: commitActions } = useCommitStore();
     const { actions: dashboardActions } = useDashboardStore();
     const { actions: reviewActions } = useReviewStore();
@@ -6389,6 +6615,38 @@ const useDebugMenuActions = () => {
         {
             title: 'View Debug Log',
             action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+        },
+        {
+            title: 'Show Success Notification',
+            action: () => notificationActions.show({
+                type: 'success',
+                title: 'Operation Successful',
+                message: 'The requested operation completed without errors.',
+            }),
+        },
+        {
+            title: 'Show Error Notification',
+            action: () => notificationActions.show({
+                type: 'error',
+                title: 'Operation Failed',
+                message: 'An unexpected error occurred. Check the debug log for details.',
+            }),
+        },
+        {
+            title: 'Show Info Notification',
+            action: () => notificationActions.show({
+                type: 'info',
+                title: 'Information',
+                message: 'This is an informational message for the user.',
+            }),
+        },
+        {
+            title: 'Show Warning Notification',
+            action: () => notificationActions.show({
+                type: 'warning',
+                title: 'Warning',
+                message: 'This action may have unintended side effects.',
+            }),
         },
         {
             title: 'Splash Screen',
@@ -6532,7 +6790,7 @@ const useDebugMenuActions = () => {
             action: () => {
                 // Use tx '2' which is the success case in prepareTransactionForReview
                 reviewActions.load('2');
-                reviewActions.startApplySimulation('success');
+                reviewActions.startApplySimulation('2', 'success');
             },
         },
         {
@@ -6540,7 +6798,7 @@ const useDebugMenuActions = () => {
             action: () => {
                 // Use tx '1' which is the failure case in prepareTransactionForReview
                 reviewActions.load('1');
-                reviewActions.startApplySimulation('failure');
+                reviewActions.startApplySimulation('1', 'failure');
             },
         },
         {

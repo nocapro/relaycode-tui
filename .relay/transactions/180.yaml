@@ -1,0 +1,450 @@
+uuid: c6b0808a-24cd-4b7f-a6ac-2de3612d46e3
+projectId: relaycode-tui
+createdAt: '2025-09-26T04:44:44.572Z'
+gitCommitMsg: >-
+  fix(debug): correct state update order in debug menu
+
+  Fixes a bug where overlays triggered from the debug menu (like notifications
+  or the debug log) would not appear. The issue was a race condition in the
+  `useInput` handler.
+
+  The code was previously executing the menu item's action (which would set an
+  active overlay) and then immediately setting the active overlay back to 'none'
+  to close the debug menu.
+
+  This commit reverses the order of operations: first, it closes the debug menu
+  overlay, and then it executes the action. This ensures that the state set by
+  the action becomes the final, persistent state, allowing the target overlay to
+  render correctly.
+promptSummary: >-
+  User reported a bug where the notification screen does not appear when
+  triggered from the debug menu. The issue was a race condition in the input
+  handler.
+reasoning:
+  - >-
+    The bug where the notification screen fails to appear when triggered from
+    the debug menu is due to a state management race condition in
+    `src/hooks/useDebugMenu.tsx`. When a menu action is triggered, the code
+    executes the action (which correctly sets the active overlay to
+    `'notification'`) but then immediately overwrites this state by setting the
+    active overlay back to `'none'` to close the debug menu.
+  - >-
+    To fix this, I will reverse the order of these operations. The patch will
+    first close the debug menu overlay by setting the active overlay to
+    `'none'`, and *then* it will execute the selected menu item's action. This
+    ensures that the state set by the action (e.g., showing the notification) is
+    the final state and persists, allowing the notification screen to render
+    correctly.
+operations:
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -298,8 +298,8 @@
+               if (key.return) {
+                   const item = menuItems[selectedIndex];
+                   if (item) {
+      -                item.action();
+                       useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+      +                item.action();
+                   }
+                   return;
+               }
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useNotificationStore } from '../stores/notification.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { useViewport } from './useViewport';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: notificationActions } = useNotificationStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Show Success Notification',
+                action: () => notificationActions.show({
+                    type: 'success',
+                    title: 'Operation Successful',
+                    message: 'The requested operation completed without errors.',
+                }),
+            },
+            {
+                title: 'Show Error Notification',
+                action: () => notificationActions.show({
+                    type: 'error',
+                    title: 'Operation Failed',
+                    message: 'An unexpected error occurred. Check the debug log for details.',
+                }),
+            },
+            {
+                title: 'Show Info Notification',
+                action: () => notificationActions.show({
+                    type: 'info',
+                    title: 'Information',
+                    message: 'This is an informational message for the user.',
+                }),
+            },
+            {
+                title: 'Show Warning Notification',
+                action: () => notificationActions.show({
+                    type: 'warning',
+                    title: 'Warning',
+                    message: 'This action may have unintended side effects.',
+                }),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('2', 'success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('1', 'failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.pageUp) {
+                setSelectedIndex(i => Math.max(0, i - viewportHeight));
+                return;
+            }
+            if (key.pageDown) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 180

@@ -1,0 +1,387 @@
+uuid: c2552a92-f04b-4a57-b080-602058e5f1a9
+projectId: relaycode-tui
+createdAt: '2025-09-26T04:21:36.026Z'
+gitCommitMsg: >-
+  feat(ui): implement notification overlay system
+
+  Introduces a new notification system to provide non-disruptive user feedback,
+  replacing direct console.log statements that interfere with the Ink renderer.
+
+  - Creates a new NotificationScreen component and a corresponding
+  `useNotificationScreen` hook to manage its state and behavior, including an
+  auto-dismiss countdown. - Adds a `notification.store.ts` Zustand store to
+  manage the visibility and content of notifications globally. - Defines
+  notification types, constants for colors, titles, and default durations. -
+  Integrates the notification system as a new overlay type (`notification`) in
+  the main `App.tsx` component, ensuring it correctly disables global hotkeys
+  when active.
+promptSummary: >-
+  Create the foundation for a non-intrusive notification system to replace
+  console.log statements. This includes creating types, constants, a zustand
+  store, a React component and hook, and integrating it into the main app shell
+  as an overlay.
+reasoning:
+  - >-
+    This is an excellent architectural decision. By creating a dedicated
+    notification system, we can eliminate disruptive `console.log` statements
+    and provide clear, consistent feedback to the user. This first phase lays
+    the groundwork by establishing the necessary data structures, state
+    management, and UI components.
+  - '### Part 1 & 2: Building the Notification System'
+  - >-
+    First, I will create the new files that define the notification system's
+    types, constants, and state management store.
+  - >-
+    Next, I'll update the view constants to include the new notification
+    overlay.
+  - >-
+    With the store in place, I will create the hook that contains the UI logic
+    for the notification screen, including the auto-dismiss timer.
+  - Now, I'll create the React component that renders the notification overlay.
+  - >-
+    Finally, I'll integrate the new notification screen into the main
+    application component, ensuring it displays correctly as an overlay and
+    disables global hotkeys when active.
+operations:
+  - type: write
+    path: src/types/notification.types.ts
+    content: |-
+      /**
+       * The type of notification to display.
+       */
+      export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+
+      /**
+       * The data payload for a notification.
+       */
+      export interface NotificationPayload {
+          type: NotificationType;
+          title: string;
+          message: string;
+          duration?: number; // in seconds
+      }
+    patchStrategy: replace
+  - type: write
+    path: src/constants/notification.constants.ts
+    content: >-
+      import type { ActionItem } from '../types/actions.types';
+
+      import type { NotificationType } from '../types/notification.types';
+
+
+      export const NOTIFICATION_DEFAULT_DURATION = 5; // seconds
+
+
+      export const NOTIFICATION_FOOTER_ACTIONS: readonly ActionItem[] = [
+          { key: 'Enter/Esc', label: 'Dismiss' },
+      ] as const;
+
+
+      export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { color:
+      string; title: string }> = {
+          success: { color: 'green', title: '✓ SUCCESS' },
+          error: { color: 'red', title: '✗ ERROR' },
+          info: { color: 'blue', title: 'ℹ INFO' },
+          warning: { color: 'yellow', title: '⚠ WARNING' },
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/stores/notification.store.ts
+    content: |-
+      import { create } from 'zustand';
+      import { useViewStore } from './view.store';
+      import type { NotificationPayload } from '../types/notification.types';
+
+      interface NotificationState {
+          isVisible: boolean;
+          notification: NotificationPayload | null;
+          actions: {
+              show: (payload: NotificationPayload) => void;
+              hide: () => void;
+          };
+      }
+
+      export const useNotificationStore = create<NotificationState>((set) => ({
+          isVisible: false,
+          notification: null,
+          actions: {
+              show: (payload) => {
+                  set({ isVisible: true, notification: payload });
+                  useViewStore.getState().actions.setActiveOverlay('notification');
+              },
+              hide: () => {
+                  set({ isVisible: false, notification: null });
+                  useViewStore.getState().actions.setActiveOverlay('none');
+              },
+          },
+      }));
+    patchStrategy: replace
+  - type: write
+    path: src/constants/view.constants.ts
+    content: |
+      --- src/constants/view.constants.ts
+      +++ src/constants/view.constants.ts
+      @@ ... @@
+           COPY: 'copy',
+           DEBUG: 'debug',
+           LOG: 'log',
+      -    NOTIFICATION: 'notification',
+       } as const;
+      +export const OVERLAYS = {
+      +    NONE: 'none',
+      +    HELP: 'help',
+      +    COPY: 'copy',
+      +    DEBUG: 'debug',
+      +    LOG: 'log',
+      +    NOTIFICATION: 'notification',
+      +} as const;
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useNotificationScreen.tsx
+    content: >-
+      import { useState, useEffect } from 'react';
+
+      import { useInput } from 'ink';
+
+      import { useNotificationStore } from '../stores/notification.store';
+
+      import { NOTIFICATION_DEFAULT_DURATION } from
+      '../constants/notification.constants';
+
+      import { useViewStore } from '../stores/view.store';
+
+      import { OVERLAYS } from '../constants/view.constants';
+
+
+      export const useNotificationScreen = () => {
+          const { isVisible, notification, actions } = useNotificationStore(state => ({
+              isVisible: state.isVisible,
+              notification: state.notification,
+              actions: state.actions,
+          }));
+          const [countdown, setCountdown] = useState(notification?.duration || NOTIFICATION_DEFAULT_DURATION);
+
+          useEffect(() => {
+              if (isVisible && notification) {
+                  const duration = notification.duration || NOTIFICATION_DEFAULT_DURATION;
+                  setCountdown(duration);
+
+                  const timer = setInterval(() => {
+                      setCountdown(prev => {
+                          if (prev <= 1) {
+                              clearInterval(timer);
+                              actions.hide();
+                              return 0;
+                          }
+                          return prev - 1;
+                      });
+                  }, 1000);
+
+                  return () => clearInterval(timer);
+              }
+          }, [isVisible, notification, actions]);
+
+          useInput((_, key) => {
+              if (key.return || key.escape) {
+                  actions.hide();
+              }
+          }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NOTIFICATION });
+
+          return {
+              notification,
+              countdown,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/NotificationScreen.tsx
+    content: >-
+      import { Box, Text } from 'ink';
+
+      import { useNotificationScreen } from '../hooks/useNotificationScreen';
+
+      import ActionFooter from './ActionFooter';
+
+      import { NOTIFICATION_FOOTER_ACTIONS, NOTIFICATION_TYPE_CONFIG } from
+      '../constants/notification.constants';
+
+
+      const NotificationScreen = () => {
+          const { notification, countdown } = useNotificationScreen();
+
+          if (!notification) {
+              return null;
+          }
+
+          const config = NOTIFICATION_TYPE_CONFIG[notification.type];
+
+          return (
+              <Box
+                  flexDirection="column"
+                  justifyContent="center"
+                  alignItems="center"
+                  width="100%"
+                  height="100%"
+              >
+                  <Box
+                      flexDirection="column"
+                      borderStyle="round"
+                      borderColor={config.color}
+                      paddingX={2}
+                      paddingY={1}
+                      width="80%"
+                  >
+                      <Box justifyContent="center" marginBottom={1}>
+                          <Text bold color={config.color}>{config.title}</Text>
+                      </Box>
+                      <Text>{notification.message}</Text>
+                      <Box marginTop={1}>
+                          <Text color="gray">(Dismissing in {countdown}s...)</Text>
+                      </Box>
+                      <Box marginTop={1}>
+                          <ActionFooter actions={NOTIFICATION_FOOTER_ACTIONS} />
+                      </Box>
+                  </Box>
+              </Box>
+          );
+      };
+
+
+      export default NotificationScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/App.tsx
+    content: >
+      --- src/App.tsx
+
+      +++ src/App.tsx
+
+      @@ -9,6 +9,7 @@
+       import DebugMenu from './components/DebugMenu'; 
+       import DebugLogScreen from './components/DebugLogScreen';
+       import GlobalHelpScreen from './components/GlobalHelpScreen';
+       import CopyScreen from './components/CopyScreen';
+      +import NotificationScreen from './components/NotificationScreen';
+       import { useViewStore } from './stores/view.store';
+       import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+       
+      @@ -17,7 +18,7 @@
+           const isOverlayOpen = activeOverlay !== 'none';
+       
+           // Global hotkeys are active if no modal-like component is open
+      -    const areGlobalHotkeysActive = activeOverlay !== 'copy' &&
+      activeOverlay !== 'log'; // These overlays have their own input handlers
+
+      +    const areGlobalHotkeysActive = activeOverlay !== 'copy' &&
+      activeOverlay !== 'log' && activeOverlay !== 'notification'; // These
+      overlays have their own input handlers
+           useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+       
+           const renderMainScreen = () => {
+      @@ -43,6 +44,7 @@
+                   {activeOverlay === 'copy' && <CopyScreen />}
+                   {activeOverlay === 'log' && <DebugLogScreen />}
+                   {activeOverlay === 'debug' && <DebugMenu />}
+      +            {activeOverlay === 'notification' && <NotificationScreen />}
+               </>
+           );
+       };
+    patchStrategy: standard-diff
+snapshot:
+  src/types/notification.types.ts: null
+  src/constants/notification.constants.ts: null
+  src/hooks/useNotificationScreen.tsx: null
+  src/stores/notification.store.ts: null
+  src/components/NotificationScreen.tsx: null
+  src/constants/view.constants.ts: |-
+    export const OVERLAYS = {
+        NONE: 'none',
+        HELP: 'help',
+        COPY: 'copy',
+        DEBUG: 'debug',
+        LOG: 'log',
+        NOTIFICATION: 'notification',
+    } as const;
+  src/App.tsx: >-
+    import { Box } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import DebugLogScreen from './components/DebugLogScreen';
+
+    import GlobalHelpScreen from './components/GlobalHelpScreen';
+
+    import CopyScreen from './components/CopyScreen';
+
+    import { useViewStore } from './stores/view.store';
+
+    import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+        const activeOverlay = useViewStore(s => s.activeOverlay);
+        const isOverlayOpen = activeOverlay !== 'none';
+
+        // Global hotkeys are active if no modal-like component is open
+        const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log'; // These overlays have their own input handlers
+        useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+        const renderMainScreen = () => {
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isOverlayOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                {activeOverlay === 'help' && <GlobalHelpScreen />}
+                {activeOverlay === 'copy' && <CopyScreen />}
+                {activeOverlay === 'log' && <DebugLogScreen />}
+                {activeOverlay === 'debug' && <DebugMenu />}
+            </>
+        );
+    };
+
+
+    export default App;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 175
