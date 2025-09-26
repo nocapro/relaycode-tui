@@ -73,9 +73,10 @@ const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew
     const statusText = transaction.status.padEnd(11, ' ');
     const expandIcon = isExpanded ? '▾' : '▸';
     
-    const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
-        : transaction.message;
+    const messageNode =
+        transaction.status === 'IN-PROGRESS'
+            ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
+            : transaction.message;
     
     const content = (
         <Text>

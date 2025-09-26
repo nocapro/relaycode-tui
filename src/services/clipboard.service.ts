@@ -35,7 +35,7 @@ const createTransactionFromPatch = (patchContent: string): Transaction => {
         reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
         files: [
             {
-                id: (Math.random() * 1000).toFixed(0) + '-1',
+                id: `${(Math.random() * 1000).toFixed(0)}-1`,
                 type: 'MOD',
                 path: filePath,
                 linesAdded,

@@ -3,14 +3,30 @@ import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
 import ActionFooter from './ActionFooter';
-import { COMMIT_SCREEN_FOOTER_ACTIONS } from '../constants/commit.constants';
+import { COMMIT_FOOTER_ACTIONS } from '../constants/commit.constants';
 
 const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+    const { transactionsToCommit, finalCommitMessage, isCommitting, commitError } = useGitCommitScreen();
 
     const messageParts = finalCommitMessage.split('\n');
     const subject = messageParts[0] || '';
     const body = messageParts.slice(1).join('\n');
+
+    const renderError = () => (
+        <Box 
+            flexDirection="column" 
+            borderStyle="round" 
+            borderColor="red" 
+            paddingX={2} 
+            marginY={1}
+        >
+            <Text bold color="red">COMMIT FAILED</Text>
+            <Text wrap="wrap">The git operation failed. Please check the error message below and resolve any issues before retrying.</Text>
+            <Box marginTop={1}>
+                <Text color="red">{commitError}</Text>
+            </Box>
+        </Box>
+    );
 
     return (
         <Box flexDirection="column">
@@ -33,14 +49,15 @@ const GitCommitScreen = () => {
                     {body ? <Text>{body}</Text> : null}
                 </Box>
             </Box>
+            {commitError && renderError()}
             <Separator />
-            <Box marginY={1} paddingX={2}>
+            {!commitError && <Box marginY={1} paddingX={2}>
                  <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
-            </Box>
+            </Box>}
             <Separator />
             {isCommitting
                 ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-                : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
+                : <ActionFooter actions={commitError ? COMMIT_FOOTER_ACTIONS.FAILURE : COMMIT_FOOTER_ACTIONS.BASE} />
             }
         </Box>
     );

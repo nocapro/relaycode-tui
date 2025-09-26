@@ -1,9 +1,21 @@
+===
+
+chrome extension suggestion
+
+=== DONE
+
+footer action should context aware, like when there is nothing to commit, no need to show commit button etc...
+
+=== DONE
+
 git commit screen improvements
 
 1. add advanced copy mode feature
 2. add flow when git operation fails
 
-===
+dont forget to add screen states to debug menu
+
+=== DONE
 
 help screen
 

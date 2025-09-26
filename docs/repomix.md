@@ -150,10 +150,16 @@ export default NotificationScreen;
 
 ## File: src/constants/commit.constants.ts
 ```typescript
-export const COMMIT_SCREEN_FOOTER_ACTIONS = [
-    { key: 'Enter', label: 'Confirm & Commit' },
-    { key: 'Esc', label: 'Cancel' },
-] as const;
+export const COMMIT_FOOTER_ACTIONS = {
+    BASE: [
+        { key: 'Enter', label: 'Confirm & Commit' },
+        { key: 'C', label: 'Copy' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const,
+    FAILURE: [
+        { key: 'R', label: 'Retry' }, { key: 'C', label: 'Copy Command' }, { key: 'Esc', label: 'Cancel' },
+    ] as const,
+};
 ```
 
 ## File: src/constants/dashboard.constants.ts
@@ -488,7 +494,7 @@ const createTransactionFromPatch = (patchContent: string): Transaction => {
         reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
         files: [
             {
-                id: (Math.random() * 1000).toFixed(0) + '-1',
+                id: `${(Math.random() * 1000).toFixed(0)}-1`,
                 type: 'MOD',
                 path: filePath,
                 linesAdded,
@@ -1959,67 +1965,6 @@ export const getVisibleItemPaths = (
 };
 ```
 
-## File: src/components/GlobalHelpScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-
-const GlobalHelpScreen = () => {
-    return (
-        <Box
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-            width="100%"
-            height="100%"
-        >
-            <Box
-                flexDirection="column"
-                borderStyle="round"
-                paddingX={2}
-                paddingY={1}
-                width="80%"
-            >
-                <Box justifyContent="center" marginBottom={1} >
-                    <Text bold>
-                        <Text color="yellow">▲ relaycode</Text>
-                        <Text color="cyan"> · keyboard shortcuts</Text>
-                    </Text>
-                </Box>
-                <Box flexDirection="column" gap={1}>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">GLOBAL</Text>
-                        <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
-                        <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">DASHBOARD (watch)</Text>
-                        <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
-                        <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
-                        <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
-                        <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
-                        <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
-                    </Box>
-                    <Box flexDirection="column">
-                        <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
-                        <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
-                        <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
-                        <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
-                        <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
-                        <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
-                        <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
-                    </Box>
-                </Box>
-            </Box>
-            <Box marginTop={1}>
-                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
-            </Box>
-        </Box>
-    );
-};
-
-export default GlobalHelpScreen;
-```
-
 ## File: src/data/mocks.ts
 ```typescript
 import type { Transaction } from '../types/domain.types';
@@ -2208,24 +2153,60 @@ import { useInput } from 'ink';
 import { useCommitStore } from '../stores/commit.store';
 import { useAppStore } from '../stores/app.store';
 import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useCopyStore } from '../stores/copy.store';
+import { CopyService } from '../services/copy.service';
+import { CommitService } from '../services/commit.service';
 
 export const useGitCommitScreen = () => {
-    const { finalCommitMessage, isCommitting } = useCommitStore();
+    const { finalCommitMessage, isCommitting, commitError } = useCommitStore();
     const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
-    const { commit } = useCommitStore(s => s.actions);
+    const { commit, resetCommitState } = useCommitStore(s => s.actions);
     const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const handleCommit = async (forceFailure?: boolean) => {
+        const { success } = await commit(forceFailure);
+        if (success) {
+            showDashboardScreen();
+        }
+    };
+
+    const openCopyMode = () => {
+        const items = CopyService.getCopyItemsForCommit(transactionsToCommit, finalCommitMessage);
+        useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+    };
 
     useInput((_, key) => {
         if (isCommitting) return;
 
-        if (key.return) {
-            commit().then(() => {
+        if (commitError) {
+            if (key.escape) {
+                resetCommitState();
                 showDashboardScreen();
-            });
+            } else if (_.toLowerCase() === 'r') {
+                handleCommit();
+            } else if (_.toLowerCase() === 'c') {
+                const command = CommitService.getGitCommitCommand(finalCommitMessage);
+                useNotificationStore.getState().actions.show({
+                    type: 'success',
+                    title: 'Copied to Clipboard',
+                    // This is a mock clipboard write for the demo
+                    message: `Command copied: ${command}`,
+                });
+            }
+            return;
+        }
+
+        if (key.return) {
+            handleCommit();
+        } else if (key.escape) {
+            showDashboardScreen();
+        } else if (_.toLowerCase() === 'c') {
+            openCopyMode();
         }
     });
 
-    return { transactionsToCommit, finalCommitMessage, isCommitting };
+    return { transactionsToCommit, finalCommitMessage, isCommitting, commitError };
 };
 ```
 
@@ -2258,16 +2239,26 @@ const generateCommitMessage = (transactions: Transaction[]): string => {
     return `${title}\n\n${bodyPoints.join('\n\n')}`;
 };
 
-const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
+const getGitCommitCommand = (commitMessage: string): string => {
+    const subject = commitMessage.split('\n')[0] || '';
+    return `git add . && git commit -m "${subject.replace(/"/g, '\\"')}"`;
+};
+
+const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
     LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+
+    await sleep(500);
+
+    if (forceFailure) {
+        LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+        throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
+    }
+
     // In a real app, this would run git commands.
     // For simulation, we'll just update the transaction store.
     const { updateTransactionStatus } = useTransactionStore.getState().actions;
 
     const txIds = transactionsToCommit.map(tx => tx.id);
-
-    // A bit of simulation
-    await sleep(500);
 
     txIds.forEach(id => {
         updateTransactionStatus(id, 'COMMITTED');
@@ -2277,6 +2268,7 @@ const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
 
 export const CommitService = {
     generateCommitMessage,
+    getGitCommitCommand,
     commit,
 };
 ```
@@ -2465,6 +2457,159 @@ export interface CopyItem {
     getData: () => string | Promise<string>;
     isDefaultSelected?: boolean;
 }
+```
+
+## File: src/components/GlobalHelpScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useStdoutDimensions } from '../utils';
+
+const HELP_SECTIONS = [
+    {
+        title: 'GLOBAL',
+        shortcuts: [
+            { key: '?', label: 'Toggle this help screen' },
+            { key: 'Q/Esc', label: 'Quit or Go Back' },
+            { key: 'Ctrl+V', label: 'Process Clipboard' },
+            { key: 'Ctrl+B', label: 'Toggle Debug Menu' },
+            { key: 'Ctrl+L', label: 'Toggle Debug Log' },
+        ],
+    },
+    {
+        title: 'DASHBOARD',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate event stream' },
+            { key: '→/Enter', label: 'Expand / View Details' },
+            { key: '←', label: 'Collapse Item' },
+            { key: 'P', label: 'Pause / Resume clipboard watcher' },
+            { key: 'A', label: 'Approve All Pending' },
+            { key: 'C', label: 'Commit All Applied' },
+            { key: 'L', label: 'View History Log' },
+        ],
+    },
+    {
+        title: 'HISTORY',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate Items' },
+            { key: '→/←', label: 'Expand / Collapse' },
+            { key: 'Space', label: 'Select for Bulk Action' },
+            { key: 'Enter', label: 'View Details' },
+            { key: 'F', label: 'Filter History' },
+            { key: 'B', label: 'Open Bulk Actions Menu' },
+            { key: 'C', label: 'Copy Selected Items' },
+        ],
+    },
+    {
+        title: 'REVIEW SCREEN',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate Items' },
+            { key: 'D/Enter', label: 'View File Diff' },
+            { key: 'R', label: 'Show / Collapse Reasoning' },
+            { key: 'Space', label: 'Toggle Approval State' },
+            { key: 'A', label: 'Apply Approved Changes' },
+            { key: 'T/Shift+T', label: 'Repair / Bulk Repair Failed Files' },
+            { key: 'I/Shift+I', label: 'Instruct / Bulk Instruct Rejected' },
+            { key: 'C', label: 'Open Copy Menu' },
+        ],
+    },
+    {
+        title: 'DETAIL SCREEN',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate Sections/Files' },
+            { key: '→/←', label: 'Expand / Collapse' },
+            { key: 'Enter', label: 'Drill-in / View Diff' },
+            { key: 'U', label: 'Revert Transaction' },
+            { key: 'C', label: 'Open Copy Menu' },
+            { key: 'O', label: 'Open File/YAML in Editor' },
+        ],
+    },
+];
+
+const KEY_PADDING = 12;
+
+const Shortcut = ({ shortcut }: { shortcut: { key: string; label: string } }) => (
+    <Text>
+        {'  '}
+        <Text color="cyan" bold>{shortcut.key.padEnd(KEY_PADDING)}</Text>
+        {shortcut.label}
+    </Text>
+);
+
+const GlobalHelpScreen = () => {
+    const [width] = useStdoutDimensions();
+
+    // 90% view width, minus 2 padding on each side.
+    const availableWidth = Math.floor(width * 0.9) - 4;
+
+    // Calculate max width needed for one column of content
+    const allShortcutLines = HELP_SECTIONS.flatMap(s => 
+        s.shortcuts.map(sc => `  ${sc.key.padEnd(KEY_PADDING)} ${sc.label}`)
+    );
+    const allLines = [...allShortcutLines, ...HELP_SECTIONS.map(s => s.title)];
+    const maxContentWidth = Math.max(...allLines.map(line => line.length));
+
+    const GAP = 4;
+    // Determine optimal number of columns
+    const numColumns = Math.max(1, Math.min(
+        HELP_SECTIONS.length, // Don't make more columns than sections
+        Math.floor(availableWidth / (maxContentWidth + GAP))
+    ));
+
+    // Distribute sections into columns
+    const columns: typeof HELP_SECTIONS[] = Array.from({ length: numColumns }, () => []);
+    const sectionsPerColumn = Math.ceil(HELP_SECTIONS.length / numColumns);
+
+    HELP_SECTIONS.forEach((section, index) => {
+        const columnIndex = Math.floor(index / sectionsPerColumn);
+        if (columns[columnIndex]) {
+            columns[columnIndex].push(section);
+        }
+    });
+
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                paddingX={2}
+                paddingY={2}
+                width="90%"
+            >
+                <Box justifyContent="center" marginBottom={1}>
+                    <Text bold>
+                        <Text color="yellow">▲ relaycode</Text>
+                        <Text color="cyan"> · Keyboard Shortcuts</Text>
+                    </Text>
+                </Box>
+
+                <Box flexDirection="row" gap={GAP}>
+                    {columns.map((sectionList, i) => (
+                        <Box key={i} flexDirection="column" gap={1} flexGrow={1} flexShrink={1} flexBasis={0}>
+                            {sectionList.map(section => (
+                                <Box key={section.title} flexDirection="column">
+                                    <Text bold color="cyan">{section.title}</Text>
+                                    {section.shortcuts.map(shortcut => (
+                                        <Shortcut key={shortcut.label} shortcut={shortcut} />
+                                    ))}
+                                </Box>
+                            ))}
+                        </Box>
+                    ))}
+                </Box>
+            </Box>
+            <Box marginTop={1}>
+                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default GlobalHelpScreen;
 ```
 
 ## File: src/components/Separator.tsx
@@ -2790,6 +2935,7 @@ export const useDetailStore = create<DetailState>((set, get) => ({
 import type { Transaction, FileItem } from '../types/domain.types';
 import type { CopyItem } from '../types/copy.types';
 import { COPYABLE_ITEMS } from '../constants/copy.constants';
+import { CommitService } from './commit.service';
 import { FileSystemService } from './fs.service';
 
 const formatFileContext = (filePath: string, content: string): string => {
@@ -2892,10 +3038,27 @@ const getCopyItemsForHistory = (
     ];
 };
 
+const getCopyItemsForCommit = (
+    transactions: Transaction[],
+    finalCommitMessage: string,
+): CopyItem[] => {
+    const subject = finalCommitMessage.split('\n')[0] || '';
+    const body = finalCommitMessage.split('\n').slice(1).join('\n').trim();
+
+    return [
+        { id: 'full_message', key: 'M', label: 'Full Commit Message', getData: () => finalCommitMessage, isDefaultSelected: true },
+        { id: 'subject', key: 'S', label: 'Commit Subject', getData: () => subject },
+        { id: 'body', key: 'B', label: 'Commit Body', getData: () => body },
+        { id: 'hashes', key: 'H', label: `Included Transaction Hashes (${transactions.length})`, getData: () => transactions.map(t => t.hash).join('\n') },
+        { id: 'command', key: 'C', label: 'Git Commit Command', getData: () => CommitService.getGitCommitCommand(finalCommitMessage) },
+    ];
+};
+
 export const CopyService = {
     getCopyItemsForReview,
     getCopyItemsForDetail,
     getCopyItemsForHistory,
+    getCopyItemsForCommit,
 };
 ```
 
@@ -3195,26 +3358,38 @@ import { useTransactionStore, selectTransactionsByStatus } from './transaction.s
 interface CommitState {
     finalCommitMessage: string;
     isCommitting: boolean;
+    commitError: string | null;
     actions: {
         prepareCommitScreen: () => void;
-        commit: () => Promise<void>;
+        commit: (forceFailure?: boolean) => Promise<{ success: boolean }>;
+        resetCommitState: () => void;
     }
 }
 
 export const useCommitStore = create<CommitState>((set) => ({
     finalCommitMessage: '',
     isCommitting: false,
+    commitError: null,
     actions: {
         prepareCommitScreen: () => {
             const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
             const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
             set({ finalCommitMessage });
         },
-        commit: async () => {
-            set({ isCommitting: true });
-            const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
-            await CommitService.commit(appliedTransactions);
-            set({ isCommitting: false });
+        commit: async (forceFailure) => {
+            set({ isCommitting: true, commitError: null });
+            try {
+                const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                await CommitService.commit(appliedTransactions, forceFailure);
+                set({ isCommitting: false });
+                return { success: true };
+            } catch (e) {
+                set({ isCommitting: false, commitError: (e as Error).message });
+                return { success: false };
+            }
+        },
+        resetCommitState: () => {
+            set({ isCommitting: false, commitError: null });
         },
     },
 }));
@@ -3414,14 +3589,30 @@ import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
 import ActionFooter from './ActionFooter';
-import { COMMIT_SCREEN_FOOTER_ACTIONS } from '../constants/commit.constants';
+import { COMMIT_FOOTER_ACTIONS } from '../constants/commit.constants';
 
 const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+    const { transactionsToCommit, finalCommitMessage, isCommitting, commitError } = useGitCommitScreen();
 
     const messageParts = finalCommitMessage.split('\n');
     const subject = messageParts[0] || '';
     const body = messageParts.slice(1).join('\n');
+
+    const renderError = () => (
+        <Box 
+            flexDirection="column" 
+            borderStyle="round" 
+            borderColor="red" 
+            paddingX={2} 
+            marginY={1}
+        >
+            <Text bold color="red">COMMIT FAILED</Text>
+            <Text wrap="wrap">The git operation failed. Please check the error message below and resolve any issues before retrying.</Text>
+            <Box marginTop={1}>
+                <Text color="red">{commitError}</Text>
+            </Box>
+        </Box>
+    );
 
     return (
         <Box flexDirection="column">
@@ -3444,14 +3635,15 @@ const GitCommitScreen = () => {
                     {body ? <Text>{body}</Text> : null}
                 </Box>
             </Box>
+            {commitError && renderError()}
             <Separator />
-            <Box marginY={1} paddingX={2}>
+            {!commitError && <Box marginY={1} paddingX={2}>
                  <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
-            </Box>
+            </Box>}
             <Separator />
             {isCommitting
                 ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-                : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
+                : <ActionFooter actions={commitError ? COMMIT_FOOTER_ACTIONS.FAILURE : COMMIT_FOOTER_ACTIONS.BASE} />
             }
         </Box>
     );
@@ -6755,9 +6947,10 @@ const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew
     const statusText = transaction.status.padEnd(11, ' ');
     const expandIcon = isExpanded ? '▾' : '▸';
     
-    const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
-        : transaction.message;
+    const messageNode =
+        transaction.status === 'IN-PROGRESS'
+            ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
+            : transaction.message;
     
     const content = (
         <Text>
@@ -6911,8 +7104,9 @@ import { useInitStore } from '../stores/init.store';
 import { useNotificationStore } from '../stores/notification.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
+import { CopyService } from '../services/copy.service';
 import type { MenuItem } from '../types/debug.types';
-import { useTransactionStore } from '../stores/transaction.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
 import { ClipboardService } from '../services/clipboard.service';
 import { UI_CONFIG } from '../config/ui.config';
@@ -7133,6 +7327,29 @@ const useDebugMenuActions = () => {
             action: () => {
                 commitActions.prepareCommitScreen();
                 appActions.showGitCommitScreen();
+            },
+        },
+        {
+            title: 'Git Commit Screen (Failure State)',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+                // Fire-and-forget, the UI will update from the store
+                commitActions.commit(true);
+            },
+        },
+        {
+            title: 'Git Commit: Copy Mode',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+                const transactionsToCommit = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                const { finalCommitMessage } = useCommitStore.getState();
+                const items = CopyService.getCopyItemsForCommit(
+                    transactionsToCommit,
+                    finalCommitMessage,
+                );
+                useCopyStore.getState().actions.open('Select data to copy from commit:', items);
             },
         },
         {

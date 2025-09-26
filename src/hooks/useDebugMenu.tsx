@@ -10,8 +10,9 @@ import { useInitStore } from '../stores/init.store';
 import { useNotificationStore } from '../stores/notification.store';
 import { useCommitStore } from '../stores/commit.store';
 import { useCopyStore } from '../stores/copy.store';
+import { CopyService } from '../services/copy.service';
 import type { MenuItem } from '../types/debug.types';
-import { useTransactionStore } from '../stores/transaction.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
 import { ClipboardService } from '../services/clipboard.service';
 import { UI_CONFIG } from '../config/ui.config';
@@ -232,6 +233,29 @@ const useDebugMenuActions = () => {
             action: () => {
                 commitActions.prepareCommitScreen();
                 appActions.showGitCommitScreen();
+            },
+        },
+        {
+            title: 'Git Commit Screen (Failure State)',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+                // Fire-and-forget, the UI will update from the store
+                commitActions.commit(true);
+            },
+        },
+        {
+            title: 'Git Commit: Copy Mode',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+                const transactionsToCommit = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                const { finalCommitMessage } = useCommitStore.getState();
+                const items = CopyService.getCopyItemsForCommit(
+                    transactionsToCommit,
+                    finalCommitMessage,
+                );
+                useCopyStore.getState().actions.open('Select data to copy from commit:', items);
             },
         },
         {

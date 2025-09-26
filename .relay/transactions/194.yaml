@@ -1,0 +1,578 @@
+uuid: c32c51eb-0648-4228-a6d1-4191c940b54e
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:36:44.171Z'
+gitCommitMsg: >-
+  feat(commit): implement git commit failure handling
+
+  Adds a comprehensive failure and recovery flow to the Git Commit screen.
+
+  - The commit service can now simulate failures for debugging. - The commit
+  store tracks `commitError` state. - The UI now displays a detailed error
+  message if a git operation fails. - New footer actions (`Retry`, `Copy
+  Command`, `Cancel`) are shown in the failure state, allowing the user to
+  recover.
+promptSummary: >-
+  Implement failure handling for the Git commit process, including UI for error
+  messages and recovery actions.
+reasoning:
+  - >-
+    Executing Parts 1 and 2 of the plan to enhance the Git Commit screen with
+    failure handling.
+  - >-
+    First, I'll modify the commit service to simulate failures. This provides
+    the backend logic necessary for the new states.
+  - >-
+    Next, I'll update the commit store to manage the new error state and provide
+    actions to handle it.
+  - I will now define the footer actions for both the base and failure states.
+  - >-
+    Then, I'll update the `useGitCommitScreen` hook to orchestrate the new state
+    and handle user input for the failure and recovery flow.
+  - >-
+    Finally, I'll update the `GitCommitScreen` component to display the error
+    message and the new footer actions when a commit fails.
+operations:
+  - type: write
+    path: src/services/commit.service.ts
+    content: >+
+      --- src/services/commit.service.ts
+
+      +++ src/services/commit.service.ts
+
+      @@ -23,17 +23,24 @@
+           return `${title}\n\n${bodyPoints.join('\n\n')}`;
+       };
+       
+      -const commit = async (transactionsToCommit: Transaction[]): Promise<void>
+      => {
+
+      +const commit = async (transactionsToCommit: Transaction[], forceFailure?:
+      boolean): Promise<void> => {
+           LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+      +
+
+      +    await sleep(500);
+
+      +
+
+      +    if (forceFailure) {
+
+      +        LoggerService.error('Mock git error: commit failed due to
+      pre-commit hook failure.');
+
+      +        throw new Error('Mock git error: commit failed due to pre-commit
+      hook failure.');
+
+      +    }
+
+      +
+           // In a real app, this would run git commands.
+           // For simulation, we'll just update the transaction store.
+           const { updateTransactionStatus } = useTransactionStore.getState().actions;
+       
+           const txIds = transactionsToCommit.map(tx => tx.id);
+       
+      -    // A bit of simulation
+
+      -    await sleep(500);
+
+      -
+           txIds.forEach(id => {
+               updateTransactionStatus(id, 'COMMITTED');
+           });
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/commit.store.ts
+    content: >+
+      --- src/stores/commit.store.ts
+
+      +++ src/stores/commit.store.ts
+
+      @@ -3,28 +3,42 @@
+       import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
+       
+       interface CommitState {
+           finalCommitMessage: string;
+           isCommitting: boolean;
+      +    commitError: string | null;
+           actions: {
+               prepareCommitScreen: () => void;
+      -        commit: () => Promise<void>;
+
+      +        commit: (forceFailure?: boolean) => Promise<{ success: boolean
+      }>;
+
+      +        resetCommitState: () => void;
+           }
+       }
+       
+       export const useCommitStore = create<CommitState>((set) => ({
+           finalCommitMessage: '',
+           isCommitting: false,
+      +    commitError: null,
+           actions: {
+               prepareCommitScreen: () => {
+                   const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                   const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
+                   set({ finalCommitMessage });
+               },
+      -        commit: async () => {
+
+      -            set({ isCommitting: true });
+
+      -            const appliedTransactions =
+      selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+
+      -            await CommitService.commit(appliedTransactions);
+
+      -            set({ isCommitting: false });
+
+      +        commit: async (forceFailure) => {
+
+      +            set({ isCommitting: true, commitError: null });
+
+      +            try {
+
+      +                const appliedTransactions =
+      selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+
+      +                await CommitService.commit(appliedTransactions,
+      forceFailure);
+
+      +                set({ isCommitting: false });
+
+      +                return { success: true };
+
+      +            } catch (e) {
+
+      +                set({ isCommitting: false, commitError: (e as
+      Error).message });
+
+      +                return { success: false };
+
+      +            }
+
+      +        },
+
+      +        resetCommitState: () => {
+
+      +            set({ isCommitting: false, commitError: null });
+               },
+           },
+       }));
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/commit.constants.ts
+    content: >+
+      --- src/constants/commit.constants.ts
+
+      +++ src/constants/commit.constants.ts
+
+      @@ -1,4 +1,9 @@
+
+      -export const COMMIT_SCREEN_FOOTER_ACTIONS = [
+
+      -    { key: 'Enter', label: 'Confirm & Commit' },
+
+      -    { key: 'Esc', label: 'Cancel' },
+
+      -] as const;
+
+      +export const COMMIT_FOOTER_ACTIONS = {
+
+      +    BASE: [
+
+      +        { key: 'Enter', label: 'Confirm & Commit' },
+
+      +        { key: 'Esc', label: 'Cancel' },
+
+      +    ] as const,
+
+      +    FAILURE: [
+
+      +        { key: 'R', label: 'Retry' }, { key: 'C', label: 'Copy Command'
+      }, { key: 'Esc', label: 'Cancel' },
+
+      +    ] as const,
+
+      +};
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGitCommitScreen.tsx
+    content: >+
+      --- src/hooks/useGitCommitScreen.tsx
+
+      +++ src/hooks/useGitCommitScreen.tsx
+
+      @@ -2,22 +2,48 @@
+       import { useCommitStore } from '../stores/commit.store';
+       import { useAppStore } from '../stores/app.store';
+       import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+      +import { useNotificationStore } from '../stores/notification.store';
+       
+       export const useGitCommitScreen = () => {
+      -    const { finalCommitMessage, isCommitting } = useCommitStore();
+
+      +    const { finalCommitMessage, isCommitting, commitError } =
+      useCommitStore();
+           const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+      -    const { commit } = useCommitStore(s => s.actions);
+
+      +    const { commit, resetCommitState } = useCommitStore(s => s.actions);
+           const { showDashboardScreen } = useAppStore(s => s.actions);
+       
+      +    const handleCommit = async (forceFailure?: boolean) => {
+
+      +        const { success } = await commit(forceFailure);
+
+      +        if (success) {
+
+      +            showDashboardScreen();
+
+      +        }
+
+      +    };
+
+      +
+           useInput((_, key) => {
+               if (isCommitting) return;
+       
+      -        if (key.return) {
+
+      -            commit().then(() => {
+
+      -                showDashboardScreen();
+
+      -            });
+
+      +        if (commitError) {
+
+      +            if (key.escape) {
+
+      +                resetCommitState();
+
+      +                showDashboardScreen();
+
+      +            } else if (_.toLowerCase() === 'r') {
+
+      +                handleCommit();
+
+      +            } else if (_.toLowerCase() === 'c') {
+
+      +                const command = `git add . && git commit -m
+      "${finalCommitMessage.split('\n')[0]}"`;
+
+      +                // This is a mock clipboard write for the demo
+
+      +                useNotificationStore.getState().actions.show({
+
+      +                    type: 'success',
+
+      +                    title: 'Copied to Clipboard',
+
+      +                    message: 'Git command copied to clipboard.',
+
+      +                });
+
+      +            }
+
+      +            return;
+               }
+      +
+
+      +        if (key.return) {
+
+      +            handleCommit();
+
+      +        } else if (key.escape) {
+
+      +            showDashboardScreen();
+
+      +        }
+           });
+       
+      -    return { transactionsToCommit, finalCommitMessage, isCommitting };
+
+      +    return { transactionsToCommit, finalCommitMessage, isCommitting,
+      commitError };
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/GitCommitScreen.tsx
+    content: >+
+      --- src/components/GitCommitScreen.tsx
+
+      +++ src/components/GitCommitScreen.tsx
+
+      @@ -4,15 +4,29 @@
+       import Separator from './Separator';
+       import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+       import ActionFooter from './ActionFooter';
+      -import { COMMIT_SCREEN_FOOTER_ACTIONS } from
+      '../constants/commit.constants';
+
+      +import { COMMIT_FOOTER_ACTIONS } from '../constants/commit.constants';
+       
+       const GitCommitScreen = () => {
+      -    const { transactionsToCommit, finalCommitMessage, isCommitting } =
+      useGitCommitScreen();
+
+      +    const { transactionsToCommit, finalCommitMessage, isCommitting,
+      commitError } = useGitCommitScreen();
+       
+           const messageParts = finalCommitMessage.split('\n');
+           const subject = messageParts[0] || '';
+           const body = messageParts.slice(1).join('\n');
+       
+      +    const renderError = () => (
+
+      +        <Box 
+
+      +            flexDirection="column" 
+
+      +            borderStyle="round" 
+
+      +            borderColor="red" 
+
+      +            paddingX={2} 
+
+      +            marginY={1}
+
+      +        >
+
+      +            <Text bold color="red">COMMIT FAILED</Text>
+
+      +            <Text>The git operation failed. Please check the error
+      message below and resolve any issues before retrying.</Text>
+
+      +            <Text color="red" marginTop={1}>{commitError}</Text>
+
+      +        </Box>
+
+      +    );
+
+      +
+           return (
+               <Box flexDirection="column">
+                   <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
+      @@ -36,13 +50,15 @@
+                           {body ? <Text>{body}</Text> : null}
+                       </Box>
+                   </Box>
+      +            {commitError && renderError()}
+                   <Separator />
+      -            <Box marginY={1} paddingX={2}>
+
+      +            {!commitError && <Box marginY={1} paddingX={2}>
+                        <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+      -            </Box>
+
+      +            </Box>}
+                   <Separator />
+                   {isCommitting
+                       ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+      -                : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
+
+      +                : <ActionFooter actions={commitError ?
+      COMMIT_FOOTER_ACTIONS.FAILURE : COMMIT_FOOTER_ACTIONS.BASE} />
+                   }
+               </Box>
+           );
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/commit.service.ts: >-
+    import type { Transaction } from '../types/domain.types';
+
+    import { sleep } from '../utils';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { LoggerService } from './logger.service';
+
+
+    const generateCommitMessage = (transactions: Transaction[]): string => {
+        LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
+        if (transactions.length === 0) {
+            LoggerService.warn('generateCommitMessage called with 0 transactions.');
+            return '';
+        }
+        // Using a more complex aggregation for better demo, based on the readme
+        const title = 'feat: implement new dashboard and clipboard logic';
+        const bodyPoints = [
+            '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+            '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+        ];
+
+        if (transactions.length === 1 && transactions[0]) {
+            LoggerService.debug('Using single transaction message for commit.');
+            return transactions[0].message;
+        }
+
+        LoggerService.debug('Using aggregated message for commit.');
+        return `${title}\n\n${bodyPoints.join('\n\n')}`;
+    };
+
+
+    const commit = async (transactionsToCommit: Transaction[]): Promise<void> =>
+    {
+        LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+        // In a real app, this would run git commands.
+        // For simulation, we'll just update the transaction store.
+        const { updateTransactionStatus } = useTransactionStore.getState().actions;
+
+        const txIds = transactionsToCommit.map(tx => tx.id);
+
+        // A bit of simulation
+        await sleep(500);
+
+        txIds.forEach(id => {
+            updateTransactionStatus(id, 'COMMITTED');
+        });
+        LoggerService.info('Commit successful.');
+    };
+
+
+    export const CommitService = {
+        generateCommitMessage,
+        commit,
+    };
+  src/stores/commit.store.ts: >-
+    import { create } from 'zustand';
+
+    import { CommitService } from '../services/commit.service';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    './transaction.store';
+
+
+    interface CommitState {
+        finalCommitMessage: string;
+        isCommitting: boolean;
+        actions: {
+            prepareCommitScreen: () => void;
+            commit: () => Promise<void>;
+        }
+    }
+
+
+    export const useCommitStore = create<CommitState>((set) => ({
+        finalCommitMessage: '',
+        isCommitting: false,
+        actions: {
+            prepareCommitScreen: () => {
+                const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
+                set({ finalCommitMessage });
+            },
+            commit: async () => {
+                set({ isCommitting: true });
+                const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                await CommitService.commit(appliedTransactions);
+                set({ isCommitting: false });
+            },
+        },
+    }));
+  src/hooks/useGitCommitScreen.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+
+    export const useGitCommitScreen = () => {
+        const { finalCommitMessage, isCommitting } = useCommitStore();
+        const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+        const { commit } = useCommitStore(s => s.actions);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        useInput((_, key) => {
+            if (isCommitting) return;
+
+            if (key.return) {
+                commit().then(() => {
+                    showDashboardScreen();
+                });
+            }
+        });
+
+        return { transactionsToCommit, finalCommitMessage, isCommitting };
+    };
+  src/constants/commit.constants.ts: |-
+    export const COMMIT_SCREEN_FOOTER_ACTIONS = [
+        { key: 'Enter', label: 'Confirm & Commit' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const;
+  src/components/GitCommitScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Spinner from 'ink-spinner';
+
+    import Separator from './Separator';
+
+    import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+
+    import ActionFooter from './ActionFooter';
+
+    import { COMMIT_SCREEN_FOOTER_ACTIONS } from
+    '../constants/commit.constants';
+
+
+    const GitCommitScreen = () => {
+        const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+        const messageParts = finalCommitMessage.split('\n');
+        const subject = messageParts[0] || '';
+        const body = messageParts.slice(1).join('\n');
+
+        return (
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text bold>TRANSACTIONS INCLUDED</Text>
+                        {transactionsToCommit.map(tx => (
+                            <Text key={tx.id}>- <Text color="gray">{tx.hash}</Text>: {tx.message}</Text>
+                        ))}
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text bold>FINAL COMMIT MESSAGE</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text color="yellow">{subject}</Text>
+                        {body ? <Text>{body}</Text> : null}
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} paddingX={2}>
+                     <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+                </Box>
+                <Separator />
+                {isCommitting
+                    ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                    : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
+                }
+            </Box>
+        );
+    };
+
+
+    export default GitCommitScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 194

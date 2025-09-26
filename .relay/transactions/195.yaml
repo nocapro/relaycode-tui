@@ -1,0 +1,946 @@
+uuid: a69f70d2-9764-46c5-9279-d3de92f254e0
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:39:20.730Z'
+gitCommitMsg: >-
+  feat(commit): implement advanced copy mode and debug states
+
+  - Adds an advanced copy mode to the Git Commit screen, accessible via the 'C'
+  key. This allows copying the full message, subject, body, transaction hashes,
+  and the git command itself. - Integrates `CopyService` to handle the
+  generation of copyable items. - Adds "Git Commit (Failure State)" and "Git
+  Commit: Copy Mode" to the debug menu for streamlined testing and development
+  of these new flows. - Refactors the simple "copy command" action in the
+  failure state to use the new centralized `CommitService.getGitCommitCommand`
+  helper.
+promptSummary: >-
+  Implement parts 3 and 4 of the plan to add copy mode to the Git Commit screen
+  and integrate new states into the debug menu.
+reasoning:
+  - >-
+    Of course. Here are the required changes to implement the advanced copy mode
+    for the Git Commit screen and integrate the new states into the debug menu.
+  - '### Part 3: Implementing Advanced Copy Mode'
+  - >-
+    First, I'll add a helper to the commit service to generate the git command
+    string. This keeps the logic centralized.
+  - >-
+    Next, I'll create the function in the copy service that defines what can be
+    copied from the commit screen.
+  - Now, I'll add the "Copy" action to the commit screen's footer.
+  - >-
+    Finally for this part, I'll update the `useGitCommitScreen` hook to handle
+    the new copy functionality and refactor the existing copy-command logic.
+  - '### Part 4: Debug Menu Integration'
+  - I'll now add the new states to the debug menu for easy testing.
+operations:
+  - type: write
+    path: src/services/commit.service.ts
+    content: >
+      --- src/services/commit.service.ts
+
+      +++ src/services/commit.service.ts
+
+      @@ -19,6 +19,11 @@
+           return `${title}\n\n${bodyPoints.join('\n\n')}`;
+       };
+       
+      +const getGitCommitCommand = (commitMessage: string): string => {
+
+      +    const subject = commitMessage.split('\n')[0] || '';
+
+      +    return `git add . && git commit -m "${subject.replace(/"/g,
+      '\\"')}"`;
+
+      +};
+
+      +
+       const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
+           LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+       
+      @@ -40,6 +45,7 @@
+       
+       export const CommitService = {
+           generateCommitMessage,
+      +    getGitCommitCommand,
+           commit,
+       };
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/copy.service.ts
+    content: >
+      --- src/services/copy.service.ts
+
+      +++ src/services/copy.service.ts
+
+      @@ -1,6 +1,7 @@
+       import type { Transaction, FileItem } from '../types/domain.types';
+       import type { CopyItem } from '../types/copy.types';
+       import { COPYABLE_ITEMS } from '../constants/copy.constants';
+      +import { CommitService } from './commit.service';
+       import { FileSystemService } from './fs.service';
+       
+       const formatFileContext = (filePath: string, content: string): string => {
+      @@ -99,8 +100,27 @@
+           ];
+       };
+       
+      +const getCopyItemsForCommit = (
+
+      +    transactions: Transaction[],
+
+      +    finalCommitMessage: string,
+
+      +): CopyItem[] => {
+
+      +    const subject = finalCommitMessage.split('\n')[0] || '';
+
+      +    const body =
+      finalCommitMessage.split('\n').slice(1).join('\n').trim();
+
+      +
+
+      +    return [
+
+      +        { id: 'full_message', key: 'M', label: 'Full Commit Message',
+      getData: () => finalCommitMessage, isDefaultSelected: true },
+
+      +        { id: 'subject', key: 'S', label: 'Commit Subject', getData: ()
+      => subject },
+
+      +        { id: 'body', key: 'B', label: 'Commit Body', getData: () => body
+      },
+
+      +        { id: 'hashes', key: 'H', label: `Included Transaction Hashes
+      (${transactions.length})`, getData: () => transactions.map(t =>
+      t.hash).join('\n') },
+
+      +        { id: 'command', key: 'C', label: 'Git Commit Command', getData:
+      () => CommitService.getGitCommitCommand(finalCommitMessage) },
+
+      +    ];
+
+      +};
+
+      +
+       export const CopyService = {
+           getCopyItemsForReview,
+           getCopyItemsForDetail,
+           getCopyItemsForHistory,
+      +    getCopyItemsForCommit,
+       };
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/commit.constants.ts
+    content: |
+      --- src/constants/commit.constants.ts
+      +++ src/constants/commit.constants.ts
+      @@ -2,6 +2,7 @@
+           BASE: [
+               { key: 'Enter', label: 'Confirm & Commit' },
+               { key: 'Esc', label: 'Cancel' },
+           ] as const,
+           FAILURE: [
+               { key: 'R', label: 'Retry' }, { key: 'C', label: 'Copy Command' }, { key: 'Esc', label: 'Cancel' },
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/commit.constants.ts
+    content: |
+      <<<<<<< SEARCH
+              { key: 'Enter', label: 'Confirm & Commit' },
+              { key: 'Esc', label: 'Cancel' },
+      =======
+              { key: 'Enter', label: 'Confirm & Commit' },
+              { key: 'C', label: 'Copy' },
+              { key: 'Esc', label: 'Cancel' },
+      >>>>>>> REPLACE
+    patchStrategy: search-replace
+  - type: write
+    path: src/hooks/useGitCommitScreen.tsx
+    content: >
+      --- src/hooks/useGitCommitScreen.tsx
+
+      +++ src/hooks/useGitCommitScreen.tsx
+
+      @@ -3,6 +3,9 @@
+       import { useAppStore } from '../stores/app.store';
+       import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+       import { useNotificationStore } from '../stores/notification.store';
+      +import { useCopyStore } from '../stores/copy.store';
+
+      +import { CopyService } from '../services/copy.service';
+
+      +import { CommitService } from '../services/commit.service';
+       
+       export const useGitCommitScreen = () => {
+           const { finalCommitMessage, isCommitting, commitError } = useCommitStore();
+      @@ -18,6 +21,11 @@
+               }
+           };
+       
+      +    const openCopyMode = () => {
+
+      +        const items =
+      CopyService.getCopyItemsForCommit(transactionsToCommit,
+      finalCommitMessage);
+
+      +        useCopyStore.getState().actions.open('Select data to copy from
+      commit:', items);
+
+      +    };
+
+      +
+           useInput((_, key) => {
+               if (isCommitting) return;
+       
+      @@ -28,7 +36,7 @@
+                   } else if (_.toLowerCase() === 'r') {
+                       handleCommit();
+                   } else if (_.toLowerCase() === 'c') {
+      -                const command = `git add . && git commit -m
+      "${finalCommitMessage.split('\n')[0]}"`;
+
+      +                const command =
+      CommitService.getGitCommitCommand(finalCommitMessage);
+                       // This is a mock clipboard write for the demo
+                       useNotificationStore.getState().actions.show({
+                           type: 'success',
+      @@ -43,6 +51,8 @@
+                   handleCommit();
+               } else if (key.escape) {
+                   showDashboardScreen();
+      +        } else if (_.toLowerCase() === 'c') {
+
+      +            openCopyMode();
+               }
+           });
+       
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -8,8 +8,9 @@
+       import { useNotificationStore } from '../stores/notification.store';
+       import { useCommitStore } from '../stores/commit.store';
+       import { useCopyStore } from '../stores/copy.store';
+      +import { CopyService } from '../services/copy.service';
+       import type { MenuItem } from '../types/debug.types';
+      -import { useTransactionStore } from '../stores/transaction.store';
+
+      +import { useTransactionStore, selectTransactionsByStatus } from
+      '../stores/transaction.store';
+       import { moveIndex } from '../stores/navigation.utils';
+       import { ClipboardService } from '../services/clipboard.service';
+       import { UI_CONFIG } from '../config/ui.config';
+      @@ -216,6 +217,29 @@
+                   action: () => {
+                       commitActions.prepareCommitScreen();
+                       appActions.showGitCommitScreen();
+      +            },
+
+      +        },
+
+      +        {
+
+      +            title: 'Git Commit Screen (Failure State)',
+
+      +            action: () => {
+
+      +                commitActions.prepareCommitScreen();
+
+      +                appActions.showGitCommitScreen();
+
+      +                // Fire-and-forget, the UI will update from the store
+
+      +                commitActions.commit(true);
+
+      +            },
+
+      +        },
+
+      +        {
+
+      +            title: 'Git Commit: Copy Mode',
+
+      +            action: () => {
+
+      +                commitActions.prepareCommitScreen();
+
+      +                appActions.showGitCommitScreen();
+
+      +                const transactionsToCommit =
+      selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+
+      +                const { finalCommitMessage } = useCommitStore.getState();
+
+      +                const items = CopyService.getCopyItemsForCommit(
+
+      +                    transactionsToCommit,
+
+      +                    finalCommitMessage,
+
+      +                );
+
+      +                useCopyStore.getState().actions.open('Select data to copy
+      from commit:', items);
+                   },
+               },
+               {
+    patchStrategy: standard-diff
+snapshot:
+  src/services/commit.service.ts: >-
+    import type { Transaction } from '../types/domain.types';
+
+    import { sleep } from '../utils';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { LoggerService } from './logger.service';
+
+
+    const generateCommitMessage = (transactions: Transaction[]): string => {
+        LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
+        if (transactions.length === 0) {
+            LoggerService.warn('generateCommitMessage called with 0 transactions.');
+            return '';
+        }
+        // Using a more complex aggregation for better demo, based on the readme
+        const title = 'feat: implement new dashboard and clipboard logic';
+        const bodyPoints = [
+            '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+            '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+        ];
+
+        if (transactions.length === 1 && transactions[0]) {
+            LoggerService.debug('Using single transaction message for commit.');
+            return transactions[0].message;
+        }
+
+        LoggerService.debug('Using aggregated message for commit.');
+        return `${title}\n\n${bodyPoints.join('\n\n')}`;
+    };
+
+
+    const commit = async (transactionsToCommit: Transaction[], forceFailure?:
+    boolean): Promise<void> => {
+        LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+
+        await sleep(500);
+
+        if (forceFailure) {
+            LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+            throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
+        }
+
+        // In a real app, this would run git commands.
+        // For simulation, we'll just update the transaction store.
+        const { updateTransactionStatus } = useTransactionStore.getState().actions;
+
+        const txIds = transactionsToCommit.map(tx => tx.id);
+
+        txIds.forEach(id => {
+            updateTransactionStatus(id, 'COMMITTED');
+        });
+        LoggerService.info('Commit successful.');
+    };
+
+
+    export const CommitService = {
+        generateCommitMessage,
+        commit,
+    };
+  src/services/copy.service.ts: >-
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    import type { CopyItem } from '../types/copy.types';
+
+    import { COPYABLE_ITEMS } from '../constants/copy.constants';
+
+    import { FileSystemService } from './fs.service';
+
+
+    const formatFileContext = (filePath: string, content: string): string => {
+        const lang = filePath.split('.').pop() || '';
+        return `--- CONTEXT FOR FILE: ${filePath} ---\n\`\`\`${lang}\n${content}\n\`\`\``;
+    };
+
+
+    const getContextForFilePaths = async (filePaths: string[]): Promise<string>
+    => {
+        const contentPromises = filePaths.map(path => FileSystemService.readFileContent(path));
+        const resolvedContents = await Promise.all(contentPromises);
+        return filePaths
+            .map((path, index) => formatFileContext(path, resolvedContents[index]!))
+            .join('\n\n');
+    };
+
+
+    const createBaseTransactionCopyItems = (transaction: Transaction):
+    CopyItem[] => [
+        { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+        { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+        { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+        { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+    ];
+
+
+    const getCopyItemsForReview = (
+        transaction: Transaction,
+        files: FileItem[],
+        selectedFile?: FileItem,
+    ): CopyItem[] => {
+        const allFilePaths = [...new Set(files.map(f => f.path))];
+
+        return [
+            ...createBaseTransactionCopyItems(transaction),
+            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+            { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+            {
+                id: 'context_files',
+                key: 'X',
+                label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+                getData: async () => {
+                    return getContextForFilePaths(allFilePaths);
+                },
+            },
+        ];
+    };
+
+
+    const getCopyItemsForDetail = (
+        transaction: Transaction,
+        selectedFile?: FileItem,
+    ): CopyItem[] => {
+        const baseItems = createBaseTransactionCopyItems(transaction);
+        const messageItem = { ...baseItems.find(i => i.id === 'message')!, isDefaultSelected: true };
+        const promptItem = baseItems.find(i => i.id === 'prompt')!;
+        const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
+        const uuidItem = baseItems.find(i => i.id === 'uuid')!;
+
+        const allFilePaths = [...new Set((transaction.files || []).map(f => f.path))];
+
+        return [
+            messageItem,
+            promptItem,
+            reasoningItem,
+            { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+            { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+            {
+                id: 'context_files',
+                key: 'X',
+                label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+                getData: async () => {
+                    return getContextForFilePaths(allFilePaths);
+                },
+            },
+            uuidItem,
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+        ];
+    };
+
+
+    const getCopyItemsForHistory = (
+        transactions: Transaction[],
+    ): CopyItem[] => {
+        if (transactions.length === 0) return [];
+
+        const allFilePaths = [
+            ...new Set(transactions.flatMap(tx => tx.files?.map(f => f.path) || [])),
+        ];
+
+        return [
+            { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+            { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+            { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+            { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+            {
+                id: 'context_files_history',
+                key: 'X',
+                label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+                getData: async () => {
+                    return getContextForFilePaths(allFilePaths);
+                },
+            },
+            { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+            { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+        ];
+    };
+
+
+    export const CopyService = {
+        getCopyItemsForReview,
+        getCopyItemsForDetail,
+        getCopyItemsForHistory,
+    };
+  src/constants/commit.constants.ts: |-
+    export const COMMIT_FOOTER_ACTIONS = {
+        BASE: [
+            { key: 'Enter', label: 'Confirm & Commit' },
+            { key: 'Esc', label: 'Cancel' },
+        ] as const,
+        FAILURE: [
+            { key: 'R', label: 'Retry' }, { key: 'C', label: 'Copy Command' }, { key: 'Esc', label: 'Cancel' },
+        ] as const,
+    };
+  src/hooks/useGitCommitScreen.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+
+    export const useGitCommitScreen = () => {
+        const { finalCommitMessage, isCommitting, commitError } = useCommitStore();
+        const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+        const { commit, resetCommitState } = useCommitStore(s => s.actions);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const handleCommit = async (forceFailure?: boolean) => {
+            const { success } = await commit(forceFailure);
+            if (success) {
+                showDashboardScreen();
+            }
+        };
+
+        useInput((_, key) => {
+            if (isCommitting) return;
+
+            if (commitError) {
+                if (key.escape) {
+                    resetCommitState();
+                    showDashboardScreen();
+                } else if (_.toLowerCase() === 'r') {
+                    handleCommit();
+                } else if (_.toLowerCase() === 'c') {
+                    const command = `git add . && git commit -m "${finalCommitMessage.split('\n')[0]}"`;
+                    // This is a mock clipboard write for the demo
+                    useNotificationStore.getState().actions.show({
+                        type: 'success',
+                        title: 'Copied to Clipboard',
+                        message: 'Git command copied to clipboard.',
+                    });
+                }
+                return;
+            }
+
+            if (key.return) {
+                handleCommit();
+            } else if (key.escape) {
+                showDashboardScreen();
+            }
+        });
+
+        return { transactionsToCommit, finalCommitMessage, isCommitting, commitError };
+    };
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useNotificationStore } from '../stores/notification.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    import { ClipboardService } from '../services/clipboard.service';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { useViewport } from './useViewport';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: notificationActions } = useNotificationStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Simulate Pasting Valid Patch',
+                action: () => ClipboardService.processClipboardContent(true),
+            },
+            {
+                title: 'Simulate Pasting Invalid Text',
+                action: () => ClipboardService.processClipboardContent(false),
+            },
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Show Success Notification',
+                action: () => notificationActions.show({
+                    type: 'success',
+                    title: 'Operation Successful',
+                    message: 'The requested operation completed without errors.',
+                }),
+            },
+            {
+                title: 'Show Error Notification',
+                action: () => notificationActions.show({
+                    type: 'error',
+                    title: 'Operation Failed',
+                    message: 'An unexpected error occurred. Check the debug log for details.',
+                }),
+            },
+            {
+                title: 'Show Info Notification',
+                action: () => notificationActions.show({
+                    type: 'info',
+                    title: 'Information',
+                    message: 'This is an informational message for the user.',
+                }),
+            },
+            {
+                title: 'Show Warning Notification',
+                action: () => notificationActions.show({
+                    type: 'warning',
+                    title: 'Warning',
+                    message: 'This action may have unintended side effects.',
+                }),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('2', 'success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('1', 'failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.pageUp) {
+                setSelectedIndex(i => Math.max(0, i - viewportHeight));
+                return;
+            }
+            if (key.pageDown) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    item.action();
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 195

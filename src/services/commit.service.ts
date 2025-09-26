@@ -25,16 +25,26 @@ const generateCommitMessage = (transactions: Transaction[]): string => {
     return `${title}\n\n${bodyPoints.join('\n\n')}`;
 };
 
-const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
+const getGitCommitCommand = (commitMessage: string): string => {
+    const subject = commitMessage.split('\n')[0] || '';
+    return `git add . && git commit -m "${subject.replace(/"/g, '\\"')}"`;
+};
+
+const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
     LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+
+    await sleep(500);
+
+    if (forceFailure) {
+        LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+        throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
+    }
+
     // In a real app, this would run git commands.
     // For simulation, we'll just update the transaction store.
     const { updateTransactionStatus } = useTransactionStore.getState().actions;
 
     const txIds = transactionsToCommit.map(tx => tx.id);
-
-    // A bit of simulation
-    await sleep(500);
 
     txIds.forEach(id => {
         updateTransactionStatus(id, 'COMMITTED');
@@ -44,5 +54,6 @@ const commit = async (transactionsToCommit: Transaction[]): Promise<void> => {
 
 export const CommitService = {
     generateCommitMessage,
+    getGitCommitCommand,
     commit,
 };

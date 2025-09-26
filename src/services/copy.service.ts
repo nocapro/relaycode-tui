@@ -1,6 +1,7 @@
 import type { Transaction, FileItem } from '../types/domain.types';
 import type { CopyItem } from '../types/copy.types';
 import { COPYABLE_ITEMS } from '../constants/copy.constants';
+import { CommitService } from './commit.service';
 import { FileSystemService } from './fs.service';
 
 const formatFileContext = (filePath: string, content: string): string => {
@@ -103,8 +104,25 @@ const getCopyItemsForHistory = (
     ];
 };
 
+const getCopyItemsForCommit = (
+    transactions: Transaction[],
+    finalCommitMessage: string,
+): CopyItem[] => {
+    const subject = finalCommitMessage.split('\n')[0] || '';
+    const body = finalCommitMessage.split('\n').slice(1).join('\n').trim();
+
+    return [
+        { id: 'full_message', key: 'M', label: 'Full Commit Message', getData: () => finalCommitMessage, isDefaultSelected: true },
+        { id: 'subject', key: 'S', label: 'Commit Subject', getData: () => subject },
+        { id: 'body', key: 'B', label: 'Commit Body', getData: () => body },
+        { id: 'hashes', key: 'H', label: `Included Transaction Hashes (${transactions.length})`, getData: () => transactions.map(t => t.hash).join('\n') },
+        { id: 'command', key: 'C', label: 'Git Commit Command', getData: () => CommitService.getGitCommitCommand(finalCommitMessage) },
+    ];
+};
+
 export const CopyService = {
     getCopyItemsForReview,
     getCopyItemsForDetail,
     getCopyItemsForHistory,
+    getCopyItemsForCommit,
 };
