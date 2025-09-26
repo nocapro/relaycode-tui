@@ -7,6 +7,8 @@ import { useTransactionStore, selectSelectedTransaction } from '../stores/transa
 import type { FileItem } from '../types/domain.types';
 import { useLayout } from './useLayout';
 import { useContentViewport } from './useContentViewport';
+import { UI_CONFIG } from '../config/ui.config';
+import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
 import { useViewport } from './useViewport';
 
 type NavigableItem =
@@ -31,29 +33,32 @@ export const useReviewScreen = () => {
     const scriptCount = transaction?.scripts?.length || 0;
     const fileCount = transaction?.files?.length || 0;
 
+    const layout = UI_CONFIG.layout.review;
+
     // Layout for the main navigable item list (prompt, reasoning, files, etc.)
     const mainListLayoutConfig = useMemo(() => ({
-        header: 2, // title+sep
-        fixedRows: 2 + 1 + 1, // meta + prompt + reasoning headers are static before list
-        marginsY: 1, // meta container
-        separators: 3, // after meta, after scripts, after files
-        footer: 2, // ActionFooter can be tall
-        // The body, if visible, also reserves space
-        dynamicRows: { count: bodyView !== 'none' ? 10 : 0 }, // Reserve a block for the body view
-    }), [bodyView]);
+        header: layout.header,
+        fixedRows: layout.fixedRows,
+        marginsY: layout.marginsY,
+        separators: layout.separators,
+        footer: layout.footer,
+        dynamicRows: {
+            count: bodyView !== REVIEW_BODY_VIEWS.NONE ? layout.bodyHeightReservation : 0,
+        },
+    }), [bodyView, layout]);
 
     const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
-    const { viewOffset } = useViewport({ selectedIndex: selectedItemIndex, layoutConfig: mainListLayoutConfig });
+    const { viewOffset } = useViewport({ selectedIndex: selectedItemIndex, itemCount: 100, layoutConfig: mainListLayoutConfig });
 
     // Layout for the body content (diff, reasoning, etc.)
     const bodyLayoutConfig = useMemo(() => ({
-        header: 2,
+        header: layout.header,
+        separators: layout.separators,
         fixedRows: 2, // meta
         marginsY: 1 + 1 + 1, // meta, scripts, files
-        separators: 4, // after title, meta, scripts, files, body
         footer: 2,
         dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
-    }), [scriptCount, fileCount]);
+    }), [layout, scriptCount, fileCount]);
 
     const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
 
@@ -66,15 +71,15 @@ export const useReviewScreen = () => {
 
     const contentLineCount = useMemo(() => {
         const currentItem = navigableItems[selectedItemIndex];
-        switch (bodyView) {
-            case 'reasoning':
+        switch (bodyView) { //
+            case REVIEW_BODY_VIEWS.REASONING:
                 return (transaction?.reasoning || '').split('\n').length;
-            case 'diff': {
+            case REVIEW_BODY_VIEWS.DIFF: {
                 if (currentItem?.type !== 'file') return 0;
                 const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
                 return (selectedFile?.diff || '').split('\n').length;
             }
-            case 'script_output': {
+            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: {
                 if (currentItem?.type !== 'script') return 0;
                 const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
                 return (selectedScript?.output || '').split('\n').length;
@@ -158,10 +163,17 @@ export const useReviewScreen = () => {
         // The 'q' (quit/back) is now handled by the global hotkey hook.
 
         if (key.escape) {
-            if (bodyView === 'bulk_repair' || bodyView === 'confirm_handoff' || bodyView === 'bulk_instruct') {
-                toggleBodyView(bodyView);
-            } else if (bodyView !== 'none') {
-                setBodyView('none');
+            switch (bodyView) {
+                case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                    toggleBodyView(bodyView);
+                    break;
+                default:
+                    if (bodyView !== REVIEW_BODY_VIEWS.NONE) {
+                        setBodyView(REVIEW_BODY_VIEWS.NONE);
+                    }
+                    break;
             }
             return true;
         }
@@ -199,8 +211,12 @@ export const useReviewScreen = () => {
     };
 
     const handleContentScrollInput = (key: Key): boolean => {
-        const contentViews = ['reasoning', 'script_output', 'diff'];
-        if (!contentViews.includes(bodyView)) return false;
+        const contentViews = [
+            REVIEW_BODY_VIEWS.REASONING,
+            REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+            REVIEW_BODY_VIEWS.DIFF,
+        ] as const;
+        if (!(contentViews as readonly string[]).includes(bodyView)) return false;
 
         if (key.upArrow) {
             contentViewport.actions.scrollUp();
@@ -215,19 +231,19 @@ export const useReviewScreen = () => {
     const handleReasoningInput = (input: string, key: Key): void => {
         if (key.upArrow) scrollReasoningUp();
         if (key.downArrow) scrollReasoningDown();
-        if (input.toLowerCase() === 'r') toggleBodyView('reasoning');
+        if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
     };
 
     const handleScriptOutputInput = (input: string, key: Key): void => {
         if (input.toLowerCase() === 'j') navigateScriptErrorDown();
         if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-        if (key.return) toggleBodyView('script_output');
+        if (key.return) toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
         if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
             const currentItem = navigableItems[selectedItemIndex];
             const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
             if (selectedScript) {
                 // eslint-disable-next-line no-console
-                console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`);
+                console.log(`[CLIPBOARD] Copied script output: ${selectedScript.command}`); //
             }
         }
     };
@@ -235,7 +251,7 @@ export const useReviewScreen = () => {
     const handleDiffInput = (input: string) => {
         if (input.toLowerCase() === 'x') expandDiff();
         if (input.toLowerCase() === 'd') toggleBodyView('diff');
-    };
+    }; //
 
     const handleMainNavigationInput = (input: string, key: Key): void => {
         // Handle Shift+R for reject all
@@ -262,20 +278,20 @@ export const useReviewScreen = () => {
         }
 
         if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
-            toggleBodyView('diff');
+            toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
         }
 
         if (input.toLowerCase() === 'r') {
-            toggleBodyView('reasoning');
+            toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
         }
 
         if (key.return) { // Enter key
             if (currentItem?.type === 'file') {
-                toggleBodyView('diff');
+                toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
             } else if (currentItem?.type === 'reasoning') {
-                toggleBodyView('reasoning');
+                toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
             } else if (currentItem?.type === 'script') {
-                toggleBodyView('script_output');
+                toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
             }
         }
 
@@ -323,12 +339,12 @@ export const useReviewScreen = () => {
         }
 
         switch (bodyView) {
-            case 'confirm_handoff': return handleHandoffConfirmInput(input, key);
-            case 'bulk_repair': return handleBulkRepairInput(input, key);
-            case 'bulk_instruct': return handleBulkInstructInput(input, key);
-            case 'reasoning': return handleReasoningInput(input, key);
-            case 'script_output': return handleScriptOutputInput(input, key);
-            case 'diff': return handleDiffInput(input);
+            case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
+            case REVIEW_BODY_VIEWS.BULK_REPAIR: return handleBulkRepairInput(input, key);
+            case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
+            case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
+            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
+            case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input);
             default: return handleMainNavigationInput(input, key);
         }
     });

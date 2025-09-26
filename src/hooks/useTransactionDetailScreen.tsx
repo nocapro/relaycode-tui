@@ -7,6 +7,8 @@ import { useCopyStore } from '../stores/copy.store';
 import { EditorService } from '../services/editor.service';
 import { useLayout } from './useLayout';
 import { useContentViewport } from './useContentViewport';
+import { OVERLAYS } from '../constants/view.constants';
+import { UI_CONFIG } from '../config/ui.config';
 
 export const useTransactionDetailScreen = () => {
     const store = useDetailStore();
@@ -24,22 +26,18 @@ export const useTransactionDetailScreen = () => {
 
     const isFilesExpanded = store.expandedItemPaths.has('FILES');
     const layoutConfig = useMemo(() => ({
-        header: 2, // Header text + separator
-        fixedRows: 4, // Meta info
-        separators: 2, // after nav, after body
-        marginsY: 1, // for body
-        footer: 2, // ActionFooter can be tall
+        ...UI_CONFIG.layout.transactionDetail,
         dynamicRows: {
             count: 3 + (isFilesExpanded ? (files.length || 0) : 0), // navigator items
         },
-    }), [isFilesExpanded, files.length]);
+    }), [isFilesExpanded, files.length]); //
 
     const { remainingHeight: availableBodyHeight } = useLayout(layoutConfig);
     
     const contentLineCount = useMemo(() => {
         if (store.bodyView === 'PROMPT') return (transaction?.prompt || '').split('\n').length;
         if (store.bodyView === 'REASONING') return (transaction?.reasoning || '').split('\n').length;
-        if (store.bodyView === 'DIFF_VIEW') {
+        if (store.bodyView === 'DIFF_VIEW') { //
             const fileId = store.focusedItemPath.split('/')[1];
             const file = files.find(f => f.id === fileId);
             return (file?.diff || '').split('\n').length;
@@ -65,7 +63,7 @@ export const useTransactionDetailScreen = () => {
         }
         
         // --- Content Scrolling ---
-        if (store.bodyView === 'PROMPT' || store.bodyView === 'REASONING' || store.bodyView === 'DIFF_VIEW') {
+        if (['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
             if (key.upArrow) {
                 viewport.actions.scrollUp();
                 return;
@@ -90,7 +88,7 @@ export const useTransactionDetailScreen = () => {
         if (input.toLowerCase() === 'o') {
             if (!transaction) return;
             const { focusedItemPath } = store;
-            if (focusedItemPath.includes('/')) { // Is a file
+            if (focusedItemPath.includes('/')) { //
                 const fileId = focusedItemPath.split('/')[1];
                 const file = files.find(f => f.id === fileId);
                 if (file) EditorService.openFileInEditor(file.path);
@@ -101,7 +99,7 @@ export const useTransactionDetailScreen = () => {
         }
 
         // Navigator movement only if not scrolling content
-        if (store.bodyView !== 'PROMPT' && store.bodyView !== 'REASONING' && store.bodyView !== 'DIFF_VIEW') {
+        if (!['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
             if (key.upArrow) navigateUp();
             if (key.downArrow) navigateDown();
         }
@@ -109,7 +107,7 @@ export const useTransactionDetailScreen = () => {
         if (key.leftArrow) collapseOrBubbleUp();
         if (key.return) expandOrDrillDown();
         if (key.escape) collapseOrBubbleUp();
-    }, { isActive: useViewStore.getState().activeOverlay === 'none' }); // Prevent input when copy overlay is open
+    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
 
     return {
         transaction,

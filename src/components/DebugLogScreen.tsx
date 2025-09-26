@@ -3,27 +3,14 @@ import TextInput from 'ink-text-input';
 import Separator from './Separator';
 import ActionFooter from './ActionFooter';
 import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+import { DEBUG_LOG_FOOTER_ACTIONS, DEBUG_LOG_MODES, LOG_LEVEL_COLORS, LOG_LEVEL_TAGS } from '../constants/log.constants';
 import type { LogEntry } from '../types/log.types';
 import { useStdoutDimensions } from '../utils';
 
-const LogLevelColors = {
-    DEBUG: 'gray',
-    INFO: 'white',
-    WARN: 'yellow',
-    ERROR: 'red',
-};
-
-const LogLevelTag = {
-    DEBUG: { color: 'white', backgroundColor: 'gray' },
-    INFO: { color: 'black', backgroundColor: 'cyan' },
-    WARN: { color: 'black', backgroundColor: 'yellow' },
-    ERROR: { color: 'white', backgroundColor: 'red' },
-};
-
 const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
     const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
-    const color = LogLevelColors[entry.level];
-    const tagColors = LogLevelTag[entry.level];
+    const color = LOG_LEVEL_COLORS[entry.level];
+    const tagColors = LOG_LEVEL_TAGS[entry.level];
 
     return (
         <Text color={color}>
@@ -55,7 +42,7 @@ const DebugLogScreen = () => {
     const renderFilter = () => (
         <Box>
             <Text>Filter: </Text>
-            {mode === 'FILTER' ? (
+            {mode === DEBUG_LOG_MODES.FILTER ? (
                 <TextInput
                     value={filterQuery}
                     onChange={setFilterQuery}
@@ -73,14 +60,9 @@ const DebugLogScreen = () => {
     );
 
     const footerActions =
-        mode === 'FILTER'
-            ? [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }]
-            : [
-                  { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
-                  { key: 'F', label: 'Filter' },
-                  { key: 'C', label: 'Clear' },
-                  { key: 'Esc/Ctrl+L', label: 'Close' },
-              ];
+        mode === DEBUG_LOG_MODES.FILTER
+            ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
+            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE;
 
     return (
         <Box

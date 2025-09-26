@@ -4,7 +4,9 @@ import { useLogStore } from '../stores/log.store';
 import { useViewStore } from '../stores/view.store';
 import { useViewport } from './useViewport';
 import { LoggerService } from '../services/logger.service';
-import type { LayoutConfig } from './useLayout';
+import { DEBUG_LOG_MODES } from '../constants/log.constants';
+import { OVERLAYS } from '../constants/view.constants';
+import { UI_CONFIG } from '../config/ui.config';
 import { moveIndex } from '../stores/navigation.utils';
 
 export const useDebugLogScreen = () => {
@@ -13,7 +15,7 @@ export const useDebugLogScreen = () => {
     const setActiveOverlay = useViewStore(s => s.actions.setActiveOverlay);
 
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const [mode, setMode] = useState<'LIST' | 'FILTER'>('LIST');
+    const [mode, setMode] = useState<keyof typeof DEBUG_LOG_MODES>('LIST');
     const [filterQuery, setFilterQuery] = useState('');
 
     const filteredLogs = useMemo(() => logs.filter(log =>
@@ -33,23 +35,22 @@ export const useDebugLogScreen = () => {
     }, [filteredLogs.length, selectedIndex]);
 
     // Header, borders, footer, filter line
-    const layoutConfig: LayoutConfig = { paddingY: 2, header: 1, separators: 2, fixedRows: 1, marginsY: 1, footer: 1 };
-
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        layoutConfig,
+        itemCount: filteredLogs.length,
+        layoutConfig: UI_CONFIG.layout.debugLog,
     });
 
-    useInput((input, key) => {
-        if (mode === 'FILTER') {
+    useInput((input, key) => { 
+        if (mode === DEBUG_LOG_MODES.FILTER) {
             if (key.escape || key.return) {
-                setMode('LIST');
+                setMode(DEBUG_LOG_MODES.LIST);
             }
             return;
         }
 
         if (key.escape) {
-            setActiveOverlay('none');
+            setActiveOverlay(OVERLAYS.NONE);
             return;
         }
         if (key.upArrow) {
@@ -75,9 +76,9 @@ export const useDebugLogScreen = () => {
             return;
         }
         if (input.toLowerCase() === 'f') {
-            setMode('FILTER');
+            setMode(DEBUG_LOG_MODES.FILTER);
         }
-    });
+    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.LOG });
 
     useEffect(() => {
         LoggerService.startSimulator();

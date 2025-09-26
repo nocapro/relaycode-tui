@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
 import { DashboardService } from '../services/dashboard.service';
+import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
 import { moveIndex } from './navigation.utils';
 
-export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' | 'APPROVING';
+export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
  
 interface DashboardState {
     status: DashboardStatus;
@@ -24,13 +25,13 @@ interface DashboardState {
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
-    status: 'LISTENING',
-    previousStatus: 'LISTENING',
+    status: DASHBOARD_STATUS.LISTENING,
+    previousStatus: DASHBOARD_STATUS.LISTENING,
     selectedTransactionIndex: 0,
     expandedTransactionId: null,
     actions: {
         togglePause: () => set(state => ({
-            status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            status: state.status === DASHBOARD_STATUS.LISTENING ? DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
         })),
         moveSelectionUp: () => set(state => {
             const { transactions } = useTransactionStore.getState();
@@ -47,14 +48,14 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             };
         }),
         startApproveAll: () => set(state => ({
-            status: 'CONFIRM_APPROVE',
+            status: DASHBOARD_STATUS.CONFIRM_APPROVE,
             previousStatus: state.status,
         })),
         cancelAction: () => set(state => ({ status: state.previousStatus })),
         setStatus: (status) => set({ status }),
         confirmAction: async () => { // The `if` is redundant as this is only called from that state.
             const previousStatus = get().previousStatus;
-            set({ status: 'APPROVING' });
+            set({ status: DASHBOARD_STATUS.APPROVING });
             await DashboardService.approveAll();
             set({ status: previousStatus });
         },

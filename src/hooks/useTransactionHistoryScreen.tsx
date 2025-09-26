@@ -8,10 +8,11 @@ import { useCopyStore } from '../stores/copy.store';
 import type { TransactionStatus } from '../types/domain.types';
 import { EditorService } from '../services/editor.service';
 import { getVisibleItemPaths } from '../stores/navigation.utils';
-import type { LayoutConfig } from './useLayout';
+import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from '../constants/history.constants';
+import { UI_CONFIG } from '../config/ui.config';
 import { useViewport } from './useViewport';
 
-export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
+export const useTransactionHistoryScreen = () => {
     const store = useHistoryStore();
     const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
     const { showDashboardScreen, showTransactionDetailScreen } = useAppStore(s => s.actions);
@@ -25,7 +26,8 @@ export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: La
 
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        layoutConfig,
+        itemCount: visibleItemPaths.length,
+        layoutConfig: UI_CONFIG.layout.history,
     });
 
     const openCopyMode = () => {
@@ -36,19 +38,19 @@ export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: La
     };
 
     const handleFilterInput = (_input: string, key: Key): void => {
-        if (key.escape) actions.setMode('LIST');
+        if (key.escape) actions.setMode(HISTORY_VIEW_MODES.LIST);
         if (key.return) actions.applyFilter();
     };
 
     const handleBulkActionsInput = (input: string, key: Key): void => {
-        if (key.escape) {
-            actions.setMode('LIST');
+        if (key.escape) { //
+            actions.setMode(HISTORY_VIEW_MODES.LIST);
             return;
         }
         if (input >= '1' && input <= '3') {
             // eslint-disable-next-line no-console
-            console.log(`[MOCK] Bulk action #${input} selected.`);
-            actions.setMode('LIST');
+            console.log(`[MOCK] Bulk action #${input} selected.`); //
+            actions.setMode(HISTORY_VIEW_MODES.LIST);
         }
     };
 
@@ -62,7 +64,7 @@ export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: La
         if (input === ' ') actions.toggleSelection();
         if (key.return) {
             const txId = selectedItemPath.split('/')[0];
-            if (txId && !selectedItemPath.includes('/')) {
+            if (txId && !selectedItemPath.includes('/')) { //
                 useDetailStore.getState().actions.load(txId);
                 showTransactionDetailScreen();
             }
@@ -72,7 +74,7 @@ export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: La
             const tx = transactions.find(t => t.id === txId);
             if (!tx) return;
 
-            if (selectedItemPath.includes('/file/')) {
+            if (selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE)) {
                 const fileId = selectedItemPath.split('/')[2];
                 const file = tx.files?.find(f => f.id === fileId);
                 if (file) EditorService.openFileInEditor(file.path);
@@ -82,21 +84,21 @@ export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: La
             }
         }
 
-        if (input.toLowerCase() === 'f') actions.setMode('FILTER');
+        if (input.toLowerCase() === 'f') actions.setMode(HISTORY_VIEW_MODES.FILTER);
         if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
-        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode('BULK_ACTIONS');
+        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode(HISTORY_VIEW_MODES.BULK_ACTIONS);
         
         if (key.escape || input.toLowerCase() === 'q') {
             showDashboardScreen();
         }
     };
 
-    useInput((input: string, key: Key) => {
-        if (mode === 'FILTER') {
+    useInput((input: string, key: Key) => { //
+        if (mode === HISTORY_VIEW_MODES.FILTER) {
             handleFilterInput(input, key);
             return;
         }
-        if (mode === 'BULK_ACTIONS') {
+        if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
             handleBulkActionsInput(input, key);
             return;
         }
@@ -112,7 +114,9 @@ export const useTransactionHistoryScreen = ({ layoutConfig }: { layoutConfig: La
     const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
 
     const filterStatusText = filterQuery ? filterQuery : '(none)';
-    const showingStatusText = `Showing ${Math.min(viewOffset + 1, visibleItemPaths.length)}-${Math.min(viewOffset + itemsInView.length, visibleItemPaths.length)} of ${visibleItemPaths.length} items`;
+    const startItem = Math.min(viewOffset + 1, visibleItemPaths.length);
+    const endItem = Math.min(viewOffset + itemsInView.length, visibleItemPaths.length);
+    const showingStatusText = `Showing ${startItem}-${endItem} of ${visibleItemPaths.length} items`;
     
     const hasSelection = selectedForAction.size > 0;
 

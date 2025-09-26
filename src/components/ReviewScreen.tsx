@@ -4,27 +4,17 @@ import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
 import type { ScriptResult, FileItem, FileChangeType } from '../types/domain.types';
 import { useReviewScreen } from '../hooks/useReviewScreen';
+import { REVIEW_BODY_VIEWS, REVIEW_FOOTER_ACTIONS, FILE_STATUS_UI, BULK_REPAIR_OPTIONS, BULK_INSTRUCT_OPTIONS } from '../constants/review.constants';
 import ActionFooter from './ActionFooter';
-import type { ActionItem } from '../types/actions.types';
 
 // --- Sub-components ---
 
-const FileItemRow = ({ file, reviewStatus, reviewError, reviewDetails, isFocused }: {
+const FileItemRow = ({ file, reviewState, isFocused }: {
     file: FileItem;
-    reviewStatus: string;
-    reviewError?: string;
-    reviewDetails?: string;
+    reviewState: { status: string; error?: string; details?: string };
     isFocused: boolean;
 }) => {
-    let icon;
-    let iconColor;
-    switch (reviewStatus) {
-        case 'APPROVED': icon = '[✓]'; iconColor = 'green'; break;
-        case 'REJECTED': icon = '[✗]'; iconColor = 'red'; break;
-        case 'FAILED': icon = '[!]'; iconColor = 'red'; break;
-        case 'AWAITING': icon = '[●]'; iconColor = 'yellow'; break;
-        case 'RE_APPLYING': icon = '[●]'; iconColor = 'cyan'; break;
-    }
+    const ui = FILE_STATUS_UI[reviewState.status as keyof typeof FILE_STATUS_UI] || { icon: '[?]', color: 'gray' };
 
     const typeColor = (type: FileChangeType) => {
         switch (type) {
@@ -40,33 +30,33 @@ const FileItemRow = ({ file, reviewStatus, reviewError, reviewDetails, isFocused
     const prefix = isFocused ? '> ' : '  ';
     const colorProps = isFocused ? { bold: true, color: 'cyan' } : {};
 
-    if (reviewStatus === 'FAILED') {
+    if (reviewState.status === 'FAILED') {
         return (
             <Box>
                 <Text {...colorProps}>
-                    {prefix}<Text color={iconColor}>{icon} FAILED {file.path}</Text>
-                    <Text color="red">    ({reviewError})</Text>
+                    {prefix}<Text color={ui.color}>{ui.icon} FAILED {file.path}</Text>
+                    <Text color="red">    ({reviewState.error})</Text>
                 </Text>
             </Box>
         );
     }
 
-    if (reviewStatus === 'AWAITING') {
+    if (reviewState.status === 'AWAITING') {
         return (
             <Box>
                 <Text {...colorProps}>
-                    {prefix}<Text color={iconColor}>{icon} AWAITING {file.path}</Text>
-                    <Text color="yellow">    ({reviewDetails})</Text>
+                    {prefix}<Text color={ui.color}>{ui.icon} AWAITING {file.path}</Text>
+                    <Text color="yellow">    ({reviewState.details})</Text>
                 </Text>
             </Box>
         );
     }
 
-    if (reviewStatus === 'RE_APPLYING') {
+    if (reviewState.status === 'RE_APPLYING') {
         return (
              <Box>
                 <Text {...colorProps}>
-                    {prefix}<Text color={iconColor}>{icon} RE-APPLYING... {file.path}</Text>
+                    {prefix}<Text color={ui.color}>{ui.icon} RE-APPLYING... {file.path}</Text>
                     <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
                 </Text>
             </Box>
@@ -76,7 +66,7 @@ const FileItemRow = ({ file, reviewStatus, reviewError, reviewDetails, isFocused
     return (
         <Box>
             <Text {...colorProps}>
-                {prefix}<Text color={iconColor}>{icon}</Text> {file.type}{' '}
+                {prefix}<Text color={ui.color}>{ui.icon}</Text> {file.type}{' '}
                 <Text color={typeColor(file.type)}>{file.path}</Text>{' '}
                 {diffStats} [{strategy}]
             </Text>
@@ -147,9 +137,9 @@ const ReviewScreen = () => {
     const { hash, message, prompt = '', reasoning = '' } = transaction;
 
     const renderBody = () => {
-        if (bodyView === 'none') return null;
+        if (bodyView === REVIEW_BODY_VIEWS.NONE) return null;
 
-        if (bodyView === 'reasoning') {
+        if (bodyView === REVIEW_BODY_VIEWS.REASONING) {
             const reasoningText = reasoning || '';
             const reasoningLinesCount = reasoningText.split('\n').length;
             const visibleLinesCount = 10;
@@ -170,7 +160,7 @@ const ReviewScreen = () => {
             );
         }
         
-        if (bodyView === 'diff') {
+        if (bodyView === REVIEW_BODY_VIEWS.DIFF) {
             const currentItem = navigableItems[selectedItemIndex];
             const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
             if (!selectedFile) return null;
@@ -185,7 +175,7 @@ const ReviewScreen = () => {
             );
         }
 
-        if (bodyView === 'script_output') {
+        if (bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT) {
              const currentItem = navigableItems[selectedItemIndex];
              const scriptItems = navigableItems.filter((i): i is { type: 'script'; id: string } => i.type === 'script');
              const scriptIndex = currentItem?.type === 'script'
@@ -231,7 +221,7 @@ const ReviewScreen = () => {
              );
         }
 
-        if (bodyView === 'confirm_handoff') {
+        if (bodyView === REVIEW_BODY_VIEWS.CONFIRM_HANDOFF) {
             return (
                 <Box flexDirection="column" gap={1}>
                     <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
@@ -247,15 +237,8 @@ const ReviewScreen = () => {
             );
         }
 
-        if (bodyView === 'bulk_repair') {
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_REPAIR) {
             const failedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'FAILED');
-            const repairOptions = [
-                '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
-                '(2) Bulk Change Strategy & Re-apply',
-                '(3) Handoff to External Agent',
-                '(4) Bulk Abandon All Failed Files',
-                '(Esc) Cancel',
-            ];
 
             return (
                 <Box flexDirection="column" gap={1}>
@@ -271,7 +254,7 @@ const ReviewScreen = () => {
                     <Text>How would you like to proceed?</Text>
 
                     <Box flexDirection="column">
-                        {repairOptions.map((opt, i) => (
+                        {BULK_REPAIR_OPTIONS.map((opt, i) => (
                             <Text key={i} color={selectedBulkRepairOptionIndex === i ? 'cyan' : undefined}>
                                 {selectedBulkRepairOptionIndex === i ? '> ' : '  '}
                                 {opt}
@@ -282,14 +265,8 @@ const ReviewScreen = () => {
             );
         }
 
-        if (bodyView === 'bulk_instruct') {
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_INSTRUCT) {
             const rejectedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'REJECTED');
-            const instructOptions = [
-                '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
-                '(2) Handoff to External Agent',
-                '(3) Bulk Un-reject All Files (revert to original)',
-                '(4) Cancel',
-            ];
 
             return (
                 <Box flexDirection="column" gap={1}>
@@ -302,7 +279,7 @@ const ReviewScreen = () => {
                         ))}
                     </Box>
                     <Box flexDirection="column" marginTop={1}>
-                        {instructOptions.map((opt, i) => (
+                        {BULK_INSTRUCT_OPTIONS.map((opt, i) => (
                             <Text key={i} color={selectedBulkInstructOptionIndex === i ? 'cyan' : undefined}>
                                 {selectedBulkInstructOptionIndex === i ? '> ' : '  '}
                                 {opt}
@@ -318,93 +295,27 @@ const ReviewScreen = () => {
 
     const renderFooter = () => {
         // Contextual footer for body views
-        if (bodyView === 'diff') {
-            return <ActionFooter actions={[
-                { key: '↑↓', label: 'Nav' },
-                { key: 'X', label: 'Expand' },
-                { key: 'D/Esc', label: 'Back' },
-            ]}/>;
-        }
-        if (bodyView === 'reasoning') {
-            return <ActionFooter actions={[
-                { key: '↑↓', label: 'Scroll Text' },
-                { key: 'R', label: 'Collapse View' },
-                { key: 'C', label: 'Copy Mode' },
-            ]}/>;
-        }
-        if (bodyView === 'script_output') {
-            return <ActionFooter actions={[
-                { key: '↑↓', label: 'Nav' },
-                { key: 'J↓/K↑', label: 'Next/Prev Error' },
-                { key: 'C', label: 'Copy Output' },
-                { key: 'Ent/Esc', label: 'Back' },
-            ]}/>;
-        }
-        if (bodyView === 'bulk_repair') {
-            return <Text>Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel</Text>;
-        }
-        if (bodyView === 'bulk_instruct') {
-            return <Text>Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel</Text>;
-        }
-        if (bodyView === 'confirm_handoff') {
-            return <ActionFooter actions={[
-                { key: 'Enter', label: 'Confirm Handoff' },
-                { key: 'Esc', label: 'Cancel' },
-            ]}/>;
-        }
+        if (bodyView === REVIEW_BODY_VIEWS.DIFF) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.DIFF_VIEW}/>;
+        if (bodyView === REVIEW_BODY_VIEWS.REASONING) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.REASONING_VIEW}/>;
+        if (bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.SCRIPT_OUTPUT_VIEW}/>;
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_REPAIR) return <Text>{REVIEW_FOOTER_ACTIONS.BULK_REPAIR_VIEW.text}</Text>;
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_INSTRUCT) return <Text>{REVIEW_FOOTER_ACTIONS.BULK_INSTRUCT_VIEW.text}</Text>;
+        if (bodyView === REVIEW_BODY_VIEWS.CONFIRM_HANDOFF) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.HANDOFF_CONFIRM_VIEW}/>;
 
-        // Main footer
-        const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
-
+        // Dynamic Main footer
         const currentItem = navigableItems[selectedItemIndex];
-        
-        if (currentItem?.type === 'file') {
-            const selectedFile = files.find(f => f.id === currentItem.id);
-            const fileState = fileReviewStates.get(currentItem.id);
-            if (fileState?.status !== 'FAILED') {
-                actions.push({ key: 'Spc', label: 'Toggle' });
-            }
-            actions.push({ key: 'D', label: 'Diff' });
-            
-            // Add repair options for failed files
-            if (selectedFile && fileState?.status === 'FAILED') {
-                actions.push({ key: 'T', label: 'Try Repair' });
-            }
-            if (selectedFile && fileState?.status === 'REJECTED') {
-                actions.push({ key: 'I', label: 'Instruct' });
-            }
-        } else if (currentItem?.type === 'script') {
-            actions.push({ key: 'Ent', label: 'Expand Details' });
-        } else { // Prompt or Reasoning
-            actions.push({ key: 'Ent', label: 'Expand' });
-        }
-
-        if (currentItem?.type !== 'reasoning') {
-            actions.push({ key: 'R', label: 'Reasoning' });
-        }
-
-        // Add bulk repair if there are failed files
         const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
-        if (hasFailedFiles) {
-            actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
-        }
-        // Add bulk instruct if there are rejected files
-        if (hasRejectedFiles) {
-            actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
-        }
-        
-        actions.push({ key: 'C', label: 'Copy' });
+        const fileState = currentItem?.type === 'file' ? fileReviewStates.get(currentItem.id) : undefined;
 
-        if (approvedFilesCount > 0) {
-            actions.push({ key: 'A', label: 'Approve' });
-        }
-
-        if (Array.from(fileReviewStates.values()).some(s => s.status === 'APPROVED' || s.status === 'FAILED')) {
-            actions.push({ key: 'Shift+R', label: 'Reject All' });
-        }
-        actions.push({ key: 'Q', label: 'Quit' });
-
-        return <ActionFooter actions={actions} />;
+        const footerConfig = {
+            isFileSelected: currentItem?.type === 'file',
+            fileStatus: fileState?.status as 'FAILED' | 'REJECTED' | 'OTHER' | undefined,
+            currentItemType: currentItem?.type as 'file' | 'script' | 'reasoning' | 'prompt' | undefined,
+            hasFailedFiles,
+            hasRejectedFiles,
+            hasApprovedFiles: approvedFilesCount > 0,
+        };
+        return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.MAIN_VIEW(footerConfig)} />;
     };
 
     return (
@@ -417,25 +328,31 @@ const ReviewScreen = () => {
             <Box flexDirection="column" marginY={1}>
                 <Box flexDirection="column">
                     <Text>{hash} · {message}</Text>
-                    <Text>
-                        (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>
-                        ) · {numFiles} Files · ({approvedFilesCount}/{numFiles} Appr)
-                        · Showing {viewOffset + 1}-
-                        {Math.min(viewOffset + navigableItemsInView.length, navigableItems.length)} of {navigableItems.length}
-                        {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && <Text> · Scripts: SKIPPED</Text>}
+                    <Box>
+                        <Text>
+                            (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>)
+                            {' '}| {numFiles} Files · ({approvedFilesCount}/{numFiles} Appr)
+                            {' '}| Showing {viewOffset + 1}-
+                            {Math.min(viewOffset + navigableItemsInView.length, navigableItems.length)}{' '}
+                            of {navigableItems.length}
+                        </Text>
+                        {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && (
+                            <Text> · Scripts: SKIPPED</Text>
+                        )}
                         {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
-                    </Text>
+                    </Box>
                 </Box>
 
                 <Box flexDirection="column" marginTop={1}>
                     <Text color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' : undefined}>
                         {navigableItems[selectedItemIndex]?.type === 'prompt' ? '> ' : '  '}
-                        (P)rompt ▸ {(prompt || '').substring(0, 60)}...
+                        (P)rompt ▸ {(prompt || '').substring(0, 50)}...
                     </Text>
                     <Text color={navigableItems[selectedItemIndex]?.type === 'reasoning' ? 'cyan' : undefined}>
                         {navigableItems[selectedItemIndex]?.type === 'reasoning' ? '> ' : '  '}
-                        (R)easoning ({(reasoning || '').split('\n\n').length} steps) {bodyView === 'reasoning' ? '▾' : '▸'}{' '}
-                        {((reasoning || '').split('\n')[0] ?? '').substring(0, 50)}...
+                        (R)easoning ({(reasoning || '').split('\n\n').length} steps){' '}
+                        {bodyView === REVIEW_BODY_VIEWS.REASONING ? '▾' : '▸'}{' '}
+                        {((reasoning || '').split('\n')[0] ?? '').substring(0, 40)}...
                     </Text>
                 </Box>
             </Box>
@@ -448,11 +365,11 @@ const ReviewScreen = () => {
                     <Box flexDirection="column" marginY={1}>
                         {scripts.map((script: ScriptResult) => {
                             const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'script' && i.id === script.command);
-                            if (itemInViewIndex === -1) return null; // Only render if visible
+                            if (itemInViewIndex === -1) return null;
                             
                             const isSelected = selectedItemIndex === viewOffset + itemInViewIndex;
                             return (
-                                <ScriptItemRow key={script.command} script={script} isSelected={isSelected} isExpanded={bodyView === 'script_output' && isSelected} />
+                                <ScriptItemRow key={script.command} script={script} isSelected={isSelected} isExpanded={bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT && isSelected} />
                             );
                         })}
                     </Box>
@@ -471,12 +388,7 @@ const ReviewScreen = () => {
                     const reviewState = fileReviewStates.get(file.id);
                     
                     return (
-                        <FileItemRow
-                            key={file.id} file={file} isFocused={isFocused}
-                            reviewStatus={reviewState?.status || 'AWAITING'}
-                            reviewError={reviewState?.error}
-                            reviewDetails={reviewState?.details}
-                        />
+                        <FileItemRow key={file.id} file={file} isFocused={isFocused} reviewState={reviewState || { status: 'AWAITING' }} />
                     );
                 })}
             </Box>
@@ -484,7 +396,7 @@ const ReviewScreen = () => {
             <Separator />
             
             {/* Body Viewport */}
-            {bodyView !== 'none' && (
+            {bodyView !== REVIEW_BODY_VIEWS.NONE && (
                 <>
                     <Box marginY={1}>
                         {renderBody()}

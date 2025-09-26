@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
 import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath } from './navigation.utils';
+import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from '../constants/history.constants';
 import { sleep } from '../utils';
 
-export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
+export type HistoryViewMode = (typeof HISTORY_VIEW_MODES)[keyof typeof HISTORY_VIEW_MODES];
  
 // Omit 'actions' from state type for partial updates
 type HistoryStateData = Omit<HistoryState, 'actions'>;
@@ -32,7 +33,7 @@ interface HistoryState {
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
-    mode: 'LIST',
+    mode: HISTORY_VIEW_MODES.LIST,
     selectedItemPath: '',
     expandedIds: new Set(),
     loadingPaths: new Set(),
@@ -43,7 +44,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             const { transactions } = useTransactionStore.getState();
             set({
                 selectedItemPath: transactions[0]?.id || '',
-                mode: 'LIST',
+                mode: HISTORY_VIEW_MODES.LIST,
                 expandedIds: new Set(),
                 loadingPaths: new Set(),
                 selectedForAction: new Set(),
@@ -90,9 +91,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             if (expandedIds.has(selectedItemPath)) return;
 
             // Files and content items with potentially large data can show a loading state
-            const isLoadable = selectedItemPath.includes('/file/') ||
-                               selectedItemPath.includes('/prompt') ||
-                               selectedItemPath.includes('/reasoning');
+            const isLoadable = selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE) ||
+                               selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.PROMPT) ||
+                               selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.REASONING);
 
             if (isLoadable) {
                 set(state => ({ loadingPaths: new Set(state.loadingPaths).add(selectedItemPath) }));
@@ -113,7 +114,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             if (newExpandedIds.has(selectedItemPath)) {
                 newExpandedIds.delete(selectedItemPath);
                 // Recursively collapse children
-                for (const id of newExpandedIds) {
+                for (const id of newExpandedIds) { //
                     if (id.startsWith(`${selectedItemPath}/`)) {
                         newExpandedIds.delete(id);
                     }
@@ -141,7 +142,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         setMode: (mode) => set({ mode }),
         setFilterQuery: (query) => set({ filterQuery: query }),
         applyFilter: () => {
-            set({ mode: 'LIST' });
+            set({ mode: HISTORY_VIEW_MODES.LIST });
         },
         prepareDebugState: (stateName) => {
             const { actions } = get();
@@ -156,13 +157,13 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                     actions.load({ expandedIds: new Set(['3', '3/file/3-1']), selectedItemPath: '3/file/3-1' });
                     break;
                 case 'filter':
-                    actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:COMMITTED' });
+                    actions.load({ mode: HISTORY_VIEW_MODES.FILTER, filterQuery: 'logger.ts status:COMMITTED' });
                     break;
                 case 'copy':
                     actions.load({ selectedForAction: new Set(['3', '6']) });
                     break;
                 case 'bulk':
-                    actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['3', '6']) });
+                    actions.load({ mode: HISTORY_VIEW_MODES.BULK_ACTIONS, selectedForAction: new Set(['3', '6']) });
                     break;
             }
         },

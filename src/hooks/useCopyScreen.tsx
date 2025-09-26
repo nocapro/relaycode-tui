@@ -2,21 +2,19 @@ import { useInput } from 'ink';
 import { useCopyStore } from '../stores/copy.store';
 import { useViewStore } from '../stores/view.store';
 import { useViewport } from './useViewport';
-import type { LayoutConfig } from './useLayout';
+import { UI_CONFIG } from '../config/ui.config';
+import { OVERLAYS } from '../constants/view.constants';
 
 export const useCopyScreen = () => {
-    const activeOverlay = useViewStore(s => s.activeOverlay);
     const {
         title, items, selectedIndex, selectedIds, lastCopiedMessage,
         actions,
     } = useCopyStore(state => ({ ...state, actions: state.actions }));
     
-    // Header, separator, title, margin, separator, status, footer
-    const layoutConfig: LayoutConfig = { header: 1, separators: 2, fixedRows: 2, marginsY: 1, footer: 1 };
-    
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        layoutConfig,
+        itemCount: items.length,
+        layoutConfig: UI_CONFIG.layout.copyScreen,
     });
 
     useInput((input, key) => {
@@ -53,7 +51,7 @@ export const useCopyScreen = () => {
         if(item) {
             actions.toggleSelectionById(item.id);
         }
-    }, { isActive: activeOverlay === 'copy' });
+    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.COPY });
 
     const itemsInView = items.slice(viewOffset, viewOffset + viewportHeight);
 

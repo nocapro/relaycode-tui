@@ -2,35 +2,20 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import Separator from './Separator';
-import type { Transaction, TransactionStatus, FileChangeType } from '../types/domain.types';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
-import { UI_CONFIG } from '../config/ui.config';
-import type { LayoutConfig } from '../hooks/useLayout';
+import { UI_CONFIG } from '../config/ui.config'; //
 import ActionFooter from './ActionFooter';
-import type { ActionItem } from '../types/actions.types';
+import { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';
+import { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.constants';
 
 // --- Sub-components & Helpers ---
 
 const getStatusIcon = (status: TransactionStatus) => {
-    switch (status) {
-        case 'PENDING': return <Text color="yellow">?</Text>;
-        case 'APPLIED': return <Text color="green">✓</Text>;
-        case 'COMMITTED': return <Text color="blue">→</Text>;
-        case 'HANDOFF': return <Text color="magenta">→</Text>;
-        case 'FAILED': return <Text color="red">✗</Text>;
-        case 'REVERTED': return <Text color="gray">↩</Text>;
-        case 'IN-PROGRESS': return <Spinner type="dots" />;
-        default: return <Text> </Text>;
-    }
-};
-
-const getFileChangeTypeIcon = (type: FileChangeType) => {
-    switch (type) {
-        case 'MOD': return '[MOD]';
-        case 'ADD': return '[ADD]';
-        case 'DEL': return '[DEL]';
-        case 'REN': return '[REN]';
-    }
+    if (status === 'IN-PROGRESS') return <Spinner type="dots" />;
+    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
+    if (!ui) return <Text> </Text>;
+    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
 };
 
 const formatTimeAgo = (timestamp: number) => {
@@ -54,7 +39,7 @@ const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
              <Box flexDirection="column" paddingLeft={1}>
                 {files.map(file => (
                      <Text key={file.id}>
-                        <Text color="gray">{getFileChangeTypeIcon(file.type)}</Text> {file.path}
+                        <Text color="gray">{FILE_TYPE_MAP[file.type]}</Text> {file.path}
                     </Text>
                 ))}
              </Box>
@@ -80,7 +65,11 @@ const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction:
         </Text>
     );
 
-    return isSelected ? <Text bold color="cyan">{'> '}{content}</Text> : <Text>{'  '}{content}</Text>;
+    if (isSelected) {
+        return <Text bold color="cyan">{'> '}{content}</Text>;
+    }
+
+    return <Text>{'  '}{content}</Text>;
 };
 
 const ConfirmationContent = ({
@@ -121,31 +110,24 @@ const DashboardScreen = () => {
         transactionsToConfirm,
         expandedTransactionId,
     } = useDashboardScreen({
-        layoutConfig: {
-            header: 1,
-            separators: 2,
-            fixedRows: 1 + 1, // status bar, event stream header
-            marginsY: 1 + 1 + 1, // status bar, event stream list, separator
-            footer: 2,
-            // Non-event stream vertical space (header, footer, etc.)
-        },
+        layoutConfig: UI_CONFIG.layout.dashboard,
     });
 
     const renderStatusBar = () => {
         let statusText: string;
         let statusIcon: React.ReactNode;
         switch (status) {
-            case 'LISTENING': statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
-            case 'PAUSED': statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
-            case 'APPROVING': statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>;
+            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; //
         }
 
         let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
         const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
 
-        if (status === 'APPROVING') approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === 'CONFIRM_APPROVE') {
+        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {
             approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
         }
         
@@ -158,24 +140,11 @@ const DashboardScreen = () => {
 
     const renderFooter = () => {
         if (isModal) return (
-            <ActionFooter actions={[
-                { key: 'Enter', label: 'Confirm' },
-                { key: 'Esc', label: 'Cancel' },
-            ]}/>
+            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>
         );
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
-        const footerActions: ActionItem[] = [
-            { key: '↑↓', label: 'Nav' },
-            { key: '→/Ent', label: 'View' },
-            { key: '←', label: 'Collapse' },
-            { key: 'L', label: 'Log' },
-            { key: 'A', label: 'Approve All' },
-            { key: 'C', label: 'Commit' },
-            { key: 'P', label: status === 'PAUSED' ? 'Resume' : 'Pause' },
-            { key: 'Q', label: 'Quit' },
-        ];
-		return <ActionFooter actions={footerActions} />;
+		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;
     };
     
     return (

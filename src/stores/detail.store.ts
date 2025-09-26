@@ -70,16 +70,16 @@ export const useDetailStore = create<DetailState>((set, get) => ({
             const { focusedItemPath, expandedItemPaths } = state;
             const newExpandedPaths = new Set(expandedItemPaths);
             
-            if (focusedItemPath.includes('/')) { // Is a file
+            if (focusedItemPath.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)) { // Is a file
                 return { bodyView: DETAIL_BODY_VIEWS.DIFF_VIEW };
             }
 
             // Is a section header
             if (newExpandedPaths.has(focusedItemPath)) {
                 // Already expanded, drill in if it's FILES
-                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) {
+                if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) { //
                     const visibleItems = getVisibleItemPaths(newExpandedPaths);
-                    const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`));
+                    const firstFile = visibleItems.find(item => item.startsWith(`${NAVIGATOR_SECTIONS.FILES}/`)); //
                     if (firstFile) {
                         return { focusedItemPath: firstFile, bodyView: DETAIL_BODY_VIEWS.FILES_LIST };
                     }
@@ -88,7 +88,7 @@ export const useDetailStore = create<DetailState>((set, get) => ({
             } else {
                 // Not expanded, so expand it
                 newExpandedPaths.add(focusedItemPath);
-                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE;
+                let newBodyView: DetailBodyView = DETAIL_BODY_VIEWS.NONE; //
                 if (focusedItemPath === NAVIGATOR_SECTIONS.PROMPT) newBodyView = DETAIL_BODY_VIEWS.PROMPT;
                 if (focusedItemPath === NAVIGATOR_SECTIONS.REASONING) newBodyView = DETAIL_BODY_VIEWS.REASONING;
                 if (focusedItemPath === NAVIGATOR_SECTIONS.FILES) newBodyView = DETAIL_BODY_VIEWS.FILES_LIST;

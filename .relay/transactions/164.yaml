@@ -1,0 +1,1579 @@
+uuid: c32c51eb-98c4-406c-81ba-9577c2f0d912
+projectId: relaycode-tui
+createdAt: '2025-09-26T00:51:02.275Z'
+gitCommitMsg: >-
+  refactor: extract constants and centralize UI configs
+
+  Executed a major refactoring to improve maintainability and establish a single
+  source of truth for constants and UI layout values.
+
+  Part 1: Constants Extraction - Created new constant files for commit,
+  dashboard, history, log, and view domains. - Augmented existing constant files
+  (copy, detail, review) with new values extracted from components. - Extracted
+  UI text, action definitions, status maps, and magic numbers into these files.
+
+  Part 2: UI Config & Type Safety - Centralized static LayoutConfig objects for
+  multiple screens into `src/config/ui.config.ts`. - Updated Zustand store types
+  (for view overlays, dashboard status, review views, etc.) to be derived from
+  the new constant objects, eliminating magic strings from state definitions.
+promptSummary: >-
+  The user requested a refactoring to extract all constants into dedicated files
+  under `src/constants/` and to centralize UI layout configurations. This
+  corresponds to executing Part 1 and Part 2 of the multi-stage refactoring
+  plan.
+reasoning:
+  - >-
+    Of course. I will execute a comprehensive refactoring to extract constants
+    and centralize UI configurations as requested. This operation will be
+    performed in a single transaction, covering Parts 1 and 2 of the master
+    plan.
+  - '### Part 1: Creating and Consolidating Constants'
+  - >-
+    First, I will create new constant files and augment existing ones to serve
+    as the single source of truth for various static values across the
+    application. This includes UI text, magic numbers, status strings, and
+    action item definitions. As part of this consolidation, I will remove the
+    original constant definitions from their scattered locations in components
+    and stores.
+  - '### Part 2: Centralizing UI Layout and Updating Types'
+  - >-
+    Next, I will centralize all static `LayoutConfig` objects into
+    `src/config/ui.config.ts` under a new `layout` key. I will then update the
+    type definitions in the Zustand stores (`view`, `dashboard`, `review`,
+    `history`) to be derived from the newly created constant objects, ensuring
+    robust type safety and preventing magic strings in our application's state.
+  - 'Here are the changes:'
+  - I'm creating several new files to hold the constants, organized by domain.
+  - I'm updating existing constants files with new values.
+  - Now I'm centralizing layout configurations.
+  - Finally, I'm updating the stores to use the new constant-derived types.
+operations:
+  - type: write
+    path: src/constants/commit.constants.ts
+    content: |-
+      export const COMMIT_SCREEN_FOOTER_ACTIONS = [
+          { key: 'Enter', label: 'Confirm & Commit' },
+          { key: 'Esc', label: 'Cancel' },
+      ] as const;
+    patchStrategy: replace
+  - type: write
+    path: src/constants/dashboard.constants.ts
+    content: >-
+      import type { ActionItem } from '../types/actions.types';
+
+
+      export const DASHBOARD_STATUS = {
+          LISTENING: 'LISTENING',
+          PAUSED: 'PAUSED',
+          CONFIRM_APPROVE: 'CONFIRM_APPROVE',
+          APPROVING: 'APPROVING',
+      } as const;
+
+
+      type DashboardStatusValue = (typeof DASHBOARD_STATUS)[keyof typeof
+      DASHBOARD_STATUS];
+
+
+      export const DASHBOARD_FOOTER_ACTIONS = {
+          MODAL: [
+              { key: 'Enter', label: 'Confirm' },
+              { key: 'Esc', label: 'Cancel' },
+          ] as const,
+          STANDARD: (status: DashboardStatusValue): ActionItem[] => [
+              { key: '↑↓', label: 'Nav' },
+              { key: '→/Ent', label: 'View' },
+              { key: '←', label: 'Collapse' },
+              { key: 'L', label: 'Log' },
+              { key: 'A', label: 'Approve All' },
+              { key: 'C', label: 'Commit' },
+              { key: 'P', label: status === DASHBOARD_STATUS.PAUSED ? 'Resume' : 'Pause' },
+              { key: 'Q', label: 'Quit' },
+          ],
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/constants/history.constants.ts
+    content: |-
+      import type { ActionItem } from '../types/actions.types';
+
+      export const HISTORY_VIEW_MODES = {
+          LIST: 'LIST',
+          FILTER: 'FILTER',
+          BULK_ACTIONS: 'BULK_ACTIONS',
+      } as const;
+
+      export const HISTORY_ITEM_PATH_SEGMENTS = {
+          FILE: '/file/',
+          PROMPT: '/prompt',
+          REASONING: '/reasoning',
+      } as const;
+
+      export const TRANSACTION_STATUS_UI = {
+          COMMITTED: { text: '✓ Committed', color: 'green' },
+          HANDOFF: { text: '→ Handoff', color: 'magenta' },
+          REVERTED: { text: '↩ Reverted', color: 'gray' },
+          APPLIED: { text: '✓ Applied', color: 'blue' },
+          PENDING: { text: '? Pending', color: 'yellow' },
+          FAILED: { text: '✗ Failed', color: 'red' },
+      } as const;
+
+      export const FILE_TYPE_MAP = {
+          MOD: '[MOD]',
+          ADD: '[ADD]',
+          DEL: '[DEL]',
+          REN: '[REN]',
+      } as const;
+
+      export const BULK_ACTIONS_OPTIONS = [
+          '(1) Revert Selected Transactions',
+          `(2) Mark as 'Git Committed'`,
+          `(3) Delete Selected Transactions (from Relaycode history)`,
+          '(Esc) Cancel',
+      ] as const;
+
+      export const HISTORY_FOOTER_ACTIONS = {
+          FILTER_MODE: [{ key: 'Enter', label: 'Apply Filter & Return' }, { key: 'Esc', label: 'Cancel' }] as const,
+          BULK_MODE: { text: 'Choose an option [1-3] or (Esc) Cancel' } as const,
+          LIST_MODE: (openActionLabel: string, hasSelection: boolean): ActionItem[] => {
+              const actions: ActionItem[] = [
+                  { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                  { key: '→', label: 'Expand' },
+                  { key: '←', label: 'Collapse' },
+                  { key: 'Spc', label: 'Select' },
+                  { key: 'Ent', label: 'Details' },
+                  { key: 'O', label: openActionLabel },
+                  { key: 'F', label: 'Filter' },
+              ];
+              if (hasSelection) {
+                  actions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
+              }
+              return actions;
+          },
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/constants/log.constants.ts
+    content: |-
+      export const MAX_LOGS = 200;
+
+      export const DEBUG_LOG_MODES = {
+          LIST: 'LIST',
+          FILTER: 'FILTER',
+      } as const;
+
+      export const LOG_LEVEL_COLORS = {
+          DEBUG: 'gray',
+          INFO: 'white',
+          WARN: 'yellow',
+          ERROR: 'red',
+      };
+
+      export const LOG_LEVEL_TAGS = {
+          DEBUG: { color: 'white', backgroundColor: 'gray' },
+          INFO: { color: 'black', backgroundColor: 'cyan' },
+          WARN: { color: 'black', backgroundColor: 'yellow' },
+          ERROR: { color: 'white', backgroundColor: 'red' },
+      };
+
+      export const DEBUG_LOG_FOOTER_ACTIONS = {
+          FILTER_MODE: [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }] as const,
+          LIST_MODE: [
+              { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+              { key: 'F', label: 'Filter' },
+              { key: 'C', label: 'Clear' },
+              { key: 'Esc/Ctrl+L', label: 'Close' },
+          ] as const,
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/constants/view.constants.ts
+    content: |-
+      export const OVERLAYS = {
+          NONE: 'none',
+          HELP: 'help',
+          COPY: 'copy',
+          DEBUG: 'debug',
+          LOG: 'log',
+      } as const;
+    patchStrategy: replace
+  - type: write
+    path: src/constants/copy.constants.ts
+    content: |+
+      --- src/constants/copy.constants.ts
+      +++ src/constants/copy.constants.ts
+      @@ -1,3 +1,5 @@
+      +import type { ActionItem } from '../types/actions.types';
+      +
+       /**
+        * Constants for the Copy/Clipboard feature.
+        */
+      @@ -14,3 +16,10 @@
+           DIFFS: 'Diffs',
+           UUIDS: 'UUIDs',
+       } as const;
+      +
+      +export const COPY_SCREEN_FOOTER_ACTIONS: readonly ActionItem[] = [
+      +    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+      +    { key: 'Spc/Hotkey', label: 'Toggle' },
+      +    { key: 'Enter', label: 'Copy' },
+      +    { key: 'Esc', label: 'Close' },
+      +];
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/detail.constants.ts
+    content: >+
+      --- src/constants/detail.constants.ts
+
+      +++ src/constants/detail.constants.ts
+
+      @@ -1,3 +1,5 @@
+
+      +import type { ActionItem } from '../types/actions.types';
+
+      +
+       /**
+        * Constants for the Transaction Detail screen.
+        */
+      @@ -15,3 +17,31 @@
+           REVERT_CONFIRM: 'REVERT_CONFIRM',
+           NONE: 'NONE',
+       } as const;
+      +
+
+      +export const FILE_CHANGE_TYPE_ICONS = {
+
+      +    MOD: '[MOD]',
+
+      +    ADD: '[ADD]',
+
+      +    DEL: '[DEL]',
+
+      +    REN: '[REN]',
+
+      +} as const;
+
+      +
+
+      +export const DETAIL_FOOTER_ACTIONS = {
+
+      +    REVERT_CONFIRM: [
+
+      +        { key: 'Enter', label: 'Confirm Revert' },
+
+      +        { key: 'Esc', label: 'Cancel' },
+
+      +    ] as const,
+
+      +    BASE: (openActionLabel: string): ActionItem[] => [
+
+      +        { key: 'C', label: 'Copy' },
+
+      +        { key: 'O', label: openActionLabel },
+
+      +        { key: 'U', label: 'Undo' },
+
+      +        { key: 'Q', label: 'Quit/Back' },
+
+      +    ],
+
+      +    DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label:
+      'Back to List' }] as const,
+
+      +    FILE_LIST_VIEW: [
+
+      +        { key: '↑↓', label: 'Nav Files' },
+
+      +        { key: '→', label: 'View Diff' },
+
+      +        { key: '←', label: 'Back to Sections' },
+
+      +    ] as const,
+
+      +    SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→',
+      label: 'Drill In' }, { key: '←', label: 'Collapse' }] as const,
+
+      +    SECTION_COLLAPSED: [{ key: '↑↓', label: 'Nav' }, { key: '→', label:
+      'Expand' }] as const,
+
+      +};
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/review.constants.ts
+    content: |+
+      --- src/constants/review.constants.ts
+      +++ src/constants/review.constants.ts
+      @@ -9,3 +9,40 @@
+           { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+           { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+       ];
+      +
+      +export const REVIEW_BODY_VIEWS = {
+      +    DIFF: 'diff',
+      +    REASONING: 'reasoning',
+      +    SCRIPT_OUTPUT: 'script_output',
+      +    BULK_REPAIR: 'bulk_repair',
+      +    CONFIRM_HANDOFF: 'confirm_handoff',
+      +    BULK_INSTRUCT: 'bulk_instruct',
+      +    NONE: 'none',
+      +} as const;
+      +
+      +export const PATCH_STATUS = {
+      +    SUCCESS: 'SUCCESS',
+      +    PARTIAL_FAILURE: 'PARTIAL_FAILURE',
+      +} as const;
+      +
+      +export const FILE_STATUS_UI = {
+      +    APPROVED: { icon: '[✓]', color: 'green' },
+      +    REJECTED: { icon: '[✗]', color: 'red' },
+      +    FAILED: { icon: '[!]', color: 'red' },
+      +    AWAITING: { icon: '[●]', color: 'yellow' },
+      +    RE_APPLYING: { icon: '[●]', color: 'cyan' },
+      +} as const;
+      +
+      +export const BULK_REPAIR_OPTIONS = [
+      +    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+      +    '(2) Bulk Change Strategy & Re-apply',
+      +    '(3) Handoff to External Agent',
+      +    '(4) Bulk Abandon All Failed Files',
+      +    '(Esc) Cancel',
+      +] as const;
+      +
+      +export const BULK_INSTRUCT_OPTIONS = [
+      +    `(1) Copy Bulk Re-instruct Prompt (for single-shot AI)`,
+      +    '(2) Handoff to External Agent',
+      +    `(3) Bulk Un-reject All Files (revert to original)`,
+      +    '(4) Cancel',
+      +] as const;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/config/ui.config.ts
+    content: >+
+      --- src/config/ui.config.ts
+
+      +++ src/config/ui.config.ts
+
+      @@ -6,18 +6,52 @@
+           diffScreen: {
+               collapseThreshold: 20, // Lines before collapsing
+               collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
+      -    },
+
+      -    dashboard: {
+
+      -        reservedRows: 9, // Non-event stream vertical space (header,
+      footer, etc.)
+
+      -    },
+
+      -    history: {
+
+      -        reservedRows: 8, // Non-content vertical space (header, footer,
+      filter)
+           },
+           splash: {
+               initialCountdown: 3, // Seconds before auto-skip
+           },
+           footer: {
+               horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+               actionSeparator: ' · ',
+           },
+      +    layout: {
+
+      +        dashboard: {
+
+      +            header: 1,
+
+      +            separators: 2,
+
+      +            fixedRows: 2, // status bar, event stream header
+
+      +            marginsY: 3, // for status bar, event stream list, separator
+
+      +            footer: 2,
+
+      +        },
+
+      +        copyScreen: {
+
+      +            header: 1,
+
+      +            separators: 2,
+
+      +            fixedRows: 2, // title, status
+
+      +            marginsY: 1,
+
+      +            footer: 1,
+
+      +        },
+
+      +        debugLog: {
+
+      +            paddingY: 2,
+
+      +            header: 1,
+
+      +            separators: 2,
+
+      +            fixedRows: 1, // filter line
+
+      +            marginsY: 1,
+
+      +            footer: 1,
+
+      +        },
+
+      +        debugMenu: {
+
+      +            paddingY: 2,
+
+      +            header: 1,
+
+      +            separators: 2,
+
+      +            footer: 1,
+
+      +        },
+
+      +        history: {
+
+      +            header: 1,
+
+      +            separators: 2,
+
+      +            fixedRows: 1, // filter row
+
+      +            marginsY: 1,
+
+      +            footer: 2,
+
+      +        },
+
+      +    },
+       } as const;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: >+
+      --- src/stores/dashboard.store.ts
+
+      +++ src/stores/dashboard.store.ts
+
+      @@ -1,9 +1,10 @@
+       import { create } from 'zustand';
+       import { useTransactionStore } from './transaction.store';
+       import { DashboardService } from '../services/dashboard.service';
+      +import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+       import { moveIndex } from './navigation.utils';
+       
+      -export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE'
+      | 'APPROVING';
+
+      +export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof
+      DASHBOARD_STATUS];
+        
+       interface DashboardState {
+           status: DashboardStatus;
+      @@ -21,15 +22,15 @@
+       }
+       
+       export const useDashboardStore = create<DashboardState>((set, get) => ({
+      -    status: 'LISTENING',
+
+      -    previousStatus: 'LISTENING',
+
+      +    status: DASHBOARD_STATUS.LISTENING,
+
+      +    previousStatus: DASHBOARD_STATUS.LISTENING,
+           selectedTransactionIndex: 0,
+           expandedTransactionId: null,
+           actions: {
+               togglePause: () => set(state => ({
+      -            status: state.status === 'LISTENING' ? 'PAUSED' :
+      'LISTENING',
+
+      +            status: state.status === DASHBOARD_STATUS.LISTENING ?
+      DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
+               })),
+               moveSelectionUp: () => set(state => {
+                   const { transactions } = useTransactionStore.getState();
+      @@ -45,13 +46,13 @@
+                   };
+               }),
+               startApproveAll: () => set(state => ({
+      -            status: 'CONFIRM_APPROVE',
+
+      +            status: DASHBOARD_STATUS.CONFIRM_APPROVE,
+                   previousStatus: state.status,
+               })),
+               cancelAction: () => set(state => ({ status: state.previousStatus })),
+               setStatus: (status) => set({ status }),
+               confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                   const previousStatus = get().previousStatus;
+      -            set({ status: 'APPROVING' });
+
+      +            set({ status: DASHBOARD_STATUS.APPROVING });
+                   await DashboardService.approveAll();
+                   set({ status: previousStatus });
+               },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/history.store.ts
+    content: >+
+      --- src/stores/history.store.ts
+
+      +++ src/stores/history.store.ts
+
+      @@ -1,9 +1,10 @@
+       import { create } from 'zustand';
+       import { useTransactionStore } from './transaction.store';
+       import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath } from './navigation.utils';
+      +import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from
+      '../constants/history.constants';
+       import { sleep } from '../utils';
+       
+      -export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
+
+      +export type HistoryViewMode = (typeof HISTORY_VIEW_MODES)[keyof typeof
+      HISTORY_VIEW_MODES];
+        
+       // Omit 'actions' from state type for partial updates
+       type HistoryStateData = Omit<HistoryState, 'actions'>;
+      @@ -29,7 +30,7 @@
+       }
+       
+       export const useHistoryStore = create<HistoryState>((set, get) => ({
+      -    mode: 'LIST',
+
+      +    mode: HISTORY_VIEW_MODES.LIST,
+           selectedItemPath: '',
+           expandedIds: new Set(),
+           loadingPaths: new Set(),
+      @@ -40,7 +41,7 @@
+                   const { transactions } = useTransactionStore.getState();
+                   set({
+                       selectedItemPath: transactions[0]?.id || '',
+      -                mode: 'LIST',
+
+      +                mode: HISTORY_VIEW_MODES.LIST,
+                       expandedIds: new Set(),
+                       loadingPaths: new Set(),
+                       selectedForAction: new Set(),
+      @@ -83,9 +84,9 @@
+                   if (expandedIds.has(selectedItemPath)) return;
+       
+                   // Files and content items with potentially large data can show a loading state
+      -            const isLoadable = selectedItemPath.includes('/file/') ||
+
+      -                               selectedItemPath.includes('/prompt') ||
+
+      -                               selectedItemPath.includes('/reasoning');
+
+      +            const isLoadable =
+      selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE) ||
+
+      +                              
+      selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.PROMPT) ||
+
+      +                              
+      selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.REASONING);
+       
+                   if (isLoadable) {
+                       set(state => ({ loadingPaths: new Set(state.loadingPaths).add(selectedItemPath) }));
+      @@ -131,7 +132,7 @@
+               setMode: (mode) => set({ mode }),
+               setFilterQuery: (query) => set({ filterQuery: query }),
+               applyFilter: () => {
+      -            set({ mode: 'LIST' });
+
+      +            set({ mode: HISTORY_VIEW_MODES.LIST });
+               },
+               prepareDebugState: (stateName) => {
+                   const { actions } = get();
+      @@ -145,13 +146,13 @@
+                           actions.load({ expandedIds: new Set(['3', '3/file/3-1']), selectedItemPath: '3/file/3-1' });
+                           break;
+                       case 'filter':
+      -                    actions.load({ mode: 'FILTER', filterQuery:
+      'logger.ts status:COMMITTED' });
+
+      +                    actions.load({ mode: HISTORY_VIEW_MODES.FILTER,
+      filterQuery: 'logger.ts status:COMMITTED' });
+                           break;
+                       case 'copy':
+                           actions.load({ selectedForAction: new Set(['3', '6']) });
+                           break;
+                       case 'bulk':
+      -                    actions.load({ mode: 'BULK_ACTIONS',
+      selectedForAction: new Set(['3', '6']) });
+
+      +                    actions.load({ mode: HISTORY_VIEW_MODES.BULK_ACTIONS,
+      selectedForAction: new Set(['3', '6']) });
+                           break;
+                   }
+               },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/log.store.ts
+    content: |+
+      --- src/stores/log.store.ts
+      +++ src/stores/log.store.ts
+      @@ -1,7 +1,6 @@
+       import { create } from 'zustand';
+       import type { LogEntry, LogLevel } from '../types/log.types';
+      -
+      -const MAX_LOGS = 200;
+      +import { MAX_LOGS } from '../constants/log.constants';
+       
+       interface LogState {
+           logs: LogEntry[];
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/review.store.ts
+    content: >+
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ -3,8 +3,8 @@
+       import { useTransactionStore } from './transaction.store';
+       import { useViewStore } from './view.store';
+       import { ReviewService } from '../services/review.service';
+      +import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS } from
+      '../constants/review.constants';
+       import { moveIndex } from './navigation.utils';
+      -import { INITIAL_APPLY_STEPS } from '../constants/review.constants';
+       import type { FileReviewStatus } from '../types/domain.types';
+       
+       export interface ApplyStep {
+      @@ -15,8 +15,9 @@
+           substeps?: ApplyStep[];
+           duration?: number;
+       }
+      -export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' |
+      'bulk_repair' | 'confirm_handoff' | 'bulk_instruct' | 'none';
+
+      -export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+
+      +
+
+      +export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof
+      REVIEW_BODY_VIEWS];
+
+      +export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof
+      PATCH_STATUS];
+       export type ApplyUpdate =
+           | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+           | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };
+      @@ -63,10 +64,10 @@
+       }
+       
+       export const useReviewStore = create<ReviewState>((set, get) => ({
+      -    patchStatus: 'SUCCESS',
+
+      +    patchStatus: PATCH_STATUS.SUCCESS,
+           applySteps: INITIAL_APPLY_STEPS,
+           selectedItemIndex: 0,
+      -    bodyView: 'none',
+
+      +    bodyView: REVIEW_BODY_VIEWS.NONE,
+           isDiffExpanded: false,
+           reasoningScrollIndex: 0,
+           scriptErrorIndex: 0,
+      @@ -84,7 +85,7 @@
+                       patchStatus,
+                       fileReviewStates,
+                       selectedItemIndex: 0,
+      -                bodyView: initialState?.bodyView ?? 'none',
+
+      +                bodyView: initialState?.bodyView ??
+      REVIEW_BODY_VIEWS.NONE,
+                       isDiffExpanded: false,
+                       reasoningScrollIndex: 0,
+                       scriptErrorIndex: 0,
+      @@ -104,7 +105,7 @@
+                   const files = tx?.files || [];
+                   if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+                   return {
+      -                bodyView: state.bodyView === view ? 'none' : view,
+
+      +                bodyView: state.bodyView === view ?
+      REVIEW_BODY_VIEWS.NONE : view,
+                       isDiffExpanded: false,
+                   };
+               }),
+      @@ -183,11 +184,11 @@
+       
+                   const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
+                   if (rejectedFiles.length === 0) {
+      -                set({ bodyView: 'none' });
+
+      +                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                       return;
+                   }
+       
+                   switch (option) {
+                       case 1:
+                           ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+      -                    set({ bodyView: 'none' });
+
+      +                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                           break;
+                       case 2:
+                           get().actions.setBodyView('confirm_handoff');
+      @@ -196,10 +197,10 @@
+                           rejectedFiles.forEach(file => {
+                               get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                           });
+      -                    set({ bodyView: 'none' });
+
+      +                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                           break;
+                       default:
+      -                    set({ bodyView: 'none' });
+
+      +                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                   }
+               },
+       
+      @@ -211,16 +212,16 @@
+       
+                   const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+                   if (failedFiles.length === 0) {
+      -                set({ bodyView: 'none' });
+
+      +                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                       return;
+                   }
+       
+                   switch (option) {
+                       case 1:
+                           ReviewService.generateBulkRepairPrompt(failedFiles);
+      -                    set({ bodyView: 'none' });
+
+      +                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                           break;
+                       case 2: {
+      -                    set({ bodyView: 'none' });
+
+      +                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                           failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                           const results = await ReviewService.runBulkReapply(failedFiles);
+                           results.forEach(result =>
+      @@ -236,10 +237,10 @@
+                           failedFiles.forEach(file => {
+                               get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                           });
+      -                    set({ bodyView: 'none' });
+
+      +                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                           break;
+                       default:
+      -                    set({ bodyView: 'none' });
+
+      +                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                   }
+               },
+               confirmHandoff: () => {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/view.store.ts
+    content: |+
+      --- src/stores/view.store.ts
+      +++ src/stores/view.store.ts
+      @@ -1,8 +1,11 @@
+       import { create } from 'zustand';
+      +import { OVERLAYS } from '../constants/view.constants';
+      +
+      +export type Overlay = (typeof OVERLAYS)[keyof typeof OVERLAYS];
+       
+       interface ViewState {
+           selectedTransactionId: string | null;
+      -    activeOverlay: 'none' | 'help' | 'copy' | 'debug' | 'log';
+      +    activeOverlay: Overlay;
+           actions: {
+               setSelectedTransactionId: (id: string | null) => void;
+               setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+      @@ -11,7 +14,7 @@
+       
+       export const useViewStore = create<ViewState>((set) => ({
+           selectedTransactionId: null,
+      -    activeOverlay: 'none',
+      +    activeOverlay: OVERLAYS.NONE,
+           actions: {
+               setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
+               setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+
+    patchStrategy: standard-diff
+snapshot:
+  src/constants/commit.constants.ts: null
+  src/constants/dashboard.constants.ts: null
+  src/constants/history.constants.ts: null
+  src/constants/log.constants.ts: null
+  src/constants/view.constants.ts: null
+  src/constants/copy.constants.ts: |-
+    /**
+     * Constants for the Copy/Clipboard feature.
+     */
+    export const COPYABLE_ITEMS = {
+        UUID: 'UUID',
+        MESSAGE: 'Git Message',
+        PROMPT: 'Prompt',
+        REASONING: 'Reasoning',
+        FILE_DIFF: 'Diff for',
+        ALL_DIFFS: 'All Diffs',
+        CONTEXT_FILES: 'Context Files (latest)',
+        FULL_YAML: 'Full YAML representation',
+        // For multi-selection contexts
+        MESSAGES: 'Git Messages',
+        PROMPTS: 'Prompts',
+        REASONINGS: 'Reasonings',
+        DIFFS: 'Diffs',
+        UUIDS: 'UUIDs',
+    } as const;
+  src/constants/detail.constants.ts: |-
+    /**
+     * Constants for the Transaction Detail screen.
+     */
+    export const NAVIGATOR_SECTIONS = {
+        PROMPT: 'PROMPT',
+        REASONING: 'REASONING',
+        FILES: 'FILES',
+    } as const;
+
+    export const DETAIL_BODY_VIEWS = {
+        PROMPT: 'PROMPT',
+        REASONING: 'REASONING',
+        FILES_LIST: 'FILES_LIST',
+        DIFF_VIEW: 'DIFF_VIEW',
+        REVERT_CONFIRM: 'REVERT_CONFIRM',
+        NONE: 'NONE',
+    } as const;
+  src/constants/review.constants.ts: |-
+    import type { ApplyStep } from '../stores/review.store';
+
+    /**
+     * Constants for the Review screen and process.
+     */
+    export const INITIAL_APPLY_STEPS: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+  src/config/ui.config.ts: |-
+    /**
+     * Centralized UI configuration.
+     * This object is the single source of truth for layout constants, thresholds,
+     * and other UI-related magic numbers.
+     */
+    export const UI_CONFIG = {
+        diffScreen: {
+            collapseThreshold: 20, // Lines before collapsing
+            collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
+        },
+        dashboard: {
+            reservedRows: 9, // Non-event stream vertical space (header, footer, etc.)
+        },
+        history: {
+            reservedRows: 8, // Non-content vertical space (header, footer, filter)
+        },
+        splash: {
+            initialCountdown: 3, // Seconds before auto-skip
+        },
+        footer: {
+            horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+            actionSeparator: ' · ',
+        },
+    } as const;
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { moveIndex } from './navigation.utils';
+
+
+    export type DashboardStatus = 'LISTENING' | 'PAUSED' | 'CONFIRM_APPROVE' |
+    'APPROVING';
+     
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus;
+        selectedTransactionIndex: number;
+        expandedTransactionId: string | null;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            setStatus: (status: DashboardStatus) => void;
+            toggleExpand: () => void;
+            setExpandedTransactionId: (id: string | null) => void;
+        };
+    }
+
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: 'LISTENING',
+        previousStatus: 'LISTENING',
+        selectedTransactionIndex: 0,
+        expandedTransactionId: null,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === 'LISTENING' ? 'PAUSED' : 'LISTENING',
+            })),
+            moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            startApproveAll: () => set(state => ({
+                status: 'CONFIRM_APPROVE',
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            setStatus: (status) => set({ status }),
+            confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                const previousStatus = get().previousStatus;
+                set({ status: 'APPROVING' });
+                await DashboardService.approveAll();
+                set({ status: previousStatus });
+            },
+            toggleExpand: () => {
+                const { selectedTransactionIndex, expandedTransactionId } = get();
+                const { transactions } = useTransactionStore.getState();
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (!selectedTx) return;
+
+                if (expandedTransactionId === selectedTx.id) {
+                    set({ expandedTransactionId: null });
+                } else {
+                    set({ expandedTransactionId: selectedTx.id });
+                }
+            },
+            setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+        },
+    }));
+  src/stores/history.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { getVisibleItemPaths, findNextPath, findPrevPath, getParentPath }
+    from './navigation.utils';
+
+    import { sleep } from '../utils';
+
+
+    export type HistoryViewMode = 'LIST' | 'FILTER' | 'BULK_ACTIONS';
+     
+    // Omit 'actions' from state type for partial updates
+
+    type HistoryStateData = Omit<HistoryState, 'actions'>;
+
+
+    interface HistoryState {
+        mode: HistoryViewMode;
+        selectedItemPath: string;
+        expandedIds: Set<string>;
+        loadingPaths: Set<string>;
+        filterQuery: string;
+        selectedForAction: Set<string>;
+        actions: {
+            load: (initialState?: Partial<HistoryStateData>) => void;
+            navigateDown: () => void;
+            navigateUp: () => void;
+            navigatePageUp: (viewportHeight: number) => void;
+            navigatePageDown: (viewportHeight: number) => void;
+            expandOrDrillDown: () => Promise<void>;
+            collapseOrBubbleUp: () => void;
+            toggleSelection: () => void;
+            setMode: (mode: HistoryViewMode) => void;
+            setFilterQuery: (query: string) => void;
+            applyFilter: () => void;
+            prepareDebugState: (stateName: 'l1-drill-content' | 'l2-drill-reasoning' | 'l2-drill-diff' | 'filter' | 'copy' | 'bulk') => void;
+        };
+    }
+
+
+    export const useHistoryStore = create<HistoryState>((set, get) => ({
+        mode: 'LIST',
+        selectedItemPath: '',
+        expandedIds: new Set(),
+        loadingPaths: new Set(),
+        filterQuery: '',
+        selectedForAction: new Set(),
+        actions: {
+            load: (initialState) => {
+                const { transactions } = useTransactionStore.getState();
+                set({
+                    selectedItemPath: transactions[0]?.id || '',
+                    mode: 'LIST',
+                    expandedIds: new Set(),
+                    loadingPaths: new Set(),
+                    selectedForAction: new Set(),
+                    filterQuery: '',
+                    ...initialState,
+                });
+            },
+            navigateUp: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findPrevPath(selectedItemPath, visibleItems) });
+            },
+            navigateDown: () => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+                set({ selectedItemPath: findNextPath(selectedItemPath, visibleItems) });
+            },
+            navigatePageUp: (viewportHeight: number) => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex === -1) return;
+
+                const newIndex = Math.max(0, currentIndex - viewportHeight);
+                set({ selectedItemPath: visibleItems[newIndex]! });
+            },
+            navigatePageDown: (viewportHeight: number) => {
+                const { expandedIds, selectedItemPath } = get();
+                const { transactions } = useTransactionStore.getState();
+                const visibleItems = getVisibleItemPaths(transactions, expandedIds);
+
+                const currentIndex = visibleItems.indexOf(selectedItemPath);
+                if (currentIndex === -1) return;
+
+                const newIndex = Math.min(visibleItems.length - 1, currentIndex + viewportHeight);
+                set({ selectedItemPath: visibleItems[newIndex]! });
+            },
+            expandOrDrillDown: async () => {
+                const { selectedItemPath, expandedIds } = get();
+                if (expandedIds.has(selectedItemPath)) return;
+
+                // Files and content items with potentially large data can show a loading state
+                const isLoadable = selectedItemPath.includes('/file/') ||
+                                   selectedItemPath.includes('/prompt') ||
+                                   selectedItemPath.includes('/reasoning');
+
+                if (isLoadable) {
+                    set(state => ({ loadingPaths: new Set(state.loadingPaths).add(selectedItemPath) }));
+                    await sleep(250); // Simulate loading
+                    set(state => {
+                        const newLoadingPaths = new Set(state.loadingPaths);
+                        newLoadingPaths.delete(selectedItemPath);
+                        const newExpandedIds = new Set(state.expandedIds).add(selectedItemPath);
+                        return { loadingPaths: newLoadingPaths, expandedIds: newExpandedIds };
+                    });
+                } else { // For transactions or simple items, expand immediately
+                    set(state => ({ expandedIds: new Set(state.expandedIds).add(selectedItemPath) }));
+                }
+            },
+            collapseOrBubbleUp: () => set(state => {
+                const { selectedItemPath, expandedIds } = state;
+                const newExpandedIds = new Set(expandedIds);
+                if (newExpandedIds.has(selectedItemPath)) {
+                    newExpandedIds.delete(selectedItemPath);
+                    // Recursively collapse children
+                    for (const id of newExpandedIds) {
+                        if (id.startsWith(`${selectedItemPath}/`)) {
+                            newExpandedIds.delete(id);
+                        }
+                    }
+                    return { expandedIds: newExpandedIds };
+                }
+                const parentId = getParentPath(selectedItemPath);
+                if (parentId) {
+                    return { selectedItemPath: parentId };
+                }
+                return {};
+            }),
+            toggleSelection: () => set(state => {
+                const { selectedItemPath, selectedForAction } = state;
+                const txId = getParentPath(selectedItemPath) || selectedItemPath;
+                if (!txId) return {};
+                const newSelection = new Set(selectedForAction);
+                if (newSelection.has(txId)) {
+                    newSelection.delete(txId);
+                } else {
+                    newSelection.add(txId);
+                }
+                return { selectedForAction: newSelection };
+            }),
+            setMode: (mode) => set({ mode }),
+            setFilterQuery: (query) => set({ filterQuery: query }),
+            applyFilter: () => {
+                set({ mode: 'LIST' });
+            },
+            prepareDebugState: (stateName) => {
+                const { actions } = get();
+                switch (stateName) {
+                    case 'l1-drill-content':
+                        actions.load({ expandedIds: new Set(['3']), selectedItemPath: '3' });
+                        break;
+                    case 'l2-drill-reasoning':
+                        actions.load({ expandedIds: new Set(['3', '3/reasoning']), selectedItemPath: '3/reasoning' });
+                        break;
+                    case 'l2-drill-diff':
+                        actions.load({ expandedIds: new Set(['3', '3/file/3-1']), selectedItemPath: '3/file/3-1' });
+                        break;
+                    case 'filter':
+                        actions.load({ mode: 'FILTER', filterQuery: 'logger.ts status:COMMITTED' });
+                        break;
+                    case 'copy':
+                        actions.load({ selectedForAction: new Set(['3', '6']) });
+                        break;
+                    case 'bulk':
+                        actions.load({ mode: 'BULK_ACTIONS', selectedForAction: new Set(['3', '6']) });
+                        break;
+                }
+            },
+        },
+    }));
+  src/stores/log.store.ts: |-
+    import { create } from 'zustand';
+    import type { LogEntry, LogLevel } from '../types/log.types';
+
+    const MAX_LOGS = 200;
+
+    interface LogState {
+        logs: LogEntry[];
+        actions: {
+            addLog: (level: LogLevel, message: string) => void;
+            clearLogs: () => void;
+        };
+    }
+
+    export const useLogStore = create<LogState>((set) => ({
+        logs: [],
+        actions: {
+            addLog: (level, message) => {
+                set(state => {
+                    const newLog: LogEntry = {
+                        level,
+                        message,
+                        timestamp: Date.now(),
+                    };
+                    // Prepend new log and trim the array to max size
+                    const updatedLogs = [newLog, ...state.logs].slice(0, MAX_LOGS);
+                    return { logs: updatedLogs };
+                });
+            },
+            clearLogs: () => set({ logs: [] }),
+        },
+    }));
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useAppStore } from './app.store';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { ReviewService } from '../services/review.service';
+
+    import { moveIndex } from './navigation.utils';
+
+    import { INITIAL_APPLY_STEPS } from '../constants/review.constants';
+
+    import type { FileReviewStatus } from '../types/domain.types';
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        duration?: number;
+    }
+
+    export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' |
+    'bulk_repair' | 'confirm_handoff' | 'bulk_instruct' | 'none';
+
+    export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+
+    export type ApplyUpdate =
+        | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+        | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };
+
+    interface ReviewState {
+        patchStatus: PatchStatus;
+        applySteps: ApplyStep[];
+        selectedItemIndex: number;
+        bodyView: ReviewBodyView;
+        isDiffExpanded: boolean;
+        reasoningScrollIndex: number;
+        scriptErrorIndex: number;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
+
+        selectedBulkRepairOptionIndex: number;
+        selectedBulkInstructOptionIndex: number;
+
+        actions: {
+            load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+            moveSelectionUp: (listSize: number) => void;
+            moveSelectionDown: (listSize: number) => void;
+            expandDiff: () => void;
+            toggleBodyView: (view: Extract<
+                ReviewBodyView, 'bulk_instruct' |
+                'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+            >) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            startApplySimulation: (scenario: 'success' | 'failure') => void;
+            tryRepairFile: (fileId: string) => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            tryInstruct: (fileId: string) => void;
+            showBulkInstruct: () => void;
+            executeBulkInstructOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void;
+            updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+            addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+            updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
+            toggleFileApproval: (fileId: string) => void;
+            rejectAllFiles: () => void;
+            navigateBulkRepairUp: () => void;
+            navigateBulkRepairDown: () => void;
+            navigateBulkInstructUp: () => void;
+            navigateBulkInstructDown: () => void;
+        };
+    }
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        patchStatus: 'SUCCESS',
+        applySteps: INITIAL_APPLY_STEPS,
+        selectedItemIndex: 0,
+        bodyView: 'none',
+        isDiffExpanded: false,
+        reasoningScrollIndex: 0,
+        scriptErrorIndex: 0,
+        fileReviewStates: new Map(),
+        selectedBulkRepairOptionIndex: 0,
+        selectedBulkInstructOptionIndex: 0,
+
+        actions: {
+            load: (transactionId, initialState) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+                
+                const { patchStatus, fileReviewStates } = ReviewService.prepareTransactionForReview(transaction);
+
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    patchStatus,
+                    fileReviewStates,
+                    selectedItemIndex: 0,
+                    bodyView: initialState?.bodyView ?? 'none',
+                    isDiffExpanded: false,
+                    reasoningScrollIndex: 0,
+                    scriptErrorIndex: 0,
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    selectedBulkRepairOptionIndex: 0,
+                    selectedBulkInstructOptionIndex: 0,
+                    ...initialState,
+                });
+            },
+            moveSelectionUp: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
+            }),
+            moveSelectionDown: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
+            }),
+            toggleBodyView: (view) => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                const files = tx?.files || [];
+                if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+                return {
+                    bodyView: state.bodyView === view ? 'none' : view,
+                    isDiffExpanded: false,
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            startApplySimulation: async (scenario) => {
+                const { showReviewProcessingScreen } = useAppStore.getState().actions;
+                const { updateApplyStep, addApplySubstep } = get().actions;
+                set({ applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)) });
+                showReviewProcessingScreen();
+                const simulationGenerator = ReviewService.runApplySimulation(scenario);
+                for await (const update of simulationGenerator) {
+                    if (update.type === 'UPDATE_STEP') {
+                        updateApplyStep(
+                            update.payload.id,
+                            update.payload.status,
+                            update.payload.duration,
+                            update.payload.details,
+                        );
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        addApplySubstep(update.payload.parentId, update.payload.substep);
+                    }
+                }
+                // Transition back to review screen is handled by the processing screen component or a separate flow
+                // For this simulation, we'll assume it transitions back, but the action itself doesn't need to do it.
+                // This avoids a direct dependency from the store to app-level navigation.
+            },
+            tryRepairFile: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!file) return;
+
+                const { status, error } = fileReviewStates.get(file.id) || {};
+                if (status !== 'FAILED') return;
+                
+                ReviewService.tryRepairFile(file, error);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+            },
+            tryInstruct: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!tx || !file) return;
+
+                const { status } = fileReviewStates.get(file.id) || {};
+                if (status !== 'REJECTED') return;
+                
+                ReviewService.tryInstructFile(file, tx);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+            },
+            showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+            executeBulkInstructOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
+                if (rejectedFiles.length === 0) {
+                    set({ bodyView: 'none' });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                        set({ bodyView: 'none' });
+                        break;
+                    case 2:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 3:
+                        rejectedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                        });
+                        set({ bodyView: 'none' });
+                        break;
+                    default:
+                        set({ bodyView: 'none' });
+                }
+            },
+
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+                if (failedFiles.length === 0) {
+                    set({ bodyView: 'none' });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkRepairPrompt(failedFiles);
+                        set({ bodyView: 'none' });
+                        break;
+                    case 2: {
+                        set({ bodyView: 'none' });
+                        failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                        const results = await ReviewService.runBulkReapply(failedFiles);
+                        results.forEach(result =>
+                            get().actions.updateFileReviewStatus(
+                                result.id, result.status, result.error,
+                            ),
+                        );
+                        break;
+                    }
+                    case 3:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 4:
+                        failedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                        });
+                        set({ bodyView: 'none' });
+                        break;
+                    default:
+                        set({ bodyView: 'none' });
+                }
+            },
+            confirmHandoff: () => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.files) return;
+                const { fileReviewStates } = get();
+                ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+                ReviewService.performHandoff(tx.hash);
+            },
+            scrollReasoningUp: () => set(state => ({ reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1) })),
+            scrollReasoningDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.reasoning) return {};
+                const maxLines = tx.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+            navigateScriptErrorDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.scripts || !tx?.files) return {};
+                const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+                if (selectedScript?.output) {
+                    const errorLines = selectedScript.output
+                        .split('\n')
+                        .filter(line => line.includes('Error') || line.includes('Warning'));
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+            updateApplyStep: (id, status, duration, details) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep = { ...s, status };
+                            if (duration !== undefined) newStep.duration = duration;
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            addApplySubstep: (parentId, substep) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateFileReviewStatus: (fileId, status, error, details) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    newStates.set(fileId, { status, error, details });
+                    return { fileReviewStates: newStates };
+                });
+            },
+            toggleFileApproval: (fileId) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    const current = newStates.get(fileId);
+                    if (current) {
+                        const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                        newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            rejectAllFiles: () => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    for (const [fileId, reviewState] of newStates.entries()) {
+                        if (reviewState.status === 'APPROVED') {
+                            newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
+                        }
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            navigateBulkRepairUp: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'up', 4),
+            })),
+            navigateBulkRepairDown: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'down', 4),
+            })),
+            navigateBulkInstructUp: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'up', 4),
+            })),
+            navigateBulkInstructDown: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'down', 4),
+            })),
+        },
+    }));
+  src/stores/view.store.ts: |-
+    import { create } from 'zustand';
+
+    interface ViewState {
+        selectedTransactionId: string | null;
+        activeOverlay: 'none' | 'help' | 'copy' | 'debug' | 'log';
+        actions: {
+            setSelectedTransactionId: (id: string | null) => void;
+            setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+        };
+    }
+
+    export const useViewStore = create<ViewState>((set) => ({
+        selectedTransactionId: null,
+        activeOverlay: 'none',
+        actions: {
+            setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
+            setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 164

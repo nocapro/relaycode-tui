@@ -1,3 +1,5 @@
+import type { ActionItem } from '../types/actions.types';
+
 /**
  * Constants for the Copy/Clipboard feature.
  */
@@ -17,3 +19,10 @@ export const COPYABLE_ITEMS = {
     DIFFS: 'Diffs',
     UUIDS: 'UUIDs',
 } as const;
+
+export const COPY_SCREEN_FOOTER_ACTIONS: readonly ActionItem[] = [
+    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+    { key: 'Spc/Hotkey', label: 'Toggle' },
+    { key: 'Enter', label: 'Copy' },
+    { key: 'Esc', label: 'Close' },
+];

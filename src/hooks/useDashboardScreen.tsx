@@ -7,6 +7,7 @@ import { useReviewStore } from '../stores/review.store';
 import { useDetailStore } from '../stores/detail.store';
 import { useHistoryStore } from '../stores/history.store';
 import type { LayoutConfig } from './useLayout';
+import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
 import { useViewport } from './useViewport';
 
 export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
@@ -21,6 +22,7 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
 
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex: selectedTransactionIndex,
+        itemCount: transactions.length,
         layoutConfig,
     });
 
@@ -39,8 +41,8 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
     const pendingApprovals = pendingTransactions.length;
     const pendingCommits = appliedTransactions.length;
 
-    const isModal = status === 'CONFIRM_APPROVE';
-    const isProcessing = status === 'APPROVING';
+    const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
+    const isProcessing = status === DASHBOARD_STATUS.APPROVING;
 
     useInput((input, key) => {
         if (isModal) {
@@ -97,7 +99,7 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
             appActions.showTransactionHistoryScreen();
         }
     });
-    const transactionsToConfirm = status === 'CONFIRM_APPROVE' ? pendingTransactions : [];
+    const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
 
     return {
         status,

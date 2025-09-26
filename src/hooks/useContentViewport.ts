@@ -41,7 +41,7 @@ export const useContentViewport = ({
     // Effect to reset scroll when content changes, which is a good default.
     useEffect(() => {
         resetScroll();
-    }, [contentLineCount]);
+    }, [contentLineCount, resetScroll]);
 
     // Effect to clamp scrollIndex if content or viewport size changes
     useEffect(() => {

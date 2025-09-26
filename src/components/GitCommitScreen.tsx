@@ -3,6 +3,7 @@ import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
 import ActionFooter from './ActionFooter';
+import { COMMIT_SCREEN_FOOTER_ACTIONS } from '../constants/commit.constants';
 
 const GitCommitScreen = () => {
     const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
@@ -36,10 +37,7 @@ const GitCommitScreen = () => {
             <Separator />
             {isCommitting
                 ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-                : <ActionFooter actions={[
-                    { key: 'Enter', label: 'Confirm & Commit' },
-                    { key: 'Esc', label: 'Cancel' },
-                ]}/>
+                : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
             }
         </Box>
     );

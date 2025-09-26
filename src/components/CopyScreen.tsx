@@ -3,6 +3,7 @@ import Separator from './Separator';
 import { useStdoutDimensions } from '../utils';
 import ActionFooter from './ActionFooter';
 import { useCopyScreen } from '../hooks/useCopyScreen';
+import { COPY_SCREEN_FOOTER_ACTIONS } from '../constants/copy.constants';
 
 const CopyScreen = () => {
     const {
@@ -47,12 +48,7 @@ const CopyScreen = () => {
                 </Box>
                 <Separator width={Math.floor(width * 0.8) - 4} />
                 {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <ActionFooter actions={[
-                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
-                    { key: 'Spc/Hotkey', label: 'Toggle' },
-                    { key: 'Enter', label: 'Copy' },
-                    { key: 'Esc', label: 'Close' },
-                ]}/>
+                <ActionFooter actions={COPY_SCREEN_FOOTER_ACTIONS}/>
             </Box>
         </Box>
     );

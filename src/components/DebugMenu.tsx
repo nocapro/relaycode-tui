@@ -3,6 +3,7 @@ import Separator from './Separator';
 import { useDebugMenu } from '../hooks/useDebugMenu';
 import { useStdoutDimensions } from '../utils';
 import ActionFooter from './ActionFooter';
+import { DEBUG_MENU_FOOTER_ACTIONS } from '../constants/debug.constants';
 
 const getKeyForIndex = (index: number): string => {
     if (index < 9) {
@@ -37,12 +38,7 @@ const DebugMenu = () => {
             </Box>
             <Separator width={width - 4} />
             <Box>
-                <ActionFooter actions={[
-                    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
-                    { key: '1-9,a-z', label: 'Jump' },
-                    { key: 'Enter', label: 'Select' },
-                    { key: 'Esc/Ctrl+B', label: 'Close' },
-                ]}/>
+                <ActionFooter actions={DEBUG_MENU_FOOTER_ACTIONS}/>
                 <Box flexGrow={1} />
                 <Text>
                     {Math.min(viewOffset + 1, totalItems)}-

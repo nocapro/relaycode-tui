@@ -3,8 +3,8 @@ import { useAppStore } from './app.store';
 import { useTransactionStore } from './transaction.store';
 import { useViewStore } from './view.store';
 import { ReviewService } from '../services/review.service';
+import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS } from '../constants/review.constants';
 import { moveIndex } from './navigation.utils';
-import { INITIAL_APPLY_STEPS } from '../constants/review.constants';
 import type { FileReviewStatus } from '../types/domain.types';
 
 export interface ApplyStep {
@@ -15,8 +15,9 @@ export interface ApplyStep {
     substeps?: ApplyStep[];
     duration?: number;
 }
-export type ReviewBodyView = 'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff' | 'bulk_instruct' | 'none';
-export type PatchStatus = 'SUCCESS' | 'PARTIAL_FAILURE';
+
+export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof REVIEW_BODY_VIEWS];
+export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
 export type ApplyUpdate =
     | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
     | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };
@@ -70,10 +71,10 @@ interface ReviewState {
 }
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
-    patchStatus: 'SUCCESS',
+    patchStatus: PATCH_STATUS.SUCCESS,
     applySteps: INITIAL_APPLY_STEPS,
     selectedItemIndex: 0,
-    bodyView: 'none',
+    bodyView: REVIEW_BODY_VIEWS.NONE,
     isDiffExpanded: false,
     reasoningScrollIndex: 0,
     scriptErrorIndex: 0,
@@ -93,7 +94,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 patchStatus,
                 fileReviewStates,
                 selectedItemIndex: 0,
-                bodyView: initialState?.bodyView ?? 'none',
+                bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
                 isDiffExpanded: false,
                 reasoningScrollIndex: 0,
                 scriptErrorIndex: 0,
@@ -115,7 +116,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             const files = tx?.files || [];
             if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
             return {
-                bodyView: state.bodyView === view ? 'none' : view,
+                bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
                 isDiffExpanded: false,
             };
         }),
@@ -186,14 +187,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
             const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
             if (rejectedFiles.length === 0) {
-                set({ bodyView: 'none' });
+                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                 return;
             }
 
             switch (option) {
                 case 1:
                     ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
-                    set({ bodyView: 'none' });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                     break;
                 case 2:
                     get().actions.setBodyView('confirm_handoff');
@@ -202,10 +203,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                     rejectedFiles.forEach(file => {
                         get().actions.updateFileReviewStatus(file.id, 'APPROVED');
                     });
-                    set({ bodyView: 'none' });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                     break;
                 default:
-                    set({ bodyView: 'none' });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
             }
         },
 
@@ -217,17 +218,17 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
             const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
             if (failedFiles.length === 0) {
-                set({ bodyView: 'none' });
+                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                 return;
             }
 
             switch (option) {
                 case 1:
                     ReviewService.generateBulkRepairPrompt(failedFiles);
-                    set({ bodyView: 'none' });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                     break;
                 case 2: {
-                    set({ bodyView: 'none' });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                     failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
                     const results = await ReviewService.runBulkReapply(failedFiles);
                     results.forEach(result =>
@@ -244,10 +245,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                     failedFiles.forEach(file => {
                         get().actions.updateFileReviewStatus(file.id, 'REJECTED');
                     });
-                    set({ bodyView: 'none' });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                     break;
                 default:
-                    set({ bodyView: 'none' });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
             }
         },
         confirmHandoff: () => {

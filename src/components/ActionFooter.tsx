@@ -4,7 +4,7 @@ import { UI_CONFIG } from '../config/ui.config';
 import type { ActionItem } from '../types/actions.types';
 
 interface ActionFooterProps {
-    actions: ActionItem[];
+    actions: readonly ActionItem[];
 }
 
 const Action = ({ item }: { item: ActionItem }) => (

@@ -12,7 +12,8 @@ import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
-import type { LayoutConfig } from './useLayout';
+import { UI_CONFIG } from '../config/ui.config';
+import { OVERLAYS } from '../constants/view.constants';
 import { useViewport } from './useViewport';
 export type { MenuItem } from '../types/debug.types';
 
@@ -28,7 +29,7 @@ const useDebugMenuActions = () => {
     const menuItems: MenuItem[] = [
         {
             title: 'View Debug Log',
-            action: () => useViewStore.getState().actions.setActiveOverlay('log'),
+            action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
         },
         {
             title: 'Splash Screen',
@@ -279,11 +280,10 @@ export const useDebugMenu = () => {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const { menuItems } = useDebugMenuActions();
 
-    const layoutConfig: LayoutConfig = { paddingY: 2, header: 1, separators: 2, footer: 1 };
-
     const { viewOffset, viewportHeight } = useViewport({
         selectedIndex,
-        layoutConfig,
+        itemCount: menuItems.length,
+        layoutConfig: UI_CONFIG.layout.debugMenu,
     });
     
     useInput((input, key) => {
@@ -307,12 +307,12 @@ export const useDebugMenu = () => {
             const item = menuItems[selectedIndex];
             if (item) {
                 item.action();
-                useViewStore.getState().actions.setActiveOverlay('none');
+                useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
             }
             return;
         }
         if (key.escape) {
-            useViewStore.getState().actions.setActiveOverlay('none');
+            useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
             return;
         }
 
@@ -330,7 +330,7 @@ export const useDebugMenu = () => {
                 setSelectedIndex(targetIndex);
             }
         }
-    });
+    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG });
 
     const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
 

@@ -5,9 +5,8 @@ import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
-import type { LayoutConfig } from '../hooks/useLayout';
+import { HISTORY_FOOTER_ACTIONS, TRANSACTION_STATUS_UI, FILE_TYPE_MAP, BULK_ACTIONS_OPTIONS, HISTORY_VIEW_MODES } from '../constants/history.constants';
 import ActionFooter from './ActionFooter';
-import type { ActionItem } from '../types/actions.types';
 
 // --- Sub-components ---
 
@@ -60,13 +59,12 @@ const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
     isLoading: boolean;
 }) => {
     const icon = isExpanded ? '▾' : '▸';
-    const typeMap = { MOD: '[MOD]', ADD: '[ADD]', DEL: '[DEL]', REN: '[REN]' };
-    
+
     return (
         <Box flexDirection="column" paddingLeft={6}>
             <Text color={isSelected ? 'cyan' : undefined}>
-                {isSelected ? '> ' : '  '}
-                {icon} {typeMap[file.type]} {file.path}
+                {isSelected ? '> ' : '  '}{' '}
+                {icon} {FILE_TYPE_MAP[file.type]} {file.path}
             </Text>
             {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
             {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
@@ -88,25 +86,17 @@ const TransactionRow = ({
     hasSelection: boolean;
 }) => {
     const icon = isExpanded ? '▾' : '▸';
-    const statusMap = {
-        COMMITTED: <Text color="green">✓ Committed</Text>,
-        HANDOFF: <Text color="magenta">→ Handoff</Text>,
-        REVERTED: <Text color="gray">↩ Reverted</Text>,
-        APPLIED: <Text color="blue">✓ Applied</Text>,
-        PENDING: <Text color="yellow">? Pending</Text>,
-        FAILED: <Text color="red">✗ Failed</Text>,
-    };
+    const uiStatus = TRANSACTION_STATUS_UI[tx.status as keyof typeof TRANSACTION_STATUS_UI] || { text: tx.status, color: 'white' };
+
     const date = new Date(tx.timestamp).toISOString().split('T')[0];
     const selectionIndicator = isSelectedForAction ? '[x] ' : '[ ] ';
     
-    const statusDisplay = statusMap[tx.status as keyof typeof statusMap] || tx.status;
-
     return (
         <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
             <Text color={isSelected ? 'cyan' : undefined}>
                 {isSelected ? '> ' : '  '}
                 {hasSelection && selectionIndicator}
-                {icon} {statusDisplay} · {tx.hash} · {date} ·{' '}
+                {icon} <Text color={uiStatus.color}>{uiStatus.text}</Text> · {tx.hash} · {date} ·{' '}
                 {tx.message}
             </Text>
             {isExpanded && (
@@ -130,10 +120,7 @@ const BulkActionsMode = ({ selectedForActionCount }: { selectedForActionCount: n
             <Box marginY={1}>
                 <Text>This action is often irreversible. Are you sure?</Text>
             </Box>
-            <Text>(1) Revert Selected Transactions</Text>
-            <Text>(2) Mark as &apos;Git Committed&apos;</Text>
-            <Text>(3) Delete Selected Transactions (from Relaycode history)</Text>
-            <Text>(Esc) Cancel</Text>
+            {BULK_ACTIONS_OPTIONS.map(opt => <Text key={opt}>{opt}</Text>)}
         </Box>
     );
 };
@@ -155,37 +142,20 @@ const TransactionHistoryScreen = () => {
         showingStatus,
         statsStatus,
         hasSelection,
-    } = useTransactionHistoryScreen({
-        layoutConfig: {
-            header: 1,
-            separators: 2, // after header, after list
-            fixedRows: 1, // filter row
-            marginsY: 1, // for list
-            footer: 2,
-        },
-    });
+    } = useTransactionHistoryScreen();
 
     const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
 
     const renderFooter = () => {
-        if (mode === 'FILTER') return <Text>(Enter) Apply Filter & Return      (Esc) Cancel</Text>; 
-        if (mode === 'BULK_ACTIONS') return <Text>Choose an option [1-3] or (Esc) Cancel</Text>;
+        if (mode === HISTORY_VIEW_MODES.FILTER) {
+            return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.FILTER_MODE} />;
+        }
+        if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
+            return <Text>{HISTORY_FOOTER_ACTIONS.BULK_MODE.text}</Text>;
+        }
         
         const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
-        const footerActions: ActionItem[] = [
-            { key: '↑↓/PgUp/PgDn', label: 'Nav' },
-            { key: '→', label: 'Expand' },
-            { key: '←', label: 'Collapse' },
-            { key: 'Spc', label: 'Select' },
-            { key: 'Ent', label: 'Details' },
-            { key: 'O', label: openActionLabel },
-            { key: 'F', label: 'Filter' },
-        ];
-
-        if (selectedForAction.size > 0) {
-            footerActions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
-        }
-        return <ActionFooter actions={footerActions} />;
+        return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.LIST_MODE(openActionLabel, hasSelection)} />;
     };
 
     return (
@@ -195,7 +165,7 @@ const TransactionHistoryScreen = () => {
 
             <Box>
                 <Text>Filter: </Text>
-                {mode === 'FILTER' ? (
+                {mode === HISTORY_VIEW_MODES.FILTER ? (
                     <TextInput value={filterQuery} onChange={actions.setFilterQuery} />
                 ) : (
                     <Text>{filterStatus}</Text>
@@ -205,9 +175,9 @@ const TransactionHistoryScreen = () => {
             </Box>
 
             <Box flexDirection="column" marginY={1}>
-                {mode === 'BULK_ACTIONS' && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
+                {mode === HISTORY_VIEW_MODES.BULK_ACTIONS && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
 
-                {mode === 'LIST' && itemsInView.map(path => {
+                {mode === HISTORY_VIEW_MODES.LIST && itemsInView.map(path => {
                     const txId = path.split('/')[0]!;
                     const tx = transactionsById.get(txId);
                     if (!tx) return <Text key={path}>Error: Missing TX {txId}</Text>;

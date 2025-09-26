@@ -3,18 +3,8 @@ import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
 import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
-import type { FileChangeType } from '../types/domain.types';
+import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
 import ActionFooter from './ActionFooter';
-import type { ActionItem } from '../types/actions.types';
-
-const getFileChangeTypeIcon = (type: FileChangeType) => {
-    switch (type) {
-        case 'MOD': return '[MOD]';
-        case 'ADD': return '[ADD]';
-        case 'DEL': return '[DEL]';
-        case 'REN': return '[REN]';
-    }
-};
 
 const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
     return (
@@ -62,7 +52,8 @@ const TransactionDetailScreen = () => {
                 </Text>
                 <Text color={isReasoningFocused ? 'cyan' : undefined}>
                     {isReasoningFocused ? '> ' : '  '}
-                    {isReasoningExpanded ? '▾' : '▸'} (R)easoning ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                    {isReasoningExpanded ? '▾' : '▸'} (R)easoning{' '}
+                    ({transaction.reasoning?.split('\n\n').length || 0} steps)
                 </Text>
                 <Text color={isFilesFocused ? 'cyan' : undefined}>
                     {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
@@ -73,13 +64,12 @@ const TransactionDetailScreen = () => {
                         {files.map((file) => {
                              const fileId = `FILES/${file.id}`;
                              const isFileSelected = focusedItemPath === fileId;
-                             const stats = file.type === 'DEL'
-                                ? ''
+                             const stats = file.type === 'DEL' ? ''
                                 : ` (+${file.linesAdded}/-${file.linesRemoved})`;
                              return (
                                 <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
                                     {isFileSelected ? '> ' : '  '}
-                                    {getFileChangeTypeIcon(file.type)} {file.path}{stats}
+                                    {FILE_CHANGE_TYPE_ICONS[file.type]} {file.path}{stats}
                                 </Text>
                             );
                         })}
@@ -90,10 +80,10 @@ const TransactionDetailScreen = () => {
     };
 
     const renderBody = () => {
-        if (bodyView === 'NONE') {
+        if (bodyView === DETAIL_BODY_VIEWS.NONE) {
             return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
         }
-        if (bodyView === 'PROMPT') {
+        if (bodyView === DETAIL_BODY_VIEWS.PROMPT) {
             return (
                 <Box flexDirection="column">
                     <Text>PROMPT</Text>
@@ -106,14 +96,14 @@ const TransactionDetailScreen = () => {
                 </Box>
             );
         }
-        if (bodyView === 'REASONING') {
+        if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
             if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
             return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
         }
-        if (bodyView === 'FILES_LIST') {
+        if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
              return <Text color="gray">(Select a file and press → to view the diff)</Text>;
         }
-        if (bodyView === 'DIFF_VIEW') {
+        if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
             const fileId = focusedItemPath.split('/')[1];
             const file = files.find(f => f.id === fileId);
             if (!file) return null;
@@ -123,51 +113,26 @@ const TransactionDetailScreen = () => {
     };
 
     const renderFooter = () => {
-        if (bodyView === 'REVERT_CONFIRM') {
-            return <ActionFooter actions={[
-                { key: 'Enter', label: 'Confirm Revert' },
-                { key: 'Esc', label: 'Cancel' },
-            ]} />;
+        if (bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM) {
+            return <ActionFooter actions={DETAIL_FOOTER_ACTIONS.REVERT_CONFIRM} />;
         }
         
         const isFileFocused = focusedItemPath.includes('/');
-        const baseActions: ActionItem[] = [
-            { key: 'C', label: 'Copy' },
-            { key: 'O', label: isFileFocused ? 'Open File' : 'Open YAML' },
-            { key: 'U', label: 'Undo' },
-            { key: 'Q', label: 'Quit/Back' },
-        ];
-        let contextualActions: ActionItem[] = [];
+        const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
+        const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
 
         if (isFileFocused) { // Is a file
-            if (bodyView === 'DIFF_VIEW') {
-                contextualActions = [
-                    { key: '↑↓', label: 'Nav Files' },
-                    { key: '←', label: 'Back to List' },
-                ];
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
             } else {
-                contextualActions = [
-                    { key: '↑↓', label: 'Nav Files' },
-                    { key: '→', label: 'View Diff' },
-                    { key: '←', label: 'Back to Sections' },
-                ];
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
             }
-            return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
         }
         
         if (expandedItemPaths.has(focusedItemPath)) {
-            contextualActions = [
-                { key: '↑↓', label: 'Nav/Scroll' },
-                { key: '→', label: 'Drill In' },
-                { key: '←', label: 'Collapse' },
-            ];
-        } else {
-            contextualActions = [
-                { key: '↑↓', label: 'Nav' },
-                { key: '→', label: 'Expand' },
-            ];
+            return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_EXPANDED, ...baseActions]} />;
         }
-        return <ActionFooter actions={[...contextualActions, ...baseActions]} />;
+        return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_COLLAPSED, ...baseActions]} />;
     };
 
     const { message, timestamp, status } = transaction;
@@ -181,10 +146,10 @@ const TransactionDetailScreen = () => {
             <Separator />
             
             {/* Modal takeover for Revert */}
-            {bodyView === 'REVERT_CONFIRM' && <RevertModal transactionHash={transaction.hash} />}
+            {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
             
             {/* Main view */}
-            <Box flexDirection="column" display={bodyView === 'REVERT_CONFIRM' ? 'none' : 'flex'}>
+            <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
                 {/* Navigator Part A */}
                 <Box flexDirection="column" marginY={1}>
                     <Text>UUID: {transaction.id}</Text>
