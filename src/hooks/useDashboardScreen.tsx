@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { useInput } from 'ink';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
@@ -17,6 +18,9 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
         expandedTransactionId,
     } = useDashboardStore();
     const transactions = useTransactionStore(s => s.transactions);
+    const [newTransactionIds, setNewTransactionIds] = useState(new Set<string>());
+    const prevTransactionIds = useRef(new Set(transactions.map(t => t.id)));
+
     const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
     const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
 
@@ -25,6 +29,32 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
         itemCount: transactions.length,
         layoutConfig,
     });
+
+    useEffect(() => {
+        const currentIds = new Set(transactions.map(t => t.id));
+        const newIds = new Set<string>();
+
+        for (const id of currentIds) {
+            if (!prevTransactionIds.current.has(id)) {
+                newIds.add(id);
+            }
+        }
+
+        if (newIds.size > 0) {
+            setNewTransactionIds(current => new Set([...current, ...newIds]));
+            newIds.forEach(id => {
+                setTimeout(() => {
+                    setNewTransactionIds(current => {
+                        const next = new Set(current);
+                        next.delete(id);
+                        return next;
+                    });
+                }, 1000);
+            });
+        }
+
+        prevTransactionIds.current = currentIds;
+    }, [transactions]);
 
     const {
         togglePause,
@@ -110,6 +140,7 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
         pendingCommits,
         isModal,
         isProcessing,
+        newTransactionIds,
         viewOffset,
         viewportHeight,
         transactionsToConfirm,

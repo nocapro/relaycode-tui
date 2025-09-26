@@ -1,0 +1,930 @@
+uuid: c257c742-0f0e-436f-b25b-0ecb10433291
+projectId: relaycode-tui
+createdAt: '2025-09-26T05:30:42.203Z'
+gitCommitMsg: >-
+  feat(ui): add animations to splash, init, and dashboard screens
+
+  Introduces several UI enhancements to improve user experience and provide
+  better visual feedback:
+
+  - **Splash Screen:** The logo and text sections now animate into view
+  sequentially, creating a more engaging startup sequence.
+
+  - **Initialization Screen:** Active tasks now display an animated spinner.
+  Completed tasks briefly "flash" a bright green color, making progress clearer.
+
+  - **Dashboard Screen:** New events in the event stream are highlighted as they
+  appear. Changes in a transaction's status are indicated with a color flash,
+  drawing attention to important updates.
+promptSummary: >-
+  The user requested to add animations to the Splash, Initialization, and
+  Dashboard screens to improve the user experience.
+reasoning:
+  - >-
+    This master plan introduces animations to enhance the user experience on key
+    screens: the Splash Screen, the Initialization Screen, and the Dashboard
+    Screen.
+  - '### Part 1: Animate the Splash Screen'
+  - >-
+    The static splash screen is transformed into a dynamic introduction by
+    animating the sequential appearance of the logo and text elements. This is
+    managed within the `useSplashScreen` hook, which orchestrates the animation
+    sequence, and the `SplashScreen` component, which renders elements based on
+    the animation's progress.
+  - '### Part 2: Add Polish to the Initialization Screen'
+  - >-
+    The initialization process becomes more visually informative. The `TaskItem`
+    component now displays an animated spinner for active tasks. Upon
+    completion, tasks briefly flash with a bright, bold green color, providing
+    clear and dynamic feedback on the process's progress.
+  - '### Part 3: Animate the Dashboard Screen Event Stream'
+  - >-
+    The dashboard's event stream is now more lively. New transactions animate
+    into view with a temporary highlight, drawing the user's attention.
+    Furthermore, when a transaction's status changes (e.g., from `PENDING` to
+    `IN-PROGRESS`), the status text briefly flashes, providing an immediate
+    visual cue for the update.
+  - '---'
+  - I will now apply the changes for all three parts.
+  - >-
+    First, I'll update the `useSplashScreen` hook to manage the new animation
+    state.
+  - Next, I'll update the `SplashScreen` component to render the animation.
+  - >-
+    Now for the `InitializationScreen` component, I will add spinners and flash
+    effects.
+  - Next, I'll update the `useDashboardScreen` hook to track new transactions.
+  - >-
+    Finally, I'll update the `DashboardScreen` component itself to render the
+    animations for new and updated events.
+  - YAML block for the final response.
+operations:
+  - type: write
+    path: src/hooks/useSplashScreen.tsx
+    content: >
+      --- src/hooks/useSplashScreen.tsx
+
+      +++ src/hooks/useSplashScreen.tsx
+
+      @@ -1,13 +1,24 @@
+
+      -import { useState, useEffect } from 'react';
+
+      +import { useState, useEffect, useRef } from 'react';
+       import { useInput } from 'ink';
+       import { useAppStore } from '../stores/app.store';
+       import { UI_CONFIG } from '../config/ui.config';
+       import { useNotificationStore } from '../stores/notification.store';
+       
+       export const useSplashScreen = () => {
+           const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+           const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+      +    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+
+      +    const [visibleSections, setVisibleSections] = useState(new
+      Set<string>());
+
+      +    const [animationComplete, setAnimationComplete] = useState(false);
+
+      +
+
+      +    // Use a ref to manage timeouts to prevent memory leaks on fast
+      unmount/skip
+
+      +    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+      +
+
+      +    const clearAllTimeouts = () => {
+
+      +        timeouts.current.forEach(clearTimeout);
+
+      +        timeouts.current = [];
+
+      +    };
+       
+           const handleSkip = () => {
+      +        clearAllTimeouts();
+
+      +        setAnimationComplete(true);
+
+      +        setVisibleLogoLines(100); // A high number to show all lines
+
+      +        setVisibleSections(new Set(['tagline', 'version', 'promo',
+      'links']));
+               showInitScreen();
+           };
+       
+      @@ -43,21 +54,49 @@
+               handleSkip(); 
+           });
+       
+           useEffect(() => {
+      -        if (countdown === 0) {
+
+      +        const t = (fn: () => void, delay: number) =>
+      timeouts.current.push(setTimeout(fn, delay));
+
+      +
+
+      +        // 1. Animate logo
+
+      +        const logoTimer = setInterval(() => {
+
+      +            setVisibleLogoLines(l => {
+
+      +                if (l >= 3) {
+
+      +                    clearInterval(logoTimer);
+
+      +                    
+
+      +                    // 2. Animate sections
+
+      +                    t(() => setVisibleSections(s => new
+      Set(s).add('tagline')), 100);
+
+      +                    t(() => setVisibleSections(s => new
+      Set(s).add('version')), 300);
+
+      +                    t(() => setVisibleSections(s => new
+      Set(s).add('promo')), 500);
+
+      +                    t(() => setVisibleSections(s => new
+      Set(s).add('links')), 700);
+
+      +                    t(() => setAnimationComplete(true), 900);
+
+      +
+
+      +                    return l;
+
+      +                }
+
+      +                return l + 1;
+
+      +            });
+
+      +        }, 80);
+
+      +
+
+      +        // Cleanup
+
+      +        return () => {
+
+      +            clearInterval(logoTimer);
+
+      +            clearAllTimeouts();
+
+      +        };
+
+      +    }, []);
+
+      +
+
+      +    useEffect(() => {
+
+      +        if (!animationComplete) return;
+
+      +
+
+      +        if (countdown <= 0) {
+                   showInitScreen();
+                   return;
+               }
+       
+               const timer = setTimeout(() => {
+                   setCountdown(c => c - 1);
+               }, 1000);
+      -
+
+      +        timeouts.current.push(timer);
+
+      +        
+               return () => clearTimeout(timer);
+      -    }, [countdown, showInitScreen]);
+
+      -
+
+      -    return { countdown };
+
+      +    }, [countdown, showInitScreen, animationComplete]);
+
+      +
+
+      +    return { countdown, visibleLogoLines, visibleSections,
+      animationComplete };
+       };
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: >
+      --- src/components/SplashScreen.tsx
+
+      +++ src/components/SplashScreen.tsx
+
+      @@ -1,10 +1,10 @@
+       import { Box, Text } from 'ink';
+       import Separator from './Separator';
+       import { useSplashScreen } from '../hooks/useSplashScreen';
+       
+       const SplashScreen = () => {
+      -    const { countdown } = useSplashScreen();
+
+      +    const { countdown, visibleLogoLines, visibleSections,
+      animationComplete } = useSplashScreen();
+           const logo = `
+                ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+                ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+      @@ -12,50 +12,65 @@
+                ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+       `;
+       
+      +    const logoLines = logo.split('\n');
+
+      +
+           return (
+               <Box flexDirection="column">
+                   <Text color="cyan">▲ relaycode</Text>
+                   <Separator />
+      -            <Text color="cyan">{logo}</Text>
+
+      -            <Box flexDirection="column" alignItems="center">
+
+      -                <Text italic>A zero-friction, AI-native patch
+      engine.</Text>
+
+      -                <Text italic color="gray">Built by Arman and contributors
+      · <Text underline>https://relay.noca.pro</Text></Text>
+
+      -            </Box>
+
+      +            <Text color="cyan">{logoLines.slice(0,
+      visibleLogoLines).join('\n')}</Text>
+
+      +            {visibleSections.has('tagline') && (
+
+      +                <Box flexDirection="column" alignItems="center">
+
+      +                    <Text italic>A zero-friction, AI-native patch
+      engine.</Text>
+
+      +                    <Text italic color="gray">Built by Arman and
+      contributors · <Text underline>https://relay.noca.pro</Text></Text>
+
+      +                </Box>
+
+      +            )}
+                   
+      -            <Box flexDirection="row" justifyContent="space-around"
+      width="100%" marginTop={1}>
+
+      -                <Box flexDirection="column" width="45%">
+
+      -                    <Text>Version 1.1.5</Text>
+
+      -                    <Text>─────────────────────────</Text>
+
+      -                    <Text>relaycode</Text>
+
+      -                    <Text>relaycode-core</Text>
+
+      -                    <Text>apply-multi-diff</Text>
+
+      -                    <Text>konro</Text>
+
+      -                </Box>
+
+      -                 <Box flexDirection="column" width="45%">
+
+      -                    <Text>Build Timestamps</Text>
+
+      -                    <Text>─────────────────────────</Text>
+
+      -                    <Text>2025-09-20 13:58:05</Text>
+
+      -                    <Text>2025-09-20 10:59:05</Text>
+
+      -                    <Text>(versioned)</Text>
+
+      -                    <Text>(versioned)</Text>
+
+      +            {visibleSections.has('version') && (
+
+      +                <Box flexDirection="row" justifyContent="space-around"
+      width="100%" marginTop={1}>
+
+      +                    <Box flexDirection="column" width="45%">
+
+      +                        <Text>Version 1.1.5</Text>
+
+      +                        <Text>─────────────────────────</Text>
+
+      +                        <Text>relaycode</Text>
+
+      +                        <Text>relaycode-core</Text>
+
+      +                        <Text>apply-multi-diff</Text>
+
+      +                        <Text>konro</Text>
+
+      +                    </Box>
+
+      +                     <Box flexDirection="column" width="45%">
+
+      +                        <Text>Build Timestamps</Text>
+
+      +                        <Text>─────────────────────────</Text>
+
+      +                        <Text>2025-09-20 13:58:05</Text>
+
+      +                        <Text>2025-09-20 10:59:05</Text>
+
+      +                        <Text>(versioned)</Text>
+
+      +                        <Text>(versioned)</Text>
+
+      +                    </Box>
+                       </Box>
+      -            </Box>
+
+      +            )}
+                   
+      -            <Box marginTop={1}><Separator /></Box>
+
+      -            <Text>If you love this workflow, check out <Text
+      underline>https://www.noca.pro</Text> for the full</Text>
+
+      -            <Text>web app with repo-wide visual context, history, and
+      rollback.</Text>
+
+      -            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+
+      +            {visibleSections.has('promo') && (
+
+      +                <>
+
+      +                    <Box marginTop={1}><Separator /></Box>
+
+      +                    <Text>If you love this workflow, check out <Text
+      underline>https://www.noca.pro</Text> for the full</Text>
+
+      +                    <Text>web app with repo-wide visual context, history,
+      and rollback.</Text>
+
+      +                    <Text><Text color="cyan" bold>(V)</Text>isit
+      noca.pro</Text>
+
+      +                </>
+
+      +            )}
+
+      +
+
+      +            {visibleSections.has('links') && (
+
+      +                <>
+
+      +                    <Separator />
+
+      +                    <Text>Follow <Text color="cyan" bold>(X)</Text> ·
+      Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan"
+      bold>(G)</Text>itHub</Text>
+
+      +                </>
+
+      +            )}
+
+      +
+                   <Separator />
+      -            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text
+      color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan"
+      bold>(G)</Text>itHub</Text>
+
+      -            <Separator />
+
+      -            <Text>Loading... {countdown} (<Text color="gray">Press any
+      key to skip</Text>)</Text>
+
+      +            <Text>
+
+      +                {animationComplete ? `Loading... ${countdown}` :
+      'Loading...'} (<Text color="gray">Press any key to skip</Text>)
+
+      +            </Text>
+               </Box>
+           );
+       };
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: "--- src/components/InitializationScreen.tsx\n+++ src/components/InitializationScreen.tsx\n@@ -1,16 +1,28 @@\n-import { Box, Text } from 'ink';\n+import { Box, Text } from 'ink';\n+import { useState, useEffect } from 'react';\n+import Spinner from 'ink-spinner';\n import Separator from './Separator';\n import type { Task } from '../stores/init.store';\n import { useInitializationScreen } from '../hooks/useInitializationScreen';\n \n const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n+\tconst [isJustDone, setIsJustDone] = useState(false);\n+\n+\tuseEffect(() => {\n+\t\tif (task.status === 'done') {\n+\t\t\tsetIsJustDone(true);\n+\t\t\tconst timer = setTimeout(() => setIsJustDone(false), 300);\n+\t\t\treturn () => clearTimeout(timer);\n+\t\t}\n+\t}, [task.status]);\n+\n \tlet symbol: React.ReactNode;\n \tswitch (task.status) {\n \t\tcase 'pending': symbol = '( )'; break;\n-\t\tcase 'active': symbol = <Text color=\"cyan\">(●)</Text>; break;\n+\t\tcase 'active': symbol = <Text color=\"cyan\"><Spinner type=\"dots\" /></Text>; break;\n \t\tcase 'done': symbol = <Text color=\"green\">{doneSymbol}</Text>; break;\n \t}\n \n \tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n \n \treturn (\n-\t\t<Box flexDirection=\"column\">\n-\t\t\t<Text>\n+\t\t<Box flexDirection=\"column\">\n+\t\t\t<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>\n \t\t\t\t{symbol} {title}\n \t\t\t</Text>\n \t\t\t{task.subtext && task.status !== 'done' && (\n"
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDashboardScreen.tsx
+    content: >
+      --- src/hooks/useDashboardScreen.tsx
+
+      +++ src/hooks/useDashboardScreen.tsx
+
+      @@ -1,4 +1,5 @@
+
+      -import { useInput } from 'ink';
+
+      +import { useState, useEffect, useRef } from 'react';
+
+      +import { useInput } from 'ink';
+       import { useDashboardStore } from '../stores/dashboard.store';
+       import { useAppStore } from '../stores/app.store';
+       import { useCommitStore } from '../stores/commit.store';
+      @@ -14,6 +15,9 @@
+               expandedTransactionId,
+           } = useDashboardStore();
+           const transactions = useTransactionStore(s => s.transactions);
+      +    const [newTransactionIds, setNewTransactionIds] = useState(new
+      Set<string>());
+
+      +    const prevTransactionIds = useRef(new Set(transactions.map(t =>
+      t.id)));
+
+      +
+           const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
+           const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+       
+      @@ -22,6 +26,33 @@
+               itemCount: transactions.length,
+               layoutConfig,
+           });
+      +
+
+      +    useEffect(() => {
+
+      +        const currentIds = new Set(transactions.map(t => t.id));
+
+      +        const newIds = new Set<string>();
+
+      +
+
+      +        for (const id of currentIds) {
+
+      +            if (!prevTransactionIds.current.has(id)) {
+
+      +                newIds.add(id);
+
+      +            }
+
+      +        }
+
+      +
+
+      +        if (newIds.size > 0) {
+
+      +            setNewTransactionIds(current => new Set([...current,
+      ...newIds]));
+
+      +            newIds.forEach(id => {
+
+      +                setTimeout(() => {
+
+      +                    setNewTransactionIds(current => {
+
+      +                        const next = new Set(current);
+
+      +                        next.delete(id);
+
+      +                        return next;
+
+      +                    });
+
+      +                }, 1000);
+
+      +            });
+
+      +        }
+
+      +
+
+      +        prevTransactionIds.current = currentIds;
+
+      +    }, [transactions]);
+       
+           const {
+               togglePause,
+      @@ -112,6 +143,7 @@
+               pendingCommits,
+               isModal,
+               isProcessing,
+      +        newTransactionIds,
+               viewOffset,
+               viewportHeight,
+               transactionsToConfirm,
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: >
+      --- src/components/DashboardScreen.tsx
+
+      +++ src/components/DashboardScreen.tsx
+
+      @@ -1,5 +1,5 @@
+
+      -import React from 'react';
+
+      +import React, { useState, useEffect, useRef } from 'react';
+       import { Box, Text } from 'ink';
+       import Spinner from 'ink-spinner';
+       import Separator from './Separator';
+      @@ -18,7 +18,7 @@
+       };
+       
+       const formatTimeAgo = (timestamp: number) => {
+      -    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+      +    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) /
+      1000));
+           if (seconds < 60) return `${seconds}s`;
+           const minutes = Math.floor(seconds / 60);
+           return `${minutes}m`;
+      @@ -46,31 +46,51 @@
+           );
+       };
+       
+      -const EventStreamItem = ({ transaction, isSelected, isExpanded }: {
+      transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
+
+      +const EventStreamItem = React.memo(({ transaction, isSelected,
+      isExpanded, isNew }: { transaction: Transaction, isSelected: boolean,
+      isExpanded: boolean, isNew: boolean }) => {
+
+      +    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
+
+      +    const [isStatusFlashing, setIsStatusFlashing] = useState(false);
+
+      +    const prevStatus = useRef(transaction.status);
+
+      +
+
+      +    useEffect(() => {
+
+      +        if (isNew) {
+
+      +            const timer = setTimeout(() => setIsAnimatingIn(false),
+      1000);
+
+      +            return () => clearTimeout(timer);
+
+      +        }
+
+      +    }, [isNew]);
+
+      +
+
+      +    useEffect(() => {
+
+      +        if (prevStatus.current !== transaction.status) {
+
+      +            setIsStatusFlashing(true);
+
+      +            const timer = setTimeout(() => setIsStatusFlashing(false),
+      500);
+
+      +            prevStatus.current = transaction.status;
+
+      +            return () => clearTimeout(timer);
+
+      +        }
+
+      +    }, [transaction.status]);
+
+      +
+           const icon = getStatusIcon(transaction.status);
+           const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+           const statusText = transaction.status.padEnd(11, ' ');
+           const expandIcon = isExpanded ? '▾' : '▸';
+           
+           const messageNode = transaction.status === 'IN-PROGRESS'
+      -        ? <Text color="cyan">{transaction.message}</Text>
+
+      +        ? <Text color={isAnimatingIn ? 'yellow' :
+      'cyan'}>{transaction.message}</Text>
+               : transaction.message;
+           
+           const content = (
+               <Text>
+      -            {time} {expandIcon} {icon} {statusText}{' '}
+
+      +            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow'
+      : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}
+                   <Text color="gray">{transaction.hash}</Text>
+                   {' '}· {messageNode}
+               </Text>
+           );
+       
+           if (isSelected) {
+      -        return <Text bold color="cyan">{'> '}{content}</Text>;
+
+      +        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'>
+      '}{content}</Text>;
+           }
+       
+      -    return <Text>{'  '}{content}</Text>;
+
+      -};
+
+      +    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{' 
+      '}{content}</Text>;
+
+      +});
+       
+       const ConfirmationContent = ({
+           transactionsToConfirm,
+      @@ -102,6 +122,7 @@
+               viewportHeight,
+               transactionsToConfirm,
+               expandedTransactionId,
+      +        newTransactionIds,
+           } = useDashboardScreen({
+               layoutConfig: UI_CONFIG.layout.dashboard,
+           });
+      @@ -155,12 +176,14 @@
+                       {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                           const actualIndex = viewOffset + index;
+                           const isExpanded = expandedTransactionId === tx.id;
+      +                    const isNew = newTransactionIds.has(tx.id);
+                           return (
+                               <React.Fragment key={tx.id}>
+                                   <EventStreamItem
+                                       transaction={tx}
+                                       isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                       isExpanded={isExpanded}
+      +                                isNew={isNew}
+                                   />
+                                   {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                               </React.Fragment>
+    patchStrategy: standard-diff
+snapshot:
+  src/components/SplashScreen.tsx: |-
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useSplashScreen } from '../hooks/useSplashScreen';
+
+    const SplashScreen = () => {
+        const { countdown } = useSplashScreen();
+        const logo = `
+             ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+             ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+             ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+    `;
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode</Text>
+                <Separator />
+                <Text color="cyan">{logo}</Text>
+                <Box flexDirection="column" alignItems="center">
+                    <Text italic>A zero-friction, AI-native patch engine.</Text>
+                    <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+                </Box>
+                
+                <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                    <Box flexDirection="column" width="45%">
+                        <Text>Version 1.1.5</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>relaycode</Text>
+                        <Text>relaycode-core</Text>
+                        <Text>apply-multi-diff</Text>
+                        <Text>konro</Text>
+                    </Box>
+                     <Box flexDirection="column" width="45%">
+                        <Text>Build Timestamps</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>2025-09-20 13:58:05</Text>
+                        <Text>2025-09-20 10:59:05</Text>
+                        <Text>(versioned)</Text>
+                        <Text>(versioned)</Text>
+                    </Box>
+                </Box>
+                
+                <Box marginTop={1}><Separator /></Box>
+                <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+                <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                <Separator />
+                <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                <Separator />
+                <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
+            </Box>
+        );
+    };
+
+    export default SplashScreen;
+  src/components/InitializationScreen.tsx: "import { Box, Text } from 'ink';\nimport Separator from './Separator';\nimport type { Task } from '../stores/init.store';\nimport { useInitializationScreen } from '../hooks/useInitializationScreen';\n\nconst TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n\tlet symbol: React.ReactNode;\n\tswitch (task.status) {\n\t\tcase 'pending': symbol = '( )'; break;\n\t\tcase 'active': symbol = <Text color=\"cyan\">(●)</Text>; break;\n\t\tcase 'done': symbol = <Text color=\"green\">{doneSymbol}</Text>; break;\n\t}\n\n\tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n\n\treturn (\n\t\t<Box flexDirection=\"column\">\n\t\t\t<Text>\n\t\t\t\t{symbol} {title}\n\t\t\t</Text>\n\t\t\t{task.subtext && task.status !== 'done' && (\n\t\t\t\t<Text italic color=\"gray\">\n\t\t\t\t\t{'     └─ '}{task.subtext}\n\t\t\t\t</Text>\n\t\t\t)}\n\t\t</Box>\n\t);\n};\n\nconst InitializationScreen = () => {\n    const {\n        phase,\n        analyzeTasks,\n        configureTasks,\n        interactiveChoice,\n        projectId,\n        footerText,\n    } = useInitializationScreen();\n\n    const renderAnalyze = () => (\n        <Box flexDirection=\"column\">\n            <Text bold color=\"cyan\">PHASE 1: ANALYZE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}\n            </Box>\n        </Box>\n    );\n\n    const renderContext = () => (\n        <Box flexDirection=\"column\" marginBottom={1}>\n            <Text bold color=\"cyan\">CONTEXT</Text>\n            <Text>  <Text color=\"green\">✓</Text> Project ID: {projectId}</Text>\n            <Text>  <Text color=\"green\">✓</Text> Gitignore:  Found at ./</Text>\n        </Box>\n    );\n\n    const renderConfigure = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n            </Box>\n        </Box>\n    );\n\n    const renderInteractive = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n                <Box flexDirection=\"column\" marginTop={1}>\n                    <Text><Text color=\"cyan\">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>\n                    <Text>  Do you want to share its state with your team by committing it?</Text>\n                </Box>\n            </Box>\n        </Box>\n    );\n\n    const renderFinalize = () => {\n        const stateText = interactiveChoice === 'share'\n            ? '.relay/ directory initialized. It will be committed to git.'\n            : '.relay/ directory initialized and added to .gitignore.';\n        const stateSubText = interactiveChoice === 'share'\n            ? undefined\n            : 'Local transaction history will be stored here.';\n        \n        return (\n            <Box flexDirection=\"column\">\n                <Text bold color=\"green\"> SYSTEM READY</Text>\n                <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Config:   relay.config.json created.</Text>\n                        <Text color=\"gray\" italic>          › Edit this file to tune linters, git integration, etc.</Text>\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> State:    {stateText}</Text>\n                        {stateSubText && <Text color=\"gray\" italic>          › {stateSubText}</Text>}\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n                        <Text color=\"gray\" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>\n                    </Box>\n                </Box>\n            </Box>\n        );\n    };\n\n    const renderPhase = () => {\n        switch (phase) {\n            case 'ANALYZE': return renderAnalyze();\n            case 'CONFIGURE': return renderConfigure();\n            case 'INTERACTIVE': return renderInteractive();\n            case 'FINALIZE': return renderFinalize();\n        }\n    };\n\n    return (\n        <Box flexDirection=\"column\">\n            <Text color=\"cyan\">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>\n            <Separator />\n            <Box marginY={1}>{renderPhase()}</Box>\n            <Separator />\n            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}\n        </Box>\n    );\n};\n\nexport default InitializationScreen;"
+  src/hooks/useDashboardScreen.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import type { LayoutConfig } from './useLayout';
+
+    import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+
+    import { useViewport } from './useViewport';
+
+
+    export const useDashboardScreen = ({ layoutConfig }: { layoutConfig:
+    LayoutConfig }) => {
+        const {
+            status,
+            selectedTransactionIndex,
+            expandedTransactionId,
+        } = useDashboardStore();
+        const transactions = useTransactionStore(s => s.transactions);
+        const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
+        const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex: selectedTransactionIndex,
+            itemCount: transactions.length,
+            layoutConfig,
+        });
+
+        const {
+            togglePause,
+            moveSelectionUp,
+            moveSelectionDown,
+            startApproveAll,
+            confirmAction,
+            cancelAction,
+            toggleExpand,
+        } = useDashboardStore(s => s.actions);
+        const appActions = useAppStore(s => s.actions);
+        const commitActions = useCommitStore(s => s.actions);
+
+        const pendingApprovals = pendingTransactions.length;
+        const pendingCommits = appliedTransactions.length;
+
+        const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
+        const isProcessing = status === DASHBOARD_STATUS.APPROVING;
+
+        useInput((input, key) => {
+            if (isModal) {
+                if (key.return) confirmAction();
+                if (key.escape) cancelAction();
+                return;
+            }
+
+            if (isProcessing) return; // No input while processing
+
+            if (key.leftArrow) {
+                if (expandedTransactionId) {
+                    toggleExpand();
+                }
+                return;
+            }
+            if (key.rightArrow) {
+                if (transactions[selectedTransactionIndex] && !expandedTransactionId) {
+                    toggleExpand();
+                }
+                return;
+            }
+
+            if (key.upArrow) moveSelectionUp();
+            if (key.downArrow) moveSelectionDown();
+            
+            if (key.return) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (!selectedTx) return;
+                
+                const isExpanded = expandedTransactionId === selectedTx.id;
+
+                if (isExpanded) {
+                    if (selectedTx.status === 'PENDING') {
+                        useReviewStore.getState().actions.load(selectedTx.id);
+                        appActions.showReviewScreen();
+                    } else {
+                        useDetailStore.getState().actions.load(selectedTx.id);
+                        appActions.showTransactionDetailScreen();
+                    }
+                } else {
+                    toggleExpand();
+                }
+            }
+            
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                useHistoryStore.getState().actions.load();
+                appActions.showTransactionHistoryScreen();
+            }
+        });
+        const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
+
+        return {
+            status,
+            transactions,
+            selectedTransactionIndex,
+            expandedTransactionId,
+            pendingApprovals,
+            pendingCommits,
+            isModal,
+            isProcessing,
+            viewOffset,
+            viewportHeight,
+            transactionsToConfirm,
+        };
+    };
+  src/components/DashboardScreen.tsx: "import React from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport Separator from './Separator';\nimport type { Transaction, TransactionStatus } from '../types/domain.types';\nimport { useDashboardScreen } from '../hooks/useDashboardScreen';\nimport { UI_CONFIG } from '../config/ui.config'; //\nimport ActionFooter from './ActionFooter';\nimport { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';\nimport { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.constants';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    if (status === 'IN-PROGRESS') return <Spinner type=\"dots\" />;\n    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];\n    if (!ui) return <Text> </Text>;\n    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.floor((Date.now() - timestamp) / 1000);\n    if (seconds < 60) return `${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `${minutes}m`;\n};\n\nconst ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {\n    const stats = transaction.stats;\n    const files = transaction.files || [];\n\n    return (\n        <Box flexDirection=\"column\" paddingLeft={4} marginBottom={1} borderStyle=\"round\" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor=\"gray\">\n            {stats && (\n                <Text color=\"gray\">\n                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}\n                </Text>\n            )}\n             <Box flexDirection=\"column\" paddingLeft={1}>\n                {files.map(file => (\n                     <Text key={file.id}>\n                        <Text color=\"gray\">{FILE_TYPE_MAP[file.type]}</Text> {file.path}\n                    </Text>\n                ))}\n             </Box>\n        </Box>\n    );\n};\n\nconst EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    const expandIcon = isExpanded ? '▾' : '▸';\n    \n    const messageNode = transaction.status === 'IN-PROGRESS'\n        ? <Text color=\"cyan\">{transaction.message}</Text>\n        : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {expandIcon} {icon} {statusText}{' '}\n            <Text color=\"gray\">{transaction.hash}</Text>\n            {' '}· {messageNode}\n        </Text>\n    );\n\n    if (isSelected) {\n        return <Text bold color=\"cyan\">{'> '}{content}</Text>;\n    }\n\n    return <Text>{'  '}{content}</Text>;\n};\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n        expandedTransactionId,\n    } = useDashboardScreen({\n        layoutConfig: UI_CONFIG.layout.dashboard,\n    });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; //\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n\t\treturn <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;\n    };\n    \n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            <Text color=\"cyan\">▲ relaycode dashboard</Text>\n            <Separator />\n            <Box marginY={1}>\n                {renderStatusBar()}\n            </Box>\n            \n            {isModal && (\n                <>\n                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                    <Separator />\n                </>\n            )}\n            \n            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {transactions.length === 0 && (\n                     <Box paddingLeft={2}><Text color=\"gray\">Listening for changes... no events yet.</Text></Box>\n                )}\n                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                    const actualIndex = viewOffset + index;\n                    const isExpanded = expandedTransactionId === tx.id;\n                    return (\n                        <React.Fragment key={tx.id}>\n                            <EventStreamItem\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                                isExpanded={isExpanded}\n                            />\n                            {isExpanded && <ExpandedEventInfo transaction={tx} />}\n                        </React.Fragment>\n                    );\n                })}\n            </Box>\n\n            <Box marginTop={1}><Separator /></Box>\n            {renderFooter()}\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/hooks/useSplashScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { useNotificationStore } from '../stores/notification.store';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+
+        const handleSkip = () => {
+            showInitScreen();
+        };
+
+        useInput((input) => {
+            const lowerInput = input.toLowerCase();
+            if (lowerInput === 'v') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening https://relay.noca.pro in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'x') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening X/Twitter in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'd') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening Discord invite in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'g') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening GitHub repository in your browser...',
+                });
+                return;
+            }
+
+            // Any other key skips
+            handleSkip(); 
+        });
+
+        useEffect(() => {
+            if (countdown === 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen]);
+
+        return { countdown };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 185

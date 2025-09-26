@@ -1,13 +1,25 @@
 import { Box, Text } from 'ink';
+import { useState, useEffect } from 'react';
+import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import type { Task } from '../stores/init.store';
 import { useInitializationScreen } from '../hooks/useInitializationScreen';
 
 const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	const [isJustDone, setIsJustDone] = useState(false);
+
+	useEffect(() => {
+		if (task.status === 'done') {
+			setIsJustDone(true);
+			const timer = setTimeout(() => setIsJustDone(false), 300);
+			return () => clearTimeout(timer);
+		}
+	}, [task.status]);
+
 	let symbol: React.ReactNode;
 	switch (task.status) {
 		case 'pending': symbol = '( )'; break;
-		case 'active': symbol = <Text color="cyan">(●)</Text>; break;
+		case 'active': symbol = <Text color="cyan"><Spinner type="dots" /></Text>; break;
 		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
 	}
 
@@ -15,7 +27,7 @@ const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: strin
 
 	return (
 		<Box flexDirection="column">
-			<Text>
+			<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>
 				{symbol} {title}
 			</Text>
 			{task.subtext && task.status !== 'done' && (

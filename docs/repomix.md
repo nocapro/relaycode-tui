@@ -53,6 +53,7 @@ src/
     useTransactionHistoryScreen.tsx
     useViewport.ts
   services/
+    clipboard.service.ts
     commit.service.ts
     copy.service.ts
     dashboard.service.ts
@@ -433,6 +434,109 @@ export const useNotificationScreen = () => {
         notification,
         countdown,
     };
+};
+```
+
+## File: src/services/clipboard.service.ts
+```typescript
+import { useTransactionStore, type Transaction } from '../stores/transaction.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useReviewStore } from '../stores/review.store';
+import { LoggerService } from './logger.service';
+
+const MOCK_VALID_PATCH = `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index 12345..67890 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -1,5 +1,6 @@
+-import React from 'react';
++import React, { useState } from 'react';
+
+ const Button = () => <button>Click Me</button>;
+
+ export default Button;
+`;
+
+const MOCK_INVALID_TEXT = 'This is just some regular text, not a patch.';
+
+const createTransactionFromPatch = (patchContent: string): Transaction => {
+    // In a real app, we would parse this. For demo, we'll create a mock.
+    const lines = patchContent.split('\n');
+    const linesAdded = lines.filter(l => l.startsWith('+')).length;
+    const linesRemoved = lines.filter(l => l.startsWith('-')).length;
+    const filePath = lines.find(l => l.startsWith('--- a/'))?.split(' a/')[1] || 'unknown/file.ts';
+
+    return {
+        id: (Math.random() * 1000).toFixed(0),
+        timestamp: Date.now(),
+        status: 'PENDING',
+        hash: Math.random().toString(16).substring(2, 10),
+        message: 'feat: apply patch from clipboard',
+        prompt: 'A patch was manually pasted into the application.',
+        reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
+        files: [
+            {
+                id: (Math.random() * 1000).toFixed(0) + '-1',
+                type: 'MOD',
+                path: filePath,
+                linesAdded,
+                linesRemoved,
+                diff: patchContent,
+                strategy: 'standard-diff',
+            },
+        ],
+        stats: {
+            files: 1,
+            linesAdded,
+            linesRemoved,
+        },
+    };
+};
+
+/**
+ * Simulates processing the clipboard content.
+ * @param forceValidPatch For debug purposes, force the outcome. If undefined, it will be random.
+ */
+const processClipboardContent = async (forceValidPatch?: boolean) => {
+    LoggerService.info('Manual paste detected. Processing clipboard content...');
+    
+    // Simulate reading from clipboardy
+    const isActuallyValid = forceValidPatch === true || (forceValidPatch === undefined && Math.random() > 0.5);
+    const clipboardContent = isActuallyValid ? MOCK_VALID_PATCH : MOCK_INVALID_TEXT;
+
+    // Simulate checking if it's a valid patch
+    if (clipboardContent.includes('diff --git')) {
+        LoggerService.debug('Valid patch detected in clipboard. Creating transaction.');
+        const newTransaction = createTransactionFromPatch(clipboardContent);
+
+        // Add to store so it exists for the review process
+        useTransactionStore.getState().actions.addTransaction(newTransaction);
+
+        // Immediately start the review simulation
+        LoggerService.debug(`Starting apply simulation for new transaction ${newTransaction.id}`);
+        // Forcing 'success' scenario for pasted patches. The simulation itself can
+        // result in a failure state which is then handled by the review screen.
+        useReviewStore.getState().actions.startApplySimulation(newTransaction.id, 'success');
+
+        useNotificationStore.getState().actions.show({
+            type: 'info',
+            title: 'Processing Pasted Patch',
+            message: `Applying new transaction "${newTransaction.hash}"...`,
+            duration: 2,
+        });
+    } else {
+        LoggerService.debug('No valid patch detected in clipboard content.');
+        useNotificationStore.getState().actions.show({
+            type: 'info',
+            title: 'Clipboard Ignored',
+            message: 'Pasted content was not a valid patch.',
+            duration: 3,
+        });
+    }
+};
+
+export const ClipboardService = {
+    processClipboardContent,
 };
 ```
 
@@ -2800,7 +2904,7 @@ export default ReviewProcessingScreen;
 
 ## File: src/hooks/useSplashScreen.tsx
 ```typescript
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { UI_CONFIG } from '../config/ui.config';
@@ -2809,8 +2913,23 @@ import { useNotificationStore } from '../stores/notification.store';
 export const useSplashScreen = () => {
     const showInitScreen = useAppStore(state => state.actions.showInitScreen);
     const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+    const [visibleSections, setVisibleSections] = useState(new Set<string>());
+    const [animationComplete, setAnimationComplete] = useState(false);
+
+    // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+    const clearAllTimeouts = () => {
+        timeouts.current.forEach(clearTimeout);
+        timeouts.current = [];
+    };
 
     const handleSkip = () => {
+        clearAllTimeouts();
+        setAnimationComplete(true);
+        setVisibleLogoLines(100); // A high number to show all lines
+        setVisibleSections(new Set(['tagline', 'version', 'promo', 'links']));
         showInitScreen();
     };
 
@@ -2854,7 +2973,38 @@ export const useSplashScreen = () => {
     });
 
     useEffect(() => {
-        if (countdown === 0) {
+        const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+        // 1. Animate logo
+        const logoTimer = setInterval(() => {
+            setVisibleLogoLines(l => {
+                if (l >= 3) {
+                    clearInterval(logoTimer);
+                    
+                    // 2. Animate sections
+                    t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                    t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                    t(() => setVisibleSections(s => new Set(s).add('promo')), 500);
+                    t(() => setVisibleSections(s => new Set(s).add('links')), 700);
+                    t(() => setAnimationComplete(true), 900);
+
+                    return l;
+                }
+                return l + 1;
+            });
+        }, 80);
+
+        // Cleanup
+        return () => {
+            clearInterval(logoTimer);
+            clearAllTimeouts();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!animationComplete) return;
+
+        if (countdown <= 0) {
             showInitScreen();
             return;
         }
@@ -2862,11 +3012,12 @@ export const useSplashScreen = () => {
         const timer = setTimeout(() => {
             setCountdown(c => c - 1);
         }, 1000);
-
+        timeouts.current.push(timer);
+        
         return () => clearTimeout(timer);
-    }, [countdown, showInitScreen]);
+    }, [countdown, showInitScreen, animationComplete]);
 
-    return { countdown };
+    return { countdown, visibleLogoLines, visibleSections, animationComplete };
 };
 ```
 
@@ -3139,55 +3290,6 @@ export const useCopyStore = create<CopyState>((set, get) => ({
 }));
 ```
 
-## File: src/stores/transaction.store.ts
-```typescript
-import { create } from 'zustand';
-import { TransactionService } from '../services/transaction.service';
-import { useViewStore } from './view.store';
-import type { Transaction, TransactionStatus } from '../types/domain.types';
-
-export type { Transaction };
-
-interface TransactionState {
-    transactions: Transaction[];
-    actions: {
-        loadTransactions: () => void;
-        updateTransactionStatus: (id: string, status: TransactionStatus) => void;
-        clearTransactions: () => void;
-    };
-}
-
-export const useTransactionStore = create<TransactionState>((set) => ({
-    transactions: [],
-    actions: {
-        loadTransactions: () => {
-            const transactions = TransactionService.getAllTransactions();
-            set({ transactions });
-        },
-        updateTransactionStatus: (id, status) => {
-            set(state => ({
-                transactions: state.transactions.map(tx =>
-                    tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
-                ),
-            }));
-        },
-        clearTransactions: () => set({ transactions: [] }),
-    },
-}));
-
-// --- Selectors ---
-
-/** Selects transactions by their status. */
-export const selectTransactionsByStatus = (status: TransactionStatus) => (state: TransactionState) =>
-    state.transactions.filter(tx => tx.status === status);
-
-/** Selects the transaction currently targeted by the view store. */
-export const selectSelectedTransaction = (state: TransactionState): Transaction | undefined => {
-    const { selectedTransactionId } = useViewStore.getState();
-    return state.transactions.find(t => t.id === selectedTransactionId);
-};
-```
-
 ## File: src/components/CopyScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
@@ -3306,119 +3408,73 @@ import Separator from './Separator';
 import { useSplashScreen } from '../hooks/useSplashScreen';
 
 const SplashScreen = () => {
-    const { countdown } = useSplashScreen();
+    const { countdown, visibleLogoLines, visibleSections, animationComplete } = useSplashScreen();
     const logo = `
          ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
          ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
          ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
 `;
 
+    const logoLines = logo.split('\n');
+
     return (
         <Box flexDirection="column">
             <Text color="cyan">▲ relaycode</Text>
             <Separator />
-            <Text color="cyan">{logo}</Text>
-            <Box flexDirection="column" alignItems="center">
-                <Text italic>A zero-friction, AI-native patch engine.</Text>
-                <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
-            </Box>
-            
-            <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
-                <Box flexDirection="column" width="45%">
-                    <Text>Version 1.1.5</Text>
-                    <Text>─────────────────────────</Text>
-                    <Text>relaycode</Text>
-                    <Text>relaycode-core</Text>
-                    <Text>apply-multi-diff</Text>
-                    <Text>konro</Text>
+            <Text color="cyan">{logoLines.slice(0, visibleLogoLines).join('\n')}</Text>
+            {visibleSections.has('tagline') && (
+                <Box flexDirection="column" alignItems="center">
+                    <Text italic>A zero-friction, AI-native patch engine.</Text>
+                    <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
                 </Box>
-                 <Box flexDirection="column" width="45%">
-                    <Text>Build Timestamps</Text>
-                    <Text>─────────────────────────</Text>
-                    <Text>2025-09-20 13:58:05</Text>
-                    <Text>2025-09-20 10:59:05</Text>
-                    <Text>(versioned)</Text>
-                    <Text>(versioned)</Text>
-                </Box>
-            </Box>
+            )}
             
-            <Box marginTop={1}><Separator /></Box>
-            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
-            <Text>web app with repo-wide visual context, history, and rollback.</Text>
-            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+            {visibleSections.has('version') && (
+                <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                    <Box flexDirection="column" width="45%">
+                        <Text>Version 1.1.5</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>relaycode</Text>
+                        <Text>relaycode-core</Text>
+                        <Text>apply-multi-diff</Text>
+                        <Text>konro</Text>
+                    </Box>
+                     <Box flexDirection="column" width="45%">
+                        <Text>Build Timestamps</Text>
+                        <Text>─────────────────────────</Text>
+                        <Text>2025-09-20 13:58:05</Text>
+                        <Text>2025-09-20 10:59:05</Text>
+                        <Text>(versioned)</Text>
+                        <Text>(versioned)</Text>
+                    </Box>
+                </Box>
+            )}
+            
+            {visibleSections.has('promo') && (
+                <>
+                    <Box marginTop={1}><Separator /></Box>
+                    <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+                    <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                    <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                </>
+            )}
+
+            {visibleSections.has('links') && (
+                <>
+                    <Separator />
+                    <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                </>
+            )}
+
             <Separator />
-            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
-            <Separator />
-            <Text>Loading... {countdown} (<Text color="gray">Press any key to skip</Text>)</Text>
+            <Text>
+                {animationComplete ? `Loading... ${countdown}` : 'Loading...'} (<Text color="gray">Press any key to skip</Text>)
+            </Text>
         </Box>
     );
 };
 
 export default SplashScreen;
-```
-
-## File: src/hooks/useGlobalHotkeys.tsx
-```typescript
-import { useApp, useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { useViewStore } from '../stores/view.store';
-import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
-import { OVERLAYS } from '../constants/view.constants';
-
-export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
-    const { exit } = useApp();
-    const { currentScreen } = useAppStore(s => ({
-        currentScreen: s.currentScreen,
-    }));
-    const { navigateBack } = useAppStore(s => s.actions);
-    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
-        activeOverlay: s.activeOverlay,
-        setActiveOverlay: s.actions.setActiveOverlay,
-    }));
-
-    useInput((input, key) => {
-        // Debug Menu toggle is the highest priority global key
-        if (key.ctrl && input === 'b') {
-            setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
-            return;
-        }
-        if (key.ctrl && input === 'l') {
-            setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
-            return;
-        }
-
-        // If an overlay with its own input is open, stop here.
-        if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
-            return;
-        }
-
-        // Help screen takes precedence over other keys
-        if (activeOverlay === OVERLAYS.HELP) {
-            if (key.escape || input === '?') {
-                setActiveOverlay(OVERLAYS.NONE);
-            }
-            return;
-        }
-
-        // --- Global hotkeys when no modal/overlay is open ---
-        
-        // Open Help
-        if (input === '?') {
-            setActiveOverlay(OVERLAYS.HELP);
-            return;
-        }
-        
-        // Quit from main screens
-        if (input.toLowerCase() === 'q') {
-            if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
-                exit();
-            }
-            navigateBack();
-        } else if (key.escape) {
-            navigateBack();
-        }
-    }, { isActive });
-};
 ```
 
 ## File: src/stores/commit.store.ts
@@ -3524,18 +3580,157 @@ export const useInitStore = create<InitState>((set) => ({
 }));
 ```
 
+## File: src/stores/transaction.store.ts
+```typescript
+import { create } from 'zustand';
+import { TransactionService } from '../services/transaction.service';
+import { useViewStore } from './view.store';
+import { useDashboardStore } from './dashboard.store';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
+
+export type { Transaction };
+
+interface TransactionState {
+    transactions: Transaction[];
+    actions: {
+        loadTransactions: () => void;
+        updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        addTransaction: (transaction: Transaction) => void;
+        clearTransactions: () => void;
+    };
+}
+
+export const useTransactionStore = create<TransactionState>((set) => ({
+    transactions: [],
+    actions: {
+        loadTransactions: () => {
+            const transactions = TransactionService.getAllTransactions();
+            set({ transactions });
+        },
+        updateTransactionStatus: (id, status) => {
+            set(state => ({
+                transactions: state.transactions.map(tx =>
+                    tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                ),
+            }));
+        },
+        addTransaction: (transaction) => {
+            set(state => ({
+                transactions: [transaction, ...state.transactions],
+            }));
+            useDashboardStore.getState().actions.setSelectedIndex(0);
+        },
+        clearTransactions: () => set({ transactions: [] }),
+    },
+}));
+
+// --- Selectors ---
+
+/** Selects transactions by their status. */
+export const selectTransactionsByStatus = (status: TransactionStatus) => (state: TransactionState) =>
+    state.transactions.filter(tx => tx.status === status);
+
+/** Selects the transaction currently targeted by the view store. */
+export const selectSelectedTransaction = (state: TransactionState): Transaction | undefined => {
+    const { selectedTransactionId } = useViewStore.getState();
+    return state.transactions.find(t => t.id === selectedTransactionId);
+};
+```
+
+## File: src/hooks/useGlobalHotkeys.tsx
+```typescript
+import { useApp, useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+import { OVERLAYS } from '../constants/view.constants';
+import { ClipboardService } from '../services/clipboard.service';
+
+export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+    const { exit } = useApp();
+    const { currentScreen } = useAppStore(s => ({
+        currentScreen: s.currentScreen,
+    }));
+    const { navigateBack } = useAppStore(s => s.actions);
+    const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+        activeOverlay: s.activeOverlay,
+        setActiveOverlay: s.actions.setActiveOverlay,
+    }));
+
+    useInput((input, key) => {
+        // Debug Menu toggle is the highest priority global key
+        if (key.ctrl && input === 'b') {
+            setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+            return;
+        }
+        if (key.ctrl && input === 'l') {
+            setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+            return;
+        }
+
+        if (key.ctrl && input === 'v') {
+            ClipboardService.processClipboardContent();
+            return;
+        }
+
+        // If an overlay with its own input is open, stop here.
+        if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+            return;
+        }
+
+        // Help screen takes precedence over other keys
+        if (activeOverlay === OVERLAYS.HELP) {
+            if (key.escape || input === '?') {
+                setActiveOverlay(OVERLAYS.NONE);
+            }
+            return;
+        }
+
+        // --- Global hotkeys when no modal/overlay is open ---
+        
+        // Open Help
+        if (input === '?') {
+            setActiveOverlay(OVERLAYS.HELP);
+            return;
+        }
+        
+        // Quit from main screens
+        if (input.toLowerCase() === 'q') {
+            if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+                exit();
+            }
+            navigateBack();
+        } else if (key.escape) {
+            navigateBack();
+        }
+    }, { isActive });
+};
+```
+
 ## File: src/components/InitializationScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
+import { useState, useEffect } from 'react';
+import Spinner from 'ink-spinner';
 import Separator from './Separator';
 import type { Task } from '../stores/init.store';
 import { useInitializationScreen } from '../hooks/useInitializationScreen';
 
 const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	const [isJustDone, setIsJustDone] = useState(false);
+
+	useEffect(() => {
+		if (task.status === 'done') {
+			setIsJustDone(true);
+			const timer = setTimeout(() => setIsJustDone(false), 300);
+			return () => clearTimeout(timer);
+		}
+	}, [task.status]);
+
 	let symbol: React.ReactNode;
 	switch (task.status) {
 		case 'pending': symbol = '( )'; break;
-		case 'active': symbol = <Text color="cyan">(●)</Text>; break;
+		case 'active': symbol = <Text color="cyan"><Spinner type="dots" /></Text>; break;
 		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
 	}
 
@@ -3543,7 +3738,7 @@ const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: strin
 
 	return (
 		<Box flexDirection="column">
-			<Text>
+			<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>
 				{symbol} {title}
 			</Text>
 			{task.subtext && task.status !== 'done' && (
@@ -3660,6 +3855,7 @@ export default InitializationScreen;
 
 ## File: src/hooks/useDashboardScreen.tsx
 ```typescript
+import { useState, useEffect, useRef } from 'react';
 import { useInput } from 'ink';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
@@ -3679,6 +3875,9 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
         expandedTransactionId,
     } = useDashboardStore();
     const transactions = useTransactionStore(s => s.transactions);
+    const [newTransactionIds, setNewTransactionIds] = useState(new Set<string>());
+    const prevTransactionIds = useRef(new Set(transactions.map(t => t.id)));
+
     const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
     const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
 
@@ -3687,6 +3886,32 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
         itemCount: transactions.length,
         layoutConfig,
     });
+
+    useEffect(() => {
+        const currentIds = new Set(transactions.map(t => t.id));
+        const newIds = new Set<string>();
+
+        for (const id of currentIds) {
+            if (!prevTransactionIds.current.has(id)) {
+                newIds.add(id);
+            }
+        }
+
+        if (newIds.size > 0) {
+            setNewTransactionIds(current => new Set([...current, ...newIds]));
+            newIds.forEach(id => {
+                setTimeout(() => {
+                    setNewTransactionIds(current => {
+                        const next = new Set(current);
+                        next.delete(id);
+                        return next;
+                    });
+                }, 1000);
+            });
+        }
+
+        prevTransactionIds.current = currentIds;
+    }, [transactions]);
 
     const {
         togglePause,
@@ -3772,6 +3997,7 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
         pendingCommits,
         isModal,
         isProcessing,
+        newTransactionIds,
         viewOffset,
         viewportHeight,
         transactionsToConfirm,
@@ -5302,86 +5528,6 @@ export const useReviewScreen = () => {
 };
 ```
 
-## File: src/stores/dashboard.store.ts
-```typescript
-import { create } from 'zustand';
-import { useTransactionStore } from './transaction.store';
-import { DashboardService } from '../services/dashboard.service';
-import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
-import { moveIndex } from './navigation.utils';
-
-export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
- 
-interface DashboardState {
-    status: DashboardStatus;
-    previousStatus: DashboardStatus;
-    selectedTransactionIndex: number;
-    expandedTransactionId: string | null;
-    actions: {
-        togglePause: () => void;
-        moveSelectionUp: () => void;
-        moveSelectionDown: () => void;
-        startApproveAll: () => void;
-        confirmAction: () => Promise<void>;
-        cancelAction: () => void;
-        setStatus: (status: DashboardStatus) => void;
-        toggleExpand: () => void;
-        setExpandedTransactionId: (id: string | null) => void;
-    };
-}
-
-export const useDashboardStore = create<DashboardState>((set, get) => ({
-    status: DASHBOARD_STATUS.LISTENING,
-    previousStatus: DASHBOARD_STATUS.LISTENING,
-    selectedTransactionIndex: 0,
-    expandedTransactionId: null,
-    actions: {
-        togglePause: () => set(state => ({
-            status: state.status === DASHBOARD_STATUS.LISTENING ? DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
-        })),
-        moveSelectionUp: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return {
-                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
-                expandedTransactionId: null,
-            };
-        }),
-        moveSelectionDown: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return {
-                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
-                expandedTransactionId: null,
-            };
-        }),
-        startApproveAll: () => set(state => ({
-            status: DASHBOARD_STATUS.CONFIRM_APPROVE,
-            previousStatus: state.status,
-        })),
-        cancelAction: () => set(state => ({ status: state.previousStatus })),
-        setStatus: (status) => set({ status }),
-        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
-            const previousStatus = get().previousStatus;
-            set({ status: DASHBOARD_STATUS.APPROVING });
-            await DashboardService.approveAll();
-            set({ status: previousStatus });
-        },
-        toggleExpand: () => {
-            const { selectedTransactionIndex, expandedTransactionId } = get();
-            const { transactions } = useTransactionStore.getState();
-            const selectedTx = transactions[selectedTransactionIndex];
-            if (!selectedTx) return;
-
-            if (expandedTransactionId === selectedTx.id) {
-                set({ expandedTransactionId: null });
-            } else {
-                set({ expandedTransactionId: selectedTx.id });
-            }
-        },
-        setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
-    },
-}));
-```
-
 ## File: src/hooks/useTransactionHistoryScreen.tsx
 ```typescript
 import { useMemo } from 'react';
@@ -5547,6 +5693,88 @@ export const useTransactionHistoryScreen = () => {
         visibleItemPaths,
     };
 };
+```
+
+## File: src/stores/dashboard.store.ts
+```typescript
+import { create } from 'zustand';
+import { useTransactionStore } from './transaction.store';
+import { DashboardService } from '../services/dashboard.service';
+import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+import { moveIndex } from './navigation.utils';
+
+export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
+ 
+interface DashboardState {
+    status: DashboardStatus;
+    previousStatus: DashboardStatus;
+    selectedTransactionIndex: number;
+    expandedTransactionId: string | null;
+    actions: {
+        togglePause: () => void;
+        moveSelectionUp: () => void;
+        moveSelectionDown: () => void;
+        startApproveAll: () => void;
+        confirmAction: () => Promise<void>;
+        cancelAction: () => void;
+        setStatus: (status: DashboardStatus) => void;
+        toggleExpand: () => void;
+        setExpandedTransactionId: (id: string | null) => void;
+        setSelectedIndex: (index: number) => void;
+    };
+}
+
+export const useDashboardStore = create<DashboardState>((set, get) => ({
+    status: DASHBOARD_STATUS.LISTENING,
+    previousStatus: DASHBOARD_STATUS.LISTENING,
+    selectedTransactionIndex: 0,
+    expandedTransactionId: null,
+    actions: {
+        togglePause: () => set(state => ({
+            status: state.status === DASHBOARD_STATUS.LISTENING ? DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
+        })),
+        moveSelectionUp: () => set(state => {
+            const { transactions } = useTransactionStore.getState();
+            return {
+                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+                expandedTransactionId: null,
+            };
+        }),
+        moveSelectionDown: () => set(state => {
+            const { transactions } = useTransactionStore.getState();
+            return {
+                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+                expandedTransactionId: null,
+            };
+        }),
+        startApproveAll: () => set(state => ({
+            status: DASHBOARD_STATUS.CONFIRM_APPROVE,
+            previousStatus: state.status,
+        })),
+        cancelAction: () => set(state => ({ status: state.previousStatus })),
+        setStatus: (status) => set({ status }),
+        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+            const previousStatus = get().previousStatus;
+            set({ status: DASHBOARD_STATUS.APPROVING });
+            await DashboardService.approveAll();
+            set({ status: previousStatus });
+        },
+        toggleExpand: () => {
+            const { selectedTransactionIndex, expandedTransactionId } = get();
+            const { transactions } = useTransactionStore.getState();
+            const selectedTx = transactions[selectedTransactionIndex];
+            if (!selectedTx) return;
+
+            if (expandedTransactionId === selectedTx.id) {
+                set({ expandedTransactionId: null });
+            } else {
+                set({ expandedTransactionId: selectedTx.id });
+            }
+        },
+        setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+        setSelectedIndex: (index) => set({ selectedTransactionIndex: index }),
+    },
+}));
 ```
 
 ## File: src/components/ReviewScreen.tsx
@@ -5971,7 +6199,7 @@ export default ReviewScreen;
 
 ## File: src/components/DashboardScreen.tsx
 ```typescript
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import Separator from './Separator';
@@ -5992,7 +6220,7 @@ const getStatusIcon = (status: TransactionStatus) => {
 };
 
 const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
     if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
     return `${minutes}m`;
@@ -6020,30 +6248,50 @@ const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
     );
 };
 
-const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
+const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {
+    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
+    const [isStatusFlashing, setIsStatusFlashing] = useState(false);
+    const prevStatus = useRef(transaction.status);
+
+    useEffect(() => {
+        if (isNew) {
+            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isNew]);
+
+    useEffect(() => {
+        if (prevStatus.current !== transaction.status) {
+            setIsStatusFlashing(true);
+            const timer = setTimeout(() => setIsStatusFlashing(false), 500);
+            prevStatus.current = transaction.status;
+            return () => clearTimeout(timer);
+        }
+    }, [transaction.status]);
+
     const icon = getStatusIcon(transaction.status);
     const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
     const statusText = transaction.status.padEnd(11, ' ');
     const expandIcon = isExpanded ? '▾' : '▸';
     
     const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color="cyan">{transaction.message}</Text>
+        ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
         : transaction.message;
     
     const content = (
         <Text>
-            {time} {expandIcon} {icon} {statusText}{' '}
+            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}
             <Text color="gray">{transaction.hash}</Text>
             {' '}· {messageNode}
         </Text>
     );
 
     if (isSelected) {
-        return <Text bold color="cyan">{'> '}{content}</Text>;
+        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;
     }
 
-    return <Text>{'  '}{content}</Text>;
-};
+    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;
+});
 
 const ConfirmationContent = ({
     transactionsToConfirm,
@@ -6082,6 +6330,7 @@ const DashboardScreen = () => {
         viewportHeight,
         transactionsToConfirm,
         expandedTransactionId,
+        newTransactionIds,
     } = useDashboardScreen({
         layoutConfig: UI_CONFIG.layout.dashboard,
     });
@@ -6143,12 +6392,14 @@ const DashboardScreen = () => {
                 {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
                     const actualIndex = viewOffset + index;
                     const isExpanded = expandedTransactionId === tx.id;
+                    const isNew = newTransactionIds.has(tx.id);
                     return (
                         <React.Fragment key={tx.id}>
                             <EventStreamItem
                                 transaction={tx}
                                 isSelected={!isModal && actualIndex === selectedTransactionIndex}
                                 isExpanded={isExpanded}
+                                isNew={isNew}
                             />
                             {isExpanded && <ExpandedEventInfo transaction={tx} />}
                         </React.Fragment>
@@ -6596,6 +6847,7 @@ import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
+import { ClipboardService } from '../services/clipboard.service';
 import { UI_CONFIG } from '../config/ui.config';
 import { OVERLAYS } from '../constants/view.constants';
 import { useViewport } from './useViewport';
@@ -6612,6 +6864,14 @@ const useDebugMenuActions = () => {
     const { actions: historyActions } = useHistoryStore();
 
     const menuItems: MenuItem[] = [
+        {
+            title: 'Simulate Pasting Valid Patch',
+            action: () => ClipboardService.processClipboardContent(true),
+        },
+        {
+            title: 'Simulate Pasting Invalid Text',
+            action: () => ClipboardService.processClipboardContent(false),
+        },
         {
             title: 'View Debug Log',
             action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),

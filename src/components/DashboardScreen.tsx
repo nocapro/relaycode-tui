@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import Separator from './Separator';
@@ -19,7 +19,7 @@ const getStatusIcon = (status: TransactionStatus) => {
 };
 
 const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
     if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
     return `${minutes}m`;
@@ -47,30 +47,50 @@ const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
     );
 };
 
-const EventStreamItem = ({ transaction, isSelected, isExpanded }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean }) => {
+const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {
+    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
+    const [isStatusFlashing, setIsStatusFlashing] = useState(false);
+    const prevStatus = useRef(transaction.status);
+
+    useEffect(() => {
+        if (isNew) {
+            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isNew]);
+
+    useEffect(() => {
+        if (prevStatus.current !== transaction.status) {
+            setIsStatusFlashing(true);
+            const timer = setTimeout(() => setIsStatusFlashing(false), 500);
+            prevStatus.current = transaction.status;
+            return () => clearTimeout(timer);
+        }
+    }, [transaction.status]);
+
     const icon = getStatusIcon(transaction.status);
     const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
     const statusText = transaction.status.padEnd(11, ' ');
     const expandIcon = isExpanded ? '▾' : '▸';
     
     const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color="cyan">{transaction.message}</Text>
+        ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
         : transaction.message;
     
     const content = (
         <Text>
-            {time} {expandIcon} {icon} {statusText}{' '}
+            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}
             <Text color="gray">{transaction.hash}</Text>
             {' '}· {messageNode}
         </Text>
     );
 
     if (isSelected) {
-        return <Text bold color="cyan">{'> '}{content}</Text>;
+        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;
     }
 
-    return <Text>{'  '}{content}</Text>;
-};
+    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;
+});
 
 const ConfirmationContent = ({
     transactionsToConfirm,
@@ -109,6 +129,7 @@ const DashboardScreen = () => {
         viewportHeight,
         transactionsToConfirm,
         expandedTransactionId,
+        newTransactionIds,
     } = useDashboardScreen({
         layoutConfig: UI_CONFIG.layout.dashboard,
     });
@@ -170,12 +191,14 @@ const DashboardScreen = () => {
                 {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
                     const actualIndex = viewOffset + index;
                     const isExpanded = expandedTransactionId === tx.id;
+                    const isNew = newTransactionIds.has(tx.id);
                     return (
                         <React.Fragment key={tx.id}>
                             <EventStreamItem
                                 transaction={tx}
                                 isSelected={!isModal && actualIndex === selectedTransactionIndex}
                                 isExpanded={isExpanded}
+                                isNew={isNew}
                             />
                             {isExpanded && <ExpandedEventInfo transaction={tx} />}
                         </React.Fragment>

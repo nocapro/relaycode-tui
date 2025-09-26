@@ -1,3 +1,20 @@
+help screen
+
+1. update the help screen
+2. we want borderless UI
+
+===
+
+splash screen:
+
+1. add random tips infos like `ctrl + v to manual paste in anyscreen`
+2. add something like check for update notification
+3. increase splash duration from 3 second to six seconds
+
+=== DONE
+
+add cool animations to splash screen, initialization screes, dashboard screens.
+
 === DONE
 
 direct console.log statements interfering with the Ink renderer

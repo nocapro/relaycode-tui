@@ -1,0 +1,485 @@
+uuid: c257c744-bb66-419b-b0b6-17e944b02534
+projectId: relaycode-tui
+createdAt: '2025-09-26T05:37:23.246Z'
+gitCommitMsg: >-
+  fix(ui): correct splash screen logo animation and centering
+
+  - Adjusted the logo animation loop in `useSplashScreen` to ensure all lines of
+  the ASCII art are displayed, preventing the logo from being cut off. -
+  Restructured the `SplashScreen` component layout to properly center all
+  content both vertically and horizontally within the terminal window.
+promptSummary: >-
+  The user reported that the splash screen logo was cut off and not centered
+  after previous animation changes. This fix addresses both issues.
+reasoning:
+  - >-
+    I understand. The animations were a bit too enthusiastic and caused a layout
+    issue on the splash screen. I'll adjust the component to fix the logo being
+    cut off and ensure it's properly centered horizontally.
+  - '### Step 1: Fix Logo Animation Logic'
+  - >-
+    First, I'll correct the animation logic in the `useSplashScreen` hook. The
+    loop that reveals the logo was stopping one line too early, causing the
+    bottom of the logo to be cut off. I'll adjust the condition to allow the
+    final line to be rendered.
+  - '### Step 2: Center Splash Screen Content'
+  - >-
+    Next, I'll restructure the `SplashScreen` component to ensure all its
+    content is properly centered, both vertically and horizontally, within the
+    terminal window. This involves wrapping the entire output in a `Box`
+    configured for centering, which will also fix the horizontal alignment of
+    the ASCII logo.
+  - >-
+    These two changes will ensure the splash screen logo animates fully into
+    view and the entire screen is presented neatly in the center of the
+    terminal.
+operations:
+  - type: write
+    path: src/hooks/useSplashScreen.tsx
+    content: >+
+      --- src/hooks/useSplashScreen.tsx
+
+      +++ src/hooks/useSplashScreen.tsx
+
+      @@ -48,7 +48,7 @@
+               // 1. Animate logo
+               const logoTimer = setInterval(() => {
+                   setVisibleLogoLines(l => {
+      -                if (l >= 3) {
+
+      +                if (l >= 4) { // Fix: was 3, which cut off the last line
+      of the logo
+                           clearInterval(logoTimer);
+                           
+                           // 2. Animate sections
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: >+
+      --- src/components/SplashScreen.tsx
+
+      +++ src/components/SplashScreen.tsx
+
+      @@ -9,49 +9,51 @@
+           const logoLines = logo.split('\n');
+       
+           return (
+      -        <Box flexDirection="column">
+
+      -            <Text color="cyan">▲ relaycode</Text>
+
+      -            <Separator />
+
+      -            <Text color="cyan">{logoLines.slice(0,
+      visibleLogoLines).join('\n')}</Text>
+
+      -            {visibleSections.has('tagline') && (
+
+      -                <Box flexDirection="column" alignItems="center">
+
+      -                    <Text italic>A zero-friction, AI-native patch
+      engine.</Text>
+
+      -                    <Text italic color="gray">Built by Arman and
+      contributors · <Text underline>https://relay.noca.pro</Text></Text>
+
+      -                </Box>
+
+      -            )}
+
+      -            
+
+      -            {visibleSections.has('version') && (
+
+      -                <Box flexDirection="row" justifyContent="space-around"
+      width="100%" marginTop={1}>
+
+      -                    <Box flexDirection="column" width="45%">
+
+      -                        <Text>Version 1.1.5</Text>
+
+      -                        <Text>─────────────────────────</Text>
+
+      -                        <Text>relaycode</Text>
+
+      -                        <Text>relaycode-core</Text>
+
+      -                        <Text>apply-multi-diff</Text>
+
+      -                        <Text>konro</Text>
+
+      +        <Box flexDirection="column" height="100%" justifyContent="center"
+      alignItems="center">
+
+      +            <Box flexDirection="column">
+
+      +                <Text color="cyan">▲ relaycode</Text>
+
+      +                <Separator />
+
+      +                <Text color="cyan">{logoLines.slice(0,
+      visibleLogoLines).join('\n')}</Text>
+
+      +                {visibleSections.has('tagline') && (
+
+      +                    <Box flexDirection="column" alignItems="center">
+
+      +                        <Text italic>A zero-friction, AI-native patch
+      engine.</Text>
+
+      +                        <Text italic color="gray">Built by Arman and
+      contributors · <Text underline>https://relay.noca.pro</Text></Text>
+                           </Box>
+      -                     <Box flexDirection="column" width="45%">
+
+      -                        <Text>Build Timestamps</Text>
+
+      -                        <Text>─────────────────────────</Text>
+
+      -                        <Text>2025-09-20 13:58:05</Text>
+
+      -                        <Text>2025-09-20 10:59:05</Text>
+
+      -                        <Text>(versioned)</Text>
+
+      -                        <Text>(versioned)</Text>
+
+      +                )}
+
+      +                
+
+      +                {visibleSections.has('version') && (
+
+      +                    <Box flexDirection="row"
+      justifyContent="space-around" width="100%" marginTop={1}>
+
+      +                        <Box flexDirection="column" width="45%">
+
+      +                            <Text>Version 1.1.5</Text>
+
+      +                            <Text>─────────────────────────</Text>
+
+      +                            <Text>relaycode</Text>
+
+      +                            <Text>relaycode-core</Text>
+
+      +                            <Text>apply-multi-diff</Text>
+
+      +                            <Text>konro</Text>
+
+      +                        </Box>
+
+      +                         <Box flexDirection="column" width="45%">
+
+      +                            <Text>Build Timestamps</Text>
+
+      +                            <Text>─────────────────────────</Text>
+
+      +                            <Text>2025-09-20 13:58:05</Text>
+
+      +                            <Text>2025-09-20 10:59:05</Text>
+
+      +                            <Text>(versioned)</Text>
+
+      +                            <Text>(versioned)</Text>
+
+      +                        </Box>
+                           </Box>
+      -                </Box>
+
+      -            )}
+
+      -            
+
+      -            {visibleSections.has('promo') && (
+
+      -                <>
+
+      -                    <Box marginTop={1}><Separator /></Box>
+
+      -                    <Text>If you love this workflow, check out <Text
+      underline>https://www.noca.pro</Text> for the full</Text>
+
+      -                    <Text>web app with repo-wide visual context, history,
+      and rollback.</Text>
+
+      -                    <Text><Text color="cyan" bold>(V)</Text>isit
+      noca.pro</Text>
+
+      -                </>
+
+      -            )}
+
+      +                )}
+
+      +                
+
+      +                {visibleSections.has('promo') && (
+
+      +                    <>
+
+      +                        <Box marginTop={1}><Separator /></Box>
+
+      +                        <Text>If you love this workflow, check out <Text
+      underline>https://www.noca.pro</Text> for the full</Text>
+
+      +                        <Text>web app with repo-wide visual context,
+      history, and rollback.</Text>
+
+      +                        <Text><Text color="cyan" bold>(V)</Text>isit
+      noca.pro</Text>
+
+      +                    </>
+
+      +                )}
+       
+      -            {visibleSections.has('links') && (
+
+      -                <>
+
+      -                    <Separator />
+
+      -                    <Text>Follow <Text color="cyan" bold>(X)</Text> ·
+      Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan"
+      bold>(G)</Text>itHub</Text>
+
+      -                </>
+
+      -            )}
+
+      +                {visibleSections.has('links') && (
+
+      +                    <>
+
+      +                        <Separator />
+
+      +                        <Text>Follow <Text color="cyan" bold>(X)</Text> ·
+      Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan"
+      bold>(G)</Text>itHub</Text>
+
+      +                    </>
+
+      +                )}
+       
+      -            <Separator />
+
+      -            <Text>
+
+      -                {animationComplete ? `Loading... ${countdown}` :
+      'Loading...'} (<Text color="gray">Press any key to skip</Text>)
+
+      -            </Text>
+
+      +                <Separator />
+
+      +                <Text>
+
+      +                    {animationComplete ? `Loading... ${countdown}` :
+      'Loading...'} (<Text color="gray">Press any key to skip</Text>)
+
+      +                </Text>
+
+      +            </Box>
+               </Box>
+           );
+       };
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useSplashScreen.tsx: |-
+    import { useState, useEffect, useRef } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { useNotificationStore } from '../stores/notification.store';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+        const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+        const [visibleSections, setVisibleSections] = useState(new Set<string>());
+        const [animationComplete, setAnimationComplete] = useState(false);
+
+        // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+        const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+        const clearAllTimeouts = () => {
+            timeouts.current.forEach(clearTimeout);
+            timeouts.current = [];
+        };
+
+        const handleSkip = () => {
+            clearAllTimeouts();
+            setAnimationComplete(true);
+            setVisibleLogoLines(100); // A high number to show all lines
+            setVisibleSections(new Set(['tagline', 'version', 'promo', 'links']));
+            showInitScreen();
+        };
+
+        useInput((input) => {
+            const lowerInput = input.toLowerCase();
+            if (lowerInput === 'v') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening https://relay.noca.pro in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'x') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening X/Twitter in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'd') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening Discord invite in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'g') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening GitHub repository in your browser...',
+                });
+                return;
+            }
+
+            // Any other key skips
+            handleSkip(); 
+        });
+
+        useEffect(() => {
+            const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+            // 1. Animate logo
+            const logoTimer = setInterval(() => {
+                setVisibleLogoLines(l => {
+                    if (l >= 3) {
+                        clearInterval(logoTimer);
+                        
+                        // 2. Animate sections
+                        t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                        t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                        t(() => setVisibleSections(s => new Set(s).add('promo')), 500);
+                        t(() => setVisibleSections(s => new Set(s).add('links')), 700);
+                        t(() => setAnimationComplete(true), 900);
+
+                        return l;
+                    }
+                    return l + 1;
+                });
+            }, 80);
+
+            // Cleanup
+            return () => {
+                clearInterval(logoTimer);
+                clearAllTimeouts();
+            };
+        }, []);
+
+        useEffect(() => {
+            if (!animationComplete) return;
+
+            if (countdown <= 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+            timeouts.current.push(timer);
+            
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen, animationComplete]);
+
+        return { countdown, visibleLogoLines, visibleSections, animationComplete };
+    };
+  src/components/SplashScreen.tsx: |-
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useSplashScreen } from '../hooks/useSplashScreen';
+
+    const SplashScreen = () => {
+        const { countdown, visibleLogoLines, visibleSections, animationComplete } = useSplashScreen();
+        const logo = `
+             ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+             ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+             ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+    `;
+
+        const logoLines = logo.split('\n');
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode</Text>
+                <Separator />
+                <Text color="cyan">{logoLines.slice(0, visibleLogoLines).join('\n')}</Text>
+                {visibleSections.has('tagline') && (
+                    <Box flexDirection="column" alignItems="center">
+                        <Text italic>A zero-friction, AI-native patch engine.</Text>
+                        <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+                    </Box>
+                )}
+                
+                {visibleSections.has('version') && (
+                    <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                        <Box flexDirection="column" width="45%">
+                            <Text>Version 1.1.5</Text>
+                            <Text>─────────────────────────</Text>
+                            <Text>relaycode</Text>
+                            <Text>relaycode-core</Text>
+                            <Text>apply-multi-diff</Text>
+                            <Text>konro</Text>
+                        </Box>
+                         <Box flexDirection="column" width="45%">
+                            <Text>Build Timestamps</Text>
+                            <Text>─────────────────────────</Text>
+                            <Text>2025-09-20 13:58:05</Text>
+                            <Text>2025-09-20 10:59:05</Text>
+                            <Text>(versioned)</Text>
+                            <Text>(versioned)</Text>
+                        </Box>
+                    </Box>
+                )}
+                
+                {visibleSections.has('promo') && (
+                    <>
+                        <Box marginTop={1}><Separator /></Box>
+                        <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+                        <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                        <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                    </>
+                )}
+
+                {visibleSections.has('links') && (
+                    <>
+                        <Separator />
+                        <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                    </>
+                )}
+
+                <Separator />
+                <Text>
+                    {animationComplete ? `Loading... ${countdown}` : 'Loading...'} (<Text color="gray">Press any key to skip</Text>)
+                </Text>
+            </Box>
+        );
+    };
+
+    export default SplashScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 187
