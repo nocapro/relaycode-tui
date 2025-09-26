@@ -10,6 +10,7 @@ import { useHistoryStore } from '../stores/history.store';
 import type { LayoutConfig } from './useLayout';
 import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
 import { useViewport } from './useViewport';
+import { useListNavigator } from './useListNavigator';
 
 export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
     const {
@@ -58,8 +59,6 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
 
     const {
         togglePause,
-        moveSelectionUp,
-        moveSelectionDown,
         startApproveAll,
         confirmAction,
         cancelAction,
@@ -74,61 +73,61 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
     const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
     const isProcessing = status === DASHBOARD_STATUS.APPROVING;
 
-    useInput((input, key) => {
-        if (isModal) {
-            if (key.return) confirmAction();
-            if (key.escape) cancelAction();
-            return;
-        }
+    useInput((_input, key) => {
+        if (key.return) confirmAction();
+        if (key.escape) cancelAction();
+    }, { isActive: isModal });
 
-        if (isProcessing) return; // No input while processing
-
-        if (key.leftArrow) {
-            if (expandedTransactionId) {
-                toggleExpand();
+    useListNavigator({
+        itemCount: transactions.length,
+        viewportHeight,
+        selectedIndex: selectedTransactionIndex,
+        onIndexChange: (index) => {
+            useDashboardStore.getState().actions.setSelectedIndex(index);
+            useDashboardStore.getState().actions.setExpandedTransactionId(null);
+        },
+        isActive: !isModal && !isProcessing,
+        onKey: (input, key) => {
+            if (key.leftArrow) {
+                if (expandedTransactionId) toggleExpand();
+                return;
             }
-            return;
-        }
-        if (key.rightArrow) {
-            if (transactions[selectedTransactionIndex] && !expandedTransactionId) {
-                toggleExpand();
+            if (key.rightArrow) {
+                if (transactions[selectedTransactionIndex] && !expandedTransactionId) toggleExpand();
+                return;
             }
-            return;
-        }
+            if (key.return) {
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (!selectedTx) return;
+                
+                const isExpanded = expandedTransactionId === selectedTx.id;
 
-        if (key.upArrow) moveSelectionUp();
-        if (key.downArrow) moveSelectionDown();
-        
-        if (key.return) {
-            const selectedTx = transactions[selectedTransactionIndex];
-            if (!selectedTx) return;
-            
-            const isExpanded = expandedTransactionId === selectedTx.id;
-
-            if (isExpanded) {
-                if (selectedTx.status === 'PENDING') {
-                    useReviewStore.getState().actions.load(selectedTx.id);
-                    appActions.showReviewScreen();
+                if (isExpanded) {
+                    if (selectedTx.status === 'PENDING') {
+                        useReviewStore.getState().actions.load(selectedTx.id);
+                        appActions.showReviewScreen();
+                    } else {
+                        useDetailStore.getState().actions.load(selectedTx.id);
+                        appActions.showTransactionDetailScreen();
+                    }
                 } else {
-                    useDetailStore.getState().actions.load(selectedTx.id);
-                    appActions.showTransactionDetailScreen();
+                    toggleExpand();
                 }
-            } else {
-                toggleExpand();
+                return;
             }
-        }
-        
-        if (input.toLowerCase() === 'p') togglePause();
-        if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
-        if (input.toLowerCase() === 'c' && pendingCommits > 0) {
-            commitActions.prepareCommitScreen();
-            appActions.showGitCommitScreen();
-        }
-        if (input.toLowerCase() === 'l') {
-            useHistoryStore.getState().actions.load();
-            appActions.showTransactionHistoryScreen();
-        }
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                useHistoryStore.getState().actions.load();
+                appActions.showTransactionHistoryScreen();
+            }
+        },
     });
+
     const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
 
     return {

@@ -12,23 +12,6 @@ export const HISTORY_ITEM_PATH_SEGMENTS = {
     REASONING: '/reasoning',
 } as const;
 
-export const TRANSACTION_STATUS_UI = {
-    COMMITTED: { text: '✓ Committed', color: 'green' },
-    HANDOFF: { text: '→ Handoff', color: 'magenta' },
-    REVERTED: { text: '↩ Reverted', color: 'gray' },
-    APPLIED: { text: '✓ Applied', color: 'blue' },
-    COMMITTING: { text: '→ Committing', color: 'magenta' },
-    PENDING: { text: '? Pending', color: 'yellow' },
-    FAILED: { text: '✗ Failed', color: 'red' },
-} as const;
-
-export const FILE_TYPE_MAP = {
-    MOD: '[MOD]',
-    ADD: '[ADD]',
-    DEL: '[DEL]',
-    REN: '[REN]',
-} as const;
-
 export const BULK_ACTIONS_OPTIONS = [
     '(1) Revert Selected Transactions',
     "(2) Mark as 'Git Committed'",

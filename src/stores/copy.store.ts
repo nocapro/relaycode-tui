@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { moveIndex } from './navigation.utils';
 import { useViewStore } from './view.store';
 import { useNotificationStore } from './notification.store';
 import { LoggerService } from '../services/logger.service';
@@ -12,7 +11,6 @@ export type { CopyItem };
 interface CopyState {
     title: string;
     items: CopyItem[];
-    selectedIndex: number;
     selectedIds: Set<string>;
     lastCopiedMessage: string | null;
     onClose?: () => void;
@@ -23,11 +21,6 @@ interface CopyState {
         openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
         openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
         openForHistory: (transactions: Transaction[]) => void;
-        navigateUp: () => void;
-        navigateDown: () => void;
-        navigatePageUp: (viewportHeight: number) => void;
-        navigatePageDown: (viewportHeight: number) => void;
-        toggleSelection: () => void;
         toggleSelectionById: (id: string) => void;
         executeCopy: () => void;
     };
@@ -36,7 +29,6 @@ interface CopyState {
 export const useCopyStore = create<CopyState>((set, get) => ({
     title: '',
     items: [],
-    selectedIndex: 0,
     selectedIds: new Set(),
     lastCopiedMessage: null,
     onClose: undefined,
@@ -48,7 +40,6 @@ export const useCopyStore = create<CopyState>((set, get) => ({
             set({
                 title,
                 items,
-                selectedIndex: 0,
                 selectedIds: defaultSelectedIds,
                 lastCopiedMessage: null,
                 onClose,
@@ -77,29 +68,6 @@ export const useCopyStore = create<CopyState>((set, get) => ({
             const items = CopyService.getCopyItemsForHistory(transactions);
             actions.open(title, items);
         },
-        navigateUp: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'up', state.items.length),
-        })),
-        navigateDown: () => set(state => ({
-            selectedIndex: moveIndex(state.selectedIndex, 'down', state.items.length),
-        })),
-        navigatePageUp: (viewportHeight: number) => set(state => ({
-            selectedIndex: Math.max(0, state.selectedIndex - viewportHeight),
-        })),
-        navigatePageDown: (viewportHeight: number) => set(state => ({
-            selectedIndex: Math.min(state.items.length - 1, state.selectedIndex + viewportHeight),
-        })),
-        toggleSelection: () => set(state => {
-            const currentItem = state.items[state.selectedIndex];
-            if (!currentItem) return {};
-            const newSelectedIds = new Set(state.selectedIds);
-            if (newSelectedIds.has(currentItem.id)) {
-                newSelectedIds.delete(currentItem.id);
-            } else {
-                newSelectedIds.add(currentItem.id);
-            }
-            return { selectedIds: newSelectedIds };
-        }),
         toggleSelectionById: (id: string) => set(state => {
             const newSelectedIds = new Set(state.selectedIds);
             if (newSelectedIds.has(id)) {

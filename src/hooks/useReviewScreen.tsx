@@ -10,6 +10,7 @@ import { useLayout } from './useLayout';
 import { useContentViewport } from './useContentViewport';
 import { UI_CONFIG } from '../config/ui.config';
 import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
+import { useListNavigator } from './useListNavigator';
 import { useViewport } from './useViewport';
 
 type NavigableItem =
@@ -49,7 +50,11 @@ export const useReviewScreen = () => {
     }), [bodyView, layout]);
 
     const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
-    const { viewOffset } = useViewport({ selectedIndex: selectedItemIndex, itemCount: 100, layoutConfig: mainListLayoutConfig });
+    const { viewOffset } = useViewport({
+        selectedIndex: selectedItemIndex,
+        itemCount: 100,
+        layoutConfig: mainListLayoutConfig,
+    });
 
     // Layout for the body content (diff, reasoning, etc.)
     const bodyLayoutConfig = useMemo(() => ({
@@ -119,8 +124,6 @@ export const useReviewScreen = () => {
     const scripts = transaction?.scripts || [];
 
     const {
-        moveSelectionUp,
-        moveSelectionDown,
         setSelectedItemIndex,
         expandDiff,
         toggleBodyView,
@@ -298,10 +301,6 @@ export const useReviewScreen = () => {
             return;
         }
 
-        // Main View Navigation
-        if (key.upArrow) moveSelectionUp(navigableItems.length);
-        if (key.downArrow) moveSelectionDown(navigableItems.length);
-
         const currentItem = navigableItems[selectedItemIndex];
 
         if (input === ' ') {
@@ -364,15 +363,18 @@ export const useReviewScreen = () => {
         }
     };
 
-    useInput((input: string, key: Key) => {
-        if (handleGlobalInput(input, key)) {
-            return;
-        }
+    useListNavigator({
+        itemCount: navigableItems.length,
+        viewportHeight: listViewportHeight,
+        selectedIndex: selectedItemIndex,
+        onIndexChange: setSelectedItemIndex,
+        isActive: bodyView === REVIEW_BODY_VIEWS.NONE,
+        onKey: handleMainNavigationInput,
+    });
 
-        // If we are in a scrollable body view, prioritize that input.
-        if (handleContentScrollInput(key)) {
-            return;
-        }
+    useInput((input: string, key: Key) => {
+        if (handleGlobalInput(input, key)) return;
+        if (handleContentScrollInput(key)) return;
 
         switch (bodyView) {
             case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
@@ -381,9 +383,8 @@ export const useReviewScreen = () => {
             case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
             case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
             case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input, key);
-            default: return handleMainNavigationInput(input, key);
         }
-    });
+    }, { isActive: bodyView !== REVIEW_BODY_VIEWS.NONE });
 
     return {
         ...store,

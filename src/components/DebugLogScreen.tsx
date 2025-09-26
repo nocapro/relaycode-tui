@@ -1,11 +1,10 @@
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
-import Separator from './Separator';
 import ActionFooter from './ActionFooter';
 import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
 import { DEBUG_LOG_FOOTER_ACTIONS, DEBUG_LOG_MODES, LOG_LEVEL_COLORS, LOG_LEVEL_TAGS } from '../constants/log.constants';
 import type { LogEntry } from '../types/log.types';
-import { useStdoutDimensions } from '../utils';
+import ScreenLayout from './layout/ScreenLayout';
 
 const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
     const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
@@ -37,7 +36,6 @@ const DebugLogScreen = () => {
         setFilterQuery,
         viewOffset,
     } = useDebugLogScreen();
-    const [width] = useStdoutDimensions();
 
     const renderFilter = () => (
         <Box>
@@ -65,34 +63,29 @@ const DebugLogScreen = () => {
             : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE(logCount > 0);
 
     return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            height="100%"
-            paddingX={2}
-            paddingY={1}
+        <ScreenLayout
+            title="▲ relaycode · DEBUG LOG"
+            footer={<ActionFooter actions={footerActions} />}
         >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
-            <Separator width={width - 4} />
-            <Box marginY={1}>{renderFilter()}</Box>
-            <Box flexDirection="column" flexGrow={1}>
-                {logsInView.map((entry, index) => (
-                    <LogEntryRow
-                        key={`${entry.timestamp}-${index}`}
-                        entry={entry}
-                        isSelected={selectedIndex === index + viewOffset}
-                    />
-                ))}
-                {logCount > 0 && filteredLogCount === 0 && (
-                    <Text color="gray">No logs match your filter.</Text>
-                )}
-                {logCount === 0 && (
-                    <Text color="gray">No log entries yet. Waiting for system activity...</Text>
-                )}
+            <Box flexDirection="column" flexGrow={1} paddingX={2}>
+                {renderFilter()}
+                <Box flexDirection="column" flexGrow={1} marginTop={1}>
+                    {logsInView.map((entry, index) => (
+                        <LogEntryRow
+                            key={`${entry.timestamp}-${index}`}
+                            entry={entry}
+                            isSelected={selectedIndex === index + viewOffset}
+                        />
+                    ))}
+                    {logCount > 0 && filteredLogCount === 0 && (
+                        <Text color="gray">No logs match your filter.</Text>
+                    )}
+                    {logCount === 0 && (
+                        <Text color="gray">No log entries yet. Waiting for system activity...</Text>
+                    )}
+                </Box>
             </Box>
-            <Separator width={width - 4} />
-            <ActionFooter actions={footerActions} />
-        </Box>
+        </ScreenLayout>
     );
 };
 

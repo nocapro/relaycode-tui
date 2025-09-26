@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
 import { DashboardService } from '../services/dashboard.service';
 import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
-import { moveIndex } from './navigation.utils';
 
 export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
  
@@ -13,8 +12,6 @@ interface DashboardState {
     expandedTransactionId: string | null;
     actions: {
         togglePause: () => void;
-        moveSelectionUp: () => void;
-        moveSelectionDown: () => void;
         startApproveAll: () => void;
         confirmAction: () => Promise<void>;
         cancelAction: () => void;
@@ -34,20 +31,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         togglePause: () => set(state => ({
             status: state.status === DASHBOARD_STATUS.LISTENING ? DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
         })),
-        moveSelectionUp: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return {
-                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
-                expandedTransactionId: null,
-            };
-        }),
-        moveSelectionDown: () => set(state => {
-            const { transactions } = useTransactionStore.getState();
-            return {
-                selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
-                expandedTransactionId: null,
-            };
-        }),
         startApproveAll: () => set(state => ({
             status: DASHBOARD_STATUS.CONFIRM_APPROVE,
             previousStatus: state.status,

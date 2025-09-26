@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
 import { useDashboardStore } from '../stores/dashboard.store';
@@ -13,11 +12,11 @@ import { useCopyStore } from '../stores/copy.store';
 import { CopyService } from '../services/copy.service';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
-import { moveIndex } from '../stores/navigation.utils';
 import { ClipboardService } from '../services/clipboard.service';
 import { UI_CONFIG } from '../config/ui.config';
 import { OVERLAYS } from '../constants/view.constants';
 import { useViewport } from './useViewport';
+import { useListNavigator } from './useListNavigator';
 export type { MenuItem } from '../types/debug.types';
 
 const useDebugMenuActions = () => {
@@ -362,51 +361,42 @@ export const useDebugMenu = () => {
         layoutConfig: UI_CONFIG.layout.debugMenu,
     });
     
-    useInput((input, key) => {
-        if (key.upArrow) {
-            setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
-            return;
-        }
-        if (key.downArrow) {
-            setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
-            return;
-        }
-        if (key.pageUp) {
-            setSelectedIndex(i => Math.max(0, i - viewportHeight));
-            return;
-        }
-        if (key.pageDown) {
-            setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
-            return;
-        }
-        if (key.return) {
-            const item = menuItems[selectedIndex];
-            if (item) {
+    useListNavigator({
+        itemCount: menuItems.length,
+        viewportHeight,
+        selectedIndex,
+        onIndexChange: setSelectedIndex,
+        isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG,
+        onKey: (input, key) => {
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    item.action();
+                }
+                return;
+            }
+            if (key.escape) {
                 useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
-                item.action();
+                return;
             }
-            return;
-        }
-        if (key.escape) {
-            useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
-            return;
-        }
 
-        // No ctrl/meta keys for selection shortcuts, and only single characters
-        if (key.ctrl || key.meta || input.length !== 1) return;
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
 
-        if (input >= '1' && input <= '9') {
-            const targetIndex = parseInt(input, 10) - 1;
-            if (targetIndex < menuItems.length) {
-                setSelectedIndex(targetIndex);
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
             }
-        } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
-            const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
-            if (targetIndex < menuItems.length) {
-                setSelectedIndex(targetIndex);
-            }
-        }
-    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG });
+        },
+    });
 
     const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
 

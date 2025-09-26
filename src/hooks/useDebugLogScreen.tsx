@@ -7,7 +7,7 @@ import { LoggerService } from '../services/logger.service';
 import { DEBUG_LOG_MODES } from '../constants/log.constants';
 import { OVERLAYS } from '../constants/view.constants';
 import { UI_CONFIG } from '../config/ui.config';
-import { moveIndex } from '../stores/navigation.utils';
+import { useListNavigator } from './useListNavigator';
 
 export const useDebugLogScreen = () => {
     const logs = useLogStore(s => s.logs);
@@ -41,44 +41,38 @@ export const useDebugLogScreen = () => {
         layoutConfig: UI_CONFIG.layout.debugLog,
     });
 
-    useInput((input, key) => { 
+    const isOverlayActive = useViewStore.getState().activeOverlay === OVERLAYS.LOG;
+
+    useInput((_input, key) => {
         if (mode === DEBUG_LOG_MODES.FILTER) {
             if (key.escape || key.return) {
                 setMode(DEBUG_LOG_MODES.LIST);
             }
-            return;
         }
+    }, { isActive: isOverlayActive && mode === DEBUG_LOG_MODES.FILTER });
 
-        if (key.escape) {
-            setActiveOverlay(OVERLAYS.NONE);
-            return;
+    useListNavigator({
+        itemCount: filteredLogs.length,
+        viewportHeight,
+        selectedIndex,
+        onIndexChange: setSelectedIndex,
+        isActive: isOverlayActive && mode === DEBUG_LOG_MODES.LIST,
+        onKey: (input, key) => {
+            if (key.escape) {
+                setActiveOverlay(OVERLAYS.NONE);
+                return;
+            }
+            if (input.toLowerCase() === 'c') {
+                clearLogs();
+                setFilterQuery('');
+                setSelectedIndex(0);
+                return;
+            }
+            if (input.toLowerCase() === 'f') {
+                setMode(DEBUG_LOG_MODES.FILTER);
+            }
         }
-        if (key.upArrow) {
-            setSelectedIndex(i => moveIndex(i, 'up', filteredLogs.length));
-            return;
-        }
-        if (key.downArrow) {
-            setSelectedIndex(i => moveIndex(i, 'down', filteredLogs.length));
-            return;
-        }
-        if (key.pageUp) {
-            setSelectedIndex(i => Math.max(0, i - viewportHeight));
-            return;
-        }
-        if (key.pageDown) {
-            setSelectedIndex(i => Math.min(filteredLogs.length - 1, i + viewportHeight));
-            return;
-        }
-        if (input.toLowerCase() === 'c') {
-            clearLogs();
-            setFilterQuery('');
-            setSelectedIndex(0);
-            return;
-        }
-        if (input.toLowerCase() === 'f') {
-            setMode(DEBUG_LOG_MODES.FILTER);
-        }
-    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.LOG });
+    });
 
     useEffect(() => {
         LoggerService.startSimulator();

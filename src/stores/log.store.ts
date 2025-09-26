@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { LogEntry, LogLevel } from '../types/log.types';
+import { MAX_LOGS } from '../constants/log.constants';
 
 interface LogState {
     logs: LogEntry[];
@@ -8,8 +9,6 @@ interface LogState {
         clearLogs: () => void;
     };
 }
-
-const MAX_LOGS = 200;
 
 export const useLogStore = create<LogState>((set) => ({
     logs: [],

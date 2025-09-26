@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import Separator from './Separator';
 import type { Transaction, TransactionStatus } from '../types/domain.types';
 import { useDashboardScreen } from '../hooks/useDashboardScreen';
 import { UI_CONFIG } from '../config/ui.config'; //
 import ActionFooter from './ActionFooter';
+import ScreenLayout from './layout/ScreenLayout';
 import { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';
-import { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.constants';
+import { TRANSACTION_STATUS_UI, FILE_CHANGE_ICONS } from '../constants/ui.constants';
 
 // --- Sub-components & Helpers ---
 
@@ -38,15 +38,14 @@ const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
             )}
              <Box flexDirection="column" paddingLeft={1}>
                 {files.map(file => (
-                     <Text key={file.id}>
-                        <Text color="gray">{FILE_TYPE_MAP[file.type]}</Text> {file.path}
+                    <Text key={file.id}>
+                        <Text color="gray">{FILE_CHANGE_ICONS[file.type]}</Text> {file.path}
                     </Text>
                 ))}
              </Box>
         </Box>
     );
 };
-
 const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {
     const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
     const [isStatusFlashing, setIsStatusFlashing] = useState(false);
@@ -174,46 +173,45 @@ const DashboardScreen = () => {
     };
     
     return (
-        <Box flexDirection="column" height="100%">
-            <Text color="cyan">▲ relaycode dashboard</Text>
-            <Separator />
-            <Box marginY={1}>
-                {renderStatusBar()}
-            </Box>
-            
-            {isModal && (
-                <>
-                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                    <Separator />
-                </>
-            )}
-            
-            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {transactions.length === 0 && (
-                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+        <ScreenLayout
+            title={<Text color="cyan">▲ relaycode dashboard</Text>}
+            footer={renderFooter()}
+        >
+            <Box flexDirection="column" flexGrow={1}>
+                <Box>
+                    {renderStatusBar()}
+                </Box>
+                
+                {isModal && (
+                    <Box marginY={1}>
+                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
+                    </Box>
                 )}
-                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
-                    const actualIndex = viewOffset + index;
-                    const isExpanded = expandedTransactionId === tx.id;
-                    const isNew = newTransactionIds.has(tx.id);
-                    return (
-                        <React.Fragment key={tx.id}>
-                            <EventStreamItem
-                                transaction={tx}
-                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                                isExpanded={isExpanded}
-                                isNew={isNew}
-                            />
-                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
-                        </React.Fragment>
-                    );
-                })}
+                
+                <Box marginTop={1}><Text bold underline> EVENT STREAM (Last 15 minutes)</Text></Box>
+                <Box flexDirection="column" marginTop={1} flexGrow={1}>
+                    {transactions.length === 0 && (
+                         <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+                    )}
+                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                        const actualIndex = viewOffset + index;
+                        const isExpanded = expandedTransactionId === tx.id;
+                        const isNew = newTransactionIds.has(tx.id);
+                        return (
+                            <React.Fragment key={tx.id}>
+                                <EventStreamItem
+                                    transaction={tx}
+                                    isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                    isExpanded={isExpanded}
+                                    isNew={isNew}
+                                />
+                                {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                            </React.Fragment>
+                        );
+                    })}
+                </Box>
             </Box>
-
-            <Box marginTop={1}><Separator /></Box>
-            {renderFooter()}
-        </Box>
+        </ScreenLayout>
     );
 };
 

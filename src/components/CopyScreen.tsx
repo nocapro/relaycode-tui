@@ -3,6 +3,7 @@ import Separator from './Separator';
 import { useStdoutDimensions } from '../utils';
 import ActionFooter from './ActionFooter';
 import { useCopyScreen } from '../hooks/useCopyScreen';
+import ModalLayout from './layout/ModalLayout';
 import { COPY_SCREEN_FOOTER_ACTIONS } from '../constants/copy.constants';
 
 const CopyScreen = () => {
@@ -17,17 +18,11 @@ const CopyScreen = () => {
     const [width] = useStdoutDimensions();
 
     return (
-        <Box 
-            width="100%"
-            height="100%"
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-        >
-            <Box 
-                flexDirection="column" 
+        <ModalLayout>
+            <Box
+                flexDirection="column"
                 paddingX={2}
-                width="80%"
+                width="100%"
             >
                 <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
                 <Separator width={Math.floor(width * 0.8) - 4} />
@@ -50,7 +45,7 @@ const CopyScreen = () => {
                 {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
                 <ActionFooter actions={COPY_SCREEN_FOOTER_ACTIONS}/>
             </Box>
-        </Box>
+        </ModalLayout>
     );
 };
 

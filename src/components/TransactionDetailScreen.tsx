@@ -1,11 +1,11 @@
 import { Box, Text } from 'ink';
-import Separator from './Separator';
-import DiffScreen from './DiffScreen';
-import ReasonScreen from './ReasonScreen';
+import ContentView from './ContentView';
 import type { FileChangeType } from '../types/domain.types';
 import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
-import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
+import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS } from '../constants/detail.constants';
 import ActionFooter from './ActionFooter';
+import { FILE_CHANGE_ICONS } from '../constants/ui.constants';
+import ScreenLayout from './layout/ScreenLayout';
 
 const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
     return (
@@ -79,7 +79,7 @@ const TransactionDetailScreen = () => {
                              return (
                                 <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
                                     {isFileSelected ? '> ' : '  '}
-                                    {FILE_CHANGE_TYPE_ICONS[file.type]} <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
+                                    {FILE_CHANGE_ICONS[file.type]} <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
                                 </Text>
                             );
                         })}
@@ -108,7 +108,7 @@ const TransactionDetailScreen = () => {
         }
         if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
             if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
-            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
+            return <ContentView title="REASONING" content={transaction.reasoning} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
         }
         if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
              return <Text color="gray">(Select a file and press → to view the diff)</Text>;
@@ -117,7 +117,14 @@ const TransactionDetailScreen = () => {
             const fileId = focusedItemPath.split('/')[1];
             const file = files.find(f => f.id === fileId);
             if (!file) return null;
-            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
+            return <ContentView
+                title={`DIFF: ${file.path}`}
+                content={file.diff}
+                highlight='diff'
+                isExpanded={true}
+                scrollIndex={contentScrollIndex}
+                maxHeight={Math.max(1, availableBodyHeight)}
+            />;
         }
         return null;
     };
@@ -139,7 +146,8 @@ const TransactionDetailScreen = () => {
             if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
                 return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
             } else {
-                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
+                const actions = [...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions];
+                return <ActionFooter actions={actions} />;
             }
         }
         
@@ -154,42 +162,32 @@ const TransactionDetailScreen = () => {
     const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
 
     return (
-        <Box flexDirection="column">
-            {/* Header */}
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
-            <Separator />
-            
+        <ScreenLayout
+            title="▲ relaycode · TRANSACTION DETAILS"
+            footer={renderFooter()}
+        >
             {/* Modal takeover for Revert */}
             {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
-            
+
             {/* Main view */}
             <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
-                {/* Navigator Part A */}
-                <Box flexDirection="column" marginY={1}>
+                <Box flexDirection="column">
                     <Text><Text color="gray">UUID:</Text> {transaction.id}</Text>
                     <Text><Text color="gray">Git:</Text> {message}</Text>
                     <Text><Text color="gray">Date:</Text> {date} · <Text color="gray">Status:</Text> {status}</Text>
                     <Text><Text color="gray">Stats:</Text> {fileStats}</Text>
                 </Box>
-                
-                {/* Navigator Part B */}
-                {renderNavigator()}
-                
-                <Separator />
-                
+
+                <Box marginY={1}>
+                    {renderNavigator()}
+                </Box>
+
                 {/* Body */}
                 <Box marginY={1}>
                     {renderBody()}
                 </Box>
-                
-                <Separator />
             </Box>
-            
-            {/* Footer */}
-            <Box>
-                {renderFooter()}
-            </Box>
-        </Box>
+        </ScreenLayout>
     );
 };
 

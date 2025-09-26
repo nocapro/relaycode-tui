@@ -18,13 +18,6 @@ export const DETAIL_BODY_VIEWS = {
     NONE: 'NONE',
 } as const;
 
-export const FILE_CHANGE_TYPE_ICONS = {
-    MOD: '[MOD]',
-    ADD: '[ADD]',
-    DEL: '[DEL]',
-    REN: '[REN]',
-} as const;
-
 export const DETAIL_FOOTER_ACTIONS = {
     REVERT_CONFIRM: [
         { key: 'Enter', label: 'Confirm Revert' },

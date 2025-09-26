@@ -1,11 +1,11 @@
 import { Box, Text } from 'ink';
-import Separator from './Separator';
-import DiffScreen from './DiffScreen';
-import ReasonScreen from './ReasonScreen';
+import ContentView from './ContentView';
 import type { ScriptResult, FileItem, FileChangeType } from '../types/domain.types';
 import { useReviewScreen } from '../hooks/useReviewScreen';
-import { REVIEW_BODY_VIEWS, REVIEW_FOOTER_ACTIONS, FILE_STATUS_UI, BULK_REPAIR_OPTIONS, BULK_INSTRUCT_OPTIONS } from '../constants/review.constants';
+import { REVIEW_BODY_VIEWS, REVIEW_FOOTER_ACTIONS, BULK_REPAIR_OPTIONS, BULK_INSTRUCT_OPTIONS } from '../constants/review.constants';
 import ActionFooter from './ActionFooter';
+import { FILE_STATUS_UI } from '../constants/ui.constants';
+import ScreenLayout from './layout/ScreenLayout';
 
 // --- Sub-components ---
 
@@ -145,10 +145,11 @@ const ReviewScreen = () => {
             const visibleLinesCount = 10;
             return (
                 <Box flexDirection="column">
-                    <ReasonScreen
-                        reasoning={reasoningText}
+                    <ContentView
+                        title="REASONING"
+                        content={reasoningText}
                         scrollIndex={contentScrollIndex}
-                        visibleLinesCount={Math.max(1, availableBodyHeight)}
+                        maxHeight={Math.max(1, availableBodyHeight)}
                     />
                     {reasoningLinesCount > visibleLinesCount && (
                         <Text color="gray">
@@ -165,12 +166,12 @@ const ReviewScreen = () => {
             const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
             if (!selectedFile) return null;
             return (
-                <DiffScreen
-                    filePath={selectedFile.path}
-                    diffContent={selectedFile.diff}
+                <ContentView
+                    title={`DIFF: ${selectedFile.path}`}
+                    content={selectedFile.diff}
+                    highlight="diff"
                     isExpanded={isDiffExpanded}
                     scrollIndex={contentScrollIndex}
-                    maxHeight={Math.max(1, availableBodyHeight)}
                 />
             );
         }
@@ -295,12 +296,20 @@ const ReviewScreen = () => {
 
     const renderFooter = () => {
         // Contextual footer for body views
-        if (bodyView === REVIEW_BODY_VIEWS.DIFF) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.DIFF_VIEW}/>;
-        if (bodyView === REVIEW_BODY_VIEWS.REASONING) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.REASONING_VIEW}/>;
-        if (bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.SCRIPT_OUTPUT_VIEW}/>;
-        if (bodyView === REVIEW_BODY_VIEWS.BULK_REPAIR) return <Text>{REVIEW_FOOTER_ACTIONS.BULK_REPAIR_VIEW.text}</Text>;
-        if (bodyView === REVIEW_BODY_VIEWS.BULK_INSTRUCT) return <Text>{REVIEW_FOOTER_ACTIONS.BULK_INSTRUCT_VIEW.text}</Text>;
-        if (bodyView === REVIEW_BODY_VIEWS.CONFIRM_HANDOFF) return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.HANDOFF_CONFIRM_VIEW}/>;
+        switch (bodyView) {
+            case REVIEW_BODY_VIEWS.DIFF:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.DIFF_VIEW}/>;
+            case REVIEW_BODY_VIEWS.REASONING:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.REASONING_VIEW}/>;
+            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.SCRIPT_OUTPUT_VIEW}/>;
+            case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                return <Text>{REVIEW_FOOTER_ACTIONS.BULK_REPAIR_VIEW.text}</Text>;
+            case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                return <Text>{REVIEW_FOOTER_ACTIONS.BULK_INSTRUCT_VIEW.text}</Text>;
+            case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.HANDOFF_CONFIRM_VIEW}/>;
+        }
 
         // Dynamic Main footer
         const currentItem = navigableItems[selectedItemIndex];
@@ -319,11 +328,7 @@ const ReviewScreen = () => {
     };
 
     return (
-        <Box flexDirection="column">
-            {/* Header */}
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · REVIEW </Text>
-            <Separator />
-            
+        <ScreenLayout title="▲ relaycode · REVIEW" footer={renderFooter()}>
             {/* Navigator Section */}
             <Box flexDirection="column" marginY={1}>
                 <Box flexDirection="column">
@@ -357,8 +362,6 @@ const ReviewScreen = () => {
                 </Box>
             </Box>
 
-            <Separator />
-
             {/* Script Results (if any) */}
             {scripts.length > 0 && navigableItemsInView.some(i => i.type === 'script') && (
                 <>
@@ -369,11 +372,14 @@ const ReviewScreen = () => {
                             
                             const isSelected = selectedItemIndex === viewOffset + itemInViewIndex;
                             return (
-                                <ScriptItemRow key={script.command} script={script} isSelected={isSelected} isExpanded={bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT && isSelected} />
+                                <ScriptItemRow
+                                    key={script.command} script={script}
+                                    isSelected={isSelected}
+                                    isExpanded={bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT && isSelected}
+                                />
                             );
                         })}
                     </Box>
-                    <Separator />
                 </>
             )}
             
@@ -392,24 +398,14 @@ const ReviewScreen = () => {
                     );
                 })}
             </Box>
-            
-            <Separator />
-            
+
             {/* Body Viewport */}
             {bodyView !== REVIEW_BODY_VIEWS.NONE && (
-                <>
-                    <Box marginY={1}>
-                        {renderBody()}
-                    </Box>
-                    <Separator />
-                </>
+                <Box marginY={1}>
+                    {renderBody()}
+                </Box>
             )}
-
-            {/* Footer */}
-            <Box>
-                {renderFooter()}
-            </Box>
-        </Box>
+        </ScreenLayout>
     );
 };
 

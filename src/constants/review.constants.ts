@@ -26,14 +26,6 @@ export const PATCH_STATUS = {
     PARTIAL_FAILURE: 'PARTIAL_FAILURE',
 } as const;
 
-export const FILE_STATUS_UI = {
-    APPROVED: { icon: '[✓]', color: 'green' },
-    REJECTED: { icon: '[✗]', color: 'red' },
-    FAILED: { icon: '[!]', color: 'red' },
-    AWAITING: { icon: '[●]', color: 'yellow' },
-    RE_APPLYING: { icon: '[●]', color: 'cyan' },
-} as const;
-
 export const BULK_REPAIR_OPTIONS = [
     '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
     '(2) Bulk Change Strategy & Re-apply',

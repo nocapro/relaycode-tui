@@ -1,15 +1,23 @@
 import { Box, Text } from 'ink';
 import { UI_CONFIG } from '../config/ui.config';
 
-interface DiffScreenProps {
-    filePath: string;
-    diffContent: string;
-    isExpanded: boolean;
+interface ContentViewProps {
+    title: string;
+    content: string;
+    isExpanded?: boolean;
     scrollIndex?: number;
     maxHeight?: number;
+    highlight?: 'diff' | 'none';
 }
-const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHeight }: DiffScreenProps) => {
-    const lines = diffContent.split('\n');
+const ContentView = ({
+    title,
+    content,
+    isExpanded = true,
+    scrollIndex = 0,
+    maxHeight,
+    highlight = 'none',
+}: ContentViewProps) => {
+    const lines = content.split('\n');
     const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
     const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
 
@@ -37,15 +45,17 @@ const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHei
 
     const renderLine = (line: string, key: number) => {
         let color = 'white';
-        if (line.startsWith('+')) color = 'green';
-        if (line.startsWith('-')) color = 'red';
-        if (line.startsWith('@@')) color = 'cyan';
+        if (highlight === 'diff') {
+            if (line.startsWith('+')) color = 'green';
+            if (line.startsWith('-')) color = 'red';
+            if (line.startsWith('@@')) color = 'cyan';
+        }
         return <Text key={key} color={color}>{line}</Text>;
     };
 
     return (
         <Box flexDirection="column">
-            <Text>DIFF: {filePath}</Text>
+            <Text>{title}</Text>
             <Box flexDirection="column" marginTop={1}>
                 {renderContent()}
             </Box>
@@ -53,4 +63,4 @@ const DiffScreen = ({ filePath, diffContent, isExpanded, scrollIndex = 0, maxHei
     );
 };
 
-export default DiffScreen;
+export default ContentView;

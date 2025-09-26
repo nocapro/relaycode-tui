@@ -2,11 +2,12 @@ import { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
-import Separator from './Separator';
 import type { Transaction, FileItem } from '../types/domain.types';
 import { useTransactionHistoryScreen } from '../hooks/useTransactionHistoryScreen';
-import { HISTORY_FOOTER_ACTIONS, TRANSACTION_STATUS_UI, FILE_TYPE_MAP, BULK_ACTIONS_OPTIONS, HISTORY_VIEW_MODES } from '../constants/history.constants';
+import { HISTORY_FOOTER_ACTIONS, BULK_ACTIONS_OPTIONS, HISTORY_VIEW_MODES } from '../constants/history.constants';
 import ActionFooter from './ActionFooter';
+import ScreenLayout from './layout/ScreenLayout';
+import { TRANSACTION_STATUS_UI, FILE_CHANGE_ICONS } from '../constants/ui.constants';
 
 // --- Sub-components ---
 
@@ -64,7 +65,7 @@ const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
         <Box flexDirection="column" paddingLeft={6}>
             <Text color={isSelected ? 'cyan' : undefined}>
                 {isSelected ? '> ' : '  '}{' '}
-                {icon} {FILE_TYPE_MAP[file.type]} {file.path}
+                {icon} {FILE_CHANGE_ICONS[file.type]} {file.path}
             </Text>
             {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
             {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
@@ -155,14 +156,13 @@ const TransactionHistoryScreen = () => {
         }
         
         const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
-        return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.LIST_MODE(openActionLabel, hasSelection)} />;
+        return (
+            <ActionFooter actions={HISTORY_FOOTER_ACTIONS.LIST_MODE(openActionLabel, hasSelection)} />
+        );
     };
 
     return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION HISTORY </Text>
-            <Separator />
-
+        <ScreenLayout title="▲ relaycode · TRANSACTION HISTORY" footer={renderFooter()}>
             <Box>
                 <Text>Filter: </Text>
                 {mode === HISTORY_VIEW_MODES.FILTER ? (
@@ -234,10 +234,7 @@ const TransactionHistoryScreen = () => {
                     );
                 })}
             </Box>
-
-            <Separator />
-            {renderFooter()}
-        </Box>
+        </ScreenLayout>
     );
 };
 

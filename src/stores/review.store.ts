@@ -3,8 +3,7 @@ import { useAppStore } from './app.store';
 import { useTransactionStore } from './transaction.store';
 import { useViewStore } from './view.store';
 import { ReviewService, type SimulationResult } from '../services/review.service';
-import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS } from '../constants/review.constants';
-import { moveIndex } from './navigation.utils';
+import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS, BULK_INSTRUCT_OPTIONS, BULK_REPAIR_OPTIONS } from '../constants/review.constants';
 import { sleep } from '../utils';
 import type { FileReviewStatus } from '../types/domain.types';
 
@@ -43,8 +42,6 @@ interface ReviewState {
 
     actions: {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
-        moveSelectionUp: (listSize: number) => void;
-        moveSelectionDown: (listSize: number) => void;
         setSelectedItemIndex: (index: number) => void;
         expandDiff: () => void;
         toggleBodyView: (view: Extract<
@@ -133,12 +130,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 ...initialState,
             });
         },
-        moveSelectionUp: (listSize) => set(state => {
-            return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
-        }),
-        moveSelectionDown: (listSize) => set(state => {
-            return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
-        }),
         setSelectedItemIndex: (index) => set({ selectedItemIndex: index }),
         toggleBodyView: (view) => set(state => {
             const transactionId = useViewStore.getState().selectedTransactionId;
@@ -242,7 +233,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
             if (!tx?.files) return;
 
-            const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
+            const rejectedFiles = tx.files.filter(
+                f => get().fileReviewStates.get(f.id)?.status === 'REJECTED',
+            );
             if (rejectedFiles.length === 0) {
                 set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                 return;
@@ -273,7 +266,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
             if (!tx?.files) return;
 
-            const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+            const failedFiles = tx.files.filter(
+                f => get().fileReviewStates.get(f.id)?.status === 'FAILED',
+            );
             if (failedFiles.length === 0) {
                 set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                 return;
@@ -288,11 +283,11 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                     set({ bodyView: REVIEW_BODY_VIEWS.NONE });
                     failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
                     const results = await ReviewService.runBulkReapply(failedFiles);
-                    results.forEach(result =>
+                    results.forEach(result => {
                         get().actions.updateFileReviewStatus(
                             result.id, result.status, result.error,
-                        ),
-                    );
+                        );
+                    });
                     break;
                 }
                 case 3:
@@ -420,16 +415,16 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             });
         },
         navigateBulkRepairUp: () => set(state => ({
-            selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'up', 4),
+            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex - 1 + BULK_REPAIR_OPTIONS.length) % BULK_REPAIR_OPTIONS.length,
         })),
         navigateBulkRepairDown: () => set(state => ({
-            selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'down', 4),
+            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex + 1) % BULK_REPAIR_OPTIONS.length,
         })),
         navigateBulkInstructUp: () => set(state => ({
-            selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'up', 4),
+            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex - 1 + BULK_INSTRUCT_OPTIONS.length) % BULK_INSTRUCT_OPTIONS.length,
         })),
         navigateBulkInstructDown: () => set(state => ({
-            selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'down', 4),
+            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex + 1) % BULK_INSTRUCT_OPTIONS.length,
         })),
     },
 }));
