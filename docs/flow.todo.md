@@ -1,4 +1,4 @@
-===
+=== DONE
 
 direct console.log statements interfering with the Ink renderer
 
@@ -10,7 +10,7 @@ should show notification screen after certain action like transaction history bu
 
 dont forget to add to debug menu for any new screen state
 
-===
+=== DONE
 
 on every screen, when user paste the patches manually using ctrl+v, it should process. even the listening is paused
 

@@ -13,6 +13,7 @@ import { useCopyStore } from '../stores/copy.store';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore } from '../stores/transaction.store';
 import { moveIndex } from '../stores/navigation.utils';
+import { ClipboardService } from '../services/clipboard.service';
 import { UI_CONFIG } from '../config/ui.config';
 import { OVERLAYS } from '../constants/view.constants';
 import { useViewport } from './useViewport';
@@ -29,6 +30,14 @@ const useDebugMenuActions = () => {
     const { actions: historyActions } = useHistoryStore();
 
     const menuItems: MenuItem[] = [
+        {
+            title: 'Simulate Pasting Valid Patch',
+            action: () => ClipboardService.processClipboardContent(true),
+        },
+        {
+            title: 'Simulate Pasting Invalid Text',
+            action: () => ClipboardService.processClipboardContent(false),
+        },
         {
             title: 'View Debug Log',
             action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),

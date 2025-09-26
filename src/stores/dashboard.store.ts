@@ -21,6 +21,7 @@ interface DashboardState {
         setStatus: (status: DashboardStatus) => void;
         toggleExpand: () => void;
         setExpandedTransactionId: (id: string | null) => void;
+        setSelectedIndex: (index: number) => void;
     };
 }
 
@@ -72,5 +73,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             }
         },
         setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+        setSelectedIndex: (index) => set({ selectedTransactionIndex: index }),
     },
 }));

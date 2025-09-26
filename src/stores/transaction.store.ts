@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { TransactionService } from '../services/transaction.service';
 import { useViewStore } from './view.store';
+import { useDashboardStore } from './dashboard.store';
 import type { Transaction, TransactionStatus } from '../types/domain.types';
 
 export type { Transaction };
@@ -10,6 +11,7 @@ interface TransactionState {
     actions: {
         loadTransactions: () => void;
         updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        addTransaction: (transaction: Transaction) => void;
         clearTransactions: () => void;
     };
 }
@@ -27,6 +29,12 @@ export const useTransactionStore = create<TransactionState>((set) => ({
                     tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
                 ),
             }));
+        },
+        addTransaction: (transaction) => {
+            set(state => ({
+                transactions: [transaction, ...state.transactions],
+            }));
+            useDashboardStore.getState().actions.setSelectedIndex(0);
         },
         clearTransactions: () => set({ transactions: [] }),
     },

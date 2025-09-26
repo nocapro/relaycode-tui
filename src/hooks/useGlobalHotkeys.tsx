@@ -3,6 +3,7 @@ import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
 import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
 import { OVERLAYS } from '../constants/view.constants';
+import { ClipboardService } from '../services/clipboard.service';
 
 export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
     const { exit } = useApp();
@@ -23,6 +24,11 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
         }
         if (key.ctrl && input === 'l') {
             setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+            return;
+        }
+
+        if (key.ctrl && input === 'v') {
+            ClipboardService.processClipboardContent();
             return;
         }
 

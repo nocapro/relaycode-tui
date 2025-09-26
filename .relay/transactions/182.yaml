@@ -1,0 +1,1001 @@
+uuid: c293df61-1250-4229-87a3-acb1d16fc0c9
+projectId: relaycode-tui
+createdAt: '2025-09-26T05:00:04.074Z'
+gitCommitMsg: >-
+  feat: implement global manual patch processing via Ctrl+V
+
+  Introduces a new global feature allowing users to manually process clipboard
+  content as a patch by pressing Ctrl+V. This action is available on all screens
+  and bypasses the paused state of the automatic clipboard listener.
+
+  - Creates a new `ClipboardService` to centralize clipboard processing logic. -
+  Adds `addTransaction` to `transaction.store` to allow dynamic creation of
+  transactions. - Adds `setSelectedIndex` to `dashboard.store` to focus the UI
+  on new items. - Implements the `Ctrl+V` hotkey in `useGlobalHotkeys`. - Adds
+  debug menu options to simulate pasting both valid and invalid content for easy
+  testing.
+promptSummary: >-
+  I need to add a feature that allows users to manually process patches by
+  pasting them with Ctrl+V on any screen, even if the automatic listener is
+  paused. I also need debug menu options to test this.
+reasoning:
+  - >-
+    This is a comprehensive plan to add a global manual paste-to-process
+    feature. Here are the step-by-step changes:
+  - '### Part 1: Core Logic & State Management'
+  - >-
+    First, I'll create a dedicated service to handle clipboard processing. Then,
+    I'll update our state stores to accommodate adding new transactions on the
+    fly and focusing the UI on them.
+  - '### Part 2: Global Hotkey Integration'
+  - >-
+    Next, I'll wire up the new service to a global `Ctrl+V` hotkey, ensuring
+    it's available across the entire application.
+  - '### Part 3: Developer Tooling Enhancement'
+  - >-
+    Finally, I will enhance the debug menu with shortcuts to make testing the
+    new clipboard functionality easy and predictable.
+operations:
+  - type: write
+    path: src/services/clipboard.service.ts
+    content: >-
+      import { useTransactionStore, type Transaction } from
+      '../stores/transaction.store';
+
+      import { useNotificationStore } from '../stores/notification.store';
+
+      import { LoggerService } from './logger.service';
+
+
+      const MOCK_VALID_PATCH = `diff --git a/src/components/Button.tsx
+      b/src/components/Button.tsx
+
+      index 12345..67890 100644
+
+      --- a/src/components/Button.tsx
+
+      +++ b/src/components/Button.tsx
+
+      @@ -1,5 +1,6 @@
+
+      -import React from 'react';
+
+      +import React, { useState } from 'react';
+
+       const Button = () => <button>Click Me</button>;
+
+       export default Button;
+      `;
+
+
+      const MOCK_INVALID_TEXT = 'This is just some regular text, not a patch.';
+
+
+      const createTransactionFromPatch = (patchContent: string): Transaction =>
+      {
+          // In a real app, we would parse this. For demo, we'll create a mock.
+          const lines = patchContent.split('\n');
+          const linesAdded = lines.filter(l => l.startsWith('+')).length;
+          const linesRemoved = lines.filter(l => l.startsWith('-')).length;
+          const filePath = lines.find(l => l.startsWith('--- a/'))?.split(' a/')[1] || 'unknown/file.ts';
+
+          return {
+              id: (Math.random() * 1000).toFixed(0),
+              timestamp: Date.now(),
+              status: 'PENDING',
+              hash: Math.random().toString(16).substring(2, 10),
+              message: 'feat: apply patch from clipboard',
+              prompt: 'A patch was manually pasted into the application.',
+              reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
+              files: [
+                  {
+                      id: (Math.random() * 1000).toFixed(0) + '-1',
+                      type: 'MOD',
+                      path: filePath,
+                      linesAdded,
+                      linesRemoved,
+                      diff: patchContent,
+                      strategy: 'standard-diff',
+                  },
+              ],
+              stats: {
+                  files: 1,
+                  linesAdded,
+                  linesRemoved,
+              },
+          };
+      };
+
+
+      /**
+       * Simulates processing the clipboard content.
+       * @param forceValidPatch For debug purposes, force the outcome. If undefined, it will be random.
+       */
+      const processClipboardContent = async (forceValidPatch?: boolean) => {
+          LoggerService.info('Manual paste detected. Processing clipboard content...');
+          
+          // Simulate reading from clipboardy
+          const isActuallyValid = forceValidPatch === true || (forceValidPatch === undefined && Math.random() > 0.5);
+          const clipboardContent = isActuallyValid ? MOCK_VALID_PATCH : MOCK_INVALID_TEXT;
+
+          // Simulate checking if it's a valid patch
+          if (clipboardContent.includes('diff --git')) {
+              LoggerService.debug('Valid patch detected in clipboard. Creating transaction.');
+              const newTransaction = createTransactionFromPatch(clipboardContent);
+              useTransactionStore.getState().actions.addTransaction(newTransaction);
+              useNotificationStore.getState().actions.show({
+                  type: 'success',
+                  title: 'Patch Processed',
+                  message: `New transaction "${newTransaction.hash}" created from clipboard.`,
+              });
+          } else {
+              LoggerService.debug('No valid patch detected in clipboard content.');
+              useNotificationStore.getState().actions.show({
+                  type: 'info',
+                  title: 'Clipboard Ignored',
+                  message: 'Pasted content was not a valid patch.',
+                  duration: 3,
+              });
+          }
+      };
+
+
+      export const ClipboardService = {
+          processClipboardContent,
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: >
+      --- src/stores/dashboard.store.ts
+
+      +++ src/stores/dashboard.store.ts
+
+      @@ -15,6 +15,7 @@
+               setStatus: (status: DashboardStatus) => void;
+               toggleExpand: () => void;
+               setExpandedTransactionId: (id: string | null) => void;
+      +        setSelectedIndex: (index: number) => void;
+           };
+       }
+       
+      @@ -59,5 +60,6 @@
+                   }
+               },
+               setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+      +        setSelectedIndex: (index) => set({ selectedTransactionIndex:
+      index }),
+           },
+       }));
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/transaction.store.ts
+    content: |+
+      --- src/stores/transaction.store.ts
+      +++ src/stores/transaction.store.ts
+      @@ -1,6 +1,7 @@
+       import { create } from 'zustand';
+       import { TransactionService } from '../services/transaction.service';
+       import { useViewStore } from './view.store';
+      +import { useDashboardStore } from './dashboard.store';
+       import type { Transaction, TransactionStatus } from '../types/domain.types';
+       
+       export type { Transaction };
+      @@ -10,6 +11,7 @@
+           actions: {
+               loadTransactions: () => void;
+               updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+      +        addTransaction: (transaction: Transaction) => void;
+               clearTransactions: () => void;
+           };
+       }
+      @@ -26,6 +28,12 @@
+                           tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                       ),
+                   }));
+      +        },
+      +        addTransaction: (transaction) => {
+      +            set(state => ({
+      +                transactions: [transaction, ...state.transactions],
+      +            }));
+      +            useDashboardStore.getState().actions.setSelectedIndex(0);
+               },
+               clearTransactions: () => set({ transactions: [] }),
+           },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: |+
+      --- src/hooks/useGlobalHotkeys.tsx
+      +++ src/hooks/useGlobalHotkeys.tsx
+      @@ -3,6 +3,7 @@
+       import { useViewStore } from '../stores/view.store';
+       import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+       import { OVERLAYS } from '../constants/view.constants';
+      +import { ClipboardService } from '../services/clipboard.service';
+       
+       export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+           const { exit } = useApp();
+      @@ -25,6 +26,11 @@
+               if (key.ctrl && input === 'l') {
+                   setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                   return;
+      +        }
+      +
+      +        if (key.ctrl && input === 'v') {
+      +            ClipboardService.processClipboardContent();
+      +            return;
+               }
+       
+               // If an overlay with its own input is open, stop here.
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >+
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -10,6 +10,7 @@
+       import type { MenuItem } from '../types/debug.types';
+       import { useTransactionStore } from '../stores/transaction.store';
+       import { moveIndex } from '../stores/navigation.utils';
+      +import { ClipboardService } from '../services/clipboard.service';
+       import { UI_CONFIG } from '../config/ui.config';
+       import { OVERLAYS } from '../constants/view.constants';
+       import { useViewport } from './useViewport';
+      @@ -25,6 +26,14 @@
+           const { actions: historyActions } = useHistoryStore();
+       
+           const menuItems: MenuItem[] = [
+      +        {
+
+      +            title: 'Simulate Pasting Valid Patch',
+
+      +            action: () => ClipboardService.processClipboardContent(true),
+
+      +        },
+
+      +        {
+
+      +            title: 'Simulate Pasting Invalid Text',
+
+      +            action: () =>
+      ClipboardService.processClipboardContent(false),
+
+      +        },
+               {
+                   title: 'View Debug Log',
+                   action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+
+    patchStrategy: standard-diff
+snapshot:
+  src/services/clipboard.service.ts: >-
+    import { useTransactionStore, type Transaction } from
+    '../stores/transaction.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { LoggerService } from './logger.service';
+
+
+    const MOCK_VALID_PATCH = `diff --git a/src/components/Button.tsx
+    b/src/components/Button.tsx
+
+    index 12345..67890 100644
+
+    --- a/src/components/Button.tsx
+
+    +++ b/src/components/Button.tsx
+
+    @@ -1,5 +1,6 @@
+
+    -import React from 'react';
+
+    +import React, { useState } from 'react';
+
+     const Button = () => <button>Click Me</button>;
+
+     export default Button;
+    `;
+
+
+    const MOCK_INVALID_TEXT = 'This is just some regular text, not a patch.';
+
+
+    const createTransactionFromPatch = (patchContent: string): Transaction => {
+        // In a real app, we would parse this. For demo, we'll create a mock.
+        const lines = patchContent.split('\n');
+        const linesAdded = lines.filter(l => l.startsWith('+')).length;
+        const linesRemoved = lines.filter(l => l.startsWith('-')).length;
+        const filePath = lines.find(l => l.startsWith('--- a/'))?.split(' a/')[1] || 'unknown/file.ts';
+
+        return {
+            id: (Math.random() * 1000).toFixed(0),
+            timestamp: Date.now(),
+            status: 'PENDING',
+            hash: Math.random().toString(16).substring(2, 10),
+            message: 'feat: apply patch from clipboard',
+            prompt: 'A patch was manually pasted into the application.',
+            reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
+            files: [
+                {
+                    id: (Math.random() * 1000).toFixed(0) + '-1',
+                    type: 'MOD',
+                    path: filePath,
+                    linesAdded,
+                    linesRemoved,
+                    diff: patchContent,
+                    strategy: 'standard-diff',
+                },
+            ],
+            stats: {
+                files: 1,
+                linesAdded,
+                linesRemoved,
+            },
+        };
+    };
+
+
+    /**
+     * Simulates processing the clipboard content.
+     * @param forceValidPatch For debug purposes, force the outcome. If undefined, it will be random.
+     */
+    const processClipboardContent = async (forceValidPatch?: boolean) => {
+        LoggerService.info('Manual paste detected. Processing clipboard content...');
+        
+        // Simulate reading from clipboardy
+        const isActuallyValid = forceValidPatch === true || (forceValidPatch === undefined && Math.random() > 0.5);
+        const clipboardContent = isActuallyValid ? MOCK_VALID_PATCH : MOCK_INVALID_TEXT;
+
+        // Simulate checking if it's a valid patch
+        if (clipboardContent.includes('diff --git')) {
+            LoggerService.debug('Valid patch detected in clipboard. Creating transaction.');
+            const newTransaction = createTransactionFromPatch(clipboardContent);
+            useTransactionStore.getState().actions.addTransaction(newTransaction);
+            useNotificationStore.getState().actions.show({
+                type: 'success',
+                title: 'Patch Processed',
+                message: `New transaction "${newTransaction.hash}" created from clipboard.`,
+            });
+        } else {
+            LoggerService.debug('No valid patch detected in clipboard content.');
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Clipboard Ignored',
+                message: 'Pasted content was not a valid patch.',
+                duration: 3,
+            });
+        }
+    };
+
+
+    export const ClipboardService = {
+        processClipboardContent,
+    };
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+
+    import { moveIndex } from './navigation.utils';
+
+
+    export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof
+    DASHBOARD_STATUS];
+     
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus;
+        selectedTransactionIndex: number;
+        expandedTransactionId: string | null;
+        actions: {
+            togglePause: () => void;
+            moveSelectionUp: () => void;
+            moveSelectionDown: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            setStatus: (status: DashboardStatus) => void;
+            toggleExpand: () => void;
+            setExpandedTransactionId: (id: string | null) => void;
+            setSelectedIndex: (index: number) => void;
+        };
+    }
+
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: DASHBOARD_STATUS.LISTENING,
+        previousStatus: DASHBOARD_STATUS.LISTENING,
+        selectedTransactionIndex: 0,
+        expandedTransactionId: null,
+        actions: {
+            togglePause: () => set(state => ({
+                status: state.status === DASHBOARD_STATUS.LISTENING ? DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
+            })),
+            moveSelectionUp: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'up', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            moveSelectionDown: () => set(state => {
+                const { transactions } = useTransactionStore.getState();
+                return {
+                    selectedTransactionIndex: moveIndex(state.selectedTransactionIndex, 'down', transactions.length),
+                    expandedTransactionId: null,
+                };
+            }),
+            startApproveAll: () => set(state => ({
+                status: DASHBOARD_STATUS.CONFIRM_APPROVE,
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            setStatus: (status) => set({ status }),
+            confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                const previousStatus = get().previousStatus;
+                set({ status: DASHBOARD_STATUS.APPROVING });
+                await DashboardService.approveAll();
+                set({ status: previousStatus });
+            },
+            toggleExpand: () => {
+                const { selectedTransactionIndex, expandedTransactionId } = get();
+                const { transactions } = useTransactionStore.getState();
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (!selectedTx) return;
+
+                if (expandedTransactionId === selectedTx.id) {
+                    set({ expandedTransactionId: null });
+                } else {
+                    set({ expandedTransactionId: selectedTx.id });
+                }
+            },
+            setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+            setSelectedIndex: (index) => set({ selectedTransactionIndex: index }),
+        },
+    }));
+  src/stores/transaction.store.ts: >
+    import { create } from 'zustand';
+
+    import { TransactionService } from '../services/transaction.service';
+
+    import { useViewStore } from './view.store';
+
+    import { useDashboardStore } from './dashboard.store';
+
+    import type { Transaction, TransactionStatus } from '../types/domain.types';
+
+
+    export type { Transaction };
+
+
+    interface TransactionState {
+        transactions: Transaction[];
+        actions: {
+            loadTransactions: () => void;
+            updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+            addTransaction: (transaction: Transaction) => void;
+            clearTransactions: () => void;
+        };
+    }
+
+
+    export const useTransactionStore = create<TransactionState>((set) => ({
+        transactions: [],
+        actions: {
+            loadTransactions: () => {
+                const transactions = TransactionService.getAllTransactions();
+                set({ transactions });
+            },
+            updateTransactionStatus: (id, status) => {
+                set(state => ({
+                    transactions: state.transactions.map(tx =>
+                        tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                    ),
+                }));
+            },
+            addTransaction: (transaction) => {
+                set(state => ({
+                    transactions: [transaction, ...state.transactions],
+                }));
+                useDashboardStore.getState().actions.setSelectedIndex(0);
+            },
+            clearTransactions: () => set({ transactions: [] }),
+        },
+    }));
+
+
+    // --- Selectors ---
+
+
+    /** Selects transactions by their status. */
+
+    export const selectTransactionsByStatus = (status: TransactionStatus) =>
+    (state: TransactionState) =>
+        state.transactions.filter(tx => tx.status === status);
+
+    /** Selects the transaction currently targeted by the view store. */
+
+    export const selectSelectedTransaction = (state: TransactionState):
+    Transaction | undefined => {
+        const { selectedTransactionId } = useViewStore.getState();
+        return state.transactions.find(t => t.id === selectedTransactionId);
+    };
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { MAIN_SCREENS_FOR_QUIT } from '../constants/app.constants';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { ClipboardService } from '../services/clipboard.service';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { currentScreen } = useAppStore(s => ({
+            currentScreen: s.currentScreen,
+        }));
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+                return;
+            }
+            if (key.ctrl && input === 'l') {
+                setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                return;
+            }
+
+            if (key.ctrl && input === 'v') {
+                ClipboardService.processClipboardContent();
+                return;
+            }
+
+            // If an overlay with its own input is open, stop here.
+            if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === OVERLAYS.HELP) {
+                if (key.escape || input === '?') {
+                    setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay(OVERLAYS.HELP);
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q') {
+                if ((MAIN_SCREENS_FOR_QUIT as readonly string[]).includes(currentScreen)) {
+                    exit();
+                }
+                navigateBack();
+            } else if (key.escape) {
+                navigateBack();
+            }
+        }, { isActive });
+    };
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useNotificationStore } from '../stores/notification.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    import { ClipboardService } from '../services/clipboard.service';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { useViewport } from './useViewport';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: notificationActions } = useNotificationStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Simulate Pasting Valid Patch',
+                action: () => ClipboardService.processClipboardContent(true),
+            },
+            {
+                title: 'Simulate Pasting Invalid Text',
+                action: () => ClipboardService.processClipboardContent(false),
+            },
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Show Success Notification',
+                action: () => notificationActions.show({
+                    type: 'success',
+                    title: 'Operation Successful',
+                    message: 'The requested operation completed without errors.',
+                }),
+            },
+            {
+                title: 'Show Error Notification',
+                action: () => notificationActions.show({
+                    type: 'error',
+                    title: 'Operation Failed',
+                    message: 'An unexpected error occurred. Check the debug log for details.',
+                }),
+            },
+            {
+                title: 'Show Info Notification',
+                action: () => notificationActions.show({
+                    type: 'info',
+                    title: 'Information',
+                    message: 'This is an informational message for the user.',
+                }),
+            },
+            {
+                title: 'Show Warning Notification',
+                action: () => notificationActions.show({
+                    type: 'warning',
+                    title: 'Warning',
+                    message: 'This action may have unintended side effects.',
+                }),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('2', 'success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('1', 'failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.pageUp) {
+                setSelectedIndex(i => Math.max(0, i - viewportHeight));
+                return;
+            }
+            if (key.pageDown) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    item.action();
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 182
