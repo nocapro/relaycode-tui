@@ -1,0 +1,502 @@
+uuid: c29e9d64-4e4b-4c4c-8822-297c5e2ec7c1
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:01:04.988Z'
+gitCommitMsg: >-
+  feat(splash): enhance splash screen with tips and update check
+
+  - Increases the splash screen auto-skip duration from 3 to 6 seconds. - Adds a
+  simulated "Checking for updates..." message that resolves to an up-to-date
+  status. - Introduces a random tip display that appears once the main animation
+  is complete. - Creates a new constants file for splash screen tips to improve
+  organization.
+promptSummary: >-
+  I need to enhance the splash screen by increasing its duration, adding a check
+  for updates notification, and displaying random tips.
+reasoning:
+  - >-
+    I will enhance the splash screen as you requested. This involves increasing
+    its duration, adding a simulated update check, and displaying a random
+    helpful tip.
+  - >-
+    First, I'll adjust the configuration to increase the splash screen's
+    duration.
+  - >-
+    Next, I'll create a new constants file to store the random tips, keeping our
+    codebase organized.
+  - >-
+    Now, I'll update the `useSplashScreen` hook to manage the logic for the new
+    update check and random tip features.
+  - >-
+    Finally, I'll update the `SplashScreen` component to render the new update
+    status and the random tip.
+operations:
+  - type: write
+    path: src/config/ui.config.ts
+    content: |+
+      --- src/config/ui.config.ts
+      +++ src/config/ui.config.ts
+      @@ -7,7 +7,7 @@
+               collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
+           },
+           splash: {
+      -        initialCountdown: 3, // Seconds before auto-skip
+      +        initialCountdown: 6, // Seconds before auto-skip
+           },
+           footer: {
+               horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/splash.constants.ts
+    content: |-
+      export const SPLASH_TIPS = [
+          'Tip: Press Ctrl+V at any time to process a patch from your clipboard.',
+          'Tip: Use Ctrl+B to open the debug menu and explore different application states.',
+          'Tip: The "?" key opens a global hotkey reference screen.',
+          'Tip: On the Dashboard, use "L" to view the complete transaction history.',
+          'Tip: Use Ctrl+L to quickly view the debug log from any screen.',
+      ] as const;
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useSplashScreen.tsx
+    content: >+
+      --- src/hooks/useSplashScreen.tsx
+
+      +++ src/hooks/useSplashScreen.tsx
+
+      @@ -2,12 +2,16 @@
+       import { useInput } from 'ink';
+       import { useAppStore } from '../stores/app.store';
+       import { UI_CONFIG } from '../config/ui.config';
+      +import { SPLASH_TIPS } from '../constants/splash.constants';
+       import { useNotificationStore } from '../stores/notification.store';
+       
+       export const useSplashScreen = () => {
+           const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+           const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+           const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+      +    const [tip, setTip] = useState('');
+
+      +    const [updateStatus, setUpdateStatus] = useState('');
+           const [visibleSections, setVisibleSections] = useState(new Set<string>());
+           const [animationComplete, setAnimationComplete] = useState(false);
+       
+      @@ -21,7 +25,8 @@
+               clearAllTimeouts();
+               setAnimationComplete(true);
+               setVisibleLogoLines(100); // A high number to show all lines
+      -        setVisibleSections(new Set(['tagline', 'version', 'promo',
+      'links']));
+
+      +        setVisibleSections(new Set(['tagline', 'version', 'updateCheck',
+      'promo', 'links']));
+
+      +        setUpdateStatus('✓ You are up to date.');
+               showInitScreen();
+           };
+       
+      @@ -63,6 +68,11 @@
+           useEffect(() => {
+               const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+       
+      +        // Pick a random tip on mount
+
+      +        if (!tip) {
+
+      +            setTip(SPLASH_TIPS[Math.floor(Math.random() *
+      SPLASH_TIPS.length)]!);
+
+      +        }
+
+      +
+               // 1. Animate logo
+               const logoTimer = setInterval(() => {
+                   setVisibleLogoLines(l => {
+      @@ -72,9 +82,15 @@
+                           // 2. Animate sections
+                           t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                           t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+      -                    t(() => setVisibleSections(s => new
+      Set(s).add('promo')), 500);
+
+      -                    t(() => setVisibleSections(s => new
+      Set(s).add('links')), 700);
+
+      -                    t(() => setAnimationComplete(true), 900);
+
+      +                    t(() => {
+
+      +                        setVisibleSections(s => new
+      Set(s).add('updateCheck'));
+
+      +                        setUpdateStatus('Checking for updates...');
+
+      +                        t(() => setUpdateStatus('✓ You are up to date.'),
+      1500);
+
+      +                    }, 600);
+
+      +
+
+      +                    t(() => setVisibleSections(s => new
+      Set(s).add('promo')), 800);
+
+      +                    t(() => setVisibleSections(s => new
+      Set(s).add('links')), 1000);
+
+      +                    t(() => setAnimationComplete(true), 1200);
+       
+                           return l;
+                       }
+      @@ -87,7 +103,7 @@
+                   clearInterval(logoTimer);
+                   clearAllTimeouts();
+               };
+      -    }, []);
+
+      +    }, [tip]);
+       
+           useEffect(() => {
+               if (!animationComplete) return;
+      @@ -104,5 +120,5 @@
+               return () => clearTimeout(timer);
+           }, [countdown, showInitScreen, animationComplete]);
+       
+      -    return { countdown, visibleLogoLines, visibleSections,
+      animationComplete };
+
+      +    return { countdown, visibleLogoLines, visibleSections,
+      animationComplete, tip, updateStatus };
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: >+
+      --- src/components/SplashScreen.tsx
+
+      +++ src/components/SplashScreen.tsx
+
+      @@ -2,7 +2,7 @@
+       import Separator from './Separator';
+       import { useSplashScreen } from '../hooks/useSplashScreen';
+       
+       const SplashScreen = () => {
+      -    const { countdown, visibleLogoLines, visibleSections,
+      animationComplete } = useSplashScreen();
+
+      +    const { countdown, visibleLogoLines, visibleSections,
+      animationComplete, tip, updateStatus } = useSplashScreen();
+           const logo = `
+                ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+                ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+      @@ -40,9 +40,16 @@
+                               </Box>
+                           </Box>
+                       )}
+      +
+
+      +                {visibleSections.has('updateCheck') && (
+
+      +                    <Box marginTop={1}>
+
+      +                        <Text>{updateStatus}</Text>
+
+      +                    </Box>
+
+      +                )}
+                       
+                       {visibleSections.has('promo') && (
+                           <>
+                               <Box marginTop={1}><Separator /></Box>
+                               <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+                               <Text>web app with repo-wide visual context, history, and rollback.</Text>
+      @@ -58,6 +65,11 @@
+                       )}
+       
+                       <Separator />
+      +                {animationComplete && (
+
+      +                    <Box marginBottom={1}>
+
+      +                        <Text italic color="gray">{tip}</Text>
+
+      +                    </Box>
+
+      +                )}
+                       <Text>
+                           {animationComplete ? `Loading... ${countdown}` : 'Loading...'} (<Text color="gray">Press any key to skip</Text>)
+                       </Text>
+
+    patchStrategy: standard-diff
+snapshot:
+  src/constants/splash.constants.ts: null
+  src/config/ui.config.ts: |-
+    /**
+     * Centralized UI configuration.
+     * This object is the single source of truth for layout constants, thresholds,
+     * and other UI-related magic numbers.
+     */
+    export const UI_CONFIG = {
+        diffScreen: {
+            collapseThreshold: 20, // Lines before collapsing
+            collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
+        },
+        splash: {
+            initialCountdown: 3, // Seconds before auto-skip
+        },
+        footer: {
+            horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+            actionSeparator: ' · ',
+        },
+        layout: {
+            dashboard: {
+                header: 1,
+                separators: 2,
+                fixedRows: 2, // status bar, event stream header
+                marginsY: 3, // for status bar, event stream list, separator
+                footer: 2,
+            },
+            transactionDetail: {
+                header: 2,
+                fixedRows: 4,
+                separators: 2,
+                marginsY: 1,
+                footer: 2,
+            },
+            copyScreen: {
+                header: 1,
+                separators: 2,
+                fixedRows: 2, // title, status
+                marginsY: 1,
+                footer: 1,
+            },
+            debugLog: {
+                paddingY: 2,
+                header: 1,
+                separators: 2,
+                fixedRows: 1, // filter line
+                marginsY: 1,
+                footer: 1,
+            },
+            debugMenu: {
+                paddingY: 2,
+                header: 1,
+                separators: 2,
+                footer: 1,
+            },
+            history: {
+                header: 1,
+                separators: 2,
+                fixedRows: 1, // filter row
+                marginsY: 1,
+                footer: 2,
+            },
+            review: {
+                header: 2,
+                fixedRows: 3, // meta, prompt, reasoning headers
+                marginsY: 2, // meta container, body
+                separators: 4, // after title, meta, scripts/files, body
+                footer: 2,
+                bodyHeightReservation: 10,
+            },
+        },
+    } as const;
+  src/hooks/useSplashScreen.tsx: |-
+    import { useState, useEffect, useRef } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { useNotificationStore } from '../stores/notification.store';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+        const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+        const [visibleSections, setVisibleSections] = useState(new Set<string>());
+        const [animationComplete, setAnimationComplete] = useState(false);
+
+        // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+        const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+        const clearAllTimeouts = () => {
+            timeouts.current.forEach(clearTimeout);
+            timeouts.current = [];
+        };
+
+        const handleSkip = () => {
+            clearAllTimeouts();
+            setAnimationComplete(true);
+            setVisibleLogoLines(100); // A high number to show all lines
+            setVisibleSections(new Set(['tagline', 'version', 'promo', 'links']));
+            showInitScreen();
+        };
+
+        useInput((input) => {
+            const lowerInput = input.toLowerCase();
+            if (lowerInput === 'v') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening https://relay.noca.pro in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'x') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening X/Twitter in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'd') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening Discord invite in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'g') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening GitHub repository in your browser...',
+                });
+                return;
+            }
+
+            // Any other key skips
+            handleSkip(); 
+        });
+
+        useEffect(() => {
+            const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+            // 1. Animate logo
+            const logoTimer = setInterval(() => {
+                setVisibleLogoLines(l => {
+                    if (l >= 4) { // Fix: was 3, which cut off the last line of the logo
+                        clearInterval(logoTimer);
+                        
+                        // 2. Animate sections
+                        t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                        t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                        t(() => setVisibleSections(s => new Set(s).add('promo')), 500);
+                        t(() => setVisibleSections(s => new Set(s).add('links')), 700);
+                        t(() => setAnimationComplete(true), 900);
+
+                        return l;
+                    }
+                    return l + 1;
+                });
+            }, 80);
+
+            // Cleanup
+            return () => {
+                clearInterval(logoTimer);
+                clearAllTimeouts();
+            };
+        }, []);
+
+        useEffect(() => {
+            if (!animationComplete) return;
+
+            if (countdown <= 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+            timeouts.current.push(timer);
+            
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen, animationComplete]);
+
+        return { countdown, visibleLogoLines, visibleSections, animationComplete };
+    };
+  src/components/SplashScreen.tsx: |-
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useSplashScreen } from '../hooks/useSplashScreen';
+
+    const SplashScreen = () => {
+        const { countdown, visibleLogoLines, visibleSections, animationComplete } = useSplashScreen();
+        const logo = `
+             ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+             ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+             ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
+    `;
+
+        const logoLines = logo.split('\n');
+
+        return (
+            <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
+                <Box flexDirection="column">
+                    <Text color="cyan">▲ relaycode</Text>
+                    <Separator />
+                    <Text color="cyan">{logoLines.slice(0, visibleLogoLines).join('\n')}</Text>
+                    {visibleSections.has('tagline') && (
+                        <Box flexDirection="column" alignItems="center">
+                            <Text italic>A zero-friction, AI-native patch engine.</Text>
+                            <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
+                        </Box>
+                    )}
+                    
+                    {visibleSections.has('version') && (
+                        <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                            <Box flexDirection="column" width="45%">
+                                <Text>Version 1.1.5</Text>
+                                <Text>─────────────────────────</Text>
+                                <Text>relaycode</Text>
+                                <Text>relaycode-core</Text>
+                                <Text>apply-multi-diff</Text>
+                                <Text>konro</Text>
+                            </Box>
+                             <Box flexDirection="column" width="45%">
+                                <Text>Build Timestamps</Text>
+                                <Text>─────────────────────────</Text>
+                                <Text>2025-09-20 13:58:05</Text>
+                                <Text>2025-09-20 10:59:05</Text>
+                                <Text>(versioned)</Text>
+                                <Text>(versioned)</Text>
+                            </Box>
+                        </Box>
+                    )}
+                    
+                    {visibleSections.has('promo') && (
+                        <>
+                            <Box marginTop={1}><Separator /></Box>
+                            <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
+                            <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                        </>
+                    )}
+
+                    {visibleSections.has('links') && (
+                        <>
+                            <Separator />
+                            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                        </>
+                    )}
+
+                    <Separator />
+                    <Text>
+                        {animationComplete ? `Loading... ${countdown}` : 'Loading...'} (<Text color="gray">Press any key to skip</Text>)
+                    </Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default SplashScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 188

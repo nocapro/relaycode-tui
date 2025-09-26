@@ -111,7 +111,7 @@ const ReviewProcessingScreen = () => {
 
     return (
         <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode apply</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
             <Separator />
             <Box marginY={1} flexDirection="column">
                 <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>

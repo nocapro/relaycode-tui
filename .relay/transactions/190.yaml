@@ -1,0 +1,928 @@
+uuid: 442e3164-9b87-4277-bf30-5ab350e9eb90
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:10:51.324Z'
+gitCommitMsg: >-
+  feat(ui): enhance color and visual consistency
+
+  This commit applies parts 3, 4, and 5 of the UI enhancement plan to improve
+  visual clarity and consistency across the application.
+
+  - **InitializationScreen**: Adds color to the final summary screen to
+  highlight generated files and success states. The interactive prompt is now
+  yellow to draw attention. - **GitCommitScreen**: Styles the final commit
+  message to distinguish the subject (yellow) from the body. Transaction hashes
+  are now gray to reduce visual noise. - **TransactionDetailScreen**: Improves
+  information hierarchy by coloring header labels, navigator hotkeys, and file
+  paths based on their change type. - **GlobalHelpScreen**: Updates the header
+  to use the new branding color scheme. - **TransactionHistoryScreen**:
+  De-emphasizes transaction hashes with gray color and adds color to the summary
+  stats line for better scannability.
+promptSummary: >-
+  The user requested the execution of parts 3, 4, and 5 of a multi-part
+  refactoring plan to add more color and improve visual consistency across
+  several screens.
+reasoning:
+  - >-
+    Excellent. Parts 1 and 2 have been executed. Here are the changes to
+    implement parts 3, 4, and 5 of the master plan in a single transaction.
+  - '### Part 3: Improving Clarity in `InitializationScreen`'
+  - >-
+    I will update `src/components/InitializationScreen.tsx` to use color to
+    better structure the final summary and highlight key information, making the
+    results of the initialization process easier to understand.
+  - '### Part 4: Enhancing Data-Rich Screens'
+  - >-
+    I'll apply targeted coloring to `GitCommitScreen` and
+    `TransactionDetailScreen` to improve scannability and visual parsing of
+    data.
+  - >-
+    First, the `GitCommitScreen` will have its transaction hashes de-emphasized
+    and its final commit message styled to distinguish the subject line.
+  - >-
+    Next, `TransactionDetailScreen` will be updated to add color to header
+    metadata, navigator hotkeys, and file paths.
+  - '### Part 5: Subtle Refinements for Consistency'
+  - >-
+    I will apply minor, consistent color adjustments to `GlobalHelpScreen` and
+    `TransactionHistoryScreen` for better visual consistency.
+  - First, the `GlobalHelpScreen` header.
+  - Finally, the `TransactionHistoryScreen` hash and status elements.
+  - >-
+    These changes complete the visual refactoring plan, bringing more color and
+    consistency to the application's interface.
+operations:
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: >+
+      --- src/components/InitializationScreen.tsx
+
+      +++ src/components/InitializationScreen.tsx
+
+      @@ -79,7 +79,7 @@
+                   <Box flexDirection="column" marginTop={1}>
+                       {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+                       <Box flexDirection="column" marginTop={1}>
+                           <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
+      -                    <Text>  Do you want to share its state with your team
+      by committing it?</Text>
+
+      +                    <Text color="yellow">  Do you want to share its state
+      with your team by committing it?</Text>
+                       </Box>
+                   </Box>
+               </Box>
+      @@ -88,27 +88,27 @@
+           const renderFinalize = () => {
+               const stateText = interactiveChoice === 'share'
+      -            ? '.relay/ directory initialized. It will be committed to
+      git.'
+
+      -            : '.relay/ directory initialized and added to .gitignore.';
+
+      +            ? <Text><Text color="cyan">.relay/</Text> directory
+      initialized. It will be committed to git.</Text>
+
+      +            : <Text><Text color="cyan">.relay/</Text> directory
+      initialized and added to <Text color="cyan">.gitignore</Text>.</Text>;
+               const stateSubText = interactiveChoice === 'share'
+                   ? undefined
+                   : 'Local transaction history will be stored here.';
+               
+               return (
+                   <Box flexDirection="column">
+      -                <Text bold color="green"> SYSTEM READY</Text>
+
+      +                <Text bold color="green">✓ SYSTEM READY</Text>
+                       <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                           <Box flexDirection="column">
+      -                        <Text><Text color="green">✓</Text> Config:  
+      relay.config.json created.</Text>
+
+      +                        <Text><Text color="green">✓</Text> <Text
+      bold>Config:</Text>   <Text color="cyan">relay.config.json</Text>
+      created.</Text>
+                               <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
+                           </Box>
+                           <Box flexDirection="column">
+      -                        <Text><Text color="green">✓</Text> State:   
+      {stateText}</Text>
+
+      +                        <Text><Text color="green">✓</Text> <Text
+      bold>State:</Text>    {stateText}</Text>
+                               {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
+                           </Box>
+                           <Box flexDirection="column">
+      -                        <Text><Text color="green">✓</Text> Prompt:  
+      System prompt generated at .relay/prompts/system-prompt.md.</Text>
+
+      -                        <Text color="gray" italic>          › Copied to
+      clipboard. Paste into your AI&apos;s custom instructions.</Text>
+
+      +                        <Text><Text color="green">✓</Text> <Text
+      bold>Prompt:</Text>   System prompt generated at <Text
+      color="cyan">.relay/prompts/system-prompt.md</Text>.</Text>
+
+      +                        <Text color="green" italic>          › Copied to
+      clipboard. Paste into your AI&apos;s custom instructions.</Text>
+                           </Box>
+                       </Box>
+                   </Box>
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/GitCommitScreen.tsx
+    content: >+
+      --- src/components/GitCommitScreen.tsx
+
+      +++ src/components/GitCommitScreen.tsx
+
+      @@ -5,6 +5,11 @@
+       
+       const GitCommitScreen = () => {
+           const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+      +
+
+      +    const messageParts = finalCommitMessage.split('\n');
+
+      +    const subject = messageParts[0] || '';
+
+      +    const body = messageParts.slice(1).join('\n');
+       
+           return (
+               <Box flexDirection="column">
+      @@ -13,16 +18,17 @@
+                       <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                       <Box marginTop={1} flexDirection="column">
+                           <Text bold>TRANSACTIONS INCLUDED</Text>
+                           {transactionsToCommit.map(tx => (
+      -                        <Text key={tx.id}>- {tx.hash}:
+      {tx.message}</Text>
+
+      +                        <Text key={tx.id}>- <Text
+      color="gray">{tx.hash}</Text>: {tx.message}</Text>
+                           ))}
+                       </Box>
+                   </Box>
+                   <Separator />
+                   <Box marginY={1} flexDirection="column" paddingX={2}>
+                       <Text bold>FINAL COMMIT MESSAGE</Text>
+      -                <Box marginTop={1}>
+
+      -                    <Text>{finalCommitMessage}</Text>
+
+      +                <Box marginTop={1} flexDirection="column">
+
+      +                    <Text color="yellow">{subject}</Text>
+
+      +                    {body ? <Text>{body}</Text> : null}
+                       </Box>
+                   </Box>
+                   <Separator />
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionDetailScreen.tsx
+    content: >+
+      --- src/components/TransactionDetailScreen.tsx
+
+      +++ src/components/TransactionDetailScreen.tsx
+
+      @@ -2,6 +2,7 @@
+       import Separator from './Separator';
+       import DiffScreen from './DiffScreen';
+       import ReasonScreen from './ReasonScreen';
+      +import type { FileChangeType } from '../types/domain.types';
+       import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
+       import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
+       import ActionFooter from './ActionFooter';
+      @@ -23,6 +24,16 @@
+           );
+       };
+       
+      +const typeColor = (type: FileChangeType) => {
+
+      +    switch (type) {
+
+      +        case 'ADD': return 'green';
+
+      +        case 'DEL': return 'red';
+
+      +        case 'REN': return 'yellow';
+
+      +        default: return 'white';
+
+      +    }
+
+      +};
+
+      +
+       const TransactionDetailScreen = () => {
+           const {
+               transaction, files,
+      @@ -45,16 +56,16 @@
+                   <Box flexDirection="column">
+                       <Text color={isPromptFocused ? 'cyan' : undefined}>
+                           {isPromptFocused ? '> ' : '  '}
+      -                    {isPromptExpanded ? '▾' : '▸'} (P)rompt
+
+      +                    {isPromptExpanded ? '▾' : '▸'} (<Text color="cyan"
+      bold>P</Text>)rompt
+                       </Text>
+                       <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                           {isReasoningFocused ? '> ' : '  '}
+      -                    {isReasoningExpanded ? '▾' : '▸'} (R)easoning{' '}
+
+      +                    {isReasoningExpanded ? '▾' : '▸'} (<Text color="cyan"
+      bold>R</Text>)easoning{' '}
+                           ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                       </Text>
+                       <Text color={isFilesFocused ? 'cyan' : undefined}>
+                           {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
+      -                    {isFilesExpanded ? '▾' : '▸'} (F)iles
+      ({files.length})
+
+      +                    {isFilesExpanded ? '▾' : '▸'} (<Text color="cyan"
+      bold>F</Text>)iles ({files.length})
+                       </Text>
+                       {isFilesExpanded && (
+                           <Box flexDirection="column" paddingLeft={2}>
+      @@ -65,7 +76,7 @@
+                                    return (
+                                       <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                           {isFileSelected ? '> ' : '  '}
+      -                                    {FILE_CHANGE_TYPE_ICONS[file.type]}
+      {file.path}{stats}
+
+      +                                    {FILE_CHANGE_TYPE_ICONS[file.type]}
+      <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
+                                       </Text>
+                                   );
+                               })}
+      @@ -140,10 +151,10 @@
+                   <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
+                       {/* Navigator Part A */}
+                       <Box flexDirection="column" marginY={1}>
+      -                    <Text>UUID: {transaction.id}</Text>
+
+      -                    <Text>Git: {message}</Text>
+
+      -                    <Text>Date: {date} · Status: {status}</Text>
+
+      -                    <Text>Stats: {fileStats}</Text>
+
+      +                    <Text><Text color="gray">UUID:</Text>
+      {transaction.id}</Text>
+
+      +                    <Text><Text color="gray">Git:</Text> {message}</Text>
+
+      +                    <Text><Text color="gray">Date:</Text> {date} · <Text
+      color="gray">Status:</Text> {status}</Text>
+
+      +                    <Text><Text color="gray">Stats:</Text>
+      {fileStats}</Text>
+                       </Box>
+                       
+                       {/* Navigator Part B */}
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/GlobalHelpScreen.tsx
+    content: >+
+      --- src/components/GlobalHelpScreen.tsx
+
+      +++ src/components/GlobalHelpScreen.tsx
+
+      @@ -15,8 +15,11 @@
+                       paddingY={1}
+                       width="80%"
+                   >
+      -                <Box justifyContent="center" marginBottom={1}>
+
+      -                    <Text bold color="cyan">▲ relaycode · keyboard
+      shortcuts</Text>
+
+      +                <Box justifyContent="center" marginBottom={1} >
+
+      +                    <Text bold>
+
+      +                        <Text color="yellow">▲ relaycode</Text>
+
+      +                        <Text color="cyan"> · keyboard shortcuts</Text>
+
+      +                    </Text>
+                       </Box>
+                       <Box flexDirection="column" gap={1}>
+                           <Box flexDirection="column">
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionHistoryScreen.tsx
+    content: >+
+      --- src/components/TransactionHistoryScreen.tsx
+
+      +++ src/components/TransactionHistoryScreen.tsx
+
+      @@ -94,7 +94,7 @@
+               <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                   <Text color={isSelected ? 'cyan' : undefined}>
+                       {isSelected ? '> ' : '  '}
+                       {hasSelection && selectionIndicator}
+      -                {icon} <Text
+      color={uiStatus.color}>{uiStatus.text}</Text> · {tx.hash} · {date} ·{' '}
+
+      +                {icon} <Text
+      color={uiStatus.color}>{uiStatus.text}</Text> · <Text
+      color="gray">{tx.hash}</Text> · {date} ·{' '}
+                       {tx.message}
+                   </Text>
+                   {isExpanded && (
+      @@ -154,7 +154,7 @@
+                           <Text>{filterStatus}</Text>
+                       )}
+                       <Text> · {showingStatus}</Text>
+      -                {statsStatus && <Text> · {statsStatus}</Text>}
+
+      +                {statsStatus && <Text> · <Text
+      color="magenta">{statsStatus}</Text></Text>}
+                   </Box>
+       
+                   <Box flexDirection="column" marginY={1}>
+
+    patchStrategy: standard-diff
+snapshot:
+  src/components/InitializationScreen.tsx: "import { Box, Text } from 'ink';\nimport { useState, useEffect } from 'react';\nimport Spinner from 'ink-spinner';\nimport Separator from './Separator';\nimport type { Task } from '../stores/init.store';\nimport { useInitializationScreen } from '../hooks/useInitializationScreen';\n\nconst TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n\tconst [isJustDone, setIsJustDone] = useState(false);\n\n\tuseEffect(() => {\n\t\tif (task.status === 'done') {\n\t\t\tsetIsJustDone(true);\n\t\t\tconst timer = setTimeout(() => setIsJustDone(false), 300);\n\t\t\treturn () => clearTimeout(timer);\n\t\t}\n\t}, [task.status]);\n\n\tlet symbol: React.ReactNode;\n\tswitch (task.status) {\n\t\tcase 'pending': symbol = '( )'; break;\n\t\tcase 'active': symbol = <Text color=\"cyan\"><Spinner type=\"dots\" /></Text>; break;\n\t\tcase 'done': symbol = <Text color=\"green\">{doneSymbol}</Text>; break;\n\t}\n\n\tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n\n\treturn (\n\t\t<Box flexDirection=\"column\">\n\t\t\t<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>\n\t\t\t\t{symbol} {title}\n\t\t\t</Text>\n\t\t\t{task.subtext && task.status !== 'done' && (\n\t\t\t\t<Text italic color=\"gray\">\n\t\t\t\t\t{'     └─ '}{task.subtext}\n\t\t\t\t</Text>\n\t\t\t)}\n\t\t</Box>\n\t);\n};\n\nconst InitializationScreen = () => {\n    const {\n        phase,\n        analyzeTasks,\n        configureTasks,\n        interactiveChoice,\n        projectId,\n        footerText,\n    } = useInitializationScreen();\n\n    const renderAnalyze = () => (\n        <Box flexDirection=\"column\">\n            <Text bold color=\"cyan\">PHASE 1: ANALYZE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}\n            </Box>\n        </Box>\n    );\n\n    const renderContext = () => (\n        <Box flexDirection=\"column\" marginBottom={1}>\n            <Text bold color=\"cyan\">CONTEXT</Text>\n            <Text>  <Text color=\"green\">✓</Text> Project ID: {projectId}</Text>\n            <Text>  <Text color=\"green\">✓</Text> Gitignore:  Found at ./</Text>\n        </Box>\n    );\n\n    const renderConfigure = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n            </Box>\n        </Box>\n    );\n\n    const renderInteractive = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n                <Box flexDirection=\"column\" marginTop={1}>\n                    <Text><Text color=\"cyan\">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>\n                    <Text>  Do you want to share its state with your team by committing it?</Text>\n                </Box>\n            </Box>\n        </Box>\n    );\n\n    const renderFinalize = () => {\n        const stateText = interactiveChoice === 'share'\n            ? '.relay/ directory initialized. It will be committed to git.'\n            : '.relay/ directory initialized and added to .gitignore.';\n        const stateSubText = interactiveChoice === 'share'\n            ? undefined\n            : 'Local transaction history will be stored here.';\n        \n        return (\n            <Box flexDirection=\"column\">\n                <Text bold color=\"green\"> SYSTEM READY</Text>\n                <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Config:   relay.config.json created.</Text>\n                        <Text color=\"gray\" italic>          › Edit this file to tune linters, git integration, etc.</Text>\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> State:    {stateText}</Text>\n                        {stateSubText && <Text color=\"gray\" italic>          › {stateSubText}</Text>}\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> Prompt:   System prompt generated at .relay/prompts/system-prompt.md.</Text>\n                        <Text color=\"gray\" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>\n                    </Box>\n                </Box>\n            </Box>\n        );\n    };\n\n    const renderPhase = () => {\n        switch (phase) {\n            case 'ANALYZE': return renderAnalyze();\n            case 'CONFIGURE': return renderConfigure();\n            case 'INTERACTIVE': return renderInteractive();\n            case 'FINALIZE': return renderFinalize();\n        }\n    };\n\n    return (\n        <Box flexDirection=\"column\">\n            <Text bold color=\"black\" backgroundColor=\"yellow\">\n                {phase === 'FINALIZE' ? ' ▲ relaycode · BOOTSTRAP COMPLETE ' : ' ▲ relaycode · BOOTSTRAP '}\n            </Text>\n            <Separator />\n            <Box marginY={1}>{renderPhase()}</Box>\n            <Separator />\n            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}\n        </Box>\n    );\n};\n\nexport default InitializationScreen;"
+  src/components/GitCommitScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Spinner from 'ink-spinner';
+
+    import Separator from './Separator';
+
+    import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+
+    import ActionFooter from './ActionFooter';
+
+    import { COMMIT_SCREEN_FOOTER_ACTIONS } from
+    '../constants/commit.constants';
+
+
+    const GitCommitScreen = () => {
+        const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
+
+        return (
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text bold>TRANSACTIONS INCLUDED</Text>
+                        {transactionsToCommit.map(tx => (
+                            <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                        ))}
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} flexDirection="column" paddingX={2}>
+                    <Text bold>FINAL COMMIT MESSAGE</Text>
+                    <Box marginTop={1}>
+                        <Text>{finalCommitMessage}</Text>
+                    </Box>
+                </Box>
+                <Separator />
+                <Box marginY={1} paddingX={2}>
+                     <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+                </Box>
+                <Separator />
+                {isCommitting
+                    ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                    : <ActionFooter actions={COMMIT_SCREEN_FOOTER_ACTIONS}/>
+                }
+            </Box>
+        );
+    };
+
+
+    export default GitCommitScreen;
+  src/components/TransactionDetailScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import { useTransactionDetailScreen } from
+    '../hooks/useTransactionDetailScreen';
+
+    import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS }
+    from '../constants/detail.constants';
+
+    import ActionFooter from './ActionFooter';
+
+
+    const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
+        return (
+            <Box 
+                borderStyle="round"
+                borderColor="yellow"
+                flexDirection="column"
+                paddingX={2}
+                width="80%"
+                alignSelf='center'
+            >
+                <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
+                <Box height={1} />
+                <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
+                <Box height={1} />
+                <Text wrap="wrap">Are you sure?</Text>
+            </Box>
+        );
+    };
+
+
+    const TransactionDetailScreen = () => {
+        const {
+            transaction, files,
+            focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
+        } = useTransactionDetailScreen();
+
+        if (!transaction) {
+            return <Text>Loading transaction...</Text>;
+        }
+
+        const renderNavigator = () => {
+            const isPromptFocused = focusedItemPath === 'PROMPT';
+            const isReasoningFocused = focusedItemPath === 'REASONING';
+            const isFilesFocused = focusedItemPath.startsWith('FILES');
+            
+            const isPromptExpanded = expandedItemPaths.has('PROMPT');
+            const isReasoningExpanded = expandedItemPaths.has('REASONING');
+            const isFilesExpanded = expandedItemPaths.has('FILES');
+            
+            return (
+                <Box flexDirection="column">
+                    <Text color={isPromptFocused ? 'cyan' : undefined}>
+                        {isPromptFocused ? '> ' : '  '}
+                        {isPromptExpanded ? '▾' : '▸'} (P)rompt
+                    </Text>
+                    <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                        {isReasoningFocused ? '> ' : '  '}
+                        {isReasoningExpanded ? '▾' : '▸'} (R)easoning{' '}
+                        ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                    </Text>
+                    <Text color={isFilesFocused ? 'cyan' : undefined}>
+                        {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
+                        {isFilesExpanded ? '▾' : '▸'} (F)iles ({files.length})
+                    </Text>
+                    {isFilesExpanded && (
+                        <Box flexDirection="column" paddingLeft={2}>
+                            {files.map((file) => {
+                                 const fileId = `FILES/${file.id}`;
+                                 const isFileSelected = focusedItemPath === fileId;
+                                 const stats = file.type === 'DEL' ? ''
+                                    : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                                 return (
+                                    <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                        {isFileSelected ? '> ' : '  '}
+                                        {FILE_CHANGE_TYPE_ICONS[file.type]} {file.path}{stats}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                    )}
+                </Box>
+            );
+        };
+
+        const renderBody = () => {
+            if (bodyView === DETAIL_BODY_VIEWS.NONE) {
+                return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.PROMPT) {
+                return (
+                    <Box flexDirection="column">
+                        <Text>PROMPT</Text>
+                        <Box marginTop={1} flexDirection="column">
+                            {(transaction.prompt || '').split('\n')
+                                .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
+                                .map((line, i) => <Text key={i}>{line}</Text>)
+                            }
+                        </Box>
+                    </Box>
+                );
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
+                if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
+                return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
+                 return <Text color="gray">(Select a file and press → to view the diff)</Text>;
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (!file) return null;
+                return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
+            }
+            return null;
+        };
+
+        const renderFooter = () => {
+            if (bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM) {
+                return <ActionFooter actions={DETAIL_FOOTER_ACTIONS.REVERT_CONFIRM} />;
+            }
+            
+            const isFileFocused = focusedItemPath.includes('/');
+            const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
+            const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
+
+            if (isFileFocused) { // Is a file
+                if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                    return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
+                } else {
+                    return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
+                }
+            }
+            
+            if (expandedItemPaths.has(focusedItemPath)) {
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_EXPANDED, ...baseActions]} />;
+            }
+            return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_COLLAPSED, ...baseActions]} />;
+        };
+
+        const { message, timestamp, status } = transaction;
+        const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
+        const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
+                <Separator />
+                
+                {/* Modal takeover for Revert */}
+                {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
+                
+                {/* Main view */}
+                <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
+                    {/* Navigator Part A */}
+                    <Box flexDirection="column" marginY={1}>
+                        <Text>UUID: {transaction.id}</Text>
+                        <Text>Git: {message}</Text>
+                        <Text>Date: {date} · Status: {status}</Text>
+                        <Text>Stats: {fileStats}</Text>
+                    </Box>
+                    
+                    {/* Navigator Part B */}
+                    {renderNavigator()}
+                    
+                    <Separator />
+                    
+                    {/* Body */}
+                    <Box marginY={1}>
+                        {renderBody()}
+                    </Box>
+                    
+                    <Separator />
+                </Box>
+                
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default TransactionDetailScreen;
+  src/components/GlobalHelpScreen.tsx: |-
+    import { Box, Text } from 'ink';
+
+    const GlobalHelpScreen = () => {
+        return (
+            <Box
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                width="100%"
+                height="100%"
+            >
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    paddingX={2}
+                    paddingY={1}
+                    width="80%"
+                >
+                    <Box justifyContent="center" marginBottom={1}>
+                        <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
+                    </Box>
+                    <Box flexDirection="column" gap={1}>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">GLOBAL</Text>
+                            <Text>  <Text color="cyan" bold>?</Text>        Toggle this help screen</Text>
+                            <Text>  <Text color="cyan" bold>Q</Text>        Quit to terminal (or go back)</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">DASHBOARD (watch)</Text>
+                            <Text>  <Text color="cyan" bold>↑↓</Text>       Navigate event stream</Text>
+                            <Text>  <Text color="cyan" bold>Enter</Text>    View details of selected transaction</Text>
+                            <Text>  <Text color="cyan" bold>P</Text>        Pause / Resume clipboard watcher</Text>
+                            <Text>  <Text color="cyan" bold>A</Text>        Approve all pending transactions</Text>
+                            <Text>  <Text color="cyan" bold>C</Text>        Commit all applied transactions to git</Text>
+                        </Box>
+                        <Box flexDirection="column">
+                            <Text bold color="cyan">REVIEW & DETAILS SCREENS</Text>
+                            <Text>  <Text color="cyan" bold>D</Text>        Show / Collapse file diff</Text>
+                            <Text>  <Text color="cyan" bold>←→</Text>       Collapse / Expand sections or files</Text>
+                            <Text>  <Text color="cyan" bold>R</Text>        Show / Collapse reasoning steps</Text>
+                            <Text>  <Text color="cyan" bold>C</Text>        Enter / Exit Copy Mode (Details Screen)</Text>
+                            <Text>  <Text color="cyan" bold>U</Text>        Undo / Revert Transaction</Text>
+                            <Text>  <Text color="cyan" bold>Space</Text>    Toggle approval state of a file (Review Screen)</Text>
+                        </Box>
+                    </Box>
+                </Box>
+                <Box marginTop={1}>
+                    <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default GlobalHelpScreen;
+  src/components/TransactionHistoryScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { Box, Text } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import Spinner from 'ink-spinner';
+
+    import Separator from './Separator';
+
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    import { useTransactionHistoryScreen } from
+    '../hooks/useTransactionHistoryScreen';
+
+    import { HISTORY_FOOTER_ACTIONS, TRANSACTION_STATUS_UI, FILE_TYPE_MAP,
+    BULK_ACTIONS_OPTIONS, HISTORY_VIEW_MODES } from
+    '../constants/history.constants';
+
+    import ActionFooter from './ActionFooter';
+
+
+    // --- Sub-components ---
+
+
+    const ContentRow = ({ title, content, isSelected, isExpanded, isLoading }: {
+        title: string;
+        content: string;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isLoading: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}{icon} {title}
+                </Text>
+                {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+                {isExpanded && !isLoading && (
+                    <Box paddingLeft={8} flexDirection="column">
+                        {(content || '').split('\n').map((line, i) => <Text key={i}>{line || ' '}</Text>)}
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    const DiffPreview = ({ diff }: { diff: string }) => {
+        const lines = diff.split('\n');
+        const previewLines = lines.slice(0, 5);
+        const hiddenLines = lines.length > 5 ? lines.length - 5 : 0;
+
+        return (
+            <Box flexDirection="column" paddingLeft={8}>
+                {previewLines.map((line, i) => {
+                    let color = 'white';
+                    if (line.startsWith('+')) color = 'green';
+                    if (line.startsWith('-')) color = 'red';
+                    if (line.startsWith('@@')) color = 'cyan';
+                    return <Text key={i} color={color}>{line}</Text>;
+                })}
+                {hiddenLines > 0 && <Text color="gray">... {hiddenLines} lines hidden ...</Text>}
+            </Box>
+        );
+    };
+
+
+    const FileRow = ({ file, isSelected, isExpanded, isLoading }: {
+        file: FileItem;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isLoading: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+
+        return (
+            <Box flexDirection="column" paddingLeft={6}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}{' '}
+                    {icon} {FILE_TYPE_MAP[file.type]} {file.path}
+                </Text>
+                {isLoading && <Box paddingLeft={8}><Spinner type="dots" /></Box>}
+                {isExpanded && !isLoading && <DiffPreview diff={file.diff} />}
+            </Box>
+        );
+    };
+
+
+    const TransactionRow = ({
+        tx,
+        isSelected,
+        isExpanded,
+        isSelectedForAction,
+        hasSelection,
+    }: {
+        tx: Transaction;
+        isSelected: boolean;
+        isExpanded: boolean;
+        isSelectedForAction: boolean;
+        hasSelection: boolean;
+    }) => {
+        const icon = isExpanded ? '▾' : '▸';
+        const uiStatus = TRANSACTION_STATUS_UI[tx.status as keyof typeof TRANSACTION_STATUS_UI] || { text: tx.status, color: 'white' };
+
+        const date = new Date(tx.timestamp).toISOString().split('T')[0];
+        const selectionIndicator = isSelectedForAction ? '[x] ' : '[ ] ';
+        
+        return (
+            <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                <Text color={isSelected ? 'cyan' : undefined}>
+                    {isSelected ? '> ' : '  '}
+                    {hasSelection && selectionIndicator}
+                    {icon} <Text color={uiStatus.color}>{uiStatus.text}</Text> · {tx.hash} · {date} ·{' '}
+                    {tx.message}
+                </Text>
+                {isExpanded && (
+                    <Box flexDirection="column" paddingLeft={8}>
+                        {tx.stats && (
+                            <Text color="gray">
+                                Stats: {tx.stats.files} files, +{tx.stats.linesAdded}/-{tx.stats.linesRemoved}
+                            </Text>
+                        )}
+                        <Text>Files:</Text>
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+
+    const BulkActionsMode = ({ selectedForActionCount }: {
+    selectedForActionCount: number }) => {
+        return (
+            <Box flexDirection="column" marginY={1}>
+                <Text bold color="yellow">PERFORM BULK ACTION ON {selectedForActionCount} SELECTED ITEMS</Text>
+                <Box marginY={1}>
+                    <Text>This action is often irreversible. Are you sure?</Text>
+                </Box>
+                {BULK_ACTIONS_OPTIONS.map(opt => <Text key={opt}>{opt}</Text>)}
+            </Box>
+        );
+    };
+
+
+    // --- Main Component ---
+
+
+    const TransactionHistoryScreen = () => {
+        const {
+            mode,
+            filterQuery,
+            selectedForAction,
+            selectedItemPath,
+            expandedIds,
+            loadingPaths,
+            actions,
+            transactions,
+            itemsInView,
+            filterStatus,
+            showingStatus,
+            statsStatus,
+            hasSelection,
+        } = useTransactionHistoryScreen();
+
+        const transactionsById = useMemo(() => new Map(transactions.map(tx => [tx.id, tx])), [transactions]);
+
+        const renderFooter = () => {
+            if (mode === HISTORY_VIEW_MODES.FILTER) {
+                return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.FILTER_MODE} />;
+            }
+            if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
+                return <Text>{HISTORY_FOOTER_ACTIONS.BULK_MODE.text}</Text>;
+            }
+            
+            const openActionLabel = selectedItemPath.includes('/file/') ? 'Open File' : 'Open YAML';
+            return <ActionFooter actions={HISTORY_FOOTER_ACTIONS.LIST_MODE(openActionLabel, hasSelection)} />;
+        };
+
+        return (
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION HISTORY </Text>
+                <Separator />
+
+                <Box>
+                    <Text>Filter: </Text>
+                    {mode === HISTORY_VIEW_MODES.FILTER ? (
+                        <TextInput value={filterQuery} onChange={actions.setFilterQuery} />
+                    ) : (
+                        <Text>{filterStatus}</Text>
+                    )}
+                    <Text> · {showingStatus}</Text>
+                    {statsStatus && <Text> · {statsStatus}</Text>}
+                </Box>
+
+                <Box flexDirection="column" marginY={1}>
+                    {mode === HISTORY_VIEW_MODES.BULK_ACTIONS && <BulkActionsMode selectedForActionCount={selectedForAction.size} />}
+
+                    {mode === HISTORY_VIEW_MODES.LIST && itemsInView.map(path => {
+                        const txId = path.split('/')[0]!;
+                        const tx = transactionsById.get(txId);
+                        if (!tx) return <Text key={path}>Error: Missing TX {txId}</Text>;
+
+                        // Is a transaction row
+                        if (path === tx.id) {
+                            return (
+                                <TransactionRow
+                                    key={path}
+                                    tx={tx}
+                                    isSelected={selectedItemPath === path}
+                                    isExpanded={expandedIds.has(path)}
+                                    isSelectedForAction={selectedForAction.has(tx.id)}
+                                    hasSelection={hasSelection}
+                                />
+                            );
+                        }
+
+                        // Is a child row
+                        const itemType = path.split('/')[1]!;
+                        const isSelected = selectedItemPath === path;
+                        const isExpanded = expandedIds.has(path);
+                        const isLoading = loadingPaths.has(path);
+
+                        if (itemType === 'file') {
+                            const fileId = path.split('/')[2]!;
+                            const file = tx.files?.find(f => f.id === fileId);
+                            if (!file) return null;
+                            return (
+                                <FileRow
+                                    key={path} file={file} isSelected={isSelected}
+                                    isExpanded={isExpanded} isLoading={isLoading}
+                                />
+                            );
+                        }
+
+                        const contentMap = {
+                            message: { title: 'Commit Message', content: tx.message || '' },
+                            prompt: { title: 'Prompt', content: tx.prompt || '' },
+                            reasoning: { title: 'Reasoning', content: tx.reasoning || '' },
+                        };
+
+                        const item = contentMap[itemType as keyof typeof contentMap];
+                        if (!item) return null;
+
+                        return (
+                            <ContentRow
+                                key={path}
+                                {...item}
+                                isSelected={isSelected}
+                                isExpanded={isExpanded}
+                                isLoading={isLoading}
+                            />
+                        );
+                    })}
+                </Box>
+
+                <Separator />
+                {renderFooter()}
+            </Box>
+        );
+    };
+
+
+    export default TransactionHistoryScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 190

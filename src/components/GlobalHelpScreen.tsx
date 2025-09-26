@@ -16,8 +16,11 @@ const GlobalHelpScreen = () => {
                 paddingY={1}
                 width="80%"
             >
-                <Box justifyContent="center" marginBottom={1}>
-                    <Text bold color="cyan">▲ relaycode · keyboard shortcuts</Text>
+                <Box justifyContent="center" marginBottom={1} >
+                    <Text bold>
+                        <Text color="yellow">▲ relaycode</Text>
+                        <Text color="cyan"> · keyboard shortcuts</Text>
+                    </Text>
                 </Box>
                 <Box flexDirection="column" gap={1}>
                     <Box flexDirection="column">

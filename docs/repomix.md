@@ -33,6 +33,7 @@ src/
     log.constants.ts
     notification.constants.ts
     review.constants.ts
+    splash.constants.ts
     view.constants.ts
   data/
     mocks.ts
@@ -94,6 +95,17 @@ tsconfig.json
 ```
 
 # Files
+
+## File: src/constants/splash.constants.ts
+```typescript
+export const SPLASH_TIPS = [
+    'Tip: Press Ctrl+V at any time to process a patch from your clipboard.',
+    'Tip: Use Ctrl+B to open the debug menu and explore different application states.',
+    'Tip: The "?" key opens a global hotkey reference screen.',
+    'Tip: On the Dashboard, use "L" to view the complete transaction history.',
+    'Tip: Use Ctrl+L to quickly view the debug log from any screen.',
+] as const;
+```
 
 ## File: src/components/NotificationScreen.tsx
 ```typescript
@@ -1301,7 +1313,7 @@ export const UI_CONFIG = {
         collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
     },
     splash: {
-        initialCountdown: 3, // Seconds before auto-skip
+        initialCountdown: 6, // Seconds before auto-skip
     },
     footer: {
         horizontalPadding: 2, // Minimum space from the left/right edges of the screen
@@ -2885,7 +2897,7 @@ const ReviewProcessingScreen = () => {
 
     return (
         <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode apply</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
             <Separator />
             <Box marginY={1} flexDirection="column">
                 <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
@@ -2900,125 +2912,6 @@ const ReviewProcessingScreen = () => {
 };
 
 export default ReviewProcessingScreen;
-```
-
-## File: src/hooks/useSplashScreen.tsx
-```typescript
-import { useState, useEffect, useRef } from 'react';
-import { useInput } from 'ink';
-import { useAppStore } from '../stores/app.store';
-import { UI_CONFIG } from '../config/ui.config';
-import { useNotificationStore } from '../stores/notification.store';
-
-export const useSplashScreen = () => {
-    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
-    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
-    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
-    const [visibleSections, setVisibleSections] = useState(new Set<string>());
-    const [animationComplete, setAnimationComplete] = useState(false);
-
-    // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
-    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-    const clearAllTimeouts = () => {
-        timeouts.current.forEach(clearTimeout);
-        timeouts.current = [];
-    };
-
-    const handleSkip = () => {
-        clearAllTimeouts();
-        setAnimationComplete(true);
-        setVisibleLogoLines(100); // A high number to show all lines
-        setVisibleSections(new Set(['tagline', 'version', 'promo', 'links']));
-        showInitScreen();
-    };
-
-    useInput((input) => {
-        const lowerInput = input.toLowerCase();
-        if (lowerInput === 'v') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening https://relay.noca.pro in your browser...',
-            });
-            return;
-        }
-        if (lowerInput === 'x') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening X/Twitter in your browser...',
-            });
-            return;
-        }
-        if (lowerInput === 'd') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening Discord invite in your browser...',
-            });
-            return;
-        }
-        if (lowerInput === 'g') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Opening Link',
-                message: 'Opening GitHub repository in your browser...',
-            });
-            return;
-        }
-
-        // Any other key skips
-        handleSkip(); 
-    });
-
-    useEffect(() => {
-        const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
-
-        // 1. Animate logo
-        const logoTimer = setInterval(() => {
-            setVisibleLogoLines(l => {
-                if (l >= 3) {
-                    clearInterval(logoTimer);
-                    
-                    // 2. Animate sections
-                    t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
-                    t(() => setVisibleSections(s => new Set(s).add('version')), 300);
-                    t(() => setVisibleSections(s => new Set(s).add('promo')), 500);
-                    t(() => setVisibleSections(s => new Set(s).add('links')), 700);
-                    t(() => setAnimationComplete(true), 900);
-
-                    return l;
-                }
-                return l + 1;
-            });
-        }, 80);
-
-        // Cleanup
-        return () => {
-            clearInterval(logoTimer);
-            clearAllTimeouts();
-        };
-    }, []);
-
-    useEffect(() => {
-        if (!animationComplete) return;
-
-        if (countdown <= 0) {
-            showInitScreen();
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setCountdown(c => c - 1);
-        }, 1000);
-        timeouts.current.push(timer);
-        
-        return () => clearTimeout(timer);
-    }, [countdown, showInitScreen, animationComplete]);
-
-    return { countdown, visibleLogoLines, visibleSections, animationComplete };
-};
 ```
 
 ## File: src/services/copy.service.ts
@@ -3323,7 +3216,7 @@ const CopyScreen = () => {
                 paddingX={2}
                 width="80%"
             >
-                <Text bold color="yellow">▲ relaycode · copy mode</Text>
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
                 <Separator width={Math.floor(width * 0.8) - 4} />
                 <Box flexDirection="column" marginY={1}>
                     <Text>{title}</Text>
@@ -3363,19 +3256,17 @@ import { COMMIT_SCREEN_FOOTER_ACTIONS } from '../constants/commit.constants';
 const GitCommitScreen = () => {
     const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
 
-    const transactionLines = transactionsToCommit.map(tx => (
-        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-    ));
-
     return (
         <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode git commit</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
             <Separator />
             <Box marginY={1} flexDirection="column" paddingX={2}>
                 <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
                 <Box marginTop={1} flexDirection="column">
                     <Text bold>TRANSACTIONS INCLUDED</Text>
-                    {transactionLines}
+                    {transactionsToCommit.map(tx => (
+                        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                    ))}
                 </Box>
             </Box>
             <Separator />
@@ -3401,80 +3292,138 @@ const GitCommitScreen = () => {
 export default GitCommitScreen;
 ```
 
-## File: src/components/SplashScreen.tsx
+## File: src/hooks/useSplashScreen.tsx
 ```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useSplashScreen } from '../hooks/useSplashScreen';
+import { useState, useEffect, useRef } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { UI_CONFIG } from '../config/ui.config';
+import { SPLASH_TIPS } from '../constants/splash.constants';
+import { useNotificationStore } from '../stores/notification.store';
 
-const SplashScreen = () => {
-    const { countdown, visibleLogoLines, visibleSections, animationComplete } = useSplashScreen();
-    const logo = `
-         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
-         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
-         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀
-`;
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+    const [tip, setTip] = useState('');
+    const [updateStatus, setUpdateStatus] = useState('');
+    const [visibleSections, setVisibleSections] = useState(new Set<string>());
+    const [animationComplete, setAnimationComplete] = useState(false);
 
-    const logoLines = logo.split('\n');
+    // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-    return (
-        <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode</Text>
-            <Separator />
-            <Text color="cyan">{logoLines.slice(0, visibleLogoLines).join('\n')}</Text>
-            {visibleSections.has('tagline') && (
-                <Box flexDirection="column" alignItems="center">
-                    <Text italic>A zero-friction, AI-native patch engine.</Text>
-                    <Text italic color="gray">Built by Arman and contributors · <Text underline>https://relay.noca.pro</Text></Text>
-                </Box>
-            )}
-            
-            {visibleSections.has('version') && (
-                <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
-                    <Box flexDirection="column" width="45%">
-                        <Text>Version 1.1.5</Text>
-                        <Text>─────────────────────────</Text>
-                        <Text>relaycode</Text>
-                        <Text>relaycode-core</Text>
-                        <Text>apply-multi-diff</Text>
-                        <Text>konro</Text>
-                    </Box>
-                     <Box flexDirection="column" width="45%">
-                        <Text>Build Timestamps</Text>
-                        <Text>─────────────────────────</Text>
-                        <Text>2025-09-20 13:58:05</Text>
-                        <Text>2025-09-20 10:59:05</Text>
-                        <Text>(versioned)</Text>
-                        <Text>(versioned)</Text>
-                    </Box>
-                </Box>
-            )}
-            
-            {visibleSections.has('promo') && (
-                <>
-                    <Box marginTop={1}><Separator /></Box>
-                    <Text>If you love this workflow, check out <Text underline>https://www.noca.pro</Text> for the full</Text>
-                    <Text>web app with repo-wide visual context, history, and rollback.</Text>
-                    <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
-                </>
-            )}
+    const clearAllTimeouts = () => {
+        timeouts.current.forEach(clearTimeout);
+        timeouts.current = [];
+    };
 
-            {visibleSections.has('links') && (
-                <>
-                    <Separator />
-                    <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
-                </>
-            )}
+    const handleSkip = () => {
+        clearAllTimeouts();
+        setAnimationComplete(true);
+        setVisibleLogoLines(100); // A high number to show all lines
+        setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+        setUpdateStatus('✓ You are up to date.');
+        showInitScreen();
+    };
 
-            <Separator />
-            <Text>
-                {animationComplete ? `Loading... ${countdown}` : 'Loading...'} (<Text color="gray">Press any key to skip</Text>)
-            </Text>
-        </Box>
-    );
+    useInput((input) => {
+        const lowerInput = input.toLowerCase();
+        if (lowerInput === 'v') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening https://relay.noca.pro in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'x') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening X/Twitter in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'd') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening Discord invite in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'g') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening GitHub repository in your browser...',
+            });
+            return;
+        }
+
+        // Any other key skips
+        handleSkip(); 
+    });
+
+    useEffect(() => {
+        const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+        // Pick a random tip on mount
+        if (!tip) {
+            setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+        }
+
+        // 1. Animate logo
+        const logoTimer = setInterval(() => {
+            setVisibleLogoLines(l => {
+                if (l >= 4) { // Fix: was 3, which cut off the last line of the logo
+                    clearInterval(logoTimer);
+                    
+                    // 2. Animate sections
+                    t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                    t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                    t(() => {
+                        setVisibleSections(s => new Set(s).add('updateCheck'));
+                        setUpdateStatus('Checking for updates...');
+                        t(() => setUpdateStatus('✓ You are up to date.'), 1500);
+                    }, 600);
+
+                    t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
+                    t(() => setVisibleSections(s => new Set(s).add('links')), 1000);
+                    t(() => setAnimationComplete(true), 1200);
+
+                    return l;
+                }
+                return l + 1;
+            });
+        }, 80);
+
+        // Cleanup
+        return () => {
+            clearInterval(logoTimer);
+            clearAllTimeouts();
+        };
+    }, [tip]);
+
+    useEffect(() => {
+        if (!animationComplete) return;
+
+        if (countdown <= 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+        timeouts.current.push(timer);
+        
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen, animationComplete]);
+
+    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
 };
-
-export default SplashScreen;
 ```
 
 ## File: src/stores/commit.store.ts
@@ -3635,6 +3584,104 @@ export const selectSelectedTransaction = (state: TransactionState): Transaction 
     const { selectedTransactionId } = useViewStore.getState();
     return state.transactions.find(t => t.id === selectedTransactionId);
 };
+```
+
+## File: src/components/SplashScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useSplashScreen } from '../hooks/useSplashScreen';
+
+const SplashScreen = () => {
+    const { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus } = useSplashScreen();
+    const logo = `
+         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀`;
+
+    const logoLines = logo.split('\n');
+
+    return (
+        <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode </Text>
+                <Separator />
+                <Box flexDirection="column">
+                    {logoLines.slice(0, visibleLogoLines).map((line, index) => {
+                        if (index === 0) return <Text key={index}>{line}</Text>;
+                        if (index === 2) return <Text key={index} color="white">{line}</Text>;
+                        return <Text key={index} color="cyan">{line}</Text>;
+                    })}
+                </Box>
+                {visibleSections.has('tagline') && (
+                    <Box flexDirection="column" alignItems="center">
+                        <Text italic>A zero-friction, AI-native patch engine.</Text>
+                        <Text italic color="gray">Built by Arman and contributors · <Text underline color="blue">https://relay.noca.pro</Text></Text>
+                    </Box>
+                )}
+                
+                {visibleSections.has('version') && (
+                    <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                        <Box flexDirection="column" width="45%">
+                            <Text color="yellow">Version 1.1.5</Text>
+                            <Text color="gray">─────────────────────────</Text>
+                            <Text>relaycode</Text>
+                            <Text>relaycode-core</Text>
+                            <Text>apply-multi-diff</Text>
+                            <Text>konro</Text>
+                        </Box>
+                         <Box flexDirection="column" width="45%">
+                            <Text color="yellow">Build Timestamps</Text>
+                            <Text color="gray">─────────────────────────</Text>
+                            <Text>2025-09-20 13:58:05</Text>
+                            <Text>2025-09-20 10:59:05</Text>
+                            <Text>(versioned)</Text>
+                            <Text>(versioned)</Text>
+                        </Box>
+                    </Box>
+                )}
+
+                {visibleSections.has('updateCheck') && (
+                    <Box marginTop={1}>
+                        <Text>{updateStatus}</Text>
+                    </Box>
+                )}
+                
+                {visibleSections.has('promo') && (
+                    <>
+                        <Box marginTop={1}><Separator /></Box>
+                        <Text>If you love this workflow, check out <Text underline color="blue">https://www.noca.pro</Text> for the full</Text>
+                        <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                        <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                    </>
+                )}
+
+                {visibleSections.has('links') && (
+                    <>
+                        <Separator />
+                        <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                    </>
+                )}
+
+                <Separator />
+                {animationComplete && (
+                    <Box marginBottom={1}>
+                        <Text italic color="gray">{tip}</Text>
+                    </Box>
+                )}
+                <Text>
+                    <Text color="gray">
+                        {animationComplete ? 'Loading... ' : 'Loading...'}
+                    </Text>
+                    {animationComplete && <Text color="yellow">{countdown}</Text>}
+                    <Text color="gray"> (Press any key to skip)</Text>
+                </Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default SplashScreen;
 ```
 
 ## File: src/hooks/useGlobalHotkeys.tsx
@@ -3841,7 +3888,9 @@ const InitializationScreen = () => {
 
     return (
         <Box flexDirection="column">
-            <Text color="cyan">{phase === 'FINALIZE' ? '▲ relaycode bootstrap complete' : '▲ relaycode bootstrap'}</Text>
+            <Text bold color="black" backgroundColor="yellow">
+                {phase === 'FINALIZE' ? ' ▲ relaycode · BOOTSTRAP COMPLETE ' : ' ▲ relaycode · BOOTSTRAP '}
+            </Text>
             <Separator />
             <Box marginY={1}>{renderPhase()}</Box>
             <Separator />
@@ -4861,7 +4910,7 @@ const TransactionDetailScreen = () => {
     return (
         <Box flexDirection="column">
             {/* Header */}
-            <Text>▲ relaycode transaction details</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
             <Separator />
             
             {/* Modal takeover for Revert */}
@@ -5065,7 +5114,7 @@ const TransactionHistoryScreen = () => {
 
     return (
         <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode transaction history</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION HISTORY </Text>
             <Separator />
 
             <Box>
@@ -6102,7 +6151,7 @@ const ReviewScreen = () => {
     return (
         <Box flexDirection="column">
             {/* Header */}
-            <Text color="cyan">▲ relaycode review</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · REVIEW </Text>
             <Separator />
             
             {/* Navigator Section */}
@@ -6195,225 +6244,6 @@ const ReviewScreen = () => {
 };
 
 export default ReviewScreen;
-```
-
-## File: src/components/DashboardScreen.tsx
-```typescript
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import type { Transaction, TransactionStatus } from '../types/domain.types';
-import { useDashboardScreen } from '../hooks/useDashboardScreen';
-import { UI_CONFIG } from '../config/ui.config'; //
-import ActionFooter from './ActionFooter';
-import { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';
-import { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.constants';
-
-// --- Sub-components & Helpers ---
-
-const getStatusIcon = (status: TransactionStatus) => {
-    if (status === 'IN-PROGRESS') return <Spinner type="dots" />;
-    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
-    if (!ui) return <Text> </Text>;
-    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
-};
-
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}m`;
-};
-
-const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
-    const stats = transaction.stats;
-    const files = transaction.files || [];
-
-    return (
-        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
-            {stats && (
-                <Text color="gray">
-                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
-                </Text>
-            )}
-             <Box flexDirection="column" paddingLeft={1}>
-                {files.map(file => (
-                     <Text key={file.id}>
-                        <Text color="gray">{FILE_TYPE_MAP[file.type]}</Text> {file.path}
-                    </Text>
-                ))}
-             </Box>
-        </Box>
-    );
-};
-
-const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {
-    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
-    const [isStatusFlashing, setIsStatusFlashing] = useState(false);
-    const prevStatus = useRef(transaction.status);
-
-    useEffect(() => {
-        if (isNew) {
-            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [isNew]);
-
-    useEffect(() => {
-        if (prevStatus.current !== transaction.status) {
-            setIsStatusFlashing(true);
-            const timer = setTimeout(() => setIsStatusFlashing(false), 500);
-            prevStatus.current = transaction.status;
-            return () => clearTimeout(timer);
-        }
-    }, [transaction.status]);
-
-    const icon = getStatusIcon(transaction.status);
-    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
-    const statusText = transaction.status.padEnd(11, ' ');
-    const expandIcon = isExpanded ? '▾' : '▸';
-    
-    const messageNode = transaction.status === 'IN-PROGRESS'
-        ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
-        : transaction.message;
-    
-    const content = (
-        <Text>
-            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}
-            <Text color="gray">{transaction.hash}</Text>
-            {' '}· {messageNode}
-        </Text>
-    );
-
-    if (isSelected) {
-        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;
-    }
-
-    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;
-});
-
-const ConfirmationContent = ({
-    transactionsToConfirm,
-}: {
-    transactionsToConfirm: Transaction[];
-}) => {
-    const actionText = 'APPROVE';
-    
-    return (
-        <Box flexDirection="column" marginY={1} paddingLeft={2}>
-            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
-            <Text>
-                The following {transactionsToConfirm.length} transaction(s) will be approved:
-            </Text>
-            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-                {transactionsToConfirm.map(tx => (
-                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-                ))}
-            </Box>
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const DashboardScreen = () => {
-    const {
-        status,
-        transactions,
-        selectedTransactionIndex,
-        pendingApprovals,
-        pendingCommits,
-        isModal,
-        isProcessing,
-        viewOffset,
-        viewportHeight,
-        transactionsToConfirm,
-        expandedTransactionId,
-        newTransactionIds,
-    } = useDashboardScreen({
-        layoutConfig: UI_CONFIG.layout.dashboard,
-    });
-
-    const renderStatusBar = () => {
-        let statusText: string;
-        let statusIcon: React.ReactNode;
-        switch (status) {
-            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
-            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
-            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; //
-        }
-
-        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
-        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
-
-        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {
-            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
-        }
-        
-        return (
-            <Text>
-                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
-            </Text>
-        );
-    };
-
-    const renderFooter = () => {
-        if (isModal) return (
-            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>
-        );
-        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
-
-		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;
-    };
-    
-    return (
-        <Box flexDirection="column" height="100%">
-            <Text color="cyan">▲ relaycode dashboard</Text>
-            <Separator />
-            <Box marginY={1}>
-                {renderStatusBar()}
-            </Box>
-            
-            {isModal && (
-                <>
-                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                    <Separator />
-                </>
-            )}
-            
-            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {transactions.length === 0 && (
-                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
-                )}
-                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
-                    const actualIndex = viewOffset + index;
-                    const isExpanded = expandedTransactionId === tx.id;
-                    const isNew = newTransactionIds.has(tx.id);
-                    return (
-                        <React.Fragment key={tx.id}>
-                            <EventStreamItem
-                                transaction={tx}
-                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                                isExpanded={isExpanded}
-                                isNew={isNew}
-                            />
-                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
-                        </React.Fragment>
-                    );
-                })}
-            </Box>
-
-            <Box marginTop={1}><Separator /></Box>
-            {renderFooter()}
-        </Box>
-    );
-};
-
-export default DashboardScreen;
 ```
 
 ## File: src/stores/review.store.ts
@@ -6828,6 +6658,225 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         })),
     },
 }));
+```
+
+## File: src/components/DashboardScreen.tsx
+```typescript
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
+import { useDashboardScreen } from '../hooks/useDashboardScreen';
+import { UI_CONFIG } from '../config/ui.config'; //
+import ActionFooter from './ActionFooter';
+import { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';
+import { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.constants';
+
+// --- Sub-components & Helpers ---
+
+const getStatusIcon = (status: TransactionStatus) => {
+    if (status === 'IN-PROGRESS') return <Spinner type="dots" />;
+    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
+    if (!ui) return <Text> </Text>;
+    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
+};
+
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m`;
+};
+
+const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
+    const stats = transaction.stats;
+    const files = transaction.files || [];
+
+    return (
+        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
+            {stats && (
+                <Text color="gray">
+                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
+                </Text>
+            )}
+             <Box flexDirection="column" paddingLeft={1}>
+                {files.map(file => (
+                     <Text key={file.id}>
+                        <Text color="gray">{FILE_TYPE_MAP[file.type]}</Text> {file.path}
+                    </Text>
+                ))}
+             </Box>
+        </Box>
+    );
+};
+
+const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {
+    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
+    const [isStatusFlashing, setIsStatusFlashing] = useState(false);
+    const prevStatus = useRef(transaction.status);
+
+    useEffect(() => {
+        if (isNew) {
+            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isNew]);
+
+    useEffect(() => {
+        if (prevStatus.current !== transaction.status) {
+            setIsStatusFlashing(true);
+            const timer = setTimeout(() => setIsStatusFlashing(false), 500);
+            prevStatus.current = transaction.status;
+            return () => clearTimeout(timer);
+        }
+    }, [transaction.status]);
+
+    const icon = getStatusIcon(transaction.status);
+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+    const statusText = transaction.status.padEnd(11, ' ');
+    const expandIcon = isExpanded ? '▾' : '▸';
+    
+    const messageNode = transaction.status === 'IN-PROGRESS'
+        ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
+        : transaction.message;
+    
+    const content = (
+        <Text>
+            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}
+            <Text color="gray">{transaction.hash}</Text>
+            {' '}· {messageNode}
+        </Text>
+    );
+
+    if (isSelected) {
+        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;
+    }
+
+    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;
+});
+
+const ConfirmationContent = ({
+    transactionsToConfirm,
+}: {
+    transactionsToConfirm: Transaction[];
+}) => {
+    const actionText = 'APPROVE';
+    
+    return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text>
+                The following {transactionsToConfirm.length} transaction(s) will be approved:
+            </Text>
+            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                {transactionsToConfirm.map(tx => (
+                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                ))}
+            </Box>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const DashboardScreen = () => {
+    const {
+        status,
+        transactions,
+        selectedTransactionIndex,
+        pendingApprovals,
+        pendingCommits,
+        isModal,
+        isProcessing,
+        viewOffset,
+        viewportHeight,
+        transactionsToConfirm,
+        expandedTransactionId,
+        newTransactionIds,
+    } = useDashboardScreen({
+        layoutConfig: UI_CONFIG.layout.dashboard,
+    });
+
+    const renderStatusBar = () => {
+        let statusText: string;
+        let statusIcon: React.ReactNode;
+        switch (status) {
+            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; //
+        }
+
+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
+        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
+
+        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {
+            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        }
+        
+        return (
+            <Text>
+                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+            </Text>
+        );
+    };
+
+    const renderFooter = () => {
+        if (isModal) return (
+            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>
+        );
+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;
+    };
+    
+    return (
+        <Box flexDirection="column" height="100%">
+            <Text color="cyan">▲ relaycode dashboard</Text>
+            <Separator />
+            <Box marginY={1}>
+                {renderStatusBar()}
+            </Box>
+            
+            {isModal && (
+                <>
+                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
+                    <Separator />
+                </>
+            )}
+            
+            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {transactions.length === 0 && (
+                     <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+                )}
+                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                    const actualIndex = viewOffset + index;
+                    const isExpanded = expandedTransactionId === tx.id;
+                    const isNew = newTransactionIds.has(tx.id);
+                    return (
+                        <React.Fragment key={tx.id}>
+                            <EventStreamItem
+                                transaction={tx}
+                                isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                isExpanded={isExpanded}
+                                isNew={isNew}
+                            />
+                            {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                        </React.Fragment>
+                    );
+                })}
+            </Box>
+
+            <Box marginTop={1}><Separator /></Box>
+            {renderFooter()}
+        </Box>
+    );
+};
+
+export default DashboardScreen;
 ```
 
 ## File: src/hooks/useDebugMenu.tsx

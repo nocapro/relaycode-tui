@@ -29,7 +29,7 @@ const CopyScreen = () => {
                 paddingX={2}
                 width="80%"
             >
-                <Text bold color="yellow">▲ relaycode · copy mode</Text>
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
                 <Separator width={Math.floor(width * 0.8) - 4} />
                 <Box flexDirection="column" marginY={1}>
                     <Text>{title}</Text>

@@ -9,7 +9,7 @@ export const UI_CONFIG = {
         collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
     },
     splash: {
-        initialCountdown: 3, // Seconds before auto-skip
+        initialCountdown: 6, // Seconds before auto-skip
     },
     footer: {
         horizontalPadding: 2, // Minimum space from the left/right edges of the screen

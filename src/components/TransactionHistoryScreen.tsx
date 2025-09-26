@@ -96,7 +96,7 @@ const TransactionRow = ({
             <Text color={isSelected ? 'cyan' : undefined}>
                 {isSelected ? '> ' : '  '}
                 {hasSelection && selectionIndicator}
-                {icon} <Text color={uiStatus.color}>{uiStatus.text}</Text> · {tx.hash} · {date} ·{' '}
+                {icon} <Text color={uiStatus.color}>{uiStatus.text}</Text> · <Text color="gray">{tx.hash}</Text> · {date} ·{' '}
                 {tx.message}
             </Text>
             {isExpanded && (
@@ -160,7 +160,7 @@ const TransactionHistoryScreen = () => {
 
     return (
         <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode transaction history</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION HISTORY </Text>
             <Separator />
 
             <Box>
@@ -171,7 +171,7 @@ const TransactionHistoryScreen = () => {
                     <Text>{filterStatus}</Text>
                 )}
                 <Text> · {showingStatus}</Text>
-                {statsStatus && <Text> · {statsStatus}</Text>}
+                {statsStatus && <Text> · <Text color="magenta">{statsStatus}</Text></Text>}
             </Box>
 
             <Box flexDirection="column" marginY={1}>

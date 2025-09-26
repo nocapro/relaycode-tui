@@ -321,7 +321,7 @@ const ReviewScreen = () => {
     return (
         <Box flexDirection="column">
             {/* Header */}
-            <Text color="cyan">▲ relaycode review</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · REVIEW </Text>
             <Separator />
             
             {/* Navigator Section */}

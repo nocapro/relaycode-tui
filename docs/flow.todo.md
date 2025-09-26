@@ -1,13 +1,13 @@
 help screen
 
-1. update the help screen
+1. update the help screen with more items that has not been documented yet
 2. we want borderless UI
 
 ===
 
 splash screen:
 
-1. add random tips infos like `ctrl + v to manual paste in anyscreen`
+1. add random tips infos like `ctrl + v to manual paste in anyscreen` and more
 2. add something like check for update notification
 3. increase splash duration from 3 second to six seconds
 

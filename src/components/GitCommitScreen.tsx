@@ -8,26 +8,29 @@ import { COMMIT_SCREEN_FOOTER_ACTIONS } from '../constants/commit.constants';
 const GitCommitScreen = () => {
     const { transactionsToCommit, finalCommitMessage, isCommitting } = useGitCommitScreen();
 
-    const transactionLines = transactionsToCommit.map(tx => (
-        <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-    ));
+    const messageParts = finalCommitMessage.split('\n');
+    const subject = messageParts[0] || '';
+    const body = messageParts.slice(1).join('\n');
 
     return (
         <Box flexDirection="column">
-            <Text color="cyan">▲ relaycode git commit</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
             <Separator />
             <Box marginY={1} flexDirection="column" paddingX={2}>
                 <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
                 <Box marginTop={1} flexDirection="column">
                     <Text bold>TRANSACTIONS INCLUDED</Text>
-                    {transactionLines}
+                    {transactionsToCommit.map(tx => (
+                        <Text key={tx.id}>- <Text color="gray">{tx.hash}</Text>: {tx.message}</Text>
+                    ))}
                 </Box>
             </Box>
             <Separator />
             <Box marginY={1} flexDirection="column" paddingX={2}>
                 <Text bold>FINAL COMMIT MESSAGE</Text>
-                <Box marginTop={1}>
-                    <Text>{finalCommitMessage}</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text color="yellow">{subject}</Text>
+                    {body ? <Text>{body}</Text> : null}
                 </Box>
             </Box>
             <Separator />

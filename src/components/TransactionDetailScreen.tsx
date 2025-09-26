@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 import Separator from './Separator';
 import DiffScreen from './DiffScreen';
 import ReasonScreen from './ReasonScreen';
+import type { FileChangeType } from '../types/domain.types';
 import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
 import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
 import ActionFooter from './ActionFooter';
@@ -23,6 +24,15 @@ const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
             <Text wrap="wrap">Are you sure?</Text>
         </Box>
     );
+};
+
+const typeColor = (type: FileChangeType) => {
+    switch (type) {
+        case 'ADD': return 'green';
+        case 'DEL': return 'red';
+        case 'REN': return 'yellow';
+        default: return 'white';
+    }
 };
 
 const TransactionDetailScreen = () => {
@@ -48,16 +58,16 @@ const TransactionDetailScreen = () => {
             <Box flexDirection="column">
                 <Text color={isPromptFocused ? 'cyan' : undefined}>
                     {isPromptFocused ? '> ' : '  '}
-                    {isPromptExpanded ? '▾' : '▸'} (P)rompt
+                    {isPromptExpanded ? '▾' : '▸'} (<Text color="cyan" bold>P</Text>)rompt
                 </Text>
                 <Text color={isReasoningFocused ? 'cyan' : undefined}>
                     {isReasoningFocused ? '> ' : '  '}
-                    {isReasoningExpanded ? '▾' : '▸'} (R)easoning{' '}
+                    {isReasoningExpanded ? '▾' : '▸'} (<Text color="cyan" bold>R</Text>)easoning{' '}
                     ({transaction.reasoning?.split('\n\n').length || 0} steps)
                 </Text>
                 <Text color={isFilesFocused ? 'cyan' : undefined}>
                     {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
-                    {isFilesExpanded ? '▾' : '▸'} (F)iles ({files.length})
+                    {isFilesExpanded ? '▾' : '▸'} (<Text color="cyan" bold>F</Text>)iles ({files.length})
                 </Text>
                 {isFilesExpanded && (
                     <Box flexDirection="column" paddingLeft={2}>
@@ -69,7 +79,7 @@ const TransactionDetailScreen = () => {
                              return (
                                 <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
                                     {isFileSelected ? '> ' : '  '}
-                                    {FILE_CHANGE_TYPE_ICONS[file.type]} {file.path}{stats}
+                                    {FILE_CHANGE_TYPE_ICONS[file.type]} <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
                                 </Text>
                             );
                         })}
@@ -142,7 +152,7 @@ const TransactionDetailScreen = () => {
     return (
         <Box flexDirection="column">
             {/* Header */}
-            <Text>▲ relaycode transaction details</Text>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
             <Separator />
             
             {/* Modal takeover for Revert */}
@@ -152,10 +162,10 @@ const TransactionDetailScreen = () => {
             <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
                 {/* Navigator Part A */}
                 <Box flexDirection="column" marginY={1}>
-                    <Text>UUID: {transaction.id}</Text>
-                    <Text>Git: {message}</Text>
-                    <Text>Date: {date} · Status: {status}</Text>
-                    <Text>Stats: {fileStats}</Text>
+                    <Text><Text color="gray">UUID:</Text> {transaction.id}</Text>
+                    <Text><Text color="gray">Git:</Text> {message}</Text>
+                    <Text><Text color="gray">Date:</Text> {date} · <Text color="gray">Status:</Text> {status}</Text>
+                    <Text><Text color="gray">Stats:</Text> {fileStats}</Text>
                 </Box>
                 
                 {/* Navigator Part B */}

@@ -2,12 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { useInput } from 'ink';
 import { useAppStore } from '../stores/app.store';
 import { UI_CONFIG } from '../config/ui.config';
+import { SPLASH_TIPS } from '../constants/splash.constants';
 import { useNotificationStore } from '../stores/notification.store';
 
 export const useSplashScreen = () => {
     const showInitScreen = useAppStore(state => state.actions.showInitScreen);
     const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
     const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+    const [tip, setTip] = useState('');
+    const [updateStatus, setUpdateStatus] = useState('');
     const [visibleSections, setVisibleSections] = useState(new Set<string>());
     const [animationComplete, setAnimationComplete] = useState(false);
 
@@ -23,7 +26,8 @@ export const useSplashScreen = () => {
         clearAllTimeouts();
         setAnimationComplete(true);
         setVisibleLogoLines(100); // A high number to show all lines
-        setVisibleSections(new Set(['tagline', 'version', 'promo', 'links']));
+        setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+        setUpdateStatus('✓ You are up to date.');
         showInitScreen();
     };
 
@@ -69,6 +73,11 @@ export const useSplashScreen = () => {
     useEffect(() => {
         const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
 
+        // Pick a random tip on mount
+        if (!tip) {
+            setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+        }
+
         // 1. Animate logo
         const logoTimer = setInterval(() => {
             setVisibleLogoLines(l => {
@@ -78,9 +87,15 @@ export const useSplashScreen = () => {
                     // 2. Animate sections
                     t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
                     t(() => setVisibleSections(s => new Set(s).add('version')), 300);
-                    t(() => setVisibleSections(s => new Set(s).add('promo')), 500);
-                    t(() => setVisibleSections(s => new Set(s).add('links')), 700);
-                    t(() => setAnimationComplete(true), 900);
+                    t(() => {
+                        setVisibleSections(s => new Set(s).add('updateCheck'));
+                        setUpdateStatus('Checking for updates...');
+                        t(() => setUpdateStatus('✓ You are up to date.'), 1500);
+                    }, 600);
+
+                    t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
+                    t(() => setVisibleSections(s => new Set(s).add('links')), 1000);
+                    t(() => setAnimationComplete(true), 1200);
 
                     return l;
                 }
@@ -93,7 +108,7 @@ export const useSplashScreen = () => {
             clearInterval(logoTimer);
             clearAllTimeouts();
         };
-    }, []);
+    }, [tip]);
 
     useEffect(() => {
         if (!animationComplete) return;
@@ -111,5 +126,5 @@ export const useSplashScreen = () => {
         return () => clearTimeout(timer);
     }, [countdown, showInitScreen, animationComplete]);
 
-    return { countdown, visibleLogoLines, visibleSections, animationComplete };
+    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
 };
