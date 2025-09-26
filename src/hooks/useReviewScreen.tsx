@@ -154,11 +154,11 @@ export const useReviewScreen = () => {
     // --- Input Handlers ---
 
     const handleGlobalInput = (input: string, key: Key): boolean => {
-        if (input === '1') { // For demo purposes
-            startApplySimulation('success'); return true;
+        if (input === '1' && transaction) { // For demo purposes
+            startApplySimulation(transaction.id, 'success'); return true;
         }
-        if (input === '2') { // For demo purposes
-            startApplySimulation('failure'); return true;
+        if (input === '2' && transaction) { // For demo purposes
+            startApplySimulation(transaction.id, 'failure'); return true;
         }
         // The 'q' (quit/back) is now handled by the global hotkey hook.
 

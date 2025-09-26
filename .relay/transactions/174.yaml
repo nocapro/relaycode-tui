@@ -1,0 +1,776 @@
+uuid: 15b170c1-3d77-4c76-a006-2187b47b2a6b
+projectId: relaycode-tui
+createdAt: '2025-09-26T01:37:23.089Z'
+gitCommitMsg: >-
+  fix(build): resolve TS and lint errors from simulation refactor
+
+  - Corrects TypeScript errors (TS2554) by providing the required
+  `transactionId` argument to `startApplySimulation` in all debug-related call
+  sites (`index.tsx` and `useDebugMenu.tsx`). - Fixes an ESLint `no-undef` error
+  in `ReviewProcessingScreen.tsx` by replacing `NodeJS.Timeout` with the more
+  portable `ReturnType<typeof setTimeout>`. - Fixes an ESLint
+  `no-multiple-empty-lines` error in `logger.service.ts`.
+promptSummary: >-
+  The user executed my previous plan and encountered TypeScript and ESLint
+  errors. I am providing fixes for these errors.
+reasoning:
+  - >-
+    You are absolutely right. My previous refactoring of the
+    `startApplySimulation` function signature was correct, but I failed to
+    update all the call sites, specifically in the debug and command-line entry
+    points. This oversight caused the TypeScript compiler errors. Additionally,
+    there are a couple of linting errors to clean up.
+  - >-
+    I will now provide the necessary patches to fix the TypeScript errors by
+    supplying the required `transactionId` and resolve the linting issues.
+  - >-
+    First, I'll fix the call to `startApplySimulation` in `index.tsx` which is
+    used for the `debug-screen` command.
+  - >-
+    Next, I'll update the calls within the debug menu hook to provide the
+    correct transaction IDs for the "Success" and "Failure" simulation menu
+    items.
+  - >-
+    Now, I'll resolve the `no-undef` linting error in
+    `ReviewProcessingScreen.tsx` by using a more portable type for the timer ID,
+    which also makes the code more robust.
+  - >-
+    Finally, I'll fix the `no-multiple-empty-lines` linting error in the logger
+    service.
+  - >-
+    These changes should resolve all build and linting errors, allowing the
+    application to run correctly.
+operations:
+  - type: write
+    path: index.tsx
+    content: >+
+      --- index.tsx
+
+      +++ index.tsx
+
+      @@ -28,7 +28,7 @@
+                       break;
+                   case 'ReviewProcessingScreen':
+                       useReviewStore.getState().actions.load('1'); // Tx '1' is failure case
+      -               
+      useReviewStore.getState().actions.startApplySimulation('failure');
+
+      +               
+      useReviewStore.getState().actions.startApplySimulation('1', 'failure');
+                       break;
+                   case 'ReviewScreen':
+                       useReviewStore.getState().actions.load('1');
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -173,14 +173,14 @@
+                   action: () => {
+                       // Use tx '2' which is the success case in prepareTransactionForReview
+                       reviewActions.load('2');
+      -                reviewActions.startApplySimulation('success');
+      +                reviewActions.startApplySimulation('2', 'success');
+                   },
+               },
+               {
+                   title: 'Review Processing (Failure)',
+                   action: () => {
+                       // Use tx '1' which is the failure case in prepareTransactionForReview
+                       reviewActions.load('1');
+      -                reviewActions.startApplySimulation('failure');
+      +                reviewActions.startApplySimulation('1', 'failure');
+                   },
+               },
+               {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewProcessingScreen.tsx
+    content: |
+      <<<<<<< SEARCH
+          useEffect(() => {
+              let timerId: NodeJS.Timeout | undefined;
+
+              if (isProcessing && processingStartTime) {
+      =======
+          useEffect(() => {
+              let timerId: ReturnType<typeof setTimeout> | undefined;
+
+              if (isProcessing && processingStartTime) {
+      >>>>>>> REPLACE
+    patchStrategy: search-replace
+  - type: write
+    path: src/services/logger.service.ts
+    content: >
+      <<<<<<< SEARCH
+
+      const error = (message: string) =>
+      useLogStore.getState().actions.addLog('ERROR', message);
+
+
+
+      export const LoggerService = {
+
+      =======
+
+      const error = (message: string) =>
+      useLogStore.getState().actions.addLog('ERROR', message);
+
+
+      export const LoggerService = {
+
+      >>>>>>> REPLACE
+    patchStrategy: search-replace
+snapshot:
+  index.tsx: |-
+    import { render } from 'ink';
+    import App from './src/App';
+    import { useAppStore } from './src/stores/app.store';
+    import { useViewStore } from './src/stores/view.store';
+    import { useDetailStore } from './src/stores/detail.store';
+    import { useHistoryStore } from './src/stores/history.store';
+    import { useReviewStore } from './src/stores/review.store';
+    import { useTransactionStore } from './src/stores/transaction.store';
+    import { useCommitStore } from './src/stores/commit.store';
+
+    const main = () => {
+        // Initialize stores
+        useTransactionStore.getState().actions.loadTransactions();
+        const args = process.argv.slice(2);
+
+        if (args[0] === 'debug-screen' && args[1]) {
+            const screenName = args[1].replace(/\.tsx$/, '');
+            const { actions: appActions } = useAppStore.getState();
+
+            switch (screenName) {
+                case 'DashboardScreen':
+                    appActions.showDashboardScreen();
+                    break;
+                case 'GitCommitScreen':
+                    useCommitStore.getState().actions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    break;
+                case 'ReviewProcessingScreen':
+                    useReviewStore.getState().actions.load('1'); // Tx '1' is failure case
+                    useReviewStore.getState().actions.startApplySimulation('failure');
+                    break;
+                case 'ReviewScreen':
+                    useReviewStore.getState().actions.load('1');
+                    appActions.showReviewScreen();
+                    break;
+                case 'TransactionDetailScreen':
+                    useDetailStore.getState().actions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    break;
+                case 'TransactionHistoryScreen':
+                    useHistoryStore.getState().actions.load();
+                    appActions.showTransactionHistoryScreen();
+                    break;
+                case 'InitializationScreen':
+                     appActions.showInitScreen();
+                     break;
+                case 'SplashScreen':
+                     appActions.showSplashScreen();
+                     break;
+                case 'DebugMenu':
+                    appActions.showDashboardScreen();
+                    useViewStore.getState().actions.setActiveOverlay('debug');
+                    break;
+                case 'DebugLogScreen':
+                    appActions.showDashboardScreen();
+                    useViewStore.getState().actions.setActiveOverlay('log');
+                    break;
+                default:
+                    process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                    process.exit(1);
+            }
+        }
+
+        // Check if we're running in an interactive terminal
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+            // eslint-disable-next-line no-console
+            console.clear();
+            render(<App />);
+        } else {
+            process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+            process.exit(1);
+        }
+    };
+
+    main();
+  src/hooks/useDebugMenu.tsx: |-
+    import { useState } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useDashboardStore } from '../stores/dashboard.store';
+    import { useReviewStore } from '../stores/review.store';
+    import { useDetailStore } from '../stores/detail.store';
+    import { useHistoryStore } from '../stores/history.store';
+    import { useInitStore } from '../stores/init.store';
+    import { useCommitStore } from '../stores/commit.store';
+    import { useCopyStore } from '../stores/copy.store';
+    import type { MenuItem } from '../types/debug.types';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { moveIndex } from '../stores/navigation.utils';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { useViewport } from './useViewport';
+    export type { MenuItem } from '../types/debug.types';
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useInput((input, key) => {
+            if (key.upArrow) {
+                setSelectedIndex(i => moveIndex(i, 'up', menuItems.length));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIndex(i => moveIndex(i, 'down', menuItems.length));
+                return;
+            }
+            if (key.pageUp) {
+                setSelectedIndex(i => Math.max(0, i - viewportHeight));
+                return;
+            }
+            if (key.pageDown) {
+                setSelectedIndex(i => Math.min(menuItems.length - 1, i + viewportHeight));
+                return;
+            }
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    item.action();
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+            if (key.escape) {
+                useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+  src/components/ReviewProcessingScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import { useEffect, useState } from 'react';
+
+    import Spinner from 'ink-spinner';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useReviewStore, type ApplyStep } from '../stores/review.store';
+
+    import Separator from './Separator';
+
+
+    const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep;
+    isSubstep?: boolean }) => {
+        if (isSubstep) {
+            let color: string | undefined;
+            let symbol: React.ReactNode;
+
+            switch (step.status) {
+                case 'pending':
+                    symbol = '○';
+                    color = 'gray';
+                    break;
+                case 'active':
+                    symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
+                    break;
+                case 'done':
+                    symbol = '✓';
+                    color = 'green';
+                    break;
+                case 'failed':
+                    symbol = '✗';
+                    color = 'red';
+                    break;
+                default:
+                    symbol = ' ';
+            }
+
+            return (
+                <Text color={color}>
+                    {'     └─ '}{symbol}{' '}{step.title}
+                </Text>
+            );
+        }
+
+        let symbol;
+        let color;
+        switch (step.status) {
+            case 'pending': symbol = '( )'; break;
+            case 'active': symbol = '(●)'; color = 'cyan'; break;
+            case 'done': symbol = '[✓]'; color = 'green'; break;
+            case 'failed': symbol = '[!]'; color = 'red'; break;
+            case 'skipped': symbol = '(-)'; color = 'gray'; break;
+        }
+
+        return (
+            <Box flexDirection="column">
+                <Text>
+                    <Text color={color}>{symbol}</Text> {step.title} {step.duration && !isSubstep && `(${step.duration}s)`}
+                </Text>
+                {step.details && (
+                    <Text color="gray">
+                        {'     └─ '}{step.details}
+                    </Text>
+                )}
+                {step.substeps?.map((sub: ApplyStep, i: number) => (
+                    <ApplyStepRow key={i} step={sub} isSubstep={true} />
+                ))}
+            </Box>
+        );
+    };
+
+
+    const ReviewProcessingScreen = () => {
+        const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
+        const { patchStatus, applySteps, processingStartTime } = useReviewStore(state => ({
+            patchStatus: state.patchStatus,
+            applySteps: state.applySteps,
+            processingStartTime: state.processingStartTime,
+        }));
+        const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
+
+        const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
+        const [elapsedTime, setElapsedTime] = useState(0);
+
+        useEffect(() => {
+            let timerId: NodeJS.Timeout | undefined;
+
+            if (isProcessing && processingStartTime) {
+                timerId = setInterval(() => {
+                    setElapsedTime((Date.now() - processingStartTime) / 1000);
+                }, 50);
+            } else {
+                const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
+                setElapsedTime(totalDuration);
+            }
+
+            return () => {
+                if (timerId) clearInterval(timerId);
+            };
+        }, [isProcessing, processingStartTime, applySteps]);
+
+        const failureCase = patchStatus === 'PARTIAL_FAILURE';
+
+        let footerText;
+        if (isProcessing) {
+            footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing... Please wait.`;
+        } else if (failureCase) {
+            footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning to repair workflow...`;
+        } else {
+            footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...`;
+        }
+
+        if (!transaction) {
+            return <Text>Loading...</Text>;
+        }
+
+        return (
+            <Box flexDirection="column">
+                <Text color="cyan">▲ relaycode apply</Text>
+                <Separator />
+                <Box marginY={1} flexDirection="column">
+                    <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
+                    <Box flexDirection="column" marginTop={1} gap={1}>
+                        {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} />)}
+                    </Box>
+                </Box>
+                <Separator />
+                <Text>{footerText}</Text>
+            </Box>
+        );
+    };
+
+
+    export default ReviewProcessingScreen;
+  src/services/logger.service.ts: >-
+    import { useLogStore } from '../stores/log.store';
+
+
+    let simulatorInterval: ReturnType<typeof setInterval> | null = null;
+
+
+    const mockClipboardContents = [
+        'feat(dashboard): implement new UI components',
+        'const clipboardy = require(\'clipboardy\');',
+        'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890 100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import React from \'react\';',
+        'All changes have been applied successfully. You can now commit them.',
+        '{\n  "id": "123",\n  "status": "PENDING"\n}',
+        'Can you refactor this to use a switch statement?',
+    ];
+
+    let currentClipboardIndex = 0;
+
+
+    const startSimulator = () => {
+        if (simulatorInterval) return;
+
+        // Initial burst of logs to populate the view
+        LoggerService.info('Log simulator started.');
+        LoggerService.debug('Initializing clipboard watcher...');
+        setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
+
+        simulatorInterval = setInterval(() => {
+            const random = Math.random();
+            if (random < 0.6) {
+                LoggerService.debug('Clipboard watcher polling...');
+            } else if (random < 0.8) {
+                LoggerService.debug('No clipboard change detected.');
+            } else {
+                const newContent = mockClipboardContents[currentClipboardIndex]!;
+                currentClipboardIndex = (currentClipboardIndex + 1) % mockClipboardContents.length;
+                const excerpt = newContent.replace(/\n/g, ' ').substring(0, 50).trim();
+                LoggerService.info(`Clipboard content changed. Excerpt: "${excerpt}..."`);
+            }
+        }, 2000);
+    };
+
+
+    const stopSimulator = () => {
+        if (simulatorInterval) {
+            clearInterval(simulatorInterval);
+            simulatorInterval = null;
+            LoggerService.info('Log simulator stopped.');
+        }
+    };
+
+
+    const debug = (message: string) =>
+    useLogStore.getState().actions.addLog('DEBUG', message);
+
+    const info = (message: string) =>
+    useLogStore.getState().actions.addLog('INFO', message);
+
+    const warn = (message: string) =>
+    useLogStore.getState().actions.addLog('WARN', message);
+
+    const error = (message: string) =>
+    useLogStore.getState().actions.addLog('ERROR', message);
+
+
+
+    export const LoggerService = {
+        debug,
+        info,
+        warn,
+        error,
+        startSimulator,
+        stopSimulator,
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 174

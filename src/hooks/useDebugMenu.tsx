@@ -169,10 +169,19 @@ const useDebugMenuActions = () => {
             },
         },
         {
-            title: 'Review Processing',
+            title: 'Review Processing (Success)',
             action: () => {
-                reviewActions.load('2'); // Use tx '2' which has scripts
-                appActions.showReviewProcessingScreen();
+                // Use tx '2' which is the success case in prepareTransactionForReview
+                reviewActions.load('2');
+                reviewActions.startApplySimulation('2', 'success');
+            },
+        },
+        {
+            title: 'Review Processing (Failure)',
+            action: () => {
+                // Use tx '1' which is the failure case in prepareTransactionForReview
+                reviewActions.load('1');
+                reviewActions.startApplySimulation('1', 'failure');
             },
         },
         {

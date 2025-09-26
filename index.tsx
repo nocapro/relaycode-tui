@@ -26,8 +26,8 @@ const main = () => {
                 appActions.showGitCommitScreen();
                 break;
             case 'ReviewProcessingScreen':
-                useReviewStore.getState().actions.load('1');
-                appActions.showReviewProcessingScreen();
+                useReviewStore.getState().actions.load('1'); // Tx '1' is failure case
+                useReviewStore.getState().actions.startApplySimulation('1', 'failure');
                 break;
             case 'ReviewScreen':
                 useReviewStore.getState().actions.load('1');

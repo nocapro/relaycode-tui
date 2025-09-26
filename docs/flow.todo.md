@@ -1,3 +1,16 @@
+=== DONE
+
+review screen: from processing screen upto review screen, the data should be the same.
+
+==== DONE
+
+review processing screen:
+
+1. we need the elapsed time is animated not static or not only refresh at certain event.
+
+2. individual files processing should also has indicator which progressing and done, because the process is parallel
+
+dont forget to update docs/relaycode-tui/review-processing-screen.readme.md for ui changes
 
 === DONE
 

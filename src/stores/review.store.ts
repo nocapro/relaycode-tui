@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { useAppStore } from './app.store';
 import { useTransactionStore } from './transaction.store';
 import { useViewStore } from './view.store';
-import { ReviewService } from '../services/review.service';
+import { ReviewService, type SimulationResult } from '../services/review.service';
 import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS } from '../constants/review.constants';
 import { moveIndex } from './navigation.utils';
+import { sleep } from '../utils';
 import type { FileReviewStatus } from '../types/domain.types';
 
 export interface ApplyStep {
@@ -20,7 +21,8 @@ export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof REVIEW_BODY
 export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
 export type ApplyUpdate =
     | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
-    | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } };
+    | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
+    | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
 
 interface ReviewState {
     patchStatus: PatchStatus;
@@ -30,6 +32,7 @@ interface ReviewState {
     isDiffExpanded: boolean;
     reasoningScrollIndex: number;
     scriptErrorIndex: number;
+    processingStartTime: number | null;
     fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
 
     selectedBulkRepairOptionIndex: number;
@@ -46,7 +49,7 @@ interface ReviewState {
         >) => void;
         setBodyView: (view: ReviewBodyView) => void;
         approve: () => void;
-        startApplySimulation: (scenario: 'success' | 'failure') => void;
+        startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
         tryRepairFile: (fileId: string) => void;
         showBulkRepair: () => void;
         executeBulkRepairOption: (option: number) => Promise<void>;
@@ -60,6 +63,7 @@ interface ReviewState {
         navigateScriptErrorDown: () => void;
         updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
         addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+        updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
         updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
         toggleFileApproval: (fileId: string) => void;
         rejectAllFiles: () => void;
@@ -78,6 +82,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     isDiffExpanded: false,
     reasoningScrollIndex: 0,
     scriptErrorIndex: 0,
+    processingStartTime: null,
     fileReviewStates: new Map(),
     selectedBulkRepairOptionIndex: 0,
     selectedBulkInstructOptionIndex: 0,
@@ -86,13 +91,28 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         load: (transactionId, initialState) => {
             const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
             if (!transaction) return;
-            
-            const { patchStatus, fileReviewStates } = ReviewService.prepareTransactionForReview(transaction);
 
+            // This logic is preserved from the deleted `prepareTransactionForReview`
+            // to allow debug screens to jump directly to a pre-populated review state
+            // without running the full simulation.
+            const isFailureCase = transaction.id === '1';
+            const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+            (transaction.files || []).forEach((file, index) => {
+                if (isFailureCase) {
+                    const isFailedFile = index > 0;
+                    const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                    const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                    fileReviewStates.set(file.id, { status, error });
+                } else {
+                    fileReviewStates.set(file.id, { status: 'APPROVED' });
+                }
+            });
+            const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
             useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
             set({
                 patchStatus,
                 fileReviewStates,
+                processingStartTime: null,
                 selectedItemIndex: 0,
                 bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
                 isDiffExpanded: false,
@@ -129,27 +149,50 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 useAppStore.getState().actions.showDashboardScreen();
             }
         },
-        startApplySimulation: async (scenario) => {
-            const { showReviewProcessingScreen } = useAppStore.getState().actions;
-            const { updateApplyStep, addApplySubstep } = get().actions;
-            set({ applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)) });
+        startApplySimulation: async (transactionId, scenario) => {
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction?.files) return;
+
+            const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
+
+            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+            set({
+                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                processingStartTime: Date.now(),
+                fileReviewStates: new Map(), // Clear previous states
+            });
+
             showReviewProcessingScreen();
-            const simulationGenerator = ReviewService.runApplySimulation(scenario);
-            for await (const update of simulationGenerator) {
+            const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
+            let simulationResult: SimulationResult;
+
+            // Manually iterate to get the return value from the async generator
+            const iterator = simulationGenerator[Symbol.asyncIterator]();
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+                const { value, done } = await iterator.next();
+                if (done) {
+                    simulationResult = value as SimulationResult;
+                    break;
+                }
+                const update = value;
                 if (update.type === 'UPDATE_STEP') {
-                    updateApplyStep(
-                        update.payload.id,
-                        update.payload.status,
-                        update.payload.duration,
-                        update.payload.details,
-                    );
+                    updateApplyStep(update.payload.id, update.payload.status, update.payload.duration, update.payload.details);
                 } else if (update.type === 'ADD_SUBSTEP') {
                     addApplySubstep(update.payload.parentId, update.payload.substep);
+                } else if (update.type === 'UPDATE_SUBSTEP') {
+                    updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
                 }
             }
-            // Transition back to review screen is handled by the processing screen component or a separate flow
-            // For this simulation, we'll assume it transitions back, but the action itself doesn't need to do it.
-            // This avoids a direct dependency from the store to app-level navigation.
+
+            await sleep(1000);
+            set({
+                processingStartTime: null,
+                fileReviewStates: simulationResult.fileReviewStates,
+                patchStatus: simulationResult.patchStatus,
+            });
+            showReviewScreen();
         },
         tryRepairFile: (fileId) => {
             const selectedTransactionId = useViewStore.getState().selectedTransactionId;
@@ -289,6 +332,24 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                         if (duration !== undefined) newStep.duration = duration;
                         if (details !== undefined) newStep.details = details;
                         return newStep;
+                    }
+                    return s;
+                }),
+            }));
+        },
+        updateApplySubstep: (parentId, substepId, status, title) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId && s.substeps) {
+                        const newSubsteps = s.substeps.map(sub => {
+                            if (sub.id === substepId) {
+                                const newSub = { ...sub, status };
+                                if (title) newSub.title = title;
+                                return newSub;
+                            }
+                            return sub;
+                        });
+                        return { ...s, substeps: newSubsteps };
                     }
                     return s;
                 }),

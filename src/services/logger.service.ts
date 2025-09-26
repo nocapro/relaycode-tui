@@ -48,7 +48,6 @@ const info = (message: string) => useLogStore.getState().actions.addLog('INFO', 
 const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
 const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
 
-
 export const LoggerService = {
     debug,
     info,
