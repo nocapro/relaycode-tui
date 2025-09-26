@@ -30,6 +30,7 @@ export interface FileItem {
 export type TransactionStatus =
     | 'PENDING'
     | 'APPLIED'
+    | 'COMMITTING'
     | 'COMMITTED'
     | 'FAILED'
     | 'REVERTED'

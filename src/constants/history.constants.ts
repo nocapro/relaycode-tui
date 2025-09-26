@@ -17,6 +17,7 @@ export const TRANSACTION_STATUS_UI = {
     HANDOFF: { text: '→ Handoff', color: 'magenta' },
     REVERTED: { text: '↩ Reverted', color: 'gray' },
     APPLIED: { text: '✓ Applied', color: 'blue' },
+    COMMITTING: { text: '→ Committing', color: 'magenta' },
     PENDING: { text: '? Pending', color: 'yellow' },
     FAILED: { text: '✗ Failed', color: 'red' },
 } as const;

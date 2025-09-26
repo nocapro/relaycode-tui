@@ -1,0 +1,596 @@
+uuid: c255b80a-995b-4ac5-9831-50e585fcd233
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:55:06.284Z'
+gitCommitMsg: >-
+  feat(dashboard): Animate commit process on event stream
+
+  Refactors the git commit workflow to provide immediate visual feedback on the
+  dashboard.
+
+  - The application now navigates to the dashboard screen instantly upon
+  confirming a commit. - A new `COMMITTING` transaction status has been
+  introduced, which displays a spinner and animates the event stream item on the
+  dashboard. - The commit service now performs a multi-stage status update
+  (`APPLIED` -> `COMMITTING` -> `COMMITTED`). - Commit failures are now handled
+  via global notifications instead of an error state on the commit screen, which
+  is consistent with the new navigation flow.
+promptSummary: >-
+  The user wants to see the "committing" process animate on the dashboard
+  screen, similar to how the "approving" process works. This requires
+  refactoring the commit flow to navigate to the dashboard *before* the
+  asynchronous commit operation begins.
+reasoning:
+  - >-
+    This is an excellent request that requires a thoughtful refactor of the
+    application's flow to achieve the desired visual effect. The core idea is to
+    navigate back to the dashboard *before* the commit process begins, allowing
+    the UI to react to the intermediate states of the commit. Here is the
+    step-by-step implementation.
+  - '### Part 1: Expanding Domain and UI Constants'
+  - >-
+    First, I'll introduce a new transaction status, `'COMMITTING'`, to represent
+    the in-flight state. Then I will update the UI constants to ensure this new
+    status is displayed correctly on the dashboard with a spinner and animated
+    text color.
+  - >-
+    I will add `'COMMITTING'` to the `TransactionStatus` type in
+    `src/types/domain.types.ts`.
+  - >-
+    Next, I'll define the visual representation for the `'COMMITTING'` status in
+    `src/constants/history.constants.ts`.
+  - >-
+    Finally for this part, I'll update the `DashboardScreen` component to
+    recognize and render the `'COMMITTING'` status, ensuring it shows a spinner
+    and uses the same text animation as the `'IN-PROGRESS'` status.
+  - '### Part 2: Refactoring the Commit Service and Store'
+  - >-
+    Now, I will modify the commit logic to be a multi-stage process. The
+    `commit` service will first set the transaction status to `'COMMITTING'`,
+    perform its work, and then set the final status to `'COMMITTED'`. In case of
+    a failure, it will revert the status back to `'APPLIED'` to allow for a
+    retry. The `commit` action in the store will be updated to handle failures
+    by dispatching a global notification instead of relying on the UI of the
+    now-unmounted `GitCommitScreen`.
+  - >-
+    I'll update `src/services/commit.service.ts` to implement the multi-phase
+    status update.
+  - >-
+    Next, I'll adjust the `commit` action in `src/stores/commit.store.ts` to
+    dispatch a notification on failure and remove its return value.
+  - '### Part 3: Adjusting the Commit Screen Flow'
+  - >-
+    Finally, I'll alter the `useGitCommitScreen` hook. The `handleCommit`
+    function will now immediately navigate back to the dashboard and then
+    trigger the commit process as a "fire-and-forget" action. This ensures the
+    user is on the dashboard screen to witness the status changes and
+    animations.
+  - >-
+    These changes collectively implement the desired feature, making the commit
+    process a more integrated and visually informative part of the dashboard
+    experience.
+operations:
+  - type: write
+    path: src/types/domain.types.ts
+    content: |+
+      --- src/types/domain.types.ts
+      +++ src/types/domain.types.ts
+      @@ -21,6 +21,7 @@
+       export type TransactionStatus =
+           | 'PENDING'
+           | 'APPLIED'
+      +    | 'COMMITTING'
+           | 'COMMITTED'
+           | 'FAILED'
+           | 'REVERTED'
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/history.constants.ts
+    content: |+
+      --- src/constants/history.constants.ts
+      +++ src/constants/history.constants.ts
+      @@ -11,6 +11,7 @@
+           HANDOFF: { text: '→ Handoff', color: 'magenta' },
+           REVERTED: { text: '↩ Reverted', color: 'gray' },
+           APPLIED: { text: '✓ Applied', color: 'blue' },
+      +    COMMITTING: { text: '→ Committing', color: 'magenta' },
+           PENDING: { text: '? Pending', color: 'yellow' },
+           FAILED: { text: '✗ Failed', color: 'red' },
+       } as const;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: >+
+      --- src/components/DashboardScreen.tsx
+
+      +++ src/components/DashboardScreen.tsx
+
+      @@ -9,7 +9,7 @@
+       // --- Sub-components & Helpers ---
+       
+       const getStatusIcon = (status: TransactionStatus) => {
+      -    if (status === 'IN-PROGRESS') return <Spinner type="dots" />;
+
+      +    if (status === 'IN-PROGRESS' || status === 'COMMITTING') return
+      <Spinner type="dots" />;
+           const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
+           if (!ui) return <Text> </Text>;
+           return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
+      @@ -62,7 +62,7 @@
+           const expandIcon = isExpanded ? '▾' : '▸';
+           
+           const messageNode =
+      -        transaction.status === 'IN-PROGRESS'
+
+      +        transaction.status === 'IN-PROGRESS' || transaction.status ===
+      'COMMITTING'
+                   ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
+                   : transaction.message;
+           
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/commit.service.ts
+    content: >+
+      --- src/services/commit.service.ts
+
+      +++ src/services/commit.service.ts
+
+      @@ -32,22 +32,27 @@
+       
+       const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
+           LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+      +    const { updateTransactionStatus } =
+      useTransactionStore.getState().actions;
+
+      +    const txIds = transactionsToCommit.map(tx => tx.id);
+
+      +
+
+      +    // Phase 1: Mark as 'COMMITTING'
+
+      +    txIds.forEach(id => {
+
+      +        updateTransactionStatus(id, 'COMMITTING');
+
+      +    });
+       
+           await sleep(500);
+       
+           if (forceFailure) {
+               LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+      +        // Revert status back to APPLIED on failure to allow retry
+
+      +        txIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+               throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
+           }
+       
+           // In a real app, this would run git commands.
+      -    // For simulation, we'll just update the transaction store.
+
+      -    const { updateTransactionStatus } =
+      useTransactionStore.getState().actions;
+
+      -
+
+      -    const txIds = transactionsToCommit.map(tx => tx.id);
+
+      -
+
+      +    // Phase 2: Mark as 'COMMITTED'
+           txIds.forEach(id => {
+               updateTransactionStatus(id, 'COMMITTED');
+           });
+           LoggerService.info('Commit successful.');
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/commit.store.ts
+    content: >+
+      --- src/stores/commit.store.ts
+
+      +++ src/stores/commit.store.ts
+
+      @@ -1,6 +1,7 @@
+       import { create } from 'zustand';
+       import { CommitService } from '../services/commit.service';
+       import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
+      +import { useNotificationStore } from './notification.store';
+       
+       interface CommitState {
+           finalCommitMessage: string;
+      @@ -8,7 +9,7 @@
+           commitError: string | null;
+           actions: {
+               prepareCommitScreen: () => void;
+      -        commit: (forceFailure?: boolean) => Promise<{ success: boolean
+      }>;
+
+      +        commit: (forceFailure?: boolean) => Promise<void>;
+               resetCommitState: () => void;
+           }
+       }
+      @@ -25,12 +26,16 @@
+                   set({ isCommitting: true, commitError: null });
+                   try {
+                       const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                       await CommitService.commit(appliedTransactions, forceFailure);
+                       set({ isCommitting: false });
+      -                return { success: true };
+                   } catch (e) {
+      -                set({ isCommitting: false, commitError: (e as
+      Error).message });
+
+      -                return { success: false };
+
+      +                const errorMessage = (e as Error).message;
+
+      +                set({ isCommitting: false, commitError: errorMessage });
+
+      +                useNotificationStore.getState().actions.show({
+
+      +                    type: 'error',
+
+      +                    title: 'Commit Failed',
+
+      +                    message: errorMessage,
+
+      +                });
+                   }
+               },
+               resetCommitState: () => {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGitCommitScreen.tsx
+    content: >+
+      --- src/hooks/useGitCommitScreen.tsx
+
+      +++ src/hooks/useGitCommitScreen.tsx
+
+      @@ -11,12 +11,9 @@
+           const { commit, resetCommitState } = useCommitStore(s => s.actions);
+           const { showDashboardScreen } = useAppStore(s => s.actions);
+       
+      -    const handleCommit = async (forceFailure?: boolean) => {
+
+      -        const { success } = await commit(forceFailure);
+
+      -        if (success) {
+
+      -            showDashboardScreen();
+
+      -        }
+
+      +    const handleCommit = (forceFailure?: boolean) => {
+
+      +        showDashboardScreen();
+
+      +        commit(forceFailure); // Fire-and-forget to allow dashboard to
+      show animation
+           };
+       
+           const openCopyMode = () => {
+
+    patchStrategy: standard-diff
+snapshot:
+  src/types/domain.types.ts: >-
+    // --- Core Domain Models ---
+
+
+    /** The type of change applied to a file. */
+
+    export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
+
+
+    /** The review status of a file within a transaction. */
+
+    export type FileReviewStatus = 'FAILED' | 'APPROVED' | 'REJECTED' |
+    'AWAITING' | 'RE_APPLYING';
+
+
+    /** The result of a script execution. */
+
+    export interface ScriptResult {
+        command: string;
+        success: boolean;
+        duration: number;
+        summary: string;
+        output: string;
+    }
+
+
+    /** The unified representation of a file change within a transaction. */
+
+    export interface FileItem {
+        id: string;
+        path: string;
+        diff: string;
+        linesAdded: number;
+        linesRemoved: number;
+        type: FileChangeType;
+        strategy?: 'replace' | 'standard-diff';
+    }
+
+
+    /** The lifecycle status of a transaction. */
+
+    export type TransactionStatus =
+        | 'PENDING'
+        | 'APPLIED'
+        | 'COMMITTED'
+        | 'FAILED'
+        | 'REVERTED'
+        | 'IN-PROGRESS'
+        | 'HANDOFF';
+
+    /** The central data model for a code modification transaction. */
+
+    export interface Transaction {
+        id: string;
+        timestamp: number;
+        status: TransactionStatus;
+        hash: string;
+        message: string;
+        prompt?: string;
+        reasoning?: string;
+        error?: string;
+        files?: FileItem[];
+        scripts?: ScriptResult[];
+        stats?: {
+            files: number;
+            linesAdded: number;
+            linesRemoved: number;
+        };
+    }
+  src/constants/history.constants.ts: |-
+    import type { ActionItem } from '../types/actions.types';
+
+    export const HISTORY_VIEW_MODES = {
+        LIST: 'LIST',
+        FILTER: 'FILTER',
+        BULK_ACTIONS: 'BULK_ACTIONS',
+    } as const;
+
+    export const HISTORY_ITEM_PATH_SEGMENTS = {
+        FILE: '/file/',
+        PROMPT: '/prompt',
+        REASONING: '/reasoning',
+    } as const;
+
+    export const TRANSACTION_STATUS_UI = {
+        COMMITTED: { text: '✓ Committed', color: 'green' },
+        HANDOFF: { text: '→ Handoff', color: 'magenta' },
+        REVERTED: { text: '↩ Reverted', color: 'gray' },
+        APPLIED: { text: '✓ Applied', color: 'blue' },
+        PENDING: { text: '? Pending', color: 'yellow' },
+        FAILED: { text: '✗ Failed', color: 'red' },
+    } as const;
+
+    export const FILE_TYPE_MAP = {
+        MOD: '[MOD]',
+        ADD: '[ADD]',
+        DEL: '[DEL]',
+        REN: '[REN]',
+    } as const;
+
+    export const BULK_ACTIONS_OPTIONS = [
+        '(1) Revert Selected Transactions',
+        "(2) Mark as 'Git Committed'",
+        '(3) Delete Selected Transactions (from Relaycode history)',
+        '(Esc) Cancel',
+    ] as const;
+
+    export const HISTORY_FOOTER_ACTIONS = {
+        FILTER_MODE: [{ key: 'Enter', label: 'Apply Filter & Return' }, { key: 'Esc', label: 'Cancel' }] as const,
+        BULK_MODE: { text: 'Choose an option [1-3] or (Esc) Cancel' } as const,
+        LIST_MODE: (openActionLabel: string, hasSelection: boolean): ActionItem[] => {
+            const actions: ActionItem[] = [
+                { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+                { key: '→', label: 'Expand' },
+                { key: '←', label: 'Collapse' },
+                { key: 'Spc', label: 'Select' },
+                { key: 'Ent', label: 'Details' },
+                { key: 'O', label: openActionLabel },
+                { key: 'F', label: 'Filter' },
+            ];
+            if (hasSelection) {
+                actions.push({ key: 'C', label: 'Copy' }, { key: 'B', label: 'Bulk' });
+            }
+            return actions;
+        },
+    };
+  src/services/commit.service.ts: >-
+    import type { Transaction } from '../types/domain.types';
+
+    import { sleep } from '../utils';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { LoggerService } from './logger.service';
+
+
+    const generateCommitMessage = (transactions: Transaction[]): string => {
+        LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
+        if (transactions.length === 0) {
+            LoggerService.warn('generateCommitMessage called with 0 transactions.');
+            return '';
+        }
+        // Using a more complex aggregation for better demo, based on the readme
+        const title = 'feat: implement new dashboard and clipboard logic';
+        const bodyPoints = [
+            '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+            '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+        ];
+
+        if (transactions.length === 1 && transactions[0]) {
+            LoggerService.debug('Using single transaction message for commit.');
+            return transactions[0].message;
+        }
+
+        LoggerService.debug('Using aggregated message for commit.');
+        return `${title}\n\n${bodyPoints.join('\n\n')}`;
+    };
+
+
+    const getGitCommitCommand = (commitMessage: string): string => {
+        const subject = commitMessage.split('\n')[0] || '';
+        return `git add . && git commit -m "${subject.replace(/"/g, '\\"')}"`;
+    };
+
+
+    const commit = async (transactionsToCommit: Transaction[], forceFailure?:
+    boolean): Promise<void> => {
+        LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+
+        await sleep(500);
+
+        if (forceFailure) {
+            LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+            throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
+        }
+
+        // In a real app, this would run git commands.
+        // For simulation, we'll just update the transaction store.
+        const { updateTransactionStatus } = useTransactionStore.getState().actions;
+
+        const txIds = transactionsToCommit.map(tx => tx.id);
+
+        txIds.forEach(id => {
+            updateTransactionStatus(id, 'COMMITTED');
+        });
+        LoggerService.info('Commit successful.');
+    };
+
+
+    export const CommitService = {
+        generateCommitMessage,
+        getGitCommitCommand,
+        commit,
+    };
+  src/components/DashboardScreen.tsx: "import React, { useState, useEffect, useRef } from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport Separator from './Separator';\nimport type { Transaction, TransactionStatus } from '../types/domain.types';\nimport { useDashboardScreen } from '../hooks/useDashboardScreen';\nimport { UI_CONFIG } from '../config/ui.config'; //\nimport ActionFooter from './ActionFooter';\nimport { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';\nimport { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.constants';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    if (status === 'IN-PROGRESS') return <Spinner type=\"dots\" />;\n    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];\n    if (!ui) return <Text> </Text>;\n    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));\n    if (seconds < 60) return `${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `${minutes}m`;\n};\n\nconst ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {\n    const stats = transaction.stats;\n    const files = transaction.files || [];\n\n    return (\n        <Box flexDirection=\"column\" paddingLeft={4} marginBottom={1} borderStyle=\"round\" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor=\"gray\">\n            {stats && (\n                <Text color=\"gray\">\n                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}\n                </Text>\n            )}\n             <Box flexDirection=\"column\" paddingLeft={1}>\n                {files.map(file => (\n                     <Text key={file.id}>\n                        <Text color=\"gray\">{FILE_TYPE_MAP[file.type]}</Text> {file.path}\n                    </Text>\n                ))}\n             </Box>\n        </Box>\n    );\n};\n\nconst EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {\n    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);\n    const [isStatusFlashing, setIsStatusFlashing] = useState(false);\n    const prevStatus = useRef(transaction.status);\n\n    useEffect(() => {\n        if (isNew) {\n            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);\n            return () => clearTimeout(timer);\n        }\n    }, [isNew]);\n\n    useEffect(() => {\n        if (prevStatus.current !== transaction.status) {\n            setIsStatusFlashing(true);\n            const timer = setTimeout(() => setIsStatusFlashing(false), 500);\n            prevStatus.current = transaction.status;\n            return () => clearTimeout(timer);\n        }\n    }, [transaction.status]);\n\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    const expandIcon = isExpanded ? '▾' : '▸';\n    \n    const messageNode =\n        transaction.status === 'IN-PROGRESS'\n            ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>\n            : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}\n            <Text color=\"gray\">{transaction.hash}</Text>\n            {' '}· {messageNode}\n        </Text>\n    );\n\n    if (isSelected) {\n        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;\n    }\n\n    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;\n});\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n        expandedTransactionId,\n        newTransactionIds,\n    } = useDashboardScreen({\n        layoutConfig: UI_CONFIG.layout.dashboard,\n    });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; //\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n\t\treturn <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD({\n            status,\n            hasPending: pendingApprovals > 0,\n            hasApplied: pendingCommits > 0,\n        })} />;\n    };\n    \n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            <Text color=\"cyan\">▲ relaycode dashboard</Text>\n            <Separator />\n            <Box marginY={1}>\n                {renderStatusBar()}\n            </Box>\n            \n            {isModal && (\n                <>\n                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                    <Separator />\n                </>\n            )}\n            \n            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {transactions.length === 0 && (\n                     <Box paddingLeft={2}><Text color=\"gray\">Listening for changes... no events yet.</Text></Box>\n                )}\n                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                    const actualIndex = viewOffset + index;\n                    const isExpanded = expandedTransactionId === tx.id;\n                    const isNew = newTransactionIds.has(tx.id);\n                    return (\n                        <React.Fragment key={tx.id}>\n                            <EventStreamItem\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                                isExpanded={isExpanded}\n                                isNew={isNew}\n                            />\n                            {isExpanded && <ExpandedEventInfo transaction={tx} />}\n                        </React.Fragment>\n                    );\n                })}\n            </Box>\n\n            <Box marginTop={1}><Separator /></Box>\n            {renderFooter()}\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/stores/commit.store.ts: >-
+    import { create } from 'zustand';
+
+    import { CommitService } from '../services/commit.service';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    './transaction.store';
+
+
+    interface CommitState {
+        finalCommitMessage: string;
+        isCommitting: boolean;
+        commitError: string | null;
+        actions: {
+            prepareCommitScreen: () => void;
+            commit: (forceFailure?: boolean) => Promise<{ success: boolean }>;
+            resetCommitState: () => void;
+        }
+    }
+
+
+    export const useCommitStore = create<CommitState>((set) => ({
+        finalCommitMessage: '',
+        isCommitting: false,
+        commitError: null,
+        actions: {
+            prepareCommitScreen: () => {
+                const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
+                set({ finalCommitMessage });
+            },
+            commit: async (forceFailure) => {
+                set({ isCommitting: true, commitError: null });
+                try {
+                    const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                    await CommitService.commit(appliedTransactions, forceFailure);
+                    set({ isCommitting: false });
+                    return { success: true };
+                } catch (e) {
+                    set({ isCommitting: false, commitError: (e as Error).message });
+                    return { success: false };
+                }
+            },
+            resetCommitState: () => {
+                set({ isCommitting: false, commitError: null });
+            },
+        },
+    }));
+  src/hooks/useGitCommitScreen.tsx: >-
+    import { useInput } from 'ink';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { CopyService } from '../services/copy.service';
+
+    import { CommitService } from '../services/commit.service';
+
+
+    export const useGitCommitScreen = () => {
+        const { finalCommitMessage, isCommitting, commitError } = useCommitStore();
+        const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+        const { commit, resetCommitState } = useCommitStore(s => s.actions);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const handleCommit = async (forceFailure?: boolean) => {
+            const { success } = await commit(forceFailure);
+            if (success) {
+                showDashboardScreen();
+            }
+        };
+
+        const openCopyMode = () => {
+            const items = CopyService.getCopyItemsForCommit(transactionsToCommit, finalCommitMessage);
+            useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+        };
+
+        useInput((_, key) => {
+            if (isCommitting) return;
+
+            if (commitError) {
+                if (key.escape) {
+                    resetCommitState();
+                    showDashboardScreen();
+                } else if (_.toLowerCase() === 'r') {
+                    handleCommit();
+                } else if (_.toLowerCase() === 'c') {
+                    const command = CommitService.getGitCommitCommand(finalCommitMessage);
+                    useNotificationStore.getState().actions.show({
+                        type: 'success',
+                        title: 'Copied to Clipboard',
+                        // This is a mock clipboard write for the demo
+                        message: `Command copied: ${command}`,
+                    });
+                }
+                return;
+            }
+
+            if (key.return) {
+                handleCommit();
+            } else if (key.escape) {
+                showDashboardScreen();
+            } else if (_.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+        });
+
+        return { transactionsToCommit, finalCommitMessage, isCommitting, commitError };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 198

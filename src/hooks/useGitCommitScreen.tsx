@@ -13,11 +13,9 @@ export const useGitCommitScreen = () => {
     const { commit, resetCommitState } = useCommitStore(s => s.actions);
     const { showDashboardScreen } = useAppStore(s => s.actions);
 
-    const handleCommit = async (forceFailure?: boolean) => {
-        const { success } = await commit(forceFailure);
-        if (success) {
-            showDashboardScreen();
-        }
+    const handleCommit = (forceFailure?: boolean) => {
+        showDashboardScreen();
+        commit(forceFailure); // Fire-and-forget to allow dashboard to show animation
     };
 
     const openCopyMode = () => {

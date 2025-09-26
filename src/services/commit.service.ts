@@ -32,20 +32,25 @@ const getGitCommitCommand = (commitMessage: string): string => {
 
 const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
     LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
+    const txIds = transactionsToCommit.map(tx => tx.id);
+
+    // Phase 1: Mark as 'COMMITTING'
+    txIds.forEach(id => {
+        updateTransactionStatus(id, 'COMMITTING');
+    });
 
     await sleep(500);
 
     if (forceFailure) {
         LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+        // Revert status back to APPLIED on failure to allow retry
+        txIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
         throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
     }
 
     // In a real app, this would run git commands.
-    // For simulation, we'll just update the transaction store.
-    const { updateTransactionStatus } = useTransactionStore.getState().actions;
-
-    const txIds = transactionsToCommit.map(tx => tx.id);
-
+    // Phase 2: Mark as 'COMMITTED'
     txIds.forEach(id => {
         updateTransactionStatus(id, 'COMMITTED');
     });

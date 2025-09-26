@@ -148,51 +148,6 @@ const NotificationScreen = () => {
 export default NotificationScreen;
 ```
 
-## File: src/constants/commit.constants.ts
-```typescript
-export const COMMIT_FOOTER_ACTIONS = {
-    BASE: [
-        { key: 'Enter', label: 'Confirm & Commit' },
-        { key: 'C', label: 'Copy' },
-        { key: 'Esc', label: 'Cancel' },
-    ] as const,
-    FAILURE: [
-        { key: 'R', label: 'Retry' }, { key: 'C', label: 'Copy Command' }, { key: 'Esc', label: 'Cancel' },
-    ] as const,
-};
-```
-
-## File: src/constants/dashboard.constants.ts
-```typescript
-import type { ActionItem } from '../types/actions.types';
-
-export const DASHBOARD_STATUS = {
-    LISTENING: 'LISTENING',
-    PAUSED: 'PAUSED',
-    CONFIRM_APPROVE: 'CONFIRM_APPROVE',
-    APPROVING: 'APPROVING',
-} as const;
-
-type DashboardStatusValue = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
-
-export const DASHBOARD_FOOTER_ACTIONS = {
-    MODAL: [
-        { key: 'Enter', label: 'Confirm' },
-        { key: 'Esc', label: 'Cancel' },
-    ] as const,
-    STANDARD: (status: DashboardStatusValue): ActionItem[] => [
-        { key: '↑↓', label: 'Nav' },
-        { key: '→/Ent', label: 'View' },
-        { key: '←', label: 'Collapse' },
-        { key: 'L', label: 'Log' },
-        { key: 'A', label: 'Approve All' },
-        { key: 'C', label: 'Commit' },
-        { key: 'P', label: status === DASHBOARD_STATUS.PAUSED ? 'Resume' : 'Pause' },
-        { key: 'Q', label: 'Quit' },
-    ],
-};
-```
-
 ## File: src/constants/debug.constants.ts
 ```typescript
 import type { ActionItem } from '../types/actions.types';
@@ -226,6 +181,7 @@ export const TRANSACTION_STATUS_UI = {
     HANDOFF: { text: '→ Handoff', color: 'magenta' },
     REVERTED: { text: '↩ Reverted', color: 'gray' },
     APPLIED: { text: '✓ Applied', color: 'blue' },
+    COMMITTING: { text: '→ Committing', color: 'magenta' },
     PENDING: { text: '? Pending', color: 'yellow' },
     FAILED: { text: '✗ Failed', color: 'red' },
 } as const;
@@ -283,40 +239,6 @@ export const INITIAL_CONFIGURE_TASKS: Task[] = [
     { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
     { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
 ];
-```
-
-## File: src/constants/log.constants.ts
-```typescript
-export const MAX_LOGS = 200;
-
-export const DEBUG_LOG_MODES = {
-    LIST: 'LIST',
-    FILTER: 'FILTER',
-} as const;
-
-export const LOG_LEVEL_COLORS = {
-    DEBUG: 'gray',
-    INFO: 'white',
-    WARN: 'yellow',
-    ERROR: 'red',
-};
-
-export const LOG_LEVEL_TAGS = {
-    DEBUG: { color: 'white', backgroundColor: 'gray' },
-    INFO: { color: 'black', backgroundColor: 'cyan' },
-    WARN: { color: 'black', backgroundColor: 'yellow' },
-    ERROR: { color: 'white', backgroundColor: 'red' },
-};
-
-export const DEBUG_LOG_FOOTER_ACTIONS = {
-    FILTER_MODE: [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }] as const,
-    LIST_MODE: [
-        { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
-        { key: 'F', label: 'Filter' },
-        { key: 'C', label: 'Clear' },
-        { key: 'Esc/Ctrl+L', label: 'Close' },
-    ] as const,
-};
 ```
 
 ## File: src/constants/notification.constants.ts
@@ -452,109 +374,6 @@ export const useNotificationScreen = () => {
         notification,
         countdown,
     };
-};
-```
-
-## File: src/services/clipboard.service.ts
-```typescript
-import { useTransactionStore, type Transaction } from '../stores/transaction.store';
-import { useNotificationStore } from '../stores/notification.store';
-import { useReviewStore } from '../stores/review.store';
-import { LoggerService } from './logger.service';
-
-const MOCK_VALID_PATCH = `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
-index 12345..67890 100644
---- a/src/components/Button.tsx
-+++ b/src/components/Button.tsx
-@@ -1,5 +1,6 @@
--import React from 'react';
-+import React, { useState } from 'react';
-
- const Button = () => <button>Click Me</button>;
-
- export default Button;
-`;
-
-const MOCK_INVALID_TEXT = 'This is just some regular text, not a patch.';
-
-const createTransactionFromPatch = (patchContent: string): Transaction => {
-    // In a real app, we would parse this. For demo, we'll create a mock.
-    const lines = patchContent.split('\n');
-    const linesAdded = lines.filter(l => l.startsWith('+')).length;
-    const linesRemoved = lines.filter(l => l.startsWith('-')).length;
-    const filePath = lines.find(l => l.startsWith('--- a/'))?.split(' a/')[1] || 'unknown/file.ts';
-
-    return {
-        id: (Math.random() * 1000).toFixed(0),
-        timestamp: Date.now(),
-        status: 'PENDING',
-        hash: Math.random().toString(16).substring(2, 10),
-        message: 'feat: apply patch from clipboard',
-        prompt: 'A patch was manually pasted into the application.',
-        reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
-        files: [
-            {
-                id: `${(Math.random() * 1000).toFixed(0)}-1`,
-                type: 'MOD',
-                path: filePath,
-                linesAdded,
-                linesRemoved,
-                diff: patchContent,
-                strategy: 'standard-diff',
-            },
-        ],
-        stats: {
-            files: 1,
-            linesAdded,
-            linesRemoved,
-        },
-    };
-};
-
-/**
- * Simulates processing the clipboard content.
- * @param forceValidPatch For debug purposes, force the outcome. If undefined, it will be random.
- */
-const processClipboardContent = async (forceValidPatch?: boolean) => {
-    LoggerService.info('Manual paste detected. Processing clipboard content...');
-    
-    // Simulate reading from clipboardy
-    const isActuallyValid = forceValidPatch === true || (forceValidPatch === undefined && Math.random() > 0.5);
-    const clipboardContent = isActuallyValid ? MOCK_VALID_PATCH : MOCK_INVALID_TEXT;
-
-    // Simulate checking if it's a valid patch
-    if (clipboardContent.includes('diff --git')) {
-        LoggerService.debug('Valid patch detected in clipboard. Creating transaction.');
-        const newTransaction = createTransactionFromPatch(clipboardContent);
-
-        // Add to store so it exists for the review process
-        useTransactionStore.getState().actions.addTransaction(newTransaction);
-
-        // Immediately start the review simulation
-        LoggerService.debug(`Starting apply simulation for new transaction ${newTransaction.id}`);
-        // Forcing 'success' scenario for pasted patches. The simulation itself can
-        // result in a failure state which is then handled by the review screen.
-        useReviewStore.getState().actions.startApplySimulation(newTransaction.id, 'success');
-
-        useNotificationStore.getState().actions.show({
-            type: 'info',
-            title: 'Processing Pasted Patch',
-            message: `Applying new transaction "${newTransaction.hash}"...`,
-            duration: 2,
-        });
-    } else {
-        LoggerService.debug('No valid patch detected in clipboard content.');
-        useNotificationStore.getState().actions.show({
-            type: 'info',
-            title: 'Clipboard Ignored',
-            message: 'Pasted content was not a valid patch.',
-            duration: 3,
-        });
-    }
-};
-
-export const ClipboardService = {
-    processClipboardContent,
 };
 ```
 
@@ -701,54 +520,95 @@ export const SCREENS_WITH_DASHBOARD_BACK_ACTION = [
 ];
 ```
 
-## File: src/constants/detail.constants.ts
+## File: src/constants/commit.constants.ts
+```typescript
+export const COMMIT_FOOTER_ACTIONS = {
+    BASE: [
+        { key: 'Enter', label: 'Confirm & Commit' },
+        { key: 'C', label: 'Copy' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const,
+    FAILURE: [
+        { key: 'R', label: 'Retry' }, { key: 'C', label: 'Copy Command' }, { key: 'Esc', label: 'Cancel' },
+    ] as const,
+};
+```
+
+## File: src/constants/dashboard.constants.ts
 ```typescript
 import type { ActionItem } from '../types/actions.types';
 
-/**
- * Constants for the Transaction Detail screen.
- */
-export const NAVIGATOR_SECTIONS = {
-    PROMPT: 'PROMPT',
-    REASONING: 'REASONING',
-    FILES: 'FILES',
+export const DASHBOARD_STATUS = {
+    LISTENING: 'LISTENING',
+    PAUSED: 'PAUSED',
+    CONFIRM_APPROVE: 'CONFIRM_APPROVE',
+    APPROVING: 'APPROVING',
 } as const;
 
-export const DETAIL_BODY_VIEWS = {
-    PROMPT: 'PROMPT',
-    REASONING: 'REASONING',
-    FILES_LIST: 'FILES_LIST',
-    DIFF_VIEW: 'DIFF_VIEW',
-    REVERT_CONFIRM: 'REVERT_CONFIRM',
-    NONE: 'NONE',
-} as const;
+type DashboardStatusValue = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
 
-export const FILE_CHANGE_TYPE_ICONS = {
-    MOD: '[MOD]',
-    ADD: '[ADD]',
-    DEL: '[DEL]',
-    REN: '[REN]',
-} as const;
+export interface DashboardStandardActionsOptions {
+    status: DashboardStatusValue;
+    hasPending: boolean;
+    hasApplied: boolean;
+}
 
-export const DETAIL_FOOTER_ACTIONS = {
-    REVERT_CONFIRM: [
-        { key: 'Enter', label: 'Confirm Revert' },
+export const DASHBOARD_FOOTER_ACTIONS = {
+    MODAL: [
+        { key: 'Enter', label: 'Confirm' },
         { key: 'Esc', label: 'Cancel' },
     ] as const,
-    BASE: (openActionLabel: string): ActionItem[] => [
-        { key: 'C', label: 'Copy' },
-        { key: 'O', label: openActionLabel },
-        { key: 'U', label: 'Undo' },
-        { key: 'Q', label: 'Quit/Back' },
-    ],
-    DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label: 'Back to List' }] as const,
-    FILE_LIST_VIEW: [
-        { key: '↑↓', label: 'Nav Files' },
-        { key: '→', label: 'View Diff' },
-        { key: '←', label: 'Back to Sections' },
-    ] as const,
-    SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→', label: 'Drill In' }, { key: '←', label: 'Collapse' }] as const,
-    SECTION_COLLAPSED: [{ key: '↑↓', label: 'Nav' }, { key: '→', label: 'Expand' }] as const,
+    STANDARD: (options: DashboardStandardActionsOptions): ActionItem[] => {
+        const { status, hasPending, hasApplied } = options;
+        const actions: ActionItem[] = [
+            { key: '↑↓', label: 'Nav' },
+            { key: '→/Ent', label: 'View' },
+            { key: '←', label: 'Collapse' },
+            { key: 'L', label: 'Log' },
+        ];
+        if (hasPending) actions.push({ key: 'A', label: 'Approve All' });
+        if (hasApplied) actions.push({ key: 'C', label: 'Commit' });
+        actions.push({ key: 'P', label: status === DASHBOARD_STATUS.PAUSED ? 'Resume' : 'Pause' });
+        actions.push({ key: 'Q', label: 'Quit' });
+        return actions;
+    },
+};
+```
+
+## File: src/constants/log.constants.ts
+```typescript
+export const MAX_LOGS = 200;
+
+export const DEBUG_LOG_MODES = {
+    LIST: 'LIST',
+    FILTER: 'FILTER',
+} as const;
+
+export const LOG_LEVEL_COLORS = {
+    DEBUG: 'gray',
+    INFO: 'white',
+    WARN: 'yellow',
+    ERROR: 'red',
+};
+
+export const LOG_LEVEL_TAGS = {
+    DEBUG: { color: 'white', backgroundColor: 'gray' },
+    INFO: { color: 'black', backgroundColor: 'cyan' },
+    WARN: { color: 'black', backgroundColor: 'yellow' },
+    ERROR: { color: 'white', backgroundColor: 'red' },
+};
+
+export const DEBUG_LOG_FOOTER_ACTIONS = {
+    FILTER_MODE: [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }] as const,
+    LIST_MODE: (hasLogs: boolean) => {
+        const actions = [
+            { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+            { key: 'F', label: 'Filter' },
+        ];
+        if (hasLogs) actions.push({ key: 'C', label: 'Clear' });
+        actions.push({ key: 'Esc/Ctrl+L', label: 'Close' });
+        return actions;
+    },
 };
 ```
 
@@ -952,6 +812,109 @@ export const useContentViewport = ({
 };
 ```
 
+## File: src/services/clipboard.service.ts
+```typescript
+import { useTransactionStore, type Transaction } from '../stores/transaction.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useReviewStore } from '../stores/review.store';
+import { LoggerService } from './logger.service';
+
+const MOCK_VALID_PATCH = `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index 12345..67890 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -1,5 +1,6 @@
+-import React from 'react';
++import React, { useState } from 'react';
+
+ const Button = () => <button>Click Me</button>;
+
+ export default Button;
+`;
+
+const MOCK_INVALID_TEXT = 'This is just some regular text, not a patch.';
+
+const createTransactionFromPatch = (patchContent: string): Transaction => {
+    // In a real app, we would parse this. For demo, we'll create a mock.
+    const lines = patchContent.split('\n');
+    const linesAdded = lines.filter(l => l.startsWith('+')).length;
+    const linesRemoved = lines.filter(l => l.startsWith('-')).length;
+    const filePath = lines.find(l => l.startsWith('--- a/'))?.split(' a/')[1] || 'unknown/file.ts';
+
+    return {
+        id: (Math.random() * 1000).toFixed(0),
+        timestamp: Date.now(),
+        status: 'PENDING',
+        hash: Math.random().toString(16).substring(2, 10),
+        message: 'feat: apply patch from clipboard',
+        prompt: 'A patch was manually pasted into the application.',
+        reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
+        files: [
+            {
+                id: `${(Math.random() * 1000).toFixed(0)}-1`,
+                type: 'MOD',
+                path: filePath,
+                linesAdded,
+                linesRemoved,
+                diff: patchContent,
+                strategy: 'standard-diff',
+            },
+        ],
+        stats: {
+            files: 1,
+            linesAdded,
+            linesRemoved,
+        },
+    };
+};
+
+/**
+ * Simulates processing the clipboard content.
+ * @param forceValidPatch For debug purposes, force the outcome. If undefined, it will be random.
+ */
+const processClipboardContent = async (forceValidPatch?: boolean) => {
+    LoggerService.info('Manual paste detected. Processing clipboard content...');
+    
+    // Simulate reading from clipboardy
+    const isActuallyValid = forceValidPatch === true || (forceValidPatch === undefined && Math.random() > 0.5);
+    const clipboardContent = isActuallyValid ? MOCK_VALID_PATCH : MOCK_INVALID_TEXT;
+
+    // Simulate checking if it's a valid patch
+    if (clipboardContent.includes('diff --git')) {
+        LoggerService.debug('Valid patch detected in clipboard. Creating transaction.');
+        const newTransaction = createTransactionFromPatch(clipboardContent);
+
+        // Add to store so it exists for the review process
+        useTransactionStore.getState().actions.addTransaction(newTransaction);
+
+        // Immediately start the review simulation
+        LoggerService.debug(`Starting apply simulation for new transaction ${newTransaction.id}`);
+        // Forcing 'success' scenario for pasted patches. The simulation itself can
+        // result in a failure state which is then handled by the review screen.
+        useReviewStore.getState().actions.startApplySimulation(newTransaction.id, 'success');
+
+        useNotificationStore.getState().actions.show({
+            type: 'info',
+            title: 'Processing Pasted Patch',
+            message: `Applying new transaction "${newTransaction.hash}"...`,
+            duration: 2,
+        });
+    } else {
+        LoggerService.debug('No valid patch detected in clipboard content.');
+        useNotificationStore.getState().actions.show({
+            type: 'info',
+            title: 'Clipboard Ignored',
+            message: 'Pasted content was not a valid patch.',
+            duration: 3,
+        });
+    }
+};
+
+export const ClipboardService = {
+    processClipboardContent,
+};
+```
+
 ## File: src/services/editor.service.ts
 ```typescript
 import { LoggerService } from './logger.service';
@@ -1043,6 +1006,7 @@ export interface FileItem {
 export type TransactionStatus =
     | 'PENDING'
     | 'APPLIED'
+    | 'COMMITTING'
     | 'COMMITTED'
     | 'FAILED'
     | 'REVERTED'
@@ -1338,6 +1302,63 @@ export const COPY_SCREEN_FOOTER_ACTIONS: readonly ActionItem[] = [
 ];
 ```
 
+## File: src/constants/detail.constants.ts
+```typescript
+import type { ActionItem } from '../types/actions.types';
+
+/**
+ * Constants for the Transaction Detail screen.
+ */
+export const NAVIGATOR_SECTIONS = {
+    PROMPT: 'PROMPT',
+    REASONING: 'REASONING',
+    FILES: 'FILES',
+} as const;
+
+export const DETAIL_BODY_VIEWS = {
+    PROMPT: 'PROMPT',
+    REASONING: 'REASONING',
+    FILES_LIST: 'FILES_LIST',
+    DIFF_VIEW: 'DIFF_VIEW',
+    REVERT_CONFIRM: 'REVERT_CONFIRM',
+    NONE: 'NONE',
+} as const;
+
+export const FILE_CHANGE_TYPE_ICONS = {
+    MOD: '[MOD]',
+    ADD: '[ADD]',
+    DEL: '[DEL]',
+    REN: '[REN]',
+} as const;
+
+export const DETAIL_FOOTER_ACTIONS = {
+    REVERT_CONFIRM: [
+        { key: 'Enter', label: 'Confirm Revert' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const,
+    BASE: (options: { openActionLabel: string; isRevertable: boolean }): ActionItem[] => {
+        const { openActionLabel, isRevertable } = options;
+        const actions: ActionItem[] = [
+            { key: 'C', label: 'Copy' },
+            { key: 'O', label: openActionLabel },
+        ];
+        if (isRevertable) {
+            actions.push({ key: 'U', label: 'Undo' });
+        }
+        actions.push({ key: 'Q', label: 'Quit/Back' });
+        return actions;
+    },
+    DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label: 'Back to List' }] as const,
+    FILE_LIST_VIEW: [
+        { key: '↑↓', label: 'Nav Files' },
+        { key: '→', label: 'View Diff' },
+        { key: '←', label: 'Back to Sections' },
+    ] as const,
+    SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→', label: 'Drill In' }, { key: '←', label: 'Collapse' }] as const,
+    SECTION_COLLAPSED: [{ key: '↑↓', label: 'Nav' }, { key: '→', label: 'Expand' }] as const,
+};
+```
+
 ## File: src/hooks/useCopyScreen.tsx
 ```typescript
 import { useInput } from 'ink';
@@ -1505,109 +1526,6 @@ export const useStdoutDimensions = (): [number, number] => {
 
     return [dimensions.columns, dimensions.rows];
 };
-```
-
-## File: src/components/DebugLogScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
-import Separator from './Separator';
-import ActionFooter from './ActionFooter';
-import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
-import { DEBUG_LOG_FOOTER_ACTIONS, DEBUG_LOG_MODES, LOG_LEVEL_COLORS, LOG_LEVEL_TAGS } from '../constants/log.constants';
-import type { LogEntry } from '../types/log.types';
-import { useStdoutDimensions } from '../utils';
-
-const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
-    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
-    const color = LOG_LEVEL_COLORS[entry.level];
-    const tagColors = LOG_LEVEL_TAGS[entry.level];
-
-    return (
-        <Text color={color}>
-            {isSelected ? '> ' : '  '}
-            <Text color="gray">{time}</Text>
-            {' '}
-            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
-                {' '}{entry.level.padEnd(5, ' ')}{' '}
-            </Text>
-            {' '}
-            {entry.message}
-        </Text>
-    );
-};
-
-const DebugLogScreen = () => {
-    const {
-        logsInView,
-        logCount,
-        filteredLogCount,
-        selectedIndex,
-        mode,
-        filterQuery,
-        setFilterQuery,
-        viewOffset,
-    } = useDebugLogScreen();
-    const [width] = useStdoutDimensions();
-
-    const renderFilter = () => (
-        <Box>
-            <Text>Filter: </Text>
-            {mode === DEBUG_LOG_MODES.FILTER ? (
-                <TextInput
-                    value={filterQuery}
-                    onChange={setFilterQuery}
-                    placeholder="Type to filter log messages..."
-                />
-            ) : (
-                <Text color="gray">{filterQuery || '(none)'}</Text>
-            )}
-            <Box flexGrow={1} /> 
-            <Text>
-                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
-                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
-            </Text> 
-        </Box>
-    );
-
-    const footerActions =
-        mode === DEBUG_LOG_MODES.FILTER
-            ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
-            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE;
-
-    return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            height="100%"
-            paddingX={2}
-            paddingY={1}
-        >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
-            <Separator width={width - 4} />
-            <Box marginY={1}>{renderFilter()}</Box>
-            <Box flexDirection="column" flexGrow={1}>
-                {logsInView.map((entry, index) => (
-                    <LogEntryRow
-                        key={`${entry.timestamp}-${index}`}
-                        entry={entry}
-                        isSelected={selectedIndex === index + viewOffset}
-                    />
-                ))}
-                {logCount > 0 && filteredLogCount === 0 && (
-                    <Text color="gray">No logs match your filter.</Text>
-                )}
-                {logCount === 0 && (
-                    <Text color="gray">No log entries yet. Waiting for system activity...</Text>
-                )}
-            </Box>
-            <Separator width={width - 4} />
-            <ActionFooter actions={footerActions} />
-        </Box>
-    );
-};
-
-export default DebugLogScreen;
 ```
 
 ## File: src/components/DiffScreen.tsx
@@ -1965,6 +1883,109 @@ export const getVisibleItemPaths = (
 };
 ```
 
+## File: src/components/DebugLogScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import Separator from './Separator';
+import ActionFooter from './ActionFooter';
+import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+import { DEBUG_LOG_FOOTER_ACTIONS, DEBUG_LOG_MODES, LOG_LEVEL_COLORS, LOG_LEVEL_TAGS } from '../constants/log.constants';
+import type { LogEntry } from '../types/log.types';
+import { useStdoutDimensions } from '../utils';
+
+const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
+    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+    const color = LOG_LEVEL_COLORS[entry.level];
+    const tagColors = LOG_LEVEL_TAGS[entry.level];
+
+    return (
+        <Text color={color}>
+            {isSelected ? '> ' : '  '}
+            <Text color="gray">{time}</Text>
+            {' '}
+            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
+                {' '}{entry.level.padEnd(5, ' ')}{' '}
+            </Text>
+            {' '}
+            {entry.message}
+        </Text>
+    );
+};
+
+const DebugLogScreen = () => {
+    const {
+        logsInView,
+        logCount,
+        filteredLogCount,
+        selectedIndex,
+        mode,
+        filterQuery,
+        setFilterQuery,
+        viewOffset,
+    } = useDebugLogScreen();
+    const [width] = useStdoutDimensions();
+
+    const renderFilter = () => (
+        <Box>
+            <Text>Filter: </Text>
+            {mode === DEBUG_LOG_MODES.FILTER ? (
+                <TextInput
+                    value={filterQuery}
+                    onChange={setFilterQuery}
+                    placeholder="Type to filter log messages..."
+                />
+            ) : (
+                <Text color="gray">{filterQuery || '(none)'}</Text>
+            )}
+            <Box flexGrow={1} /> 
+            <Text>
+                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
+                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
+            </Text> 
+        </Box>
+    );
+
+    const footerActions =
+        mode === DEBUG_LOG_MODES.FILTER
+            ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
+            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE(logCount > 0);
+
+    return (
+        <Box
+            flexDirection="column"
+            width="100%"
+            height="100%"
+            paddingX={2}
+            paddingY={1}
+        >
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+            <Separator width={width - 4} />
+            <Box marginY={1}>{renderFilter()}</Box>
+            <Box flexDirection="column" flexGrow={1}>
+                {logsInView.map((entry, index) => (
+                    <LogEntryRow
+                        key={`${entry.timestamp}-${index}`}
+                        entry={entry}
+                        isSelected={selectedIndex === index + viewOffset}
+                    />
+                ))}
+                {logCount > 0 && filteredLogCount === 0 && (
+                    <Text color="gray">No logs match your filter.</Text>
+                )}
+                {logCount === 0 && (
+                    <Text color="gray">No log entries yet. Waiting for system activity...</Text>
+                )}
+            </Box>
+            <Separator width={width - 4} />
+            <ActionFooter actions={footerActions} />
+        </Box>
+    );
+};
+
+export default DebugLogScreen;
+```
+
 ## File: src/data/mocks.ts
 ```typescript
 import type { Transaction } from '../types/domain.types';
@@ -2144,132 +2165,6 @@ export const useDebugLogScreen = () => {
         setFilterQuery,
         viewOffset,
     };
-};
-```
-
-## File: src/hooks/useGitCommitScreen.tsx
-```typescript
-import { useInput } from 'ink';
-import { useCommitStore } from '../stores/commit.store';
-import { useAppStore } from '../stores/app.store';
-import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
-import { useNotificationStore } from '../stores/notification.store';
-import { useCopyStore } from '../stores/copy.store';
-import { CopyService } from '../services/copy.service';
-import { CommitService } from '../services/commit.service';
-
-export const useGitCommitScreen = () => {
-    const { finalCommitMessage, isCommitting, commitError } = useCommitStore();
-    const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
-    const { commit, resetCommitState } = useCommitStore(s => s.actions);
-    const { showDashboardScreen } = useAppStore(s => s.actions);
-
-    const handleCommit = async (forceFailure?: boolean) => {
-        const { success } = await commit(forceFailure);
-        if (success) {
-            showDashboardScreen();
-        }
-    };
-
-    const openCopyMode = () => {
-        const items = CopyService.getCopyItemsForCommit(transactionsToCommit, finalCommitMessage);
-        useCopyStore.getState().actions.open('Select data to copy from commit:', items);
-    };
-
-    useInput((_, key) => {
-        if (isCommitting) return;
-
-        if (commitError) {
-            if (key.escape) {
-                resetCommitState();
-                showDashboardScreen();
-            } else if (_.toLowerCase() === 'r') {
-                handleCommit();
-            } else if (_.toLowerCase() === 'c') {
-                const command = CommitService.getGitCommitCommand(finalCommitMessage);
-                useNotificationStore.getState().actions.show({
-                    type: 'success',
-                    title: 'Copied to Clipboard',
-                    // This is a mock clipboard write for the demo
-                    message: `Command copied: ${command}`,
-                });
-            }
-            return;
-        }
-
-        if (key.return) {
-            handleCommit();
-        } else if (key.escape) {
-            showDashboardScreen();
-        } else if (_.toLowerCase() === 'c') {
-            openCopyMode();
-        }
-    });
-
-    return { transactionsToCommit, finalCommitMessage, isCommitting, commitError };
-};
-```
-
-## File: src/services/commit.service.ts
-```typescript
-import type { Transaction } from '../types/domain.types';
-import { sleep } from '../utils';
-import { useTransactionStore } from '../stores/transaction.store';
-import { LoggerService } from './logger.service';
-
-const generateCommitMessage = (transactions: Transaction[]): string => {
-    LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
-    if (transactions.length === 0) {
-        LoggerService.warn('generateCommitMessage called with 0 transactions.');
-        return '';
-    }
-    // Using a more complex aggregation for better demo, based on the readme
-    const title = 'feat: implement new dashboard and clipboard logic';
-    const bodyPoints = [
-        '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
-        '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
-    ];
-
-    if (transactions.length === 1 && transactions[0]) {
-        LoggerService.debug('Using single transaction message for commit.');
-        return transactions[0].message;
-    }
-
-    LoggerService.debug('Using aggregated message for commit.');
-    return `${title}\n\n${bodyPoints.join('\n\n')}`;
-};
-
-const getGitCommitCommand = (commitMessage: string): string => {
-    const subject = commitMessage.split('\n')[0] || '';
-    return `git add . && git commit -m "${subject.replace(/"/g, '\\"')}"`;
-};
-
-const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
-    LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
-
-    await sleep(500);
-
-    if (forceFailure) {
-        LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
-        throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
-    }
-
-    // In a real app, this would run git commands.
-    // For simulation, we'll just update the transaction store.
-    const { updateTransactionStatus } = useTransactionStore.getState().actions;
-
-    const txIds = transactionsToCommit.map(tx => tx.id);
-
-    txIds.forEach(id => {
-        updateTransactionStatus(id, 'COMMITTED');
-    });
-    LoggerService.info('Commit successful.');
-};
-
-export const CommitService = {
-    generateCommitMessage,
-    getGitCommitCommand,
-    commit,
 };
 ```
 
@@ -2626,6 +2521,67 @@ const Separator = ({ width: propWidth }: { width?: number }) => {
 export default Separator;
 ```
 
+## File: src/hooks/useGitCommitScreen.tsx
+```typescript
+import { useInput } from 'ink';
+import { useCommitStore } from '../stores/commit.store';
+import { useAppStore } from '../stores/app.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useCopyStore } from '../stores/copy.store';
+import { CopyService } from '../services/copy.service';
+import { CommitService } from '../services/commit.service';
+
+export const useGitCommitScreen = () => {
+    const { finalCommitMessage, isCommitting, commitError } = useCommitStore();
+    const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+    const { commit, resetCommitState } = useCommitStore(s => s.actions);
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const handleCommit = (forceFailure?: boolean) => {
+        showDashboardScreen();
+        commit(forceFailure); // Fire-and-forget to allow dashboard to show animation
+    };
+
+    const openCopyMode = () => {
+        const items = CopyService.getCopyItemsForCommit(transactionsToCommit, finalCommitMessage);
+        useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+    };
+
+    useInput((_, key) => {
+        if (isCommitting) return;
+
+        if (commitError) {
+            if (key.escape) {
+                resetCommitState();
+                showDashboardScreen();
+            } else if (_.toLowerCase() === 'r') {
+                handleCommit();
+            } else if (_.toLowerCase() === 'c') {
+                const command = CommitService.getGitCommitCommand(finalCommitMessage);
+                useNotificationStore.getState().actions.show({
+                    type: 'success',
+                    title: 'Copied to Clipboard',
+                    // This is a mock clipboard write for the demo
+                    message: `Command copied: ${command}`,
+                });
+            }
+            return;
+        }
+
+        if (key.return) {
+            handleCommit();
+        } else if (key.escape) {
+            showDashboardScreen();
+        } else if (_.toLowerCase() === 'c') {
+            openCopyMode();
+        }
+    });
+
+    return { transactionsToCommit, finalCommitMessage, isCommitting, commitError };
+};
+```
+
 ## File: src/hooks/useInitializationScreen.tsx
 ```typescript
 import { useEffect } from 'react';
@@ -2691,6 +2647,74 @@ export const useInitializationScreen = () => {
         projectId,
         footerText,
     };
+};
+```
+
+## File: src/services/commit.service.ts
+```typescript
+import type { Transaction } from '../types/domain.types';
+import { sleep } from '../utils';
+import { useTransactionStore } from '../stores/transaction.store';
+import { LoggerService } from './logger.service';
+
+const generateCommitMessage = (transactions: Transaction[]): string => {
+    LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
+    if (transactions.length === 0) {
+        LoggerService.warn('generateCommitMessage called with 0 transactions.');
+        return '';
+    }
+    // Using a more complex aggregation for better demo, based on the readme
+    const title = 'feat: implement new dashboard and clipboard logic';
+    const bodyPoints = [
+        '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+        '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+    ];
+
+    if (transactions.length === 1 && transactions[0]) {
+        LoggerService.debug('Using single transaction message for commit.');
+        return transactions[0].message;
+    }
+
+    LoggerService.debug('Using aggregated message for commit.');
+    return `${title}\n\n${bodyPoints.join('\n\n')}`;
+};
+
+const getGitCommitCommand = (commitMessage: string): string => {
+    const subject = commitMessage.split('\n')[0] || '';
+    return `git add . && git commit -m "${subject.replace(/"/g, '\\"')}"`;
+};
+
+const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
+    LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
+    const txIds = transactionsToCommit.map(tx => tx.id);
+
+    // Phase 1: Mark as 'COMMITTING'
+    txIds.forEach(id => {
+        updateTransactionStatus(id, 'COMMITTING');
+    });
+
+    await sleep(500);
+
+    if (forceFailure) {
+        LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+        // Revert status back to APPLIED on failure to allow retry
+        txIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+        throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
+    }
+
+    // In a real app, this would run git commands.
+    // Phase 2: Mark as 'COMMITTED'
+    txIds.forEach(id => {
+        updateTransactionStatus(id, 'COMMITTED');
+    });
+    LoggerService.info('Commit successful.');
+};
+
+export const CommitService = {
+    generateCommitMessage,
+    getGitCommitCommand,
+    commit,
 };
 ```
 
@@ -2928,138 +2952,6 @@ export const useDetailStore = create<DetailState>((set, get) => ({
     "typescript": "^5.9.2"
   }
 }
-```
-
-## File: src/services/copy.service.ts
-```typescript
-import type { Transaction, FileItem } from '../types/domain.types';
-import type { CopyItem } from '../types/copy.types';
-import { COPYABLE_ITEMS } from '../constants/copy.constants';
-import { CommitService } from './commit.service';
-import { FileSystemService } from './fs.service';
-
-const formatFileContext = (filePath: string, content: string): string => {
-    const lang = filePath.split('.').pop() || '';
-    return `--- CONTEXT FOR FILE: ${filePath} ---\n\`\`\`${lang}\n${content}\n\`\`\``;
-};
-
-const getContextForFilePaths = async (filePaths: string[]): Promise<string> => {
-    const contentPromises = filePaths.map(path => FileSystemService.readFileContent(path));
-    const resolvedContents = await Promise.all(contentPromises);
-    return filePaths
-        .map((path, index) => formatFileContext(path, resolvedContents[index]!))
-        .join('\n\n');
-};
-
-const createBaseTransactionCopyItems = (transaction: Transaction): CopyItem[] => [
-    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
-    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
-    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
-    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
-];
-
-const getCopyItemsForReview = (
-    transaction: Transaction,
-    files: FileItem[],
-    selectedFile?: FileItem,
-): CopyItem[] => {
-    const allFilePaths = [...new Set(files.map(f => f.path))];
-
-    return [
-        ...createBaseTransactionCopyItems(transaction),
-        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
-        { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
-        {
-            id: 'context_files',
-            key: 'X',
-            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
-            getData: async () => {
-                return getContextForFilePaths(allFilePaths);
-            },
-        },
-    ];
-};
-
-const getCopyItemsForDetail = (
-    transaction: Transaction,
-    selectedFile?: FileItem,
-): CopyItem[] => {
-    const baseItems = createBaseTransactionCopyItems(transaction);
-    const messageItem = { ...baseItems.find(i => i.id === 'message')!, isDefaultSelected: true };
-    const promptItem = baseItems.find(i => i.id === 'prompt')!;
-    const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
-    const uuidItem = baseItems.find(i => i.id === 'uuid')!;
-
-    const allFilePaths = [...new Set((transaction.files || []).map(f => f.path))];
-
-    return [
-        messageItem,
-        promptItem,
-        reasoningItem,
-        { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
-        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
-        {
-            id: 'context_files',
-            key: 'X',
-            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
-            getData: async () => {
-                return getContextForFilePaths(allFilePaths);
-            },
-        },
-        uuidItem,
-        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
-    ];
-};
-
-const getCopyItemsForHistory = (
-    transactions: Transaction[],
-): CopyItem[] => {
-    if (transactions.length === 0) return [];
-
-    const allFilePaths = [
-        ...new Set(transactions.flatMap(tx => tx.files?.map(f => f.path) || [])),
-    ];
-
-    return [
-        { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
-        { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
-        { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
-        { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
-        {
-            id: 'context_files_history',
-            key: 'X',
-            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
-            getData: async () => {
-                return getContextForFilePaths(allFilePaths);
-            },
-        },
-        { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
-        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
-    ];
-};
-
-const getCopyItemsForCommit = (
-    transactions: Transaction[],
-    finalCommitMessage: string,
-): CopyItem[] => {
-    const subject = finalCommitMessage.split('\n')[0] || '';
-    const body = finalCommitMessage.split('\n').slice(1).join('\n').trim();
-
-    return [
-        { id: 'full_message', key: 'M', label: 'Full Commit Message', getData: () => finalCommitMessage, isDefaultSelected: true },
-        { id: 'subject', key: 'S', label: 'Commit Subject', getData: () => subject },
-        { id: 'body', key: 'B', label: 'Commit Body', getData: () => body },
-        { id: 'hashes', key: 'H', label: `Included Transaction Hashes (${transactions.length})`, getData: () => transactions.map(t => t.hash).join('\n') },
-        { id: 'command', key: 'C', label: 'Git Commit Command', getData: () => CommitService.getGitCommitCommand(finalCommitMessage) },
-    ];
-};
-
-export const CopyService = {
-    getCopyItemsForReview,
-    getCopyItemsForDetail,
-    getCopyItemsForHistory,
-    getCopyItemsForCommit,
-};
 ```
 
 ## File: src/services/transaction.service.ts
@@ -3349,50 +3241,136 @@ const ReviewProcessingScreen = () => {
 export default ReviewProcessingScreen;
 ```
 
-## File: src/stores/commit.store.ts
+## File: src/services/copy.service.ts
 ```typescript
-import { create } from 'zustand';
-import { CommitService } from '../services/commit.service';
-import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
+import type { Transaction, FileItem } from '../types/domain.types';
+import type { CopyItem } from '../types/copy.types';
+import { COPYABLE_ITEMS } from '../constants/copy.constants';
+import { CommitService } from './commit.service';
+import { FileSystemService } from './fs.service';
 
-interface CommitState {
-    finalCommitMessage: string;
-    isCommitting: boolean;
-    commitError: string | null;
-    actions: {
-        prepareCommitScreen: () => void;
-        commit: (forceFailure?: boolean) => Promise<{ success: boolean }>;
-        resetCommitState: () => void;
-    }
-}
+const formatFileContext = (filePath: string, content: string): string => {
+    const lang = filePath.split('.').pop() || '';
+    return `--- CONTEXT FOR FILE: ${filePath} ---\n\`\`\`${lang}\n${content}\n\`\`\``;
+};
 
-export const useCommitStore = create<CommitState>((set) => ({
-    finalCommitMessage: '',
-    isCommitting: false,
-    commitError: null,
-    actions: {
-        prepareCommitScreen: () => {
-            const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
-            const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
-            set({ finalCommitMessage });
+const getContextForFilePaths = async (filePaths: string[]): Promise<string> => {
+    const contentPromises = filePaths.map(path => FileSystemService.readFileContent(path));
+    const resolvedContents = await Promise.all(contentPromises);
+    return filePaths
+        .map((path, index) => formatFileContext(path, resolvedContents[index]!))
+        .join('\n\n');
+};
+
+const createBaseTransactionCopyItems = (transaction: Transaction): CopyItem[] => [
+    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+];
+
+const getCopyItemsForReview = (
+    transaction: Transaction,
+    files: FileItem[],
+    selectedFile?: FileItem,
+): CopyItem[] => {
+    const allFilePaths = [...new Set(files.map(f => f.path))];
+
+    return [
+        ...createBaseTransactionCopyItems(transaction),
+        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+        { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+        {
+            id: 'context_files',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
         },
-        commit: async (forceFailure) => {
-            set({ isCommitting: true, commitError: null });
-            try {
-                const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
-                await CommitService.commit(appliedTransactions, forceFailure);
-                set({ isCommitting: false });
-                return { success: true };
-            } catch (e) {
-                set({ isCommitting: false, commitError: (e as Error).message });
-                return { success: false };
-            }
+    ];
+};
+
+const getCopyItemsForDetail = (
+    transaction: Transaction,
+    selectedFile?: FileItem,
+): CopyItem[] => {
+    const baseItems = createBaseTransactionCopyItems(transaction);
+    const messageItem = { ...baseItems.find(i => i.id === 'message')!, isDefaultSelected: true };
+    const promptItem = baseItems.find(i => i.id === 'prompt')!;
+    const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
+    const uuidItem = baseItems.find(i => i.id === 'uuid')!;
+
+    const allFilePaths = [...new Set((transaction.files || []).map(f => f.path))];
+
+    return [
+        messageItem,
+        promptItem,
+        reasoningItem,
+        { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+        {
+            id: 'context_files',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
         },
-        resetCommitState: () => {
-            set({ isCommitting: false, commitError: null });
+        uuidItem,
+        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+    ];
+};
+
+const getCopyItemsForHistory = (
+    transactions: Transaction[],
+): CopyItem[] => {
+    if (transactions.length === 0) return [];
+
+    const allFilePaths = [
+        ...new Set(transactions.flatMap(tx => tx.files?.map(f => f.path) || [])),
+    ];
+
+    return [
+        { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+        { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+        { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+        { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+        {
+            id: 'context_files_history',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
         },
-    },
-}));
+        { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+    ];
+};
+
+const getCopyItemsForCommit = (
+    transactions: Transaction[],
+    finalCommitMessage: string,
+): CopyItem[] => {
+    const subject = finalCommitMessage.split('\n')[0] || '';
+    const body = finalCommitMessage.split('\n').slice(1).join('\n').trim();
+
+    return [
+        { id: 'full_message', key: 'M', label: 'Full Commit Message', getData: () => finalCommitMessage, isDefaultSelected: true },
+        { id: 'subject', key: 'S', label: 'Commit Subject', getData: () => subject },
+        { id: 'body', key: 'B', label: 'Commit Body', getData: () => body },
+        { id: 'hashes', key: 'H', label: `Included Transaction Hashes (${transactions.length})`, getData: () => transactions.map(t => t.hash).join('\n') },
+        { id: 'command', key: 'C', label: 'Git Commit Command', getData: () => CommitService.getGitCommitCommand(finalCommitMessage) },
+    ];
+};
+
+export const CopyService = {
+    getCopyItemsForReview,
+    getCopyItemsForDetail,
+    getCopyItemsForHistory,
+    getCopyItemsForCommit,
+};
 ```
 
 ## File: src/stores/init.store.ts
@@ -3580,76 +3558,6 @@ const CopyScreen = () => {
 };
 
 export default CopyScreen;
-```
-
-## File: src/components/GitCommitScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import Separator from './Separator';
-import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
-import ActionFooter from './ActionFooter';
-import { COMMIT_FOOTER_ACTIONS } from '../constants/commit.constants';
-
-const GitCommitScreen = () => {
-    const { transactionsToCommit, finalCommitMessage, isCommitting, commitError } = useGitCommitScreen();
-
-    const messageParts = finalCommitMessage.split('\n');
-    const subject = messageParts[0] || '';
-    const body = messageParts.slice(1).join('\n');
-
-    const renderError = () => (
-        <Box 
-            flexDirection="column" 
-            borderStyle="round" 
-            borderColor="red" 
-            paddingX={2} 
-            marginY={1}
-        >
-            <Text bold color="red">COMMIT FAILED</Text>
-            <Text wrap="wrap">The git operation failed. Please check the error message below and resolve any issues before retrying.</Text>
-            <Box marginTop={1}>
-                <Text color="red">{commitError}</Text>
-            </Box>
-        </Box>
-    );
-
-    return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold>TRANSACTIONS INCLUDED</Text>
-                    {transactionsToCommit.map(tx => (
-                        <Text key={tx.id}>- <Text color="gray">{tx.hash}</Text>: {tx.message}</Text>
-                    ))}
-                </Box>
-            </Box>
-            <Separator />
-            <Box marginY={1} flexDirection="column" paddingX={2}>
-                <Text bold>FINAL COMMIT MESSAGE</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text color="yellow">{subject}</Text>
-                    {body ? <Text>{body}</Text> : null}
-                </Box>
-            </Box>
-            {commitError && renderError()}
-            <Separator />
-            {!commitError && <Box marginY={1} paddingX={2}>
-                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
-            </Box>}
-            <Separator />
-            {isCommitting
-                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
-                : <ActionFooter actions={commitError ? COMMIT_FOOTER_ACTIONS.FAILURE : COMMIT_FOOTER_ACTIONS.BASE} />
-            }
-        </Box>
-    );
-};
-
-export default GitCommitScreen;
 ```
 
 ## File: src/hooks/useGlobalHotkeys.tsx
@@ -3854,6 +3762,127 @@ export const useSplashScreen = () => {
 
     return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
 };
+```
+
+## File: src/stores/commit.store.ts
+```typescript
+import { create } from 'zustand';
+import { CommitService } from '../services/commit.service';
+import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
+import { useNotificationStore } from './notification.store';
+
+interface CommitState {
+    finalCommitMessage: string;
+    isCommitting: boolean;
+    commitError: string | null;
+    actions: {
+        prepareCommitScreen: () => void;
+        commit: (forceFailure?: boolean) => Promise<void>;
+        resetCommitState: () => void;
+    }
+}
+
+export const useCommitStore = create<CommitState>((set) => ({
+    finalCommitMessage: '',
+    isCommitting: false,
+    commitError: null,
+    actions: {
+        prepareCommitScreen: () => {
+            const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+            const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
+            set({ finalCommitMessage });
+        },
+        commit: async (forceFailure) => {
+            set({ isCommitting: true, commitError: null });
+            try {
+                const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                await CommitService.commit(appliedTransactions, forceFailure);
+                set({ isCommitting: false });
+            } catch (e) {
+                const errorMessage = (e as Error).message;
+                set({ isCommitting: false, commitError: errorMessage });
+                useNotificationStore.getState().actions.show({
+                    type: 'error',
+                    title: 'Commit Failed',
+                    message: errorMessage,
+                });
+            }
+        },
+        resetCommitState: () => {
+            set({ isCommitting: false, commitError: null });
+        },
+    },
+}));
+```
+
+## File: src/components/GitCommitScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import Separator from './Separator';
+import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
+import ActionFooter from './ActionFooter';
+import { COMMIT_FOOTER_ACTIONS } from '../constants/commit.constants';
+
+const GitCommitScreen = () => {
+    const { transactionsToCommit, finalCommitMessage, isCommitting, commitError } = useGitCommitScreen();
+
+    const messageParts = finalCommitMessage.split('\n');
+    const subject = messageParts[0] || '';
+    const body = messageParts.slice(1).join('\n');
+
+    const renderError = () => (
+        <Box 
+            flexDirection="column" 
+            borderStyle="round" 
+            borderColor="red" 
+            paddingX={2} 
+            marginY={1}
+        >
+            <Text bold color="red">COMMIT FAILED</Text>
+            <Text wrap="wrap">The git operation failed. Please check the error message below and resolve any issues before retrying.</Text>
+            <Box marginTop={1}>
+                <Text color="red">{commitError}</Text>
+            </Box>
+        </Box>
+    );
+
+    return (
+        <Box flexDirection="column">
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · GIT COMMIT </Text>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text bold>TRANSACTIONS INCLUDED</Text>
+                    {transactionsToCommit.map(tx => (
+                        <Text key={tx.id}>- <Text color="gray">{tx.hash}</Text>: {tx.message}</Text>
+                    ))}
+                </Box>
+            </Box>
+            <Separator />
+            <Box marginY={1} flexDirection="column" paddingX={2}>
+                <Text bold>FINAL COMMIT MESSAGE</Text>
+                <Box marginTop={1} flexDirection="column">
+                    <Text color="yellow">{subject}</Text>
+                    {body ? <Text>{body}</Text> : null}
+                </Box>
+            </Box>
+            {commitError && renderError()}
+            <Separator />
+            {!commitError && <Box marginY={1} paddingX={2}>
+                 <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>
+            </Box>}
+            <Separator />
+            {isCommitting
+                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                : <ActionFooter actions={commitError ? COMMIT_FOOTER_ACTIONS.FAILURE : COMMIT_FOOTER_ACTIONS.BASE} />
+            }
+        </Box>
+    );
+};
+
+export default GitCommitScreen;
 ```
 
 ## File: src/components/SplashScreen.tsx
@@ -5343,202 +5372,6 @@ export const useReviewScreen = () => {
 };
 ```
 
-## File: src/components/TransactionDetailScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import DiffScreen from './DiffScreen';
-import ReasonScreen from './ReasonScreen';
-import type { FileChangeType } from '../types/domain.types';
-import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
-import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
-import ActionFooter from './ActionFooter';
-
-const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
-    return (
-        <Box 
-            borderStyle="round"
-            borderColor="yellow"
-            flexDirection="column"
-            paddingX={2}
-            width="80%"
-            alignSelf='center'
-        >
-            <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
-            <Box height={1} />
-            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
-            <Box height={1} />
-            <Text wrap="wrap">Are you sure?</Text>
-        </Box>
-    );
-};
-
-const typeColor = (type: FileChangeType) => {
-    switch (type) {
-        case 'ADD': return 'green';
-        case 'DEL': return 'red';
-        case 'REN': return 'yellow';
-        default: return 'white';
-    }
-};
-
-const TransactionDetailScreen = () => {
-    const {
-        transaction, files,
-        focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
-    } = useTransactionDetailScreen();
-
-    if (!transaction) {
-        return <Text>Loading transaction...</Text>;
-    }
-
-    const renderNavigator = () => {
-        const isPromptFocused = focusedItemPath === 'PROMPT';
-        const isReasoningFocused = focusedItemPath === 'REASONING';
-        const isFilesFocused = focusedItemPath.startsWith('FILES');
-        
-        const isPromptExpanded = expandedItemPaths.has('PROMPT');
-        const isReasoningExpanded = expandedItemPaths.has('REASONING');
-        const isFilesExpanded = expandedItemPaths.has('FILES');
-        
-        return (
-            <Box flexDirection="column">
-                <Text color={isPromptFocused ? 'cyan' : undefined}>
-                    {isPromptFocused ? '> ' : '  '}
-                    {isPromptExpanded ? '▾' : '▸'} (<Text color="cyan" bold>P</Text>)rompt
-                </Text>
-                <Text color={isReasoningFocused ? 'cyan' : undefined}>
-                    {isReasoningFocused ? '> ' : '  '}
-                    {isReasoningExpanded ? '▾' : '▸'} (<Text color="cyan" bold>R</Text>)easoning{' '}
-                    ({transaction.reasoning?.split('\n\n').length || 0} steps)
-                </Text>
-                <Text color={isFilesFocused ? 'cyan' : undefined}>
-                    {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
-                    {isFilesExpanded ? '▾' : '▸'} (<Text color="cyan" bold>F</Text>)iles ({files.length})
-                </Text>
-                {isFilesExpanded && (
-                    <Box flexDirection="column" paddingLeft={2}>
-                        {files.map((file) => {
-                             const fileId = `FILES/${file.id}`;
-                             const isFileSelected = focusedItemPath === fileId;
-                             const stats = file.type === 'DEL' ? ''
-                                : ` (+${file.linesAdded}/-${file.linesRemoved})`;
-                             return (
-                                <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
-                                    {isFileSelected ? '> ' : '  '}
-                                    {FILE_CHANGE_TYPE_ICONS[file.type]} <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                )}
-            </Box>
-        );
-    };
-
-    const renderBody = () => {
-        if (bodyView === DETAIL_BODY_VIEWS.NONE) {
-            return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.PROMPT) {
-            return (
-                <Box flexDirection="column">
-                    <Text>PROMPT</Text>
-                    <Box marginTop={1} flexDirection="column">
-                        {(transaction.prompt || '').split('\n')
-                            .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
-                            .map((line, i) => <Text key={i}>{line}</Text>)
-                        }
-                    </Box>
-                </Box>
-            );
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
-            if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
-            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
-             return <Text color="gray">(Select a file and press → to view the diff)</Text>;
-        }
-        if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
-            const fileId = focusedItemPath.split('/')[1];
-            const file = files.find(f => f.id === fileId);
-            if (!file) return null;
-            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
-        }
-        return null;
-    };
-
-    const renderFooter = () => {
-        if (bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM) {
-            return <ActionFooter actions={DETAIL_FOOTER_ACTIONS.REVERT_CONFIRM} />;
-        }
-        
-        const isFileFocused = focusedItemPath.includes('/');
-        const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
-        const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
-
-        if (isFileFocused) { // Is a file
-            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
-                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
-            } else {
-                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
-            }
-        }
-        
-        if (expandedItemPaths.has(focusedItemPath)) {
-            return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_EXPANDED, ...baseActions]} />;
-        }
-        return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_COLLAPSED, ...baseActions]} />;
-    };
-
-    const { message, timestamp, status } = transaction;
-    const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
-    const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
-
-    return (
-        <Box flexDirection="column">
-            {/* Header */}
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
-            <Separator />
-            
-            {/* Modal takeover for Revert */}
-            {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
-            
-            {/* Main view */}
-            <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
-                {/* Navigator Part A */}
-                <Box flexDirection="column" marginY={1}>
-                    <Text><Text color="gray">UUID:</Text> {transaction.id}</Text>
-                    <Text><Text color="gray">Git:</Text> {message}</Text>
-                    <Text><Text color="gray">Date:</Text> {date} · <Text color="gray">Status:</Text> {status}</Text>
-                    <Text><Text color="gray">Stats:</Text> {fileStats}</Text>
-                </Box>
-                
-                {/* Navigator Part B */}
-                {renderNavigator()}
-                
-                <Separator />
-                
-                {/* Body */}
-                <Box marginY={1}>
-                    {renderBody()}
-                </Box>
-                
-                <Separator />
-            </Box>
-            
-            {/* Footer */}
-            <Box>
-                {renderFooter()}
-            </Box>
-        </Box>
-    );
-};
-
-export default TransactionDetailScreen;
-```
-
 ## File: src/components/TransactionHistoryScreen.tsx
 ```typescript
 import { useMemo } from 'react';
@@ -6034,6 +5867,206 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         setSelectedIndex: (index) => set({ selectedTransactionIndex: index }),
     },
 }));
+```
+
+## File: src/components/TransactionDetailScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import DiffScreen from './DiffScreen';
+import ReasonScreen from './ReasonScreen';
+import type { FileChangeType } from '../types/domain.types';
+import { useTransactionDetailScreen } from '../hooks/useTransactionDetailScreen';
+import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS } from '../constants/detail.constants';
+import ActionFooter from './ActionFooter';
+
+const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
+    return (
+        <Box 
+            borderStyle="round"
+            borderColor="yellow"
+            flexDirection="column"
+            paddingX={2}
+            width="80%"
+            alignSelf='center'
+        >
+            <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
+            <Box height={1} />
+            <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
+            <Box height={1} />
+            <Text wrap="wrap">Are you sure?</Text>
+        </Box>
+    );
+};
+
+const typeColor = (type: FileChangeType) => {
+    switch (type) {
+        case 'ADD': return 'green';
+        case 'DEL': return 'red';
+        case 'REN': return 'yellow';
+        default: return 'white';
+    }
+};
+
+const TransactionDetailScreen = () => {
+    const {
+        transaction, files,
+        focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
+    } = useTransactionDetailScreen();
+
+    if (!transaction) {
+        return <Text>Loading transaction...</Text>;
+    }
+
+    const renderNavigator = () => {
+        const isPromptFocused = focusedItemPath === 'PROMPT';
+        const isReasoningFocused = focusedItemPath === 'REASONING';
+        const isFilesFocused = focusedItemPath.startsWith('FILES');
+        
+        const isPromptExpanded = expandedItemPaths.has('PROMPT');
+        const isReasoningExpanded = expandedItemPaths.has('REASONING');
+        const isFilesExpanded = expandedItemPaths.has('FILES');
+        
+        return (
+            <Box flexDirection="column">
+                <Text color={isPromptFocused ? 'cyan' : undefined}>
+                    {isPromptFocused ? '> ' : '  '}
+                    {isPromptExpanded ? '▾' : '▸'} (<Text color="cyan" bold>P</Text>)rompt
+                </Text>
+                <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                    {isReasoningFocused ? '> ' : '  '}
+                    {isReasoningExpanded ? '▾' : '▸'} (<Text color="cyan" bold>R</Text>)easoning{' '}
+                    ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                </Text>
+                <Text color={isFilesFocused ? 'cyan' : undefined}>
+                    {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
+                    {isFilesExpanded ? '▾' : '▸'} (<Text color="cyan" bold>F</Text>)iles ({files.length})
+                </Text>
+                {isFilesExpanded && (
+                    <Box flexDirection="column" paddingLeft={2}>
+                        {files.map((file) => {
+                             const fileId = `FILES/${file.id}`;
+                             const isFileSelected = focusedItemPath === fileId;
+                             const stats = file.type === 'DEL' ? ''
+                                : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                             return (
+                                <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                    {isFileSelected ? '> ' : '  '}
+                                    {FILE_CHANGE_TYPE_ICONS[file.type]} <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+    const renderBody = () => {
+        if (bodyView === DETAIL_BODY_VIEWS.NONE) {
+            return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.PROMPT) {
+            return (
+                <Box flexDirection="column">
+                    <Text>PROMPT</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        {(transaction.prompt || '').split('\n')
+                            .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
+                            .map((line, i) => <Text key={i}>{line}</Text>)
+                        }
+                    </Box>
+                </Box>
+            );
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
+            if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
+            return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
+             return <Text color="gray">(Select a file and press → to view the diff)</Text>;
+        }
+        if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+            const fileId = focusedItemPath.split('/')[1];
+            const file = files.find(f => f.id === fileId);
+            if (!file) return null;
+            return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
+        }
+        return null;
+    };
+
+    const renderFooter = () => {
+        if (bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM) {
+            return <ActionFooter actions={DETAIL_FOOTER_ACTIONS.REVERT_CONFIRM} />;
+        }
+        
+        const isFileFocused = focusedItemPath.includes('/');
+        const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
+        const isRevertable = ['APPLIED', 'FAILED'].includes(transaction.status);
+        const baseActions = DETAIL_FOOTER_ACTIONS.BASE({
+            openActionLabel,
+            isRevertable,
+        });
+
+        if (isFileFocused) { // Is a file
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
+            } else {
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
+            }
+        }
+        
+        if (expandedItemPaths.has(focusedItemPath)) {
+            return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_EXPANDED, ...baseActions]} />;
+        }
+        return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_COLLAPSED, ...baseActions]} />;
+    };
+
+    const { message, timestamp, status } = transaction;
+    const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
+    const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
+
+    return (
+        <Box flexDirection="column">
+            {/* Header */}
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
+            <Separator />
+            
+            {/* Modal takeover for Revert */}
+            {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
+            
+            {/* Main view */}
+            <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
+                {/* Navigator Part A */}
+                <Box flexDirection="column" marginY={1}>
+                    <Text><Text color="gray">UUID:</Text> {transaction.id}</Text>
+                    <Text><Text color="gray">Git:</Text> {message}</Text>
+                    <Text><Text color="gray">Date:</Text> {date} · <Text color="gray">Status:</Text> {status}</Text>
+                    <Text><Text color="gray">Stats:</Text> {fileStats}</Text>
+                </Box>
+                
+                {/* Navigator Part B */}
+                {renderNavigator()}
+                
+                <Separator />
+                
+                {/* Body */}
+                <Box marginY={1}>
+                    {renderBody()}
+                </Box>
+                
+                <Separator />
+            </Box>
+            
+            {/* Footer */}
+            <Box>
+                {renderFooter()}
+            </Box>
+        </Box>
+    );
+};
+
+export default TransactionDetailScreen;
 ```
 
 ## File: src/components/ReviewScreen.tsx
@@ -6886,7 +6919,7 @@ import { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.const
 // --- Sub-components & Helpers ---
 
 const getStatusIcon = (status: TransactionStatus) => {
-    if (status === 'IN-PROGRESS') return <Spinner type="dots" />;
+    if (status === 'IN-PROGRESS' || status === 'COMMITTING') return <Spinner type="dots" />;
     const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
     if (!ui) return <Text> </Text>;
     return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
@@ -6948,7 +6981,7 @@ const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew
     const expandIcon = isExpanded ? '▾' : '▸';
     
     const messageNode =
-        transaction.status === 'IN-PROGRESS'
+        transaction.status === 'IN-PROGRESS' || transaction.status === 'COMMITTING'
             ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
             : transaction.message;
     
@@ -7040,7 +7073,11 @@ const DashboardScreen = () => {
         );
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
-		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;
+		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD({
+            status,
+            hasPending: pendingApprovals > 0,
+            hasApplied: pendingCommits > 0,
+        })} />;
     };
     
     return (

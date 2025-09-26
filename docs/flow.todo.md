@@ -4,6 +4,18 @@ chrome extension suggestion
 
 ===
 
+review processing:
+
+sometimes the post-scripts is stuck and user need to force stop
+
+=== DONE
+
+review processing:
+
+elapsed time per section should not only appear when processing is done, but also during the processing itself.
+
+=== DONE
+
 dashboard screen: event stream items only animated at approval process, we need also on git committing process
 
 === DONE

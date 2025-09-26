@@ -12,7 +12,7 @@ import { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.const
 // --- Sub-components & Helpers ---
 
 const getStatusIcon = (status: TransactionStatus) => {
-    if (status === 'IN-PROGRESS') return <Spinner type="dots" />;
+    if (status === 'IN-PROGRESS' || status === 'COMMITTING') return <Spinner type="dots" />;
     const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
     if (!ui) return <Text> </Text>;
     return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
@@ -74,7 +74,7 @@ const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew
     const expandIcon = isExpanded ? '▾' : '▸';
     
     const messageNode =
-        transaction.status === 'IN-PROGRESS'
+        transaction.status === 'IN-PROGRESS' || transaction.status === 'COMMITTING'
             ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
             : transaction.message;
     
