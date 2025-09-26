@@ -1,0 +1,1556 @@
+uuid: c32c1c69-2f22-4824-a212-325b3992b1a8
+projectId: relaycode-tui
+createdAt: '2025-09-26T07:46:17.071Z'
+gitCommitMsg: >-
+  feat(processing): implement interruptible and skippable steps
+
+  Introduced a "skip" feature for the post-command script step during patch
+  application, allowing users to bypass long-running scripts.
+
+  - Added state and actions to `review.store` to handle skip requests. - Made
+  the `runApplySimulation` service aware of the skip state. - Implemented a
+  reliable `Ctrl+C` handler in a new `useReviewProcessingScreen` hook that
+  cancels the process without exiting the application. - Refactored
+  `ReviewProcessingScreen` to use the new hook and display dynamic footer
+  actions for "Cancel" and "Skip".
+promptSummary: >-
+  The user wanted to fix Ctrl+C exiting the app during a process and add the
+  ability to "skip" a long-running step.
+reasoning:
+  - >-
+    Of course. Dealing with terminal process signals and adding interruptible
+    steps is a great way to improve user experience. Here is a plan to address
+    both your points: fixing `Ctrl+C` and adding a "skip" feature for
+    long-running scripts.
+  - '### Plan Summary:'
+  - >-
+    1.  **Fix `Ctrl+C`**: I will introduce a new hook,
+    `useReviewProcessingScreen`, which will contain all the logic for the
+    processing screen. Inside this hook, I will use a `useEffect` to listen for
+    `stdin` data, reliably intercepting the `Ctrl+C` signal (`\u0003`) and
+    triggering the cancellation flow without quitting the application.
+  - '2.  **Add "Skip" Feature**:'
+  - >-
+    *   I'll update the `review.store` with new state and actions (`isSkipping`,
+    `skipCurrentStep`, `resetSkip`) to manage the skip request.
+  - >-
+    *   The `review.service` will be modified to make the script execution step
+    aware of the "skip" state, allowing it to be bypassed.
+  - >-
+    *   The footer actions will become dynamic to show the "Skip" option (`S`)
+    only when the script step is active.
+  - '*   The new `useReviewProcessingScreen` hook will handle the `S` keypress.'
+  - >-
+    3.  **Refactor**: The `ReviewProcessingScreen` component will be refactored
+    to be a cleaner, presentation-only component that uses the new hook.
+  - 'Here are the detailed changes:'
+  - I'll start by updating the review store to handle the "skip" state.
+  - >-
+    Next, I'll make the footer actions dynamic to conditionally show the "Skip"
+    option.
+  - >-
+    Now, I'll update the simulation service to make the script execution step
+    interruptible and skippable.
+  - >-
+    I'll create the new `useReviewProcessingScreen` hook to encapsulate all
+    logic, including the `Ctrl+C` fix and skip input handling.
+  - >-
+    Finally, I'll refactor the `ReviewProcessingScreen` component to use this
+    new hook.
+  - >-
+    These changes provide a robust solution for cancelling the process without
+    exiting the app and introduce the requested "skip" functionality for
+    long-running script steps.
+operations:
+  - type: write
+    path: src/stores/review.store.ts
+    content: |+
+      --- src/stores/review.store.ts
+      +++ src/stores/review.store.ts
+      @@ -23,6 +23,7 @@
+           selectedBulkRepairOptionIndex: number;
+           selectedBulkInstructOptionIndex: number;
+           isCancelling: boolean;
+      +    isSkipping: boolean;
+       
+           actions: {
+               load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+      @@ -36,6 +37,8 @@
+               tryRepairFile: (fileId: string) => void;
+               showBulkRepair: () => void;
+               executeBulkRepairOption: (option: number) => Promise<void>;
+      +        skipCurrentStep: () => void;
+      +        resetSkip: () => void;
+               tryInstruct: (fileId: string) => void;
+               cancelProcessing: () => void;
+               showBulkInstruct: () => void;
+      @@ -65,6 +68,7 @@
+           selectedBulkRepairOptionIndex: 0,
+           selectedBulkInstructOptionIndex: 0,
+           isCancelling: false,
+      +    isSkipping: false,
+       
+           actions: {
+               load: (transactionId, initialState) => {
+      @@ -127,6 +131,7 @@
+                       applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                       processingStartTime: Date.now(),
+                       isCancelling: false,
+      +                isSkipping: false,
+                       fileReviewStates: new Map(), // Clear previous states
+                   });
+       
+      @@ -194,6 +199,8 @@
+               },
+               showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+               cancelProcessing: () => set({ isCancelling: true }),
+      +        skipCurrentStep: () => set({ isSkipping: true }),
+      +        resetSkip: () => set({ isSkipping: false }),
+               executeBulkInstructOption: async (option) => {
+                   const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                   const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/review.constants.ts
+    content: >+
+      --- src/constants/review.constants.ts
+
+      +++ src/constants/review.constants.ts
+
+      @@ -107,6 +107,15 @@
+           },
+       };
+       
+      -export const REVIEW_PROCESSING_FOOTER_ACTION: readonly ActionItem[] = [
+
+      -    { key: 'Ctrl+C', label: 'Cancel Process' },
+
+      -] as const;
+
+      +export const getReviewProcessingFooterActions = (
+
+      +    isSkippable: boolean,
+
+      +): readonly ActionItem[] => {
+
+      +    const actions: ActionItem[] = [{ key: 'Ctrl+C', label: 'Cancel
+      Process' }];
+
+      +    if (isSkippable) {
+
+      +        actions.push({ key: 'S', label: 'Skip Script' });
+
+      +    }
+
+      +    return actions;
+
+      +};
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/review.service.ts
+    content: >+
+      --- src/services/review.service.ts
+
+      +++ src/services/review.service.ts
+
+      @@ -165,9 +165,27 @@
+                   yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+                   return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+               }
+      -        await sleep(1200);
+
+      -        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command',
+      substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' }
+      } };
+
+      -        yield { type: 'UPDATE_STEP', payload: { id: 'post-command',
+      status: 'done' } };
+
+      +
+
+      +        let wasPostCommandSkipped = false;
+
+      +        const postCommandStartTime = Date.now();
+
+      +        const scriptDuration = 2500; // Mock script duration
+
+      +        while (Date.now() - postCommandStartTime < scriptDuration) {
+
+      +            if (useReviewStore.getState().isSkipping) {
+
+      +                useReviewStore.getState().actions.resetSkip();
+
+      +                wasPostCommandSkipped = true;
+
+      +                break;
+
+      +            }
+
+      +            if (useReviewStore.getState().isCancelling) {
+
+      +                break; // Let the global cancel check after this step
+      handle the state update
+
+      +            }
+
+      +            await sleep(50);
+
+      +        }
+
+      +
+
+      +        if (wasPostCommandSkipped) {
+
+      +            yield { type: 'UPDATE_STEP', payload: { id: 'post-command',
+      status: 'skipped', details: 'Skipped by user' } };
+
+      +        } else if (!useReviewStore.getState().isCancelling) {
+
+      +            yield { type: 'ADD_SUBSTEP', payload: { parentId:
+      'post-command', substep: { id: 's3', title: '`bun run test` ... Passed',
+      status: 'done' } } };
+
+      +            yield { type: 'UPDATE_STEP', payload: { id: 'post-command',
+      status: 'done' } };
+
+      +        }
+       
+               if (useReviewStore.getState().isCancelling) {
+                    yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewProcessingScreen.tsx
+    content: >-
+      import { useState, useEffect, useMemo } from 'react';
+
+      import { useInput } from 'ink';
+
+      import { useReviewStore } from '../stores/review.store';
+
+      import { useTransactionStore, selectSelectedTransaction } from
+      '../stores/transaction.store';
+
+
+      export const useReviewProcessingScreen = () => {
+          const {
+              applySteps,
+              processingStartTime,
+              isCancelling,
+              patchStatus,
+              actions: { cancelProcessing, skipCurrentStep },
+          } = useReviewStore();
+
+          const transaction = useTransactionStore(selectSelectedTransaction);
+          const isProcessing = processingStartTime !== null;
+
+          const [now, setNow] = useState(Date.now());
+
+          useEffect(() => {
+              if (!isProcessing) return;
+              const timer = setInterval(() => setNow(Date.now()), 100);
+              return () => clearInterval(timer);
+          }, [isProcessing]);
+
+          const elapsedTime = isProcessing ? (now - processingStartTime) / 1000 : 0;
+
+          const isSkippable = useMemo(() => {
+              const activeStep = applySteps.find(step => step.status === 'active');
+              return activeStep?.id === 'post-command';
+          }, [applySteps]);
+
+          // --- Input Handling ---
+
+          // Handle Ctrl+C by listening to stdin. This is more reliable than useInput for Ctrl+C,
+          // as it prevents the default terminal behavior of exiting the process.
+          useEffect(() => {
+              const onData = (data: Buffer) => {
+                  // Check for Ctrl+C
+                  if (data.toString() === '\u0003') {
+                      cancelProcessing();
+                  }
+              };
+
+              if (isProcessing && !isCancelling) {
+                  process.stdin.on('data', onData);
+                  return () => {
+                      process.stdin.removeListener('data', onData);
+                  };
+              }
+          }, [isProcessing, isCancelling, cancelProcessing]);
+
+          useInput(
+              (input) => {
+                  if (input.toLowerCase() === 's' && isSkippable) {
+                      skipCurrentStep();
+                  }
+              },
+              { isActive: isProcessing && !isCancelling },
+          );
+
+          return {
+              transaction,
+              applySteps,
+              isProcessing,
+              isCancelling,
+              patchStatus,
+              elapsedTime,
+              now,
+              isSkippable,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/ReviewProcessingScreen.tsx
+    content: >+
+      --- src/components/ReviewProcessingScreen.tsx
+
+      +++ src/components/ReviewProcessingScreen.tsx
+
+      @@ -3,8 +3,8 @@
+       import { type ApplyStep } from '../stores/review.store';
+       import Separator from './Separator';
+       import ActionFooter from './ActionFooter';
+      -import { useReviewProcessingScreen } from
+      '../hooks/useReviewProcessingScreen';
+
+      -import { REVIEW_PROCESSING_FOOTER_ACTION } from
+      '../constants/review.constants';
+
+      +import { useReviewProcessingScreen } from
+      '../hooks/useReviewProcessingScreen'; // This will be created
+
+      +import { getReviewProcessingFooterActions } from
+      '../constants/review.constants';
+       
+       const ApplyStepRow = ({ step, isSubstep = false, now }: {
+           step: ApplyStep;
+      @@ -87,6 +87,7 @@
+               patchStatus,
+               elapsedTime,
+               now,
+      +        isSkippable,
+           } = useReviewProcessingScreen();
+       
+           const failureCase = patchStatus === 'PARTIAL_FAILURE';
+      @@ -99,7 +100,7 @@
+                       <Box flexDirection="column" gap={1}>
+                           <Text>Elapsed: {elapsedTime.toFixed(1)}s · Processing... Please wait.</Text>
+                           <Separator />
+      -                    <ActionFooter
+      actions={REVIEW_PROCESSING_FOOTER_ACTION} />
+
+      +                    <ActionFooter
+      actions={getReviewProcessingFooterActions(isSkippable)} />
+                       </Box>
+                   );
+               }
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useAppStore } from './app.store';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { ReviewService, type SimulationResult } from
+    '../services/review.service';
+
+    import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS } from
+    '../constants/review.constants';
+
+    import { moveIndex } from './navigation.utils';
+
+    import { sleep } from '../utils';
+
+    import type { FileReviewStatus } from '../types/domain.types';
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        startTime?: number;
+        duration?: number;
+    }
+
+
+    export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof
+    REVIEW_BODY_VIEWS];
+
+    export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
+
+    export type ApplyUpdate =
+        | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+        | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
+        | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
+
+    interface ReviewState {
+        patchStatus: PatchStatus;
+        applySteps: ApplyStep[];
+        selectedItemIndex: number;
+        bodyView: ReviewBodyView;
+        isDiffExpanded: boolean;
+        reasoningScrollIndex: number;
+        scriptErrorIndex: number;
+        processingStartTime: number | null;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
+
+        selectedBulkRepairOptionIndex: number;
+        selectedBulkInstructOptionIndex: number;
+        isCancelling: boolean;
+
+        actions: {
+            load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+            moveSelectionUp: (listSize: number) => void;
+            moveSelectionDown: (listSize: number) => void;
+            expandDiff: () => void;
+            toggleBodyView: (view: Extract<
+                ReviewBodyView, 'bulk_instruct' |
+                'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+            >) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
+            tryRepairFile: (fileId: string) => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            tryInstruct: (fileId: string) => void;
+            cancelProcessing: () => void;
+            showBulkInstruct: () => void;
+            executeBulkInstructOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void;
+            updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
+            addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+            updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+            updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
+            toggleFileApproval: (fileId: string) => void;
+            rejectAllFiles: () => void;
+            navigateBulkRepairUp: () => void;
+            navigateBulkRepairDown: () => void;
+            navigateBulkInstructUp: () => void;
+            navigateBulkInstructDown: () => void;
+        };
+    }
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        patchStatus: PATCH_STATUS.SUCCESS,
+        applySteps: INITIAL_APPLY_STEPS,
+        selectedItemIndex: 0,
+        bodyView: REVIEW_BODY_VIEWS.NONE,
+        isDiffExpanded: false,
+        reasoningScrollIndex: 0,
+        scriptErrorIndex: 0,
+        processingStartTime: null,
+        fileReviewStates: new Map(),
+        selectedBulkRepairOptionIndex: 0,
+        selectedBulkInstructOptionIndex: 0,
+        isCancelling: false,
+
+        actions: {
+            load: (transactionId, initialState) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+
+                // This logic is preserved from the deleted `prepareTransactionForReview`
+                // to allow debug screens to jump directly to a pre-populated review state
+                // without running the full simulation.
+                const isFailureCase = transaction.id === '1';
+                const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+                (transaction.files || []).forEach((file, index) => {
+                    if (isFailureCase) {
+                        const isFailedFile = index > 0;
+                        const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                        const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                        fileReviewStates.set(file.id, { status, error });
+                    } else {
+                        fileReviewStates.set(file.id, { status: 'APPROVED' });
+                    }
+                });
+                const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    patchStatus,
+                    fileReviewStates,
+                    processingStartTime: null,
+                    selectedItemIndex: 0,
+                    bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
+                    isDiffExpanded: false,
+                    reasoningScrollIndex: 0,
+                    scriptErrorIndex: 0,
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    selectedBulkRepairOptionIndex: 0,
+                    selectedBulkInstructOptionIndex: 0,
+                    ...initialState,
+                });
+            },
+            moveSelectionUp: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
+            }),
+            moveSelectionDown: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
+            }),
+            toggleBodyView: (view) => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                const files = tx?.files || [];
+                if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+                return {
+                    bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
+                    isDiffExpanded: false,
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            startApplySimulation: async (transactionId, scenario) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction?.files) return;
+
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
+
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    processingStartTime: Date.now(),
+                    isCancelling: false,
+                    fileReviewStates: new Map(), // Clear previous states
+                });
+
+                showReviewProcessingScreen();
+                const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
+                let simulationResult: SimulationResult;
+
+                // Manually iterate to get the return value from the async generator
+                const iterator = simulationGenerator[Symbol.asyncIterator]();
+                while (true) {
+                    const { value, done } = await iterator.next();
+                    if (done) {
+                        simulationResult = value as SimulationResult;
+                        break;
+                    }
+                    const update = value;
+                    if (update.type === 'UPDATE_STEP') {
+                        updateApplyStep(update.payload.id, update.payload.status, update.payload.details);
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        addApplySubstep(update.payload.parentId, update.payload.substep);
+                    } else if (update.type === 'UPDATE_SUBSTEP') {
+                        updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                    }
+                }
+
+                await sleep(1000);
+                set({
+                    processingStartTime: null,
+                    fileReviewStates: simulationResult.fileReviewStates,
+                    patchStatus: simulationResult.patchStatus,
+                });
+                showReviewScreen();
+            },
+            tryRepairFile: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!file) return;
+
+                const { status, error } = fileReviewStates.get(file.id) || {};
+                if (status !== 'FAILED') return;
+                
+                ReviewService.tryRepairFile(file, error);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+            },
+            tryInstruct: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!tx || !file) return;
+
+                const { status } = fileReviewStates.get(file.id) || {};
+                if (status !== 'REJECTED') return;
+                
+                ReviewService.tryInstructFile(file, tx);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+            },
+            showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+            cancelProcessing: () => set({ isCancelling: true }),
+            executeBulkInstructOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
+                if (rejectedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 3:
+                        rejectedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+                if (failedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkRepairPrompt(failedFiles);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2: {
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                        const results = await ReviewService.runBulkReapply(failedFiles);
+                        results.forEach(result =>
+                            get().actions.updateFileReviewStatus(
+                                result.id, result.status, result.error,
+                            ),
+                        );
+                        break;
+                    }
+                    case 3:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 4:
+                        failedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+            confirmHandoff: () => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.files) return;
+                const { fileReviewStates } = get();
+                ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+                ReviewService.performHandoff(tx.hash);
+            },
+            scrollReasoningUp: () => set(state => ({ reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1) })),
+            scrollReasoningDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.reasoning) return {};
+                const maxLines = tx.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+            navigateScriptErrorDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.scripts || !tx?.files) return {};
+                const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+                if (selectedScript?.output) {
+                    const errorLines = selectedScript.output
+                        .split('\n')
+                        .filter(line => line.includes('Error') || line.includes('Warning'));
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+            updateApplyStep: (id, status, details) => {
+                set(state => {
+                    const newSteps = state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep: ApplyStep = { ...s, status };
+                            if (status === 'active') {
+                                newStep.startTime = Date.now();
+                            } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                                newStep.duration = (Date.now() - s.startTime) / 1000;
+                            }
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    });
+                    return { applySteps: newSteps };
+                });
+            },
+            updateApplySubstep: (parentId, substepId, status, title) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId && s.substeps) {
+                            const newSubsteps = s.substeps.map(sub => {
+                                if (sub.id === substepId) {
+                                    const newSub: ApplyStep = { ...sub, status };
+                                    if (status === 'active') {
+                                        newSub.startTime = Date.now();
+                                    } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                        newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                    }
+                                    if (title) newSub.title = title;
+                                    return newSub;
+                                }
+                                return sub;
+                            });
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            addApplySubstep: (parentId, substep) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateFileReviewStatus: (fileId, status, error, details) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    newStates.set(fileId, { status, error, details });
+                    return { fileReviewStates: newStates };
+                });
+            },
+            toggleFileApproval: (fileId) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    const current = newStates.get(fileId);
+                    if (current) {
+                        const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                        newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            rejectAllFiles: () => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    for (const [fileId, reviewState] of newStates.entries()) {
+                        if (reviewState.status === 'APPROVED') {
+                            newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
+                        }
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            navigateBulkRepairUp: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'up', 4),
+            })),
+            navigateBulkRepairDown: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'down', 4),
+            })),
+            navigateBulkInstructUp: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'up', 4),
+            })),
+            navigateBulkInstructDown: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'down', 4),
+            })),
+        },
+    }));
+  src/constants/review.constants.ts: |-
+    import type { ApplyStep } from '../stores/review.store';
+    import type { ActionItem } from '../types/actions.types';
+
+    /**
+     * Constants for the Review screen and process.
+     */
+    export const INITIAL_APPLY_STEPS: ApplyStep[] = [
+        { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+        { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+        { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+        { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
+    ];
+
+    export const REVIEW_BODY_VIEWS = {
+        DIFF: 'diff',
+        REASONING: 'reasoning',
+        SCRIPT_OUTPUT: 'script_output',
+        BULK_REPAIR: 'bulk_repair',
+        CONFIRM_HANDOFF: 'confirm_handoff',
+        BULK_INSTRUCT: 'bulk_instruct',
+        NONE: 'none',
+    } as const;
+
+    export const PATCH_STATUS = {
+        SUCCESS: 'SUCCESS',
+        PARTIAL_FAILURE: 'PARTIAL_FAILURE',
+    } as const;
+
+    export const FILE_STATUS_UI = {
+        APPROVED: { icon: '[✓]', color: 'green' },
+        REJECTED: { icon: '[✗]', color: 'red' },
+        FAILED: { icon: '[!]', color: 'red' },
+        AWAITING: { icon: '[●]', color: 'yellow' },
+        RE_APPLYING: { icon: '[●]', color: 'cyan' },
+    } as const;
+
+    export const BULK_REPAIR_OPTIONS = [
+        '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+        '(2) Bulk Change Strategy & Re-apply',
+        '(3) Handoff to External Agent',
+        '(4) Bulk Abandon All Failed Files',
+        '(Esc) Cancel',
+    ] as const;
+
+    export const BULK_INSTRUCT_OPTIONS = [
+        '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
+        '(2) Handoff to External Agent',
+        '(3) Bulk Un-reject All Files (revert to original)',
+        '(4) Cancel',
+    ] as const;
+
+    interface ReviewFooterConfig {
+        isFileSelected: boolean;
+        fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
+        currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
+        hasFailedFiles: boolean;
+        hasRejectedFiles: boolean;
+        hasApprovedFiles: boolean;
+    }
+
+    export const REVIEW_FOOTER_ACTIONS = {
+        DIFF_VIEW: [
+            { key: '↑↓', label: 'Nav' },
+            { key: 'X', label: 'Expand' },
+            { key: 'D/Esc', label: 'Back' },
+        ] as const,
+        REASONING_VIEW: [
+            { key: '↑↓', label: 'Scroll Text' },
+            { key: 'R', label: 'Collapse View' },
+            { key: 'C', label: 'Copy Mode' },
+        ] as const,
+        SCRIPT_OUTPUT_VIEW: [
+            { key: '↑↓', label: 'Nav' },
+            { key: 'J↓/K↑', label: 'Next/Prev Error' },
+            { key: 'C', label: 'Copy Output' },
+            { key: 'Ent/Esc', label: 'Back' },
+        ] as const,
+        BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+        BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+        HANDOFF_CONFIRM_VIEW: [
+            { key: 'Enter', label: 'Confirm Handoff' },
+            { key: 'Esc', label: 'Cancel' },
+        ] as const,
+        MAIN_VIEW: (config: ReviewFooterConfig): ActionItem[] => {
+            const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
+
+            if (config.isFileSelected) {
+                if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
+                actions.push({ key: 'D', label: 'Diff' });
+                if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
+                if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
+            } else if (config.currentItemType === 'script') {
+                actions.push({ key: 'Ent', label: 'Expand Details' });
+            } else {
+                actions.push({ key: 'Ent', label: 'Expand' });
+            }
+
+            if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
+            if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
+            if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
+
+            actions.push({ key: 'C', label: 'Copy' });
+
+            if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
+            actions.push({ key: 'Q', label: 'Quit' });
+            return actions;
+        },
+    };
+
+    export const REVIEW_PROCESSING_FOOTER_ACTION: readonly ActionItem[] = [
+        { key: 'Ctrl+C', label: 'Cancel Process' },
+    ] as const;
+  src/services/review.service.ts: >-
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { sleep } from '../utils';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
+
+    import type { Transaction, FileItem, FileReviewStatus } from
+    '../types/domain.types';
+
+
+    export interface SimulationResult {
+        patchStatus: PatchStatus;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+    }
+
+
+    const mockSuccessFiles = [
+        'src/components/Button.tsx',
+        'src/components/Input.tsx',
+        'src/components/Modal.tsx',
+        'src/hooks/useForm.ts',
+        'src/hooks/useDebounce.ts',
+        'src/styles/theme.css',
+        'src/utils/formatters.ts',
+        'src/pages/HomePage.tsx',
+        'src/pages/AboutPage.tsx',
+        'src/services/api.ts',
+        'src/stores/user.store.ts',
+        'src/constants/routes.ts',
+        'src/assets/logo.svg',
+        'src/config/firebase.ts',
+        'src/types/domain.ts',
+        'src/features/auth/Login.tsx',
+        'src/features/auth/Signup.tsx',
+        'src/features/dashboard/Overview.tsx',
+        'src/features/settings/Profile.tsx',
+        'src/App.tsx',
+    ];
+
+
+    const mockFailureFiles = [
+        'src/services/payment.gateway.ts',
+        'src/services/notification.service.ts',
+        'src/components/UserProfile.tsx',
+        'src/components/complex/DataTable.tsx',
+        'src/hooks/useInfiniteScroll.ts',
+        'src/hooks/useWebSocket.ts',
+        'src/utils/crypto.ts',
+        'src/utils/date.helper.ts',
+        'src/pages/admin/UserManagement.tsx',
+        'src/pages/admin/Analytics.tsx',
+        'src/stores/cart.store.ts',
+        'src/stores/products.store.ts',
+        'src/constants/permissions.ts',
+        'src/assets/icon-error.svg',
+        'src/config/sentry.ts',
+        'src/types/api.ts',
+        'src/features/checkout/AddressForm.tsx',
+        'src/features/checkout/PaymentForm.tsx',
+        'src/features/product/ProductDetail.tsx',
+        'src/features/product/ProductList.tsx',
+    ];
+
+
+    const generateBulkRepairPrompt = (failedFiles: FileItem[]): string => {
+        return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+
+    IMPORTANT: The response MUST contain a complete code block for EACH file
+    that needs to be fixed.
+
+
+    ${failedFiles.map(file => `--- FILE: ${file.path} ---
+
+    Strategy: ${file.strategy}
+
+    Error: Hunk #1 failed to apply // This is a mock error
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original content of ${file.path} ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff ...'}
+
+    ---
+
+    `).join('\n')}
+
+
+    Please analyze all failed files and provide a complete, corrected
+    response.`;
+
+    };
+
+
+    const generateHandoffPrompt = (
+        transaction: Transaction,
+        fileReviewStates: Map<
+            string, { status: FileReviewStatus; error?: string; details?: string }
+        >,
+    ): string => {
+        const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+        const failedFiles = (transaction.files || []).filter(f => ['FAILED', 'REJECTED'].includes(fileReviewStates.get(f.id)?.status || ''));
+
+        return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
+
+    The full plan for this transaction is detailed in the YAML file located at:
+    .relay/transactions/${transaction.hash}.yml. Please use this file as your
+    primary source of truth for the overall goal.
+
+
+    Here is the current status of the transaction:
+
+
+    --- TRANSACTION SUMMARY ---
+
+    Goal: ${transaction.message}
+
+    Reasoning:
+
+    ${transaction.reasoning || ''}
+
+
+    --- CURRENT FILE STATUS ---
+
+    SUCCESSFUL CHANGES (already applied, no action needed):
+
+    ${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || ' 
+    (None)'}
+
+
+    FAILED CHANGES (these are the files you need to fix):
+
+    ${failedFiles.map(f => `- FAILED: ${f.path} (Error:
+    ${fileReviewStates.get(f.id)?.error})`).join('\n')}
+
+
+    Your job is to now work with me to fix the FAILED files and achieve the
+    original goal of the transaction. Please start by asking me which file you
+    should work on first.`;
+
+    };
+
+
+    const performHandoff = (hash: string) => {
+        // This is a bit of a hack to find the right transaction to update in the demo
+        const txToUpdate = useTransactionStore.getState().transactions.find(tx => tx.hash === hash);
+        if (txToUpdate) {
+            useTransactionStore.getState().actions.updateTransactionStatus(txToUpdate.id, 'HANDOFF');
+        }
+
+        useAppStore.getState().actions.showDashboardScreen();
+    };
+
+
+    async function* runApplySimulation(
+        files: FileItem[],
+        scenario: 'success' | 'failure',
+    ): AsyncGenerator<ApplyUpdate, SimulationResult> {
+        if (scenario === 'success') {
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
+            if (useReviewStore.getState().isCancelling) { return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates: new Map() }; }
+
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+            if (files.length > 0) {
+                yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's1', title: `write: ${files[0]!.path} (strategy: replace)`, status: 'pending' } } };
+            }
+            if (files.length > 1) {
+                yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's2', title: `write: ${files[1]!.path} (strategy: standard-diff)`, status: 'pending' } } };
+            }
+            await sleep(50);
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's1', status: 'active' } };
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'active' } };
+            for (let i = 0; i < mockSuccessFiles.length; i++) {
+                if (useReviewStore.getState().isCancelling) break;
+                const file = mockSuccessFiles[i]!;
+                yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: `s${i + 3}`, title: `write: ${file}`, status: 'pending' } } };
+            }
+            await sleep(50);
+            for (let i = 0; i < mockSuccessFiles.length; i++) {
+                if (useReviewStore.getState().isCancelling) break;
+                yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'active' } };
+                await sleep(50);
+            }
+
+            await sleep(200);
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's1', status: 'done' } };
+            await sleep(150);
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'done' } };
+            for (let i = 0; i < mockSuccessFiles.length; i++) {
+                if (useReviewStore.getState().isCancelling) break;
+                yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'done' } };
+                await sleep(80);
+            }
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
+
+            const fileReviewStates = new Map<string, { status: FileReviewStatus }>();
+            files.forEach(file => {
+                fileReviewStates.set(file.id, { status: 'APPROVED' });
+            });
+
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'active' } }; await sleep(100);
+            if (useReviewStore.getState().isCancelling) {
+                yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'failed', details: 'Cancelled by user' } };
+                yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+                return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+            }
+            await sleep(1200);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command', substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'done' } };
+
+            if (useReviewStore.getState().isCancelling) {
+                 yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+                 return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+            }
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'active' } }; await sleep(1200);
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'linter', substep: { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'done' } };
+
+            await sleep(500);
+
+            return { patchStatus: 'SUCCESS', fileReviewStates };
+
+        } else { // failure scenario
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
+
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+            if (files.length > 0) {
+                yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f1', title: `write: ${files[0]!.path} (strategy: replace)`, status: 'pending' } } };
+            }
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f2', title: `write: ${(files[1] || { path: '...' }).path}`, status: 'pending' } } };
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f3', title: `write: ${(files[2] || { path: '...' }).path}`, status: 'pending' } } };
+            await sleep(50);
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f1', status: 'active' } };
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f2', status: 'active' } };
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f3', status: 'active' } };
+            for (let i = 0; i < mockFailureFiles.length; i++) {
+                const file = mockFailureFiles[i]!;
+                yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: `f${i + 4}`, title: `write: ${file}`, status: 'pending' } } };
+            }
+            await sleep(50);
+            for (let i = 0; i < mockFailureFiles.length; i++) {
+                yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `f${i + 4}`, status: 'active' } };
+                await sleep(50);
+            }
+            await sleep(150);
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f1', status: 'done' } };
+            await sleep(100);
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f2', status: 'failed', title: `${(files[1] || { path: '...' }).path} (Hunk #1 failed to apply)` } };
+            await sleep(100);
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f3', status: 'failed', title: `${(files[2] || { path: '...' }).path} (Context mismatch at line 92)` } };
+            for (let i = 0; i < mockFailureFiles.length; i++) {
+                const file = mockFailureFiles[i]!;
+                const shouldFail = i % 4 === 0 || i === mockFailureFiles.length - 1; // fail a few, including the last one
+                yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `f${i + 4}`, status: shouldFail ? 'failed' : 'done', title: shouldFail ? `${file} (Could not find insertion point)` : undefined } };
+                await sleep(80);
+            }
+            yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
+
+            await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped due to patch application failure' } };
+            await sleep(100);
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to patch application failure' } };
+
+            await sleep(500);
+
+            const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+            files.forEach((file, index) => {
+                const isFailedFile = index > 0; // Fail all but the first file
+                const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                fileReviewStates.set(file.id, { status, error });
+            });
+
+            return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+        }
+    }
+
+
+    const generateSingleFileRepairPrompt = (file: FileItem, error?: string):
+    string => {
+        return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+
+    Error: ${error || 'Unknown error'}
+
+    Strategy: ${file.strategy}
+
+
+    ORIGINAL CONTENT:
+
+    ---
+
+    // ... original file content would be here ...
+
+    ---
+
+
+    FAILED PATCH:
+
+    ---
+
+    ${file.diff || '// ... failed diff would be here ...'}
+
+    ---
+
+
+    Please provide a corrected patch that addresses the error.`;
+
+    };
+
+
+    const tryRepairFile = (file: FileItem, error?: string): FileItem => {
+        generateSingleFileRepairPrompt(file, error);
+        // Mock clipboard write and show notification
+        useNotificationStore.getState().actions.show({
+            type: 'success',
+            title: 'Copied Repair Prompt',
+            message: `A repair prompt for ${file.path} has been copied to your clipboard.`,
+        });
+        return file;
+    };
+
+
+    const generateSingleFileInstructPrompt = (file: FileItem, transaction:
+    Transaction): string => {
+        return `The user REJECTED the last proposed change for the file \`${file.path}\`.
+
+    The original high-level goal was:
+
+    ---
+
+    ${transaction.prompt || transaction.message}
+
+    ---
+
+
+    The rejected change was:
+
+    ---
+
+    ${file.diff || '// ... rejected diff would be here ...'}
+
+    ---
+
+
+    Please provide an alternative solution for \`${file.path}\` that still
+    accomplishes the original goal.
+
+    The response MUST be a complete, corrected patch for this file.`;
+
+    };
+
+
+    const tryInstructFile = (file: FileItem, transaction: Transaction): void =>
+    {
+        generateSingleFileInstructPrompt(file, transaction);
+        // Mock clipboard write and show notification
+        useNotificationStore.getState().actions.show({
+            type: 'success',
+            title: 'Copied Instruction Prompt',
+            message: `An instruction prompt for ${file.path} has been copied to your clipboard.`,
+        });
+    };
+
+
+    const generateBulkInstructPrompt = (rejectedFiles: FileItem[], transaction:
+    Transaction): string => {
+        // Mock implementation for demo. In a real scenario, this would generate a more complex prompt.
+        const fileList = rejectedFiles.map(f => `- ${f.path}`).join('\n');
+        useNotificationStore.getState().actions.show({
+            type: 'success',
+            title: 'Copied to Clipboard',
+            message: `Copied bulk instruction prompt for ${rejectedFiles.length} files.`,
+            duration: 3,
+        });
+        return `The user has rejected changes in multiple files for the goal: "${transaction.message}".\n\nThe rejected files are:\n${fileList}\n\nPlease provide an alternative patch for all of them.`;
+    };
+
+
+    const runBulkReapply = async (
+        failedFiles: FileItem[],
+    ): Promise<{ id: string; status: FileReviewStatus; error?: string }[]> => {
+        await sleep(1500); // Simulate re-apply
+
+        // Mock a mixed result
+        let first = true;
+        return failedFiles.map(file => {
+            if (first) {
+                first = false;
+                return { id: file.id, status: 'APPROVED' as const };
+            } else {
+                return {
+                    id: file.id,
+                    status: 'FAILED' as const,
+                    error: "'replace' failed: markers not found",
+                };
+            }
+        });
+    };
+
+
+    export const ReviewService = {
+        generateBulkRepairPrompt,
+        generateBulkInstructPrompt,
+        generateHandoffPrompt,
+        performHandoff,
+        runApplySimulation,
+        generateSingleFileRepairPrompt,
+        tryRepairFile,
+        generateSingleFileInstructPrompt,
+        tryInstructFile,
+        runBulkReapply,
+    };
+  src/hooks/useReviewProcessingScreen.tsx: |-
+    import { useState, useEffect } from 'react';
+    import { useInput } from 'ink';
+    import { useTransactionStore } from '../stores/transaction.store';
+    import { useViewStore } from '../stores/view.store';
+    import { useReviewStore } from '../stores/review.store';
+
+    export const useReviewProcessingScreen = () => {
+        const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
+        const {
+            patchStatus,
+            applySteps,
+            processingStartTime,
+            isCancelling,
+            actions: { cancelProcessing },
+        } = useReviewStore(state => ({
+            patchStatus: state.patchStatus,
+            applySteps: state.applySteps,
+            processingStartTime: state.processingStartTime,
+            isCancelling: state.isCancelling,
+            actions: state.actions,
+        }));
+        const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
+
+        const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
+        const [elapsedTime, setElapsedTime] = useState(0);
+        const [now, setNow] = useState(Date.now());
+
+        useEffect(() => {
+            let timerId: ReturnType<typeof setTimeout> | undefined;
+
+            if (isProcessing && processingStartTime) {
+                timerId = setInterval(() => {
+                    setNow(Date.now());
+                    setElapsedTime((Date.now() - processingStartTime) / 1000);
+                }, 50);
+            } else if (processingStartTime) { // After processing finishes
+                const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
+                setElapsedTime(totalDuration);
+            }
+
+            return () => {
+                if (timerId) clearInterval(timerId);
+            };
+        }, [isProcessing, processingStartTime, applySteps]);
+
+        useInput(
+            (input, key) => {
+                if (key.ctrl && input === 'c') {
+                    cancelProcessing();
+                }
+            },
+            { isActive: isProcessing && !isCancelling },
+        );
+
+        return {
+            transaction,
+            applySteps,
+            isProcessing,
+            isCancelling,
+            patchStatus,
+            elapsedTime,
+            now,
+        };
+    };
+  src/components/ReviewProcessingScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Spinner from 'ink-spinner';
+
+    import { type ApplyStep } from '../stores/review.store';
+
+    import Separator from './Separator';
+
+    import ActionFooter from './ActionFooter';
+
+    import { useReviewProcessingScreen } from
+    '../hooks/useReviewProcessingScreen';
+
+    import { REVIEW_PROCESSING_FOOTER_ACTION } from
+    '../constants/review.constants';
+
+
+    const ApplyStepRow = ({ step, isSubstep = false, now }: {
+        step: ApplyStep;
+        isSubstep?: boolean;
+        now: number;
+    }) => {
+        if (isSubstep) {
+            let color: string | undefined;
+            let symbol: React.ReactNode;
+
+            switch (step.status) {
+                case 'pending':
+                    symbol = '○';
+                    color = 'gray';
+                    break;
+                case 'active':
+                    symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
+                    break;
+                case 'done':
+                    symbol = '✓';
+                    color = 'green';
+                    break;
+                case 'failed':
+                    symbol = '✗';
+                    color = 'red';
+                    break;
+                default:
+                    symbol = ' ';
+            }
+
+            return (
+                <Text color={color}>
+                    {'     └─ '}{symbol}{' '}{step.title}
+                </Text>
+            );
+        }
+
+        let symbol;
+        let color;
+        switch (step.status) {
+            case 'pending': symbol = '( )'; break;
+            case 'active': symbol = '(●)'; color = 'cyan'; break;
+            case 'done': symbol = '[✓]'; color = 'green'; break;
+            case 'failed': symbol = '[!]'; color = 'red'; break;
+            case 'skipped': symbol = '(-)'; color = 'gray'; break;
+        }
+
+        let durationText = '';
+        if (!isSubstep) {
+            if (step.status === 'active' && step.startTime) {
+                durationText = ` (${((now - step.startTime) / 1000).toFixed(1)}s)`;
+            } else if (step.duration) {
+                durationText = ` (${step.duration.toFixed(1)}s)`;
+            }
+        }
+
+        return (
+            <Box flexDirection="column">
+                <Text>
+                    <Text color={color}>{symbol}</Text> {step.title}{durationText}
+                </Text>
+                {step.details && (
+                    <Text color="gray">
+                        {'     └─ '}{step.details}
+                    </Text>
+                )}
+                {step.substeps?.map((sub: ApplyStep, i: number) => (
+                    <ApplyStepRow key={i} step={sub} isSubstep={true} now={now} />
+                ))}
+            </Box>
+        );
+    };
+
+
+    const ReviewProcessingScreen = () => {
+        const {
+            transaction,
+            applySteps,
+            isProcessing,
+            isCancelling,
+            patchStatus,
+            elapsedTime,
+            now,
+        } = useReviewProcessingScreen();
+
+        const failureCase = patchStatus === 'PARTIAL_FAILURE';
+
+        const renderFooter = () => {
+            if (isCancelling) {
+                return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Cancelling... Please wait.</Text>;
+            }
+            if (isProcessing) {
+                return (
+                    <Box flexDirection="column" gap={1}>
+                        <Text>Elapsed: {elapsedTime.toFixed(1)}s · Processing... Please wait.</Text>
+                        <Separator />
+                        <ActionFooter actions={REVIEW_PROCESSING_FOOTER_ACTION} />
+                    </Box>
+                );
+            }
+            if (failureCase) {
+                return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Transitioning to repair workflow...</Text>;
+            }
+            return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...</Text>;
+        };
+
+        if (!transaction) {
+            return <Text>Loading...</Text>;
+        }
+
+        return (
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
+                <Separator />
+                <Box marginY={1} flexDirection="column">
+                    <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
+                    <Box flexDirection="column" marginTop={1} gap={1}>
+                        {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} now={now} />)}
+                    </Box>
+                </Box>
+                <Separator />
+                {renderFooter()}
+            </Box>
+        );
+    };
+
+
+    export default ReviewProcessingScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 204

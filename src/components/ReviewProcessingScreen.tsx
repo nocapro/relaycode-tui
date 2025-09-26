@@ -1,12 +1,16 @@
 import { Box, Text } from 'ink';
-import { useEffect, useState } from 'react';
 import Spinner from 'ink-spinner';
-import { useTransactionStore } from '../stores/transaction.store';
-import { useViewStore } from '../stores/view.store';
-import { useReviewStore, type ApplyStep } from '../stores/review.store';
+import { type ApplyStep } from '../stores/review.store';
 import Separator from './Separator';
+import ActionFooter from './ActionFooter';
+import { useReviewProcessingScreen } from '../hooks/useReviewProcessingScreen'; // This will be created
+import { getReviewProcessingFooterActions } from '../constants/review.constants';
 
-const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep; isSubstep?: boolean }) => {
+const ApplyStepRow = ({ step, isSubstep = false, now }: {
+    step: ApplyStep;
+    isSubstep?: boolean;
+    now: number;
+}) => {
     if (isSubstep) {
         let color: string | undefined;
         let symbol: React.ReactNode;
@@ -48,10 +52,19 @@ const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep; isSubstep?
         case 'skipped': symbol = '(-)'; color = 'gray'; break;
     }
 
+    let durationText = '';
+    if (!isSubstep) {
+        if (step.status === 'active' && step.startTime) {
+            durationText = ` (${((now - step.startTime) / 1000).toFixed(1)}s)`;
+        } else if (step.duration) {
+            durationText = ` (${step.duration.toFixed(1)}s)`;
+        }
+    }
+
     return (
         <Box flexDirection="column">
             <Text>
-                <Text color={color}>{symbol}</Text> {step.title} {step.duration && !isSubstep && `(${step.duration}s)`}
+                <Text color={color}>{symbol}</Text> {step.title}{durationText}
             </Text>
             {step.details && (
                 <Text color="gray">
@@ -59,51 +72,44 @@ const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep; isSubstep?
                 </Text>
             )}
             {step.substeps?.map((sub: ApplyStep, i: number) => (
-                <ApplyStepRow key={i} step={sub} isSubstep={true} />
+                <ApplyStepRow key={i} step={sub} isSubstep={true} now={now} />
             ))}
         </Box>
     );
 };
 
 const ReviewProcessingScreen = () => {
-    const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
-    const { patchStatus, applySteps, processingStartTime } = useReviewStore(state => ({
-        patchStatus: state.patchStatus,
-        applySteps: state.applySteps,
-        processingStartTime: state.processingStartTime,
-    }));
-    const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
-
-    const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
-    const [elapsedTime, setElapsedTime] = useState(0);
-
-    useEffect(() => {
-        let timerId: ReturnType<typeof setTimeout> | undefined;
-
-        if (isProcessing && processingStartTime) {
-            timerId = setInterval(() => {
-                setElapsedTime((Date.now() - processingStartTime) / 1000);
-            }, 50);
-        } else {
-            const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
-            setElapsedTime(totalDuration);
-        }
-
-        return () => {
-            if (timerId) clearInterval(timerId);
-        };
-    }, [isProcessing, processingStartTime, applySteps]);
+    const {
+        transaction,
+        applySteps,
+        isProcessing,
+        isCancelling,
+        patchStatus,
+        elapsedTime,
+        now,
+        isSkippable,
+    } = useReviewProcessingScreen();
 
     const failureCase = patchStatus === 'PARTIAL_FAILURE';
 
-    let footerText;
-    if (isProcessing) {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing... Please wait.`;
-    } else if (failureCase) {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning to repair workflow...`;
-    } else {
-        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...`;
-    }
+    const renderFooter = () => {
+        if (isCancelling) {
+            return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Cancelling... Please wait.</Text>;
+        }
+        if (isProcessing) {
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text>Elapsed: {elapsedTime.toFixed(1)}s · Processing... Please wait.</Text>
+                    <Separator />
+                    <ActionFooter actions={getReviewProcessingFooterActions(isSkippable)} />
+                </Box>
+            );
+        }
+        if (failureCase) {
+            return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Transitioning to repair workflow...</Text>;
+        }
+        return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...</Text>;
+    };
 
     if (!transaction) {
         return <Text>Loading...</Text>;
@@ -116,11 +122,11 @@ const ReviewProcessingScreen = () => {
             <Box marginY={1} flexDirection="column">
                 <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
                 <Box flexDirection="column" marginTop={1} gap={1}>
-                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} />)}
+                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} now={now} />)}
                 </Box>
             </Box>
             <Separator />
-            <Text>{footerText}</Text>
+            {renderFooter()}
         </Box>
     );
 };

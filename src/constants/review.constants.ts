@@ -106,3 +106,13 @@ export const REVIEW_FOOTER_ACTIONS = {
         return actions;
     },
 };
+
+export const getReviewProcessingFooterActions = (
+    isSkippable: boolean,
+): readonly ActionItem[] => {
+    const actions: ActionItem[] = [{ key: 'Ctrl+C', label: 'Cancel Process' }];
+    if (isSkippable) {
+        actions.push({ key: 'S', label: 'Skip Script' });
+    }
+    return actions;
+};

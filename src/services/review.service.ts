@@ -1,5 +1,6 @@
 import { useTransactionStore } from '../stores/transaction.store';
 import { useAppStore } from '../stores/app.store';
+import { useReviewStore } from '../stores/review.store';
 import { sleep } from '../utils';
 import { useNotificationStore } from '../stores/notification.store';
 import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
@@ -125,7 +126,8 @@ async function* runApplySimulation(
 ): AsyncGenerator<ApplyUpdate, SimulationResult> {
     if (scenario === 'success') {
         yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
-        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done', duration: 0.1 } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
+        if (useReviewStore.getState().isCancelling) { return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates: new Map() }; }
 
         yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
         if (files.length > 0) {
@@ -138,11 +140,13 @@ async function* runApplySimulation(
         yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's1', status: 'active' } };
         yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'active' } };
         for (let i = 0; i < mockSuccessFiles.length; i++) {
+            if (useReviewStore.getState().isCancelling) break;
             const file = mockSuccessFiles[i]!;
             yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: `s${i + 3}`, title: `write: ${file}`, status: 'pending' } } };
         }
         await sleep(50);
         for (let i = 0; i < mockSuccessFiles.length; i++) {
+            if (useReviewStore.getState().isCancelling) break;
             yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'active' } };
             await sleep(50);
         }
@@ -152,31 +156,61 @@ async function* runApplySimulation(
         await sleep(150);
         yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'done' } };
         for (let i = 0; i < mockSuccessFiles.length; i++) {
+            if (useReviewStore.getState().isCancelling) break;
             yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'done' } };
             await sleep(80);
         }
-        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done', duration: 1.8 } };
-
-        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'active' } }; await sleep(1300);
-        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command', substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' } } };
-        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'done', duration: 2.3 } };
-
-        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'active' } }; await sleep(1200);
-        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'linter', substep: { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' } } };
-        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'done', duration: 1.2 } };
-
-        await sleep(500);
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
 
         const fileReviewStates = new Map<string, { status: FileReviewStatus }>();
         files.forEach(file => {
             fileReviewStates.set(file.id, { status: 'APPROVED' });
         });
 
+        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'active' } }; await sleep(100);
+        if (useReviewStore.getState().isCancelling) {
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'failed', details: 'Cancelled by user' } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+            return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+        }
+
+        let wasPostCommandSkipped = false;
+        const postCommandStartTime = Date.now();
+        const scriptDuration = 2500; // Mock script duration
+        while (Date.now() - postCommandStartTime < scriptDuration) {
+            if (useReviewStore.getState().isSkipping) {
+                useReviewStore.getState().actions.resetSkip();
+                wasPostCommandSkipped = true;
+                break;
+            }
+            if (useReviewStore.getState().isCancelling) {
+                break; // Let the global cancel check after this step handle the state update
+            }
+            await sleep(50);
+        }
+
+        if (wasPostCommandSkipped) {
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped by user' } };
+        } else if (!useReviewStore.getState().isCancelling) {
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command', substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'done' } };
+        }
+
+        if (useReviewStore.getState().isCancelling) {
+             yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+             return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+        }
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'active' } }; await sleep(1200);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'linter', substep: { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' } } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'done' } };
+
+        await sleep(500);
+
         return { patchStatus: 'SUCCESS', fileReviewStates };
 
     } else { // failure scenario
         yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
-        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done', duration: 0.1 } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
 
         yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
         if (files.length > 0) {
@@ -209,7 +243,7 @@ async function* runApplySimulation(
             yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `f${i + 4}`, status: shouldFail ? 'failed' : 'done', title: shouldFail ? `${file} (Could not find insertion point)` : undefined } };
             await sleep(80);
         }
-        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done', duration: 2.1 } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
 
         await sleep(100);
         yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped due to patch application failure' } };

@@ -1,0 +1,871 @@
+uuid: f19c4383-a7dd-47e2-8929-37367c3b24f5
+projectId: relaycode-tui
+createdAt: '2025-09-26T07:03:43.262Z'
+gitCommitMsg: >-
+  feat(ui): display live duration for active review steps
+
+  Refactored the `ReviewProcessingScreen` to show a live, ticking duration for
+  each individual processing step (including substeps) while it is active.
+
+  - Added an optional `startTime` property to the `ApplyStep` interface in
+  `review.store.ts`. - Updated store actions to set `startTime` when a step's
+  status changes to 'active'. - Modified `ReviewProcessingScreen.tsx` to use a
+  high-frequency ticker that updates a `now` timestamp. - The `ApplyStepRow`
+  component now uses this `now` timestamp to calculate and display the live
+  elapsed time for any active step, falling back to the final recorded
+  `duration` for completed steps.
+promptSummary: >-
+  The user wanted to refactor the Review Processing screen to show live-updating
+  timers for each active step.
+reasoning:
+  - >-
+    This refactoring will enhance the `ReviewProcessingScreen` to display a
+    live, ticking duration for each individual processing step as it's active. I
+    will start by modifying the state management to track when each step begins,
+    then update the UI component to consume this new state and render the live
+    timers.
+  - >-
+    First, I'll update the `ApplyStep` type in `src/stores/review.store.ts` to
+    include an optional `startTime`. I'll then modify the `updateApplyStep` and
+    `updateApplySubstep` actions to set this timestamp whenever a step or
+    substep becomes active.
+  - >-
+    Next, I'll refactor the `ReviewProcessingScreen.tsx` component. I'll change
+    its interval-based state to simply track the current time, triggering
+    re-renders. The `ApplyStepRow` sub-component will be made aware of the
+    current time and will be responsible for calculating and displaying the live
+    elapsed duration for any active step it represents. This makes the duration
+    display dynamic and reactive to state changes.
+operations:
+  - type: write
+    path: src/stores/review.store.ts
+    content: >+
+      --- src/stores/review.store.ts
+
+      +++ src/stores/review.store.ts
+
+      @@ ... @@
+           status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+           details?: string;
+           substeps?: ApplyStep[];
+      -    duration?: number;
+
+      +    duration?: number;
+
+      +    startTime?: number;
+       }
+       
+       export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof REVIEW_BODY_VIEWS];
+      @@ ... @@
+               updateApplyStep: (id, status, duration, details) => {
+                   set(state => ({
+                       applySteps: state.applySteps.map(s => {
+      -                    if (s.id === id) {
+
+      -                        const newStep = { ...s, status };
+
+      -                        if (duration !== undefined) newStep.duration =
+      duration;
+
+      -                        if (details !== undefined) newStep.details =
+      details;
+
+      -                        return newStep;
+
+      +                    if (s.id === id) {
+
+      +                        const newStep: ApplyStep = { ...s, status };
+
+      +                        if (duration !== undefined) newStep.duration =
+      duration;
+
+      +                        if (details !== undefined) newStep.details =
+      details;
+
+      +                        if (status === 'active') newStep.startTime =
+      Date.now();
+
+      +                        return newStep;
+                           }
+                           return s;
+                       }),
+      @@ ... @@
+                       applySteps: state.applySteps.map(s => {
+                           if (s.id === parentId && s.substeps) {
+                               const newSubsteps = s.substeps.map(sub => {
+      -                            if (sub.id === substepId) {
+
+      -                                const newSub = { ...sub, status };
+
+      -                                if (title) newSub.title = title;
+
+      -                                return newSub;
+
+      +                            if (sub.id === substepId) {
+
+      +                                const newSub: ApplyStep = { ...sub,
+      status };
+
+      +                                if (title) newSub.title = title;
+
+      +                                if (status === 'active') newSub.startTime
+      = Date.now();
+
+      +                                return newSub;
+                                   }
+                                   return sub;
+                               });
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/ReviewProcessingScreen.tsx
+    content: >+
+      --- src/components/ReviewProcessingScreen.tsx
+
+      +++ src/components/ReviewProcessingScreen.tsx
+
+      @@ -1,5 +1,5 @@
+       import { Box, Text } from 'ink';
+      -import { useEffect, useState } from 'react';
+
+      +import { useEffect, useState, useMemo } from 'react';
+       import Spinner from 'ink-spinner';
+       import { useTransactionStore } from '../stores/transaction.store';
+       import { useViewStore } from '../stores/view.store';
+      @@ -7,7 +7,20 @@
+       import Separator from './Separator';
+       
+      -const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep;
+      isSubstep?: boolean }) => {
+
+      +const ApplyStepRow = ({ step, isSubstep = false, now }: { step:
+      ApplyStep; isSubstep?: boolean; now: number }) => {
+
+      +    const durationDisplay = useMemo(() => {
+
+      +        if (step.status === 'active' && step.startTime) {
+
+      +            const elapsed = ((now - step.startTime) / 1000).toFixed(1);
+
+      +            return `(${elapsed}s)`;
+
+      +        }
+
+      +        if (step.duration) {
+
+      +            return `(${step.duration}s)`;
+
+      +        }
+
+      +        return null;
+
+      +    }, [step, now]);
+
+      +
+           if (isSubstep) {
+               let color: string | undefined;
+               let symbol: React.ReactNode;
+      @@ ... @@
+       
+               return (
+                   <Text color={color}>
+      -                {'     └─ '}{symbol}{' '}{step.title}
+
+      +                {'     └─ '}{symbol}{' '}{step.title} {durationDisplay}
+                   </Text>
+               );
+           }
+       
+           let symbol;
+           let color;
+      +
+           switch (step.status) {
+               case 'pending': symbol = '( )'; break;
+               case 'active': symbol = '(●)'; color = 'cyan'; break;
+      @@ ... @@
+           return (
+               <Box flexDirection="column">
+                   <Text>
+      -                <Text color={color}>{symbol}</Text> {step.title}
+      {step.duration && !isSubstep && `(${step.duration}s)`}
+
+      +                <Text color={color}>{symbol}</Text> {step.title}
+      {durationDisplay}
+                   </Text>
+                   {step.details && (
+                       <Text color="gray">
+                           {'     └─ '}{step.details}
+                       </Text>
+                   )}
+      -            {step.substeps?.map((sub: ApplyStep, i: number) => (
+
+      -                <ApplyStepRow key={i} step={sub} isSubstep={true} />
+
+      +            {step.substeps?.map((sub: ApplyStep) => (
+
+      +                <ApplyStepRow key={sub.id} step={sub} isSubstep={true}
+      now={now} />
+                   ))}
+               </Box>
+           );
+      @@ ... @@
+           const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
+       
+           const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
+      -    const [elapsedTime, setElapsedTime] = useState(0);
+
+      +    const [now, setNow] = useState(() => Date.now());
+       
+           useEffect(() => {
+               let timerId: ReturnType<typeof setTimeout> | undefined;
+       
+      -        if (isProcessing && processingStartTime) {
+
+      +        if (isProcessing) {
+                   timerId = setInterval(() => {
+      -                setElapsedTime((Date.now() - processingStartTime) /
+      1000);
+
+      +                setNow(Date.now());
+                   }, 50);
+      -        } else {
+
+      -            const totalDuration = applySteps.reduce((acc, step) => acc +
+      (step.duration || 0), 0);
+
+      -            setElapsedTime(totalDuration);
+               }
+       
+               return () => {
+                   if (timerId) clearInterval(timerId);
+               };
+      -    }, [isProcessing, processingStartTime, applySteps]);
+
+      +    }, [isProcessing]);
+       
+           const failureCase = patchStatus === 'PARTIAL_FAILURE';
+       
+      +    const totalElapsedTime = useMemo(() => {
+
+      +        if (isProcessing && processingStartTime) {
+
+      +            return (now - processingStartTime) / 1000;
+
+      +        }
+
+      +        return applySteps.reduce((acc, step) => acc + (step.duration ||
+      0), 0);
+
+      +    }, [isProcessing, processingStartTime, applySteps, now]);
+
+      +
+           let footerText;
+           if (isProcessing) {
+      -        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing...
+      Please wait.`;
+
+      +        footerText = `Elapsed: ${totalElapsedTime.toFixed(1)}s ·
+      Processing... Please wait.`;
+           } else if (failureCase) {
+      -        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning
+      to repair workflow...`;
+
+      +        footerText = `Elapsed: ${totalElapsedTime.toFixed(1)}s ·
+      Transitioning to repair workflow...`;
+           } else {
+      -        footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied
+      successfully. Transitioning...`;
+
+      +        footerText = `Elapsed: ${totalElapsedTime.toFixed(1)}s · Patch
+      applied successfully. Transitioning...`;
+           }
+       
+           if (!transaction) {
+      @@ ... @@
+                   <Box marginY={1} flexDirection="column">
+                       <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
+                       <Box flexDirection="column" marginTop={1} gap={1}>
+      -                    {applySteps.map((step: ApplyStep) => <ApplyStepRow
+      key={step.id} step={step} />)}
+
+      +                    {applySteps.map((step: ApplyStep) => <ApplyStepRow
+      key={step.id} step={step} now={now} />)}
+                       </Box>
+                   </Box>
+                   <Separator />
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useAppStore } from './app.store';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { ReviewService, type SimulationResult } from
+    '../services/review.service';
+
+    import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS } from
+    '../constants/review.constants';
+
+    import { moveIndex } from './navigation.utils';
+
+    import { sleep } from '../utils';
+
+    import type { FileReviewStatus } from '../types/domain.types';
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        duration?: number;
+    }
+
+
+    export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof
+    REVIEW_BODY_VIEWS];
+
+    export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
+
+    export type ApplyUpdate =
+        | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+        | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
+        | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
+
+    interface ReviewState {
+        patchStatus: PatchStatus;
+        applySteps: ApplyStep[];
+        selectedItemIndex: number;
+        bodyView: ReviewBodyView;
+        isDiffExpanded: boolean;
+        reasoningScrollIndex: number;
+        scriptErrorIndex: number;
+        processingStartTime: number | null;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
+
+        selectedBulkRepairOptionIndex: number;
+        selectedBulkInstructOptionIndex: number;
+
+        actions: {
+            load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+            moveSelectionUp: (listSize: number) => void;
+            moveSelectionDown: (listSize: number) => void;
+            expandDiff: () => void;
+            toggleBodyView: (view: Extract<
+                ReviewBodyView, 'bulk_instruct' |
+                'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+            >) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
+            tryRepairFile: (fileId: string) => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            tryInstruct: (fileId: string) => void;
+            showBulkInstruct: () => void;
+            executeBulkInstructOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+            scrollReasoningUp: () => void;
+            scrollReasoningDown: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void;
+            updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+            addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+            updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+            updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
+            toggleFileApproval: (fileId: string) => void;
+            rejectAllFiles: () => void;
+            navigateBulkRepairUp: () => void;
+            navigateBulkRepairDown: () => void;
+            navigateBulkInstructUp: () => void;
+            navigateBulkInstructDown: () => void;
+        };
+    }
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        patchStatus: PATCH_STATUS.SUCCESS,
+        applySteps: INITIAL_APPLY_STEPS,
+        selectedItemIndex: 0,
+        bodyView: REVIEW_BODY_VIEWS.NONE,
+        isDiffExpanded: false,
+        reasoningScrollIndex: 0,
+        scriptErrorIndex: 0,
+        processingStartTime: null,
+        fileReviewStates: new Map(),
+        selectedBulkRepairOptionIndex: 0,
+        selectedBulkInstructOptionIndex: 0,
+
+        actions: {
+            load: (transactionId, initialState) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+
+                // This logic is preserved from the deleted `prepareTransactionForReview`
+                // to allow debug screens to jump directly to a pre-populated review state
+                // without running the full simulation.
+                const isFailureCase = transaction.id === '1';
+                const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+                (transaction.files || []).forEach((file, index) => {
+                    if (isFailureCase) {
+                        const isFailedFile = index > 0;
+                        const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                        const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                        fileReviewStates.set(file.id, { status, error });
+                    } else {
+                        fileReviewStates.set(file.id, { status: 'APPROVED' });
+                    }
+                });
+                const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    patchStatus,
+                    fileReviewStates,
+                    processingStartTime: null,
+                    selectedItemIndex: 0,
+                    bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
+                    isDiffExpanded: false,
+                    reasoningScrollIndex: 0,
+                    scriptErrorIndex: 0,
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    selectedBulkRepairOptionIndex: 0,
+                    selectedBulkInstructOptionIndex: 0,
+                    ...initialState,
+                });
+            },
+            moveSelectionUp: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'up', listSize) };
+            }),
+            moveSelectionDown: (listSize) => set(state => {
+                return { selectedItemIndex: moveIndex(state.selectedItemIndex, 'down', listSize) };
+            }),
+            toggleBodyView: (view) => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                const files = tx?.files || [];
+                if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+                return {
+                    bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
+                    isDiffExpanded: false,
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            expandDiff: () => set(state => ({ isDiffExpanded: !state.isDiffExpanded })),
+            approve: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            startApplySimulation: async (transactionId, scenario) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction?.files) return;
+
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
+
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    processingStartTime: Date.now(),
+                    fileReviewStates: new Map(), // Clear previous states
+                });
+
+                showReviewProcessingScreen();
+                const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
+                let simulationResult: SimulationResult;
+
+                // Manually iterate to get the return value from the async generator
+                const iterator = simulationGenerator[Symbol.asyncIterator]();
+                while (true) {
+                    const { value, done } = await iterator.next();
+                    if (done) {
+                        simulationResult = value as SimulationResult;
+                        break;
+                    }
+                    const update = value;
+                    if (update.type === 'UPDATE_STEP') {
+                        updateApplyStep(update.payload.id, update.payload.status, update.payload.duration, update.payload.details);
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        addApplySubstep(update.payload.parentId, update.payload.substep);
+                    } else if (update.type === 'UPDATE_SUBSTEP') {
+                        updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                    }
+                }
+
+                await sleep(1000);
+                set({
+                    processingStartTime: null,
+                    fileReviewStates: simulationResult.fileReviewStates,
+                    patchStatus: simulationResult.patchStatus,
+                });
+                showReviewScreen();
+            },
+            tryRepairFile: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!file) return;
+
+                const { status, error } = fileReviewStates.get(file.id) || {};
+                if (status !== 'FAILED') return;
+                
+                ReviewService.tryRepairFile(file, error);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+            },
+            tryInstruct: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!tx || !file) return;
+
+                const { status } = fileReviewStates.get(file.id) || {};
+                if (status !== 'REJECTED') return;
+                
+                ReviewService.tryInstructFile(file, tx);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+            },
+            showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+            executeBulkInstructOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const rejectedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'REJECTED');
+                if (rejectedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 3:
+                        rejectedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+                if (failedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkRepairPrompt(failedFiles);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2: {
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                        const results = await ReviewService.runBulkReapply(failedFiles);
+                        results.forEach(result =>
+                            get().actions.updateFileReviewStatus(
+                                result.id, result.status, result.error,
+                            ),
+                        );
+                        break;
+                    }
+                    case 3:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 4:
+                        failedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+            confirmHandoff: () => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.files) return;
+                const { fileReviewStates } = get();
+                ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+                ReviewService.performHandoff(tx.hash);
+            },
+            scrollReasoningUp: () => set(state => ({ reasoningScrollIndex: Math.max(0, state.reasoningScrollIndex - 1) })),
+            scrollReasoningDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.reasoning) return {};
+                const maxLines = tx.reasoning.split('\n').length;
+                return { reasoningScrollIndex: Math.min(maxLines - 1, state.reasoningScrollIndex + 1) };
+            }),
+            navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+            navigateScriptErrorDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.scripts || !tx?.files) return {};
+                const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+                if (selectedScript?.output) {
+                    const errorLines = selectedScript.output
+                        .split('\n')
+                        .filter(line => line.includes('Error') || line.includes('Warning'));
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+            updateApplyStep: (id, status, duration, details) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep = { ...s, status };
+                            if (duration !== undefined) newStep.duration = duration;
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateApplySubstep: (parentId, substepId, status, title) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId && s.substeps) {
+                            const newSubsteps = s.substeps.map(sub => {
+                                if (sub.id === substepId) {
+                                    const newSub = { ...sub, status };
+                                    if (title) newSub.title = title;
+                                    return newSub;
+                                }
+                                return sub;
+                            });
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            addApplySubstep: (parentId, substep) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateFileReviewStatus: (fileId, status, error, details) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    newStates.set(fileId, { status, error, details });
+                    return { fileReviewStates: newStates };
+                });
+            },
+            toggleFileApproval: (fileId) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    const current = newStates.get(fileId);
+                    if (current) {
+                        const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                        newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            rejectAllFiles: () => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    for (const [fileId, reviewState] of newStates.entries()) {
+                        if (reviewState.status === 'APPROVED') {
+                            newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
+                        }
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            navigateBulkRepairUp: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'up', 4),
+            })),
+            navigateBulkRepairDown: () => set(state => ({
+                selectedBulkRepairOptionIndex: moveIndex(state.selectedBulkRepairOptionIndex, 'down', 4),
+            })),
+            navigateBulkInstructUp: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'up', 4),
+            })),
+            navigateBulkInstructDown: () => set(state => ({
+                selectedBulkInstructOptionIndex: moveIndex(state.selectedBulkInstructOptionIndex, 'down', 4),
+            })),
+        },
+    }));
+  src/components/ReviewProcessingScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import { useEffect, useState } from 'react';
+
+    import Spinner from 'ink-spinner';
+
+    import { useTransactionStore } from '../stores/transaction.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useReviewStore, type ApplyStep } from '../stores/review.store';
+
+    import Separator from './Separator';
+
+
+    const ApplyStepRow = ({ step, isSubstep = false }: { step: ApplyStep;
+    isSubstep?: boolean }) => {
+        if (isSubstep) {
+            let color: string | undefined;
+            let symbol: React.ReactNode;
+
+            switch (step.status) {
+                case 'pending':
+                    symbol = '○';
+                    color = 'gray';
+                    break;
+                case 'active':
+                    symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
+                    break;
+                case 'done':
+                    symbol = '✓';
+                    color = 'green';
+                    break;
+                case 'failed':
+                    symbol = '✗';
+                    color = 'red';
+                    break;
+                default:
+                    symbol = ' ';
+            }
+
+            return (
+                <Text color={color}>
+                    {'     └─ '}{symbol}{' '}{step.title}
+                </Text>
+            );
+        }
+
+        let symbol;
+        let color;
+        switch (step.status) {
+            case 'pending': symbol = '( )'; break;
+            case 'active': symbol = '(●)'; color = 'cyan'; break;
+            case 'done': symbol = '[✓]'; color = 'green'; break;
+            case 'failed': symbol = '[!]'; color = 'red'; break;
+            case 'skipped': symbol = '(-)'; color = 'gray'; break;
+        }
+
+        return (
+            <Box flexDirection="column">
+                <Text>
+                    <Text color={color}>{symbol}</Text> {step.title} {step.duration && !isSubstep && `(${step.duration}s)`}
+                </Text>
+                {step.details && (
+                    <Text color="gray">
+                        {'     └─ '}{step.details}
+                    </Text>
+                )}
+                {step.substeps?.map((sub: ApplyStep, i: number) => (
+                    <ApplyStepRow key={i} step={sub} isSubstep={true} />
+                ))}
+            </Box>
+        );
+    };
+
+
+    const ReviewProcessingScreen = () => {
+        const selectedTransactionId = useViewStore(s => s.selectedTransactionId);
+        const { patchStatus, applySteps, processingStartTime } = useReviewStore(state => ({
+            patchStatus: state.patchStatus,
+            applySteps: state.applySteps,
+            processingStartTime: state.processingStartTime,
+        }));
+        const transaction = useTransactionStore(s => s.transactions.find(t => t.id === selectedTransactionId));
+
+        const isProcessing = applySteps.some(s => s.status === 'pending' || s.status === 'active');
+        const [elapsedTime, setElapsedTime] = useState(0);
+
+        useEffect(() => {
+            let timerId: ReturnType<typeof setTimeout> | undefined;
+
+            if (isProcessing && processingStartTime) {
+                timerId = setInterval(() => {
+                    setElapsedTime((Date.now() - processingStartTime) / 1000);
+                }, 50);
+            } else {
+                const totalDuration = applySteps.reduce((acc, step) => acc + (step.duration || 0), 0);
+                setElapsedTime(totalDuration);
+            }
+
+            return () => {
+                if (timerId) clearInterval(timerId);
+            };
+        }, [isProcessing, processingStartTime, applySteps]);
+
+        const failureCase = patchStatus === 'PARTIAL_FAILURE';
+
+        let footerText;
+        if (isProcessing) {
+            footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Processing... Please wait.`;
+        } else if (failureCase) {
+            footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Transitioning to repair workflow...`;
+        } else {
+            footerText = `Elapsed: ${elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...`;
+        }
+
+        if (!transaction) {
+            return <Text>Loading...</Text>;
+        }
+
+        return (
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
+                <Separator />
+                <Box marginY={1} flexDirection="column">
+                    <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
+                    <Box flexDirection="column" marginTop={1} gap={1}>
+                        {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} />)}
+                    </Box>
+                </Box>
+                <Separator />
+                <Text>{footerText}</Text>
+            </Box>
+        );
+    };
+
+
+    export default ReviewProcessingScreen;
+approved: false
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: undone
+id: 199

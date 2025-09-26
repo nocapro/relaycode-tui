@@ -14,6 +14,7 @@ export interface ApplyStep {
     status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
     details?: string;
     substeps?: ApplyStep[];
+    startTime?: number;
     duration?: number;
 }
 
@@ -37,6 +38,8 @@ interface ReviewState {
 
     selectedBulkRepairOptionIndex: number;
     selectedBulkInstructOptionIndex: number;
+    isCancelling: boolean;
+    isSkipping: boolean;
 
     actions: {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
@@ -53,7 +56,10 @@ interface ReviewState {
         tryRepairFile: (fileId: string) => void;
         showBulkRepair: () => void;
         executeBulkRepairOption: (option: number) => Promise<void>;
+        skipCurrentStep: () => void;
+        resetSkip: () => void;
         tryInstruct: (fileId: string) => void;
+        cancelProcessing: () => void;
         showBulkInstruct: () => void;
         executeBulkInstructOption: (option: number) => Promise<void>;
         confirmHandoff: () => void;
@@ -61,7 +67,7 @@ interface ReviewState {
         scrollReasoningDown: () => void;
         navigateScriptErrorUp: () => void;
         navigateScriptErrorDown: () => void;
-        updateApplyStep: (id: string, status: ApplyStep['status'], duration?: number, details?: string) => void;
+        updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
         addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
         updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
         updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
@@ -86,6 +92,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     fileReviewStates: new Map(),
     selectedBulkRepairOptionIndex: 0,
     selectedBulkInstructOptionIndex: 0,
+    isCancelling: false,
+    isSkipping: false,
 
     actions: {
         load: (transactionId, initialState) => {
@@ -160,6 +168,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             set({
                 applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
                 processingStartTime: Date.now(),
+                isCancelling: false,
+                isSkipping: false,
                 fileReviewStates: new Map(), // Clear previous states
             });
 
@@ -177,7 +187,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 }
                 const update = value;
                 if (update.type === 'UPDATE_STEP') {
-                    updateApplyStep(update.payload.id, update.payload.status, update.payload.duration, update.payload.details);
+                    updateApplyStep(update.payload.id, update.payload.status, update.payload.details);
                 } else if (update.type === 'ADD_SUBSTEP') {
                     addApplySubstep(update.payload.parentId, update.payload.substep);
                 } else if (update.type === 'UPDATE_SUBSTEP') {
@@ -222,6 +232,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
         },
         showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+        cancelProcessing: () => set({ isCancelling: true }),
+        skipCurrentStep: () => set({ isSkipping: true }),
+        resetSkip: () => set({ isSkipping: false }),
         executeBulkInstructOption: async (option) => {
             const selectedTransactionId = useViewStore.getState().selectedTransactionId;
             const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
@@ -323,18 +336,23 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             }
             return {};
         }),
-        updateApplyStep: (id, status, duration, details) => {
-            set(state => ({
-                applySteps: state.applySteps.map(s => {
+        updateApplyStep: (id, status, details) => {
+            set(state => {
+                const newSteps = state.applySteps.map(s => {
                     if (s.id === id) {
-                        const newStep = { ...s, status };
-                        if (duration !== undefined) newStep.duration = duration;
+                        const newStep: ApplyStep = { ...s, status };
+                        if (status === 'active') {
+                            newStep.startTime = Date.now();
+                        } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                            newStep.duration = (Date.now() - s.startTime) / 1000;
+                        }
                         if (details !== undefined) newStep.details = details;
                         return newStep;
                     }
                     return s;
-                }),
-            }));
+                });
+                return { applySteps: newSteps };
+            });
         },
         updateApplySubstep: (parentId, substepId, status, title) => {
             set(state => ({
@@ -342,7 +360,12 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                     if (s.id === parentId && s.substeps) {
                         const newSubsteps = s.substeps.map(sub => {
                             if (sub.id === substepId) {
-                                const newSub = { ...sub, status };
+                                const newSub: ApplyStep = { ...sub, status };
+                                if (status === 'active') {
+                                    newSub.startTime = Date.now();
+                                } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                    newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                }
                                 if (title) newSub.title = title;
                                 return newSub;
                             }
