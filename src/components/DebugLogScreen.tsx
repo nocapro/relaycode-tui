@@ -62,7 +62,7 @@ const DebugLogScreen = () => {
     const footerActions =
         mode === DEBUG_LOG_MODES.FILTER
             ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
-            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE;
+            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE(logCount > 0);
 
     return (
         <Box

@@ -166,7 +166,11 @@ const DashboardScreen = () => {
         );
         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
 
-		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;
+		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD({
+            status,
+            hasPending: pendingApprovals > 0,
+            hasApplied: pendingCommits > 0,
+        })} />;
     };
     
     return (

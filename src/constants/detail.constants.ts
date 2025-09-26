@@ -30,12 +30,18 @@ export const DETAIL_FOOTER_ACTIONS = {
         { key: 'Enter', label: 'Confirm Revert' },
         { key: 'Esc', label: 'Cancel' },
     ] as const,
-    BASE: (openActionLabel: string): ActionItem[] => [
-        { key: 'C', label: 'Copy' },
-        { key: 'O', label: openActionLabel },
-        { key: 'U', label: 'Undo' },
-        { key: 'Q', label: 'Quit/Back' },
-    ],
+    BASE: (options: { openActionLabel: string; isRevertable: boolean }): ActionItem[] => {
+        const { openActionLabel, isRevertable } = options;
+        const actions: ActionItem[] = [
+            { key: 'C', label: 'Copy' },
+            { key: 'O', label: openActionLabel },
+        ];
+        if (isRevertable) {
+            actions.push({ key: 'U', label: 'Undo' });
+        }
+        actions.push({ key: 'Q', label: 'Quit/Back' });
+        return actions;
+    },
     DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label: 'Back to List' }] as const,
     FILE_LIST_VIEW: [
         { key: '↑↓', label: 'Nav Files' },

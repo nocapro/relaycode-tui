@@ -2,6 +2,10 @@
 
 chrome extension suggestion
 
+===
+
+dashboard screen: event stream items only animated at approval process, we need also on git committing process
+
 === DONE
 
 footer action should context aware, like when there is nothing to commit, no need to show commit button etc...

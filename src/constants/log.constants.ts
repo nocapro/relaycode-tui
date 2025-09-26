@@ -21,10 +21,13 @@ export const LOG_LEVEL_TAGS = {
 
 export const DEBUG_LOG_FOOTER_ACTIONS = {
     FILTER_MODE: [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }] as const,
-    LIST_MODE: [
-        { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
-        { key: 'F', label: 'Filter' },
-        { key: 'C', label: 'Clear' },
-        { key: 'Esc/Ctrl+L', label: 'Close' },
-    ] as const,
+    LIST_MODE: (hasLogs: boolean) => {
+        const actions = [
+            { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+            { key: 'F', label: 'Filter' },
+        ];
+        if (hasLogs) actions.push({ key: 'C', label: 'Clear' });
+        actions.push({ key: 'Esc/Ctrl+L', label: 'Close' });
+        return actions;
+    },
 };

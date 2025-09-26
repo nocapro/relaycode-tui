@@ -1,0 +1,714 @@
+uuid: f193ac42-6e27-463d-ae83-8a3089d7b40b
+projectId: relaycode-tui
+createdAt: '2025-09-26T06:47:49.738Z'
+gitCommitMsg: >-
+  refactor(ui): make footer actions context-aware
+
+  - **Dashboard:**
+    - The "Approve All" action now only appears when there are PENDING transactions.
+    - The "Commit" action now only appears when there are APPLIED transactions.
+
+  - **Debug Log:**
+    - The "Clear" action is now hidden when there are no logs to clear.
+
+  - **Transaction Detail:**
+    - The "Undo" action is now hidden for transactions that are not in a revertable state (e.g., already committed or reverted).
+
+  This improves the user experience by reducing clutter and only presenting
+  actions that are currently valid.
+promptSummary: >-
+  The user requested to make footer actions context-aware across multiple
+  screens to hide actions that are not currently relevant.
+reasoning:
+  - >-
+    Excellent, I will execute the refactoring plan to make the footer actions
+    context-aware across the application. This will involve updating the action
+    constants to be functions that accept state, and then providing that state
+    from the respective components.
+  - '### Part 1: Dashboard Footer Actions'
+  - >-
+    First, I'll modify the Dashboard's footer actions. The `Approve All` and
+    `Commit` actions will now only appear if there are `PENDING` or `APPLIED`
+    transactions, respectively.
+  - >-
+    I'm updating `src/constants/dashboard.constants.ts` to convert the static
+    `STANDARD` action list into a function that accepts options about the
+    current state.
+  - >-
+    Now, I'll update `src/components/DashboardScreen.tsx` to provide the
+    necessary state (`hasPending`, `hasApplied`) to the new function.
+  - '### Part 2: Debug Log Footer Actions'
+  - >-
+    Next, I'll update the Debug Log footer. The `Clear` action will now only be
+    visible when there are logs present in the store.
+  - >-
+    I'll start by converting the `LIST_MODE` actions in
+    `src/constants/log.constants.ts` into a function that accepts a boolean.
+  - >-
+    Then, I'll modify `src/components/DebugLogScreen.tsx` to call this new
+    function with the log count.
+  - '### Part 3: Transaction Detail Footer Actions'
+  - >-
+    Finally, I'll adjust the Transaction Detail screen. The `Undo` action will
+    be hidden for transactions that are not in a state where they can be
+    reverted (e.g., `COMMITTED`, `REVERTED`).
+  - >-
+    I am updating `src/constants/detail.constants.ts` to make the `BASE` actions
+    function accept an object with an `isRevertable` flag.
+  - >-
+    Lastly, I'll update `src/components/TransactionDetailScreen.tsx` to
+    determine the transaction's revertability and pass it to the actions
+    function.
+  - >-
+    This completes all the requested refactorings. The UI will now be more
+    intelligent, showing actions only when they are relevant to the current
+    context.
+operations:
+  - type: write
+    path: src/constants/dashboard.constants.ts
+    content: >+
+      --- src/constants/dashboard.constants.ts
+
+      +++ src/constants/dashboard.constants.ts
+
+      @@ -9,18 +9,28 @@
+       
+       type DashboardStatusValue = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
+       
+      +export interface DashboardStandardActionsOptions {
+
+      +    status: DashboardStatusValue;
+
+      +    hasPending: boolean;
+
+      +    hasApplied: boolean;
+
+      +}
+
+      +
+       export const DASHBOARD_FOOTER_ACTIONS = {
+           MODAL: [
+               { key: 'Enter', label: 'Confirm' },
+               { key: 'Esc', label: 'Cancel' },
+           ] as const,
+      -    STANDARD: (status: DashboardStatusValue): ActionItem[] => [
+
+      -        { key: '↑↓', label: 'Nav' },
+
+      -        { key: '→/Ent', label: 'View' },
+
+      -        { key: '←', label: 'Collapse' },
+
+      -        { key: 'L', label: 'Log' },
+
+      -        { key: 'A', label: 'Approve All' },
+
+      -        { key: 'C', label: 'Commit' },
+
+      -        { key: 'P', label: status === DASHBOARD_STATUS.PAUSED ? 'Resume'
+      : 'Pause' },
+
+      -        { key: 'Q', label: 'Quit' },
+
+      -    ],
+
+      +    STANDARD: (options: DashboardStandardActionsOptions): ActionItem[] =>
+      {
+
+      +        const { status, hasPending, hasApplied } = options;
+
+      +        const actions: ActionItem[] = [
+
+      +            { key: '↑↓', label: 'Nav' },
+
+      +            { key: '→/Ent', label: 'View' },
+
+      +            { key: '←', label: 'Collapse' },
+
+      +            { key: 'L', label: 'Log' },
+
+      +        ];
+
+      +        if (hasPending) actions.push({ key: 'A', label: 'Approve All' });
+
+      +        if (hasApplied) actions.push({ key: 'C', label: 'Commit' });
+
+      +        actions.push({ key: 'P', label: status ===
+      DASHBOARD_STATUS.PAUSED ? 'Resume' : 'Pause' });
+
+      +        actions.push({ key: 'Q', label: 'Quit' });
+
+      +        return actions;
+
+      +    },
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DashboardScreen.tsx
+    content: "--- src/components/DashboardScreen.tsx\n+++ src/components/DashboardScreen.tsx\n@@ -190,7 +190,11 @@\n         );\n         if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n \n-\t\treturn <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;\n+\t\treturn <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD({\n+            status,\n+            hasPending: pendingApprovals > 0,\n+            hasApplied: pendingCommits > 0,\n+        })} />;\n     };\n     \n     return (\n\n"
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/log.constants.ts
+    content: |+
+      --- src/constants/log.constants.ts
+      +++ src/constants/log.constants.ts
+      @@ -22,11 +22,13 @@
+       
+       export const DEBUG_LOG_FOOTER_ACTIONS = {
+           FILTER_MODE: [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }] as const,
+      -    LIST_MODE: [
+      -        { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+      -        { key: 'F', label: 'Filter' },
+      -        { key: 'C', label: 'Clear' },
+      -        { key: 'Esc/Ctrl+L', label: 'Close' },
+      -    ] as const,
+      +    LIST_MODE: (hasLogs: boolean) => {
+      +        const actions = [
+      +            { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+      +            { key: 'F', label: 'Filter' },
+      +        ];
+      +        if (hasLogs) actions.push({ key: 'C', label: 'Clear' });
+      +        actions.push({ key: 'Esc/Ctrl+L', label: 'Close' });
+      +        return actions;
+      +    },
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/DebugLogScreen.tsx
+    content: |+
+      --- src/components/DebugLogScreen.tsx
+      +++ src/components/DebugLogScreen.tsx
+      @@ -62,7 +62,7 @@
+           const footerActions =
+               mode === DEBUG_LOG_MODES.FILTER
+                   ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
+      -            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE;
+      +            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE(logCount > 0);
+       
+           return (
+               <Box
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/constants/detail.constants.ts
+    content: >+
+      --- src/constants/detail.constants.ts
+
+      +++ src/constants/detail.constants.ts
+
+      @@ -27,14 +27,20 @@
+       
+       export const DETAIL_FOOTER_ACTIONS = {
+           REVERT_CONFIRM: [
+               { key: 'Enter', label: 'Confirm Revert' },
+               { key: 'Esc', label: 'Cancel' },
+           ] as const,
+      -    BASE: (openActionLabel: string): ActionItem[] => [
+
+      -        { key: 'C', label: 'Copy' },
+
+      -        { key: 'O', label: openActionLabel },
+
+      -        { key: 'U', label: 'Undo' },
+
+      -        { key: 'Q', label: 'Quit/Back' },
+
+      -    ],
+
+      +    BASE: (options: { openActionLabel: string; isRevertable: boolean }):
+      ActionItem[] => {
+
+      +        const { openActionLabel, isRevertable } = options;
+
+      +        const actions: ActionItem[] = [
+
+      +            { key: 'C', label: 'Copy' },
+
+      +            { key: 'O', label: openActionLabel },
+
+      +        ];
+
+      +        if (isRevertable) {
+
+      +            actions.push({ key: 'U', label: 'Undo' });
+
+      +        }
+
+      +        actions.push({ key: 'Q', label: 'Quit/Back' });
+
+      +        return actions;
+
+      +    },
+           DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label: 'Back to List' }] as const,
+           FILE_LIST_VIEW: [
+               { key: '↑↓', label: 'Nav Files' },
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/TransactionDetailScreen.tsx
+    content: >+
+      --- src/components/TransactionDetailScreen.tsx
+
+      +++ src/components/TransactionDetailScreen.tsx
+
+      @@ -165,7 +165,11 @@
+               
+               const isFileFocused = focusedItemPath.includes('/');
+               const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
+      -        const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
+
+      +        const isRevertable = ['APPLIED',
+      'FAILED'].includes(transaction.status);
+
+      +        const baseActions = DETAIL_FOOTER_ACTIONS.BASE({
+
+      +            openActionLabel,
+
+      +            isRevertable,
+
+      +        });
+       
+               if (isFileFocused) { // Is a file
+                   if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+
+    patchStrategy: standard-diff
+snapshot:
+  src/constants/dashboard.constants.ts: >-
+    import type { ActionItem } from '../types/actions.types';
+
+
+    export const DASHBOARD_STATUS = {
+        LISTENING: 'LISTENING',
+        PAUSED: 'PAUSED',
+        CONFIRM_APPROVE: 'CONFIRM_APPROVE',
+        APPROVING: 'APPROVING',
+    } as const;
+
+
+    type DashboardStatusValue = (typeof DASHBOARD_STATUS)[keyof typeof
+    DASHBOARD_STATUS];
+
+
+    export const DASHBOARD_FOOTER_ACTIONS = {
+        MODAL: [
+            { key: 'Enter', label: 'Confirm' },
+            { key: 'Esc', label: 'Cancel' },
+        ] as const,
+        STANDARD: (status: DashboardStatusValue): ActionItem[] => [
+            { key: '↑↓', label: 'Nav' },
+            { key: '→/Ent', label: 'View' },
+            { key: '←', label: 'Collapse' },
+            { key: 'L', label: 'Log' },
+            { key: 'A', label: 'Approve All' },
+            { key: 'C', label: 'Commit' },
+            { key: 'P', label: status === DASHBOARD_STATUS.PAUSED ? 'Resume' : 'Pause' },
+            { key: 'Q', label: 'Quit' },
+        ],
+    };
+  src/components/DashboardScreen.tsx: "import React, { useState, useEffect, useRef } from 'react';\nimport { Box, Text } from 'ink';\nimport Spinner from 'ink-spinner';\nimport Separator from './Separator';\nimport type { Transaction, TransactionStatus } from '../types/domain.types';\nimport { useDashboardScreen } from '../hooks/useDashboardScreen';\nimport { UI_CONFIG } from '../config/ui.config'; //\nimport ActionFooter from './ActionFooter';\nimport { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';\nimport { TRANSACTION_STATUS_UI, FILE_TYPE_MAP } from '../constants/history.constants';\n\n// --- Sub-components & Helpers ---\n\nconst getStatusIcon = (status: TransactionStatus) => {\n    if (status === 'IN-PROGRESS') return <Spinner type=\"dots\" />;\n    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];\n    if (!ui) return <Text> </Text>;\n    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;\n};\n\nconst formatTimeAgo = (timestamp: number) => {\n    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));\n    if (seconds < 60) return `${seconds}s`;\n    const minutes = Math.floor(seconds / 60);\n    return `${minutes}m`;\n};\n\nconst ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {\n    const stats = transaction.stats;\n    const files = transaction.files || [];\n\n    return (\n        <Box flexDirection=\"column\" paddingLeft={4} marginBottom={1} borderStyle=\"round\" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor=\"gray\">\n            {stats && (\n                <Text color=\"gray\">\n                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}\n                </Text>\n            )}\n             <Box flexDirection=\"column\" paddingLeft={1}>\n                {files.map(file => (\n                     <Text key={file.id}>\n                        <Text color=\"gray\">{FILE_TYPE_MAP[file.type]}</Text> {file.path}\n                    </Text>\n                ))}\n             </Box>\n        </Box>\n    );\n};\n\nconst EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {\n    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);\n    const [isStatusFlashing, setIsStatusFlashing] = useState(false);\n    const prevStatus = useRef(transaction.status);\n\n    useEffect(() => {\n        if (isNew) {\n            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);\n            return () => clearTimeout(timer);\n        }\n    }, [isNew]);\n\n    useEffect(() => {\n        if (prevStatus.current !== transaction.status) {\n            setIsStatusFlashing(true);\n            const timer = setTimeout(() => setIsStatusFlashing(false), 500);\n            prevStatus.current = transaction.status;\n            return () => clearTimeout(timer);\n        }\n    }, [transaction.status]);\n\n    const icon = getStatusIcon(transaction.status);\n    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');\n    const statusText = transaction.status.padEnd(11, ' ');\n    const expandIcon = isExpanded ? '▾' : '▸';\n    \n    const messageNode =\n        transaction.status === 'IN-PROGRESS'\n            ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>\n            : transaction.message;\n    \n    const content = (\n        <Text>\n            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}\n            <Text color=\"gray\">{transaction.hash}</Text>\n            {' '}· {messageNode}\n        </Text>\n    );\n\n    if (isSelected) {\n        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;\n    }\n\n    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;\n});\n\nconst ConfirmationContent = ({\n    transactionsToConfirm,\n}: {\n    transactionsToConfirm: Transaction[];\n}) => {\n    const actionText = 'APPROVE';\n    \n    return (\n        <Box flexDirection=\"column\" marginY={1} paddingLeft={2}>\n            <Text bold color=\"yellow\">{actionText} ALL PENDING TRANSACTIONS?</Text>\n            <Text>\n                The following {transactionsToConfirm.length} transaction(s) will be approved:\n            </Text>\n            <Box flexDirection=\"column\" paddingLeft={1} marginTop={1}>\n                {transactionsToConfirm.map(tx => (\n                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>\n                ))}\n            </Box>\n        </Box>\n    );\n};\n\n// --- Main Component ---\n\nconst DashboardScreen = () => {\n    const {\n        status,\n        transactions,\n        selectedTransactionIndex,\n        pendingApprovals,\n        pendingCommits,\n        isModal,\n        isProcessing,\n        viewOffset,\n        viewportHeight,\n        transactionsToConfirm,\n        expandedTransactionId,\n        newTransactionIds,\n    } = useDashboardScreen({\n        layoutConfig: UI_CONFIG.layout.dashboard,\n    });\n\n    const renderStatusBar = () => {\n        let statusText: string;\n        let statusIcon: React.ReactNode;\n        switch (status) {\n            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; break;\n            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color=\"yellow\">||</Text>; break;\n            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color=\"cyan\"><Spinner type=\"dots\"/></Text>; break;\n            default: statusText = 'LISTENING'; statusIcon = <Text color=\"green\">●</Text>; //\n        }\n\n        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');\n        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');\n\n        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color=\"cyan\">(<Spinner type=\"dots\"/>)</Text>;\n        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {\n            approvalStr = <Text bold color=\"yellow\">┌ {approvalStr} ┐</Text>;\n        }\n        \n        return (\n            <Text>\n                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}\n            </Text>\n        );\n    };\n\n    const renderFooter = () => {\n        if (isModal) return (\n            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>\n        );\n        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;\n\n\t\treturn <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD(status)} />;\n    };\n    \n    return (\n        <Box flexDirection=\"column\" height=\"100%\">\n            <Text color=\"cyan\">▲ relaycode dashboard</Text>\n            <Separator />\n            <Box marginY={1}>\n                {renderStatusBar()}\n            </Box>\n            \n            {isModal && (\n                <>\n                    <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />\n                    <Separator />\n                </>\n            )}\n            \n            <Text bold underline> EVENT STREAM (Last 15 minutes)</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {transactions.length === 0 && (\n                     <Box paddingLeft={2}><Text color=\"gray\">Listening for changes... no events yet.</Text></Box>\n                )}\n                {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {\n                    const actualIndex = viewOffset + index;\n                    const isExpanded = expandedTransactionId === tx.id;\n                    const isNew = newTransactionIds.has(tx.id);\n                    return (\n                        <React.Fragment key={tx.id}>\n                            <EventStreamItem\n                                transaction={tx}\n                                isSelected={!isModal && actualIndex === selectedTransactionIndex}\n                                isExpanded={isExpanded}\n                                isNew={isNew}\n                            />\n                            {isExpanded && <ExpandedEventInfo transaction={tx} />}\n                        </React.Fragment>\n                    );\n                })}\n            </Box>\n\n            <Box marginTop={1}><Separator /></Box>\n            {renderFooter()}\n        </Box>\n    );\n};\n\nexport default DashboardScreen;"
+  src/constants/log.constants.ts: |-
+    export const MAX_LOGS = 200;
+
+    export const DEBUG_LOG_MODES = {
+        LIST: 'LIST',
+        FILTER: 'FILTER',
+    } as const;
+
+    export const LOG_LEVEL_COLORS = {
+        DEBUG: 'gray',
+        INFO: 'white',
+        WARN: 'yellow',
+        ERROR: 'red',
+    };
+
+    export const LOG_LEVEL_TAGS = {
+        DEBUG: { color: 'white', backgroundColor: 'gray' },
+        INFO: { color: 'black', backgroundColor: 'cyan' },
+        WARN: { color: 'black', backgroundColor: 'yellow' },
+        ERROR: { color: 'white', backgroundColor: 'red' },
+    };
+
+    export const DEBUG_LOG_FOOTER_ACTIONS = {
+        FILTER_MODE: [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }] as const,
+        LIST_MODE: [
+            { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+            { key: 'F', label: 'Filter' },
+            { key: 'C', label: 'Clear' },
+            { key: 'Esc/Ctrl+L', label: 'Close' },
+        ] as const,
+    };
+  src/components/DebugLogScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import Separator from './Separator';
+
+    import ActionFooter from './ActionFooter';
+
+    import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+
+    import { DEBUG_LOG_FOOTER_ACTIONS, DEBUG_LOG_MODES, LOG_LEVEL_COLORS,
+    LOG_LEVEL_TAGS } from '../constants/log.constants';
+
+    import type { LogEntry } from '../types/log.types';
+
+    import { useStdoutDimensions } from '../utils';
+
+
+    const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected:
+    boolean }) => {
+        const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+        const color = LOG_LEVEL_COLORS[entry.level];
+        const tagColors = LOG_LEVEL_TAGS[entry.level];
+
+        return (
+            <Text color={color}>
+                {isSelected ? '> ' : '  '}
+                <Text color="gray">{time}</Text>
+                {' '}
+                <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
+                    {' '}{entry.level.padEnd(5, ' ')}{' '}
+                </Text>
+                {' '}
+                {entry.message}
+            </Text>
+        );
+    };
+
+
+    const DebugLogScreen = () => {
+        const {
+            logsInView,
+            logCount,
+            filteredLogCount,
+            selectedIndex,
+            mode,
+            filterQuery,
+            setFilterQuery,
+            viewOffset,
+        } = useDebugLogScreen();
+        const [width] = useStdoutDimensions();
+
+        const renderFilter = () => (
+            <Box>
+                <Text>Filter: </Text>
+                {mode === DEBUG_LOG_MODES.FILTER ? (
+                    <TextInput
+                        value={filterQuery}
+                        onChange={setFilterQuery}
+                        placeholder="Type to filter log messages..."
+                    />
+                ) : (
+                    <Text color="gray">{filterQuery || '(none)'}</Text>
+                )}
+                <Box flexGrow={1} /> 
+                <Text>
+                    Showing {Math.min(viewOffset + 1, filteredLogCount)}-
+                    {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
+                </Text> 
+            </Box>
+        );
+
+        const footerActions =
+            mode === DEBUG_LOG_MODES.FILTER
+                ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
+                : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE;
+
+        return (
+            <Box
+                flexDirection="column"
+                width="100%"
+                height="100%"
+                paddingX={2}
+                paddingY={1}
+            >
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG LOG </Text>
+                <Separator width={width - 4} />
+                <Box marginY={1}>{renderFilter()}</Box>
+                <Box flexDirection="column" flexGrow={1}>
+                    {logsInView.map((entry, index) => (
+                        <LogEntryRow
+                            key={`${entry.timestamp}-${index}`}
+                            entry={entry}
+                            isSelected={selectedIndex === index + viewOffset}
+                        />
+                    ))}
+                    {logCount > 0 && filteredLogCount === 0 && (
+                        <Text color="gray">No logs match your filter.</Text>
+                    )}
+                    {logCount === 0 && (
+                        <Text color="gray">No log entries yet. Waiting for system activity...</Text>
+                    )}
+                </Box>
+                <Separator width={width - 4} />
+                <ActionFooter actions={footerActions} />
+            </Box>
+        );
+    };
+
+
+    export default DebugLogScreen;
+  src/constants/detail.constants.ts: |-
+    import type { ActionItem } from '../types/actions.types';
+
+    /**
+     * Constants for the Transaction Detail screen.
+     */
+    export const NAVIGATOR_SECTIONS = {
+        PROMPT: 'PROMPT',
+        REASONING: 'REASONING',
+        FILES: 'FILES',
+    } as const;
+
+    export const DETAIL_BODY_VIEWS = {
+        PROMPT: 'PROMPT',
+        REASONING: 'REASONING',
+        FILES_LIST: 'FILES_LIST',
+        DIFF_VIEW: 'DIFF_VIEW',
+        REVERT_CONFIRM: 'REVERT_CONFIRM',
+        NONE: 'NONE',
+    } as const;
+
+    export const FILE_CHANGE_TYPE_ICONS = {
+        MOD: '[MOD]',
+        ADD: '[ADD]',
+        DEL: '[DEL]',
+        REN: '[REN]',
+    } as const;
+
+    export const DETAIL_FOOTER_ACTIONS = {
+        REVERT_CONFIRM: [
+            { key: 'Enter', label: 'Confirm Revert' },
+            { key: 'Esc', label: 'Cancel' },
+        ] as const,
+        BASE: (openActionLabel: string): ActionItem[] => [
+            { key: 'C', label: 'Copy' },
+            { key: 'O', label: openActionLabel },
+            { key: 'U', label: 'Undo' },
+            { key: 'Q', label: 'Quit/Back' },
+        ],
+        DIFF_VIEW: [{ key: '↑↓', label: 'Nav Files' }, { key: '←', label: 'Back to List' }] as const,
+        FILE_LIST_VIEW: [
+            { key: '↑↓', label: 'Nav Files' },
+            { key: '→', label: 'View Diff' },
+            { key: '←', label: 'Back to Sections' },
+        ] as const,
+        SECTION_EXPANDED: [{ key: '↑↓', label: 'Nav/Scroll' }, { key: '→', label: 'Drill In' }, { key: '←', label: 'Collapse' }] as const,
+        SECTION_COLLAPSED: [{ key: '↑↓', label: 'Nav' }, { key: '→', label: 'Expand' }] as const,
+    };
+  src/components/TransactionDetailScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import Separator from './Separator';
+
+    import DiffScreen from './DiffScreen';
+
+    import ReasonScreen from './ReasonScreen';
+
+    import type { FileChangeType } from '../types/domain.types';
+
+    import { useTransactionDetailScreen } from
+    '../hooks/useTransactionDetailScreen';
+
+    import { DETAIL_BODY_VIEWS, DETAIL_FOOTER_ACTIONS, FILE_CHANGE_TYPE_ICONS }
+    from '../constants/detail.constants';
+
+    import ActionFooter from './ActionFooter';
+
+
+    const RevertModal = ({ transactionHash }: { transactionHash: string }) => {
+        return (
+            <Box 
+                borderStyle="round"
+                borderColor="yellow"
+                flexDirection="column"
+                paddingX={2}
+                width="80%"
+                alignSelf='center'
+            >
+                <Text bold color="yellow" wrap="wrap" >REVERT THIS TRANSACTION?</Text>
+                <Box height={1} />
+                <Text wrap="wrap">This will create a NEW transaction that reverses all changes made by {transactionHash}. The original transaction record will be preserved.</Text>
+                <Box height={1} />
+                <Text wrap="wrap">Are you sure?</Text>
+            </Box>
+        );
+    };
+
+
+    const typeColor = (type: FileChangeType) => {
+        switch (type) {
+            case 'ADD': return 'green';
+            case 'DEL': return 'red';
+            case 'REN': return 'yellow';
+            default: return 'white';
+        }
+    };
+
+
+    const TransactionDetailScreen = () => {
+        const {
+            transaction, files,
+            focusedItemPath, expandedItemPaths, bodyView, contentScrollIndex, availableBodyHeight,
+        } = useTransactionDetailScreen();
+
+        if (!transaction) {
+            return <Text>Loading transaction...</Text>;
+        }
+
+        const renderNavigator = () => {
+            const isPromptFocused = focusedItemPath === 'PROMPT';
+            const isReasoningFocused = focusedItemPath === 'REASONING';
+            const isFilesFocused = focusedItemPath.startsWith('FILES');
+            
+            const isPromptExpanded = expandedItemPaths.has('PROMPT');
+            const isReasoningExpanded = expandedItemPaths.has('REASONING');
+            const isFilesExpanded = expandedItemPaths.has('FILES');
+            
+            return (
+                <Box flexDirection="column">
+                    <Text color={isPromptFocused ? 'cyan' : undefined}>
+                        {isPromptFocused ? '> ' : '  '}
+                        {isPromptExpanded ? '▾' : '▸'} (<Text color="cyan" bold>P</Text>)rompt
+                    </Text>
+                    <Text color={isReasoningFocused ? 'cyan' : undefined}>
+                        {isReasoningFocused ? '> ' : '  '}
+                        {isReasoningExpanded ? '▾' : '▸'} (<Text color="cyan" bold>R</Text>)easoning{' '}
+                        ({transaction.reasoning?.split('\n\n').length || 0} steps)
+                    </Text>
+                    <Text color={isFilesFocused ? 'cyan' : undefined}>
+                        {isFilesFocused && !focusedItemPath.includes('/') ? '> ' : '  '}
+                        {isFilesExpanded ? '▾' : '▸'} (<Text color="cyan" bold>F</Text>)iles ({files.length})
+                    </Text>
+                    {isFilesExpanded && (
+                        <Box flexDirection="column" paddingLeft={2}>
+                            {files.map((file) => {
+                                 const fileId = `FILES/${file.id}`;
+                                 const isFileSelected = focusedItemPath === fileId;
+                                 const stats = file.type === 'DEL' ? ''
+                                    : ` (+${file.linesAdded}/-${file.linesRemoved})`;
+                                 return (
+                                    <Text key={file.id} color={isFileSelected ? 'cyan' : undefined}>
+                                        {isFileSelected ? '> ' : '  '}
+                                        {FILE_CHANGE_TYPE_ICONS[file.type]} <Text color={typeColor(file.type)}>{file.path}</Text>{stats}
+                                    </Text>
+                                );
+                            })}
+                        </Box>
+                    )}
+                </Box>
+            );
+        };
+
+        const renderBody = () => {
+            if (bodyView === DETAIL_BODY_VIEWS.NONE) {
+                return <Text color="gray">(Press → to expand a section and view its contents)</Text>;
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.PROMPT) {
+                return (
+                    <Box flexDirection="column">
+                        <Text>PROMPT</Text>
+                        <Box marginTop={1} flexDirection="column">
+                            {(transaction.prompt || '').split('\n')
+                                .slice(contentScrollIndex, contentScrollIndex + availableBodyHeight)
+                                .map((line, i) => <Text key={i}>{line}</Text>)
+                            }
+                        </Box>
+                    </Box>
+                );
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.REASONING) {
+                if (!transaction.reasoning) return <Text color="gray">No reasoning provided.</Text>;
+                return <ReasonScreen reasoning={transaction.reasoning} scrollIndex={contentScrollIndex} visibleLinesCount={Math.max(1, availableBodyHeight)} />;
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.FILES_LIST) {
+                 return <Text color="gray">(Select a file and press → to view the diff)</Text>;
+            }
+            if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (!file) return null;
+                return <DiffScreen filePath={file.path} diffContent={file.diff} isExpanded={true} scrollIndex={contentScrollIndex} maxHeight={Math.max(1, availableBodyHeight)} />;
+            }
+            return null;
+        };
+
+        const renderFooter = () => {
+            if (bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM) {
+                return <ActionFooter actions={DETAIL_FOOTER_ACTIONS.REVERT_CONFIRM} />;
+            }
+            
+            const isFileFocused = focusedItemPath.includes('/');
+            const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
+            const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
+
+            if (isFileFocused) { // Is a file
+                if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
+                    return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.DIFF_VIEW, ...baseActions]} />;
+                } else {
+                    return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.FILE_LIST_VIEW, ...baseActions]} />;
+                }
+            }
+            
+            if (expandedItemPaths.has(focusedItemPath)) {
+                return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_EXPANDED, ...baseActions]} />;
+            }
+            return <ActionFooter actions={[...DETAIL_FOOTER_ACTIONS.SECTION_COLLAPSED, ...baseActions]} />;
+        };
+
+        const { message, timestamp, status } = transaction;
+        const date = new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19);
+        const fileStats = `${files.length} Files · +${files.reduce((a, f) => a + f.linesAdded, 0)} lines, -${files.reduce((a, f) => a + f.linesRemoved, 0)} lines`;
+
+        return (
+            <Box flexDirection="column">
+                {/* Header */}
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · TRANSACTION DETAILS </Text>
+                <Separator />
+                
+                {/* Modal takeover for Revert */}
+                {bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM && <RevertModal transactionHash={transaction.hash} />}
+                
+                {/* Main view */}
+                <Box flexDirection="column" display={bodyView === DETAIL_BODY_VIEWS.REVERT_CONFIRM ? 'none' : 'flex'}>
+                    {/* Navigator Part A */}
+                    <Box flexDirection="column" marginY={1}>
+                        <Text><Text color="gray">UUID:</Text> {transaction.id}</Text>
+                        <Text><Text color="gray">Git:</Text> {message}</Text>
+                        <Text><Text color="gray">Date:</Text> {date} · <Text color="gray">Status:</Text> {status}</Text>
+                        <Text><Text color="gray">Stats:</Text> {fileStats}</Text>
+                    </Box>
+                    
+                    {/* Navigator Part B */}
+                    {renderNavigator()}
+                    
+                    <Separator />
+                    
+                    {/* Body */}
+                    <Box marginY={1}>
+                        {renderBody()}
+                    </Box>
+                    
+                    <Separator />
+                </Box>
+                
+                {/* Footer */}
+                <Box>
+                    {renderFooter()}
+                </Box>
+            </Box>
+        );
+    };
+
+
+    export default TransactionDetailScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 197

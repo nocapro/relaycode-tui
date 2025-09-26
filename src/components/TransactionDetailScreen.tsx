@@ -129,7 +129,11 @@ const TransactionDetailScreen = () => {
         
         const isFileFocused = focusedItemPath.includes('/');
         const openActionLabel = isFileFocused ? 'Open File' : 'Open YAML';
-        const baseActions = DETAIL_FOOTER_ACTIONS.BASE(openActionLabel);
+        const isRevertable = ['APPLIED', 'FAILED'].includes(transaction.status);
+        const baseActions = DETAIL_FOOTER_ACTIONS.BASE({
+            openActionLabel,
+            isRevertable,
+        });
 
         if (isFileFocused) { // Is a file
             if (bodyView === DETAIL_BODY_VIEWS.DIFF_VIEW) {
