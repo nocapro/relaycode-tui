@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useStdoutDimensions } from '../utils';
+import { useDimensions } from '../contexts/DimensionsContext';
 import { useLayout, type LayoutConfig } from './useLayout';
 
 interface UseViewportOptions {
@@ -10,6 +10,7 @@ interface UseViewportOptions {
 
 export const useViewport = ({ selectedIndex, itemCount, layoutConfig }: UseViewportOptions) => {
 	const { remainingHeight: viewportHeight } = useLayout(layoutConfig);
+	const { columns: width } = useDimensions();
 	const [viewOffset, setViewOffset] = useState(0);
 
 	useEffect(() => {
@@ -27,6 +28,6 @@ export const useViewport = ({ selectedIndex, itemCount, layoutConfig }: UseViewp
     return {
         viewOffset,
         viewportHeight,
-        width: useStdoutDimensions()[0],
+        width,
     };
 };

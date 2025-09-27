@@ -1,0 +1,144 @@
+uuid: c4086427-047f-4318-ad1d-61c167d5830e
+projectId: relaycode-tui
+createdAt: '2025-09-27T07:34:03.307Z'
+gitCommitMsg: >-
+  fix: Debounce terminal resize events to prevent UI corruption
+
+  Rapidly firing `resize` events during terminal window resizing were causing a
+  cascade of re-renders, leading to visual artifacts and a broken UI layout.
+
+  This commit introduces a 150ms debounce mechanism to the resize event handler
+  in `useStdoutDimensions`. This ensures that the application only re-renders
+  once the user has finished resizing the window, providing a stable and smooth
+  visual experience.
+promptSummary: >-
+  The user is experiencing a broken UI when resizing the terminal window. I will
+  fix this by debouncing the `resize` event listener in `useStdoutDimensions`.
+reasoning:
+  - >-
+    Okay, I'm on it. Debouncing the resize event is the right move to stabilize
+    the UI. Here's the patch to implement that fix.
+  - >-
+    I will apply the debounce logic to the `resize` event handler within
+    `src/utils.ts`. This change will prevent the rapid succession of re-renders
+    that is causing the UI to break apart during window resizing, ensuring a
+    smooth and stable experience for the user.
+operations:
+  - type: write
+    path: src/utils.ts
+    content: >+
+      --- src/utils.ts
+
+      +++ src/utils.ts
+
+      @@ -12,6 +12,7 @@
+       };
+       
+       let listenerAttached = false;
+      +let debounceTimeout: NodeJS.Timeout | null = null;
+       
+       const updateAndNotify = () => {
+           const newDimensions = {
+      @@ -25,8 +26,15 @@
+           }
+       };
+       
+      +const debouncedUpdateAndNotify = () => {
+
+      +    if (debounceTimeout) {
+
+      +        clearTimeout(debounceTimeout);
+
+      +    }
+
+      +    debounceTimeout = setTimeout(updateAndNotify, 150); // Debounce
+      resize event
+
+      +};
+
+      +
+       if (!listenerAttached) {
+      -    process.stdout.on('resize', updateAndNotify);
+
+      +    process.stdout.on('resize', debouncedUpdateAndNotify);
+           listenerAttached = true;
+       }
+       
+
+    patchStrategy: standard-diff
+snapshot:
+  src/utils.ts: >-
+    import { useState, useEffect } from 'react';
+
+
+    // Utility for simulation
+
+    export const sleep = (ms: number) => new Promise(resolve =>
+    setTimeout(resolve, ms));
+
+
+    type Dimensions = { columns: number; rows: number };
+
+    const subscribers = new Set<(dims: Dimensions) => void>();
+
+    let currentDimensions: Dimensions = {
+        columns: process.stdout.columns || 80,
+        rows: process.stdout.rows || 24,
+    };
+
+
+    let listenerAttached = false;
+
+
+    const updateAndNotify = () => {
+        const newDimensions = {
+            columns: process.stdout.columns || 80,
+            rows: process.stdout.rows || 24,
+        };
+
+        if (newDimensions.columns !== currentDimensions.columns || newDimensions.rows !== currentDimensions.rows) {
+            currentDimensions = newDimensions;
+            subscribers.forEach(subscriber => subscriber(currentDimensions));
+        }
+    };
+
+
+    if (!listenerAttached) {
+        process.stdout.on('resize', updateAndNotify);
+        listenerAttached = true;
+    }
+
+
+    export const useStdoutDimensions = (): [number, number] => {
+        const [dimensions, setDimensions] = useState(currentDimensions);
+
+        useEffect(() => {
+            const subscriber = (newDims: Dimensions) => setDimensions(newDims);
+            subscribers.add(subscriber);
+
+            // On mount, check if dimensions are stale and update if needed for this hook instance.
+            setDimensions(dims => {
+                const latestDims = {
+                    columns: process.stdout.columns || 80,
+                    rows: process.stdout.rows || 24,
+                };
+                if (latestDims.columns !== dims.columns || latestDims.rows !== dims.rows) {
+                    return latestDims;
+                }
+                return dims;
+            });
+
+            return () => {
+                subscribers.delete(subscriber);
+            };
+        }, []);
+
+        return [dimensions.columns, dimensions.rows];
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 222

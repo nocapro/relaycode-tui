@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { useStdoutDimensions } from '../utils';
+import { useDimensions } from '../contexts/DimensionsContext';
 import { UI_CONFIG } from '../config/ui.config';
 import type { ActionItem } from '../types/actions.types';
 
@@ -14,7 +14,7 @@ const Action = ({ item }: { item: ActionItem }) => (
 );
 
 const ActionFooter = ({ actions }: ActionFooterProps) => {
-    const [width] = useStdoutDimensions();
+    const { columns: width } = useDimensions();
     const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
     const separatorWidth = actionSeparator.length;
 

@@ -13,6 +13,7 @@ import DebugLogScreen from './components/DebugLogScreen';
 import GlobalHelpScreen from './components/GlobalHelpScreen';
 import CopyScreen from './components/CopyScreen';
 import NotificationScreen from './components/NotificationScreen';
+import { DimensionsProvider } from './contexts/DimensionsContext';
 import { useViewStore } from './stores/view.store';
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
 
@@ -38,7 +39,7 @@ const App = () => {
     };
 
     return (
-        <>
+        <DimensionsProvider>
             <Box
                 width="100%"
                 height="100%"
@@ -52,7 +53,7 @@ const App = () => {
             {activeOverlay === 'log' && <DebugLogScreen />}
             {activeOverlay === 'debug' && <DebugMenu />}
             {activeOverlay === 'notification' && <NotificationScreen />}
-        </>
+        </DimensionsProvider>
     );
 };
 

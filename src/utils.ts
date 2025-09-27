@@ -11,6 +11,7 @@ let currentDimensions: Dimensions = {
 };
 
 let listenerAttached = false;
+let debounceTimeout: NodeJS.Timeout | null = null;
 
 const updateAndNotify = () => {
     const newDimensions = {
@@ -24,8 +25,15 @@ const updateAndNotify = () => {
     }
 };
 
+const debouncedUpdateAndNotify = () => {
+    if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+    }
+    debounceTimeout = setTimeout(updateAndNotify, 150); // Debounce resize event
+};
+
 if (!listenerAttached) {
-    process.stdout.on('resize', updateAndNotify);
+    process.stdout.on('resize', debouncedUpdateAndNotify);
     listenerAttached = true;
 }
 

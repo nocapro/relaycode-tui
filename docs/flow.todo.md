@@ -21,7 +21,7 @@ update UI docs
 1. add cwd and current active git branch info in dashboard screen
 2. review screen: we also need git commit message in content, not only prompt and reasoning
 
-===
+=== DONE
 
 radically improve UI and UX consistency accross screens
 

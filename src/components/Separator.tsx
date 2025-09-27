@@ -1,8 +1,8 @@
 import {Text} from 'ink';
-import { useStdoutDimensions } from '../utils';
+import { useDimensions } from '../contexts/DimensionsContext';
 
 const Separator = ({ width: propWidth }: { width?: number }) => {
-	const [columns] = useStdoutDimensions();
+	const { columns } = useDimensions();
 	const width = propWidth ?? columns;
 	return <Text>{'─'.repeat(width)}</Text>;
 };

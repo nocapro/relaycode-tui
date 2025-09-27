@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useStdoutDimensions } from '../utils';
+import { useDimensions } from '../contexts/DimensionsContext';
 
 export interface LayoutConfig {
     header?: number;
@@ -25,7 +25,7 @@ export interface LayoutInfo {
  * @returns An object with total terminal height and the calculated remaining height for content.
  */
 export const useLayout = (config: LayoutConfig): LayoutInfo => {
-    const [, totalHeight] = useStdoutDimensions();
+    const { rows: totalHeight } = useDimensions();
 
     const reservedHeight = useMemo(() => {
         let reserved = 0;

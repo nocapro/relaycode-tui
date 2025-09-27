@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { useStdoutDimensions } from '../utils';
+import { useDimensions } from '../contexts/DimensionsContext';
 import ModalLayout from './layout/ModalLayout';
 
 const HELP_SECTIONS = [
@@ -74,7 +74,7 @@ const Shortcut = ({ shortcut }: { shortcut: { key: string; label: string } }) =>
 );
 
 const GlobalHelpScreen = () => {
-    const [width] = useStdoutDimensions();
+    const { columns: width } = useDimensions();
 
     // 90% view width, minus 2 padding on each side.
     const availableWidth = Math.floor(width * 0.9) - 4;

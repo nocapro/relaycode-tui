@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import Separator from './Separator';
-import { useStdoutDimensions } from '../utils';
+import { useDimensions } from '../contexts/DimensionsContext';
 import ActionFooter from './ActionFooter';
 import { useCopyScreen } from '../hooks/useCopyScreen';
 import ModalLayout from './layout/ModalLayout';
@@ -15,7 +15,7 @@ const CopyScreen = () => {
         lastCopiedMessage,
         viewOffset,
     } = useCopyScreen();
-    const [width] = useStdoutDimensions();
+    const { columns: width } = useDimensions();
 
     return (
         <ModalLayout>
