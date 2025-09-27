@@ -129,6 +129,7 @@ const DashboardScreen = () => {
         viewportHeight,
         transactionsToConfirm,
         expandedTransactionId,
+        contextInfo,
         newTransactionIds,
     } = useDashboardScreen({
         layoutConfig: UI_CONFIG.layout.dashboard,
@@ -176,6 +177,7 @@ const DashboardScreen = () => {
         <ScreenLayout
             title="DASHBOARD"
             footer={renderFooter()}
+            contextInfo={contextInfo}
         >
             <Box flexDirection="column" flexGrow={1}>
                 <Box>

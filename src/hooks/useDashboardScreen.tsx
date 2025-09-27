@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useInput } from 'ink';
 import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
@@ -11,6 +11,8 @@ import type { LayoutConfig } from './useLayout';
 import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
 import { useViewport } from './useViewport';
 import { useListNavigator } from './useListNavigator';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
     const {
@@ -128,6 +130,19 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
 
     const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
 
+    const contextInfo = useMemo(() => {
+        try {
+            const cwd = process.cwd();
+            const parentDir = path.basename(path.dirname(cwd));
+            const currentDir = path.basename(cwd);
+            const shortCwd = `.../${parentDir}/${currentDir}`;
+            const gitBranch = execSync('git rev-parse --abbrev-ref HEAD').toString().trim();
+            return `[${shortCwd} @ ${gitBranch}]`;
+        } catch (error) {
+            return '[Context unavailable]'; // Handle cases where not in a git repo, etc.
+        }
+    }, []);
+
     return {
         status,
         transactions,
@@ -141,5 +156,6 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
         viewOffset,
         viewportHeight,
         transactionsToConfirm,
+        contextInfo,
     };
 };

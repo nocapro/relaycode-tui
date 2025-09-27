@@ -4,15 +4,19 @@ src/
   components/
     layout/
       ScreenLayout.tsx
-    ActionFooter.tsx
-    CopyScreen.tsx
-    GlobalHelpScreen.tsx
-    Separator.tsx
+    ContentView.tsx
+    DashboardScreen.tsx
+    ReviewScreen.tsx
+  constants/
+    dashboard.constants.ts
+    review.constants.ts
   hooks/
-    useLayout.ts
-    useViewport.ts
-  App.tsx
-  utils.ts
+    useDashboardScreen.tsx
+    useReviewScreen.tsx
+  stores/
+    review.store.ts
+  types/
+    domain.types.ts
 eslint.config.js
 index.tsx
 package.json
@@ -21,59 +25,74 @@ tsconfig.json
 
 # Files
 
-## File: src/hooks/useLayout.ts
+## File: src/components/ContentView.tsx
 ```typescript
-import { useMemo } from 'react';
-import { useStdoutDimensions } from '../utils';
+import { Box, Text } from 'ink';
+import { UI_CONFIG } from '../config/ui.config';
 
-export interface LayoutConfig {
-    header?: number;
-    footer?: number;
-    separators?: number;
-    marginsY?: number; // Total vertical margin
-    paddingY?: number; // Total vertical padding
-    fixedRows?: number; // For any other static rows
-    dynamicRows?: {
-        count: number;
-        lineHeight?: number; // Default to 1
-    };
+interface ContentViewProps {
+    title: string;
+    content: string;
+    isExpanded?: boolean;
+    scrollIndex?: number;
+    maxHeight?: number;
+    highlight?: 'diff' | 'none';
 }
+const ContentView = ({
+    title,
+    content,
+    isExpanded = true,
+    scrollIndex = 0,
+    maxHeight,
+    highlight = 'none',
+}: ContentViewProps) => {
+    const lines = content.split('\n');
+    const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
+    const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
 
-export interface LayoutInfo {
-    totalHeight: number;
-    remainingHeight: number;
-}
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
 
-/**
- * Calculates available vertical space based on terminal height and a declarative layout config.
- * @param config A declarative object describing static and dynamic rows to reserve.
- * @returns An object with total terminal height and the calculated remaining height for content.
- */
-export const useLayout = (config: LayoutConfig): LayoutInfo => {
-    const [, totalHeight] = useStdoutDimensions();
-
-    const reservedHeight = useMemo(() => {
-        let reserved = 0;
-        reserved += config.header || 0;
-        reserved += config.footer || 0;
-        reserved += config.separators || 0;
-        reserved += config.marginsY || 0;
-        reserved += config.paddingY || 0;
-        reserved += config.fixedRows || 0;
-
-        if (config.dynamicRows) {
-            reserved += config.dynamicRows.count * (config.dynamicRows.lineHeight || 1);
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
         }
-        return reserved;
-    }, [config]);
-
-    const remainingHeight = Math.max(1, totalHeight - reservedHeight);
-
-    return {
-        totalHeight,
-        remainingHeight,
+        // Handle vertical scrolling for expanded view
+        if (isExpanded && maxHeight) {
+            const visibleLines = lines.slice(scrollIndex, scrollIndex + maxHeight);
+            return visibleLines.map((line, i) => renderLine(line, scrollIndex + i));
+        }
+        return lines.map((line, i) => renderLine(line, i));
     };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (highlight === 'diff') {
+            if (line.startsWith('+')) color = 'green';
+            if (line.startsWith('-')) color = 'red';
+            if (line.startsWith('@@')) color = 'cyan';
+        }
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>{title}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
 };
+
+export default ContentView;
 ```
 
 ## File: src/components/layout/ScreenLayout.tsx
@@ -104,6 +123,47 @@ const ScreenLayout = ({ title, footer, children }: ScreenLayoutProps) => {
 };
 
 export default ScreenLayout;
+```
+
+## File: src/constants/dashboard.constants.ts
+```typescript
+import type { ActionItem } from '../types/actions.types';
+
+export const DASHBOARD_STATUS = {
+    LISTENING: 'LISTENING',
+    PAUSED: 'PAUSED',
+    CONFIRM_APPROVE: 'CONFIRM_APPROVE',
+    APPROVING: 'APPROVING',
+} as const;
+
+type DashboardStatusValue = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
+
+export interface DashboardStandardActionsOptions {
+    status: DashboardStatusValue;
+    hasPending: boolean;
+    hasApplied: boolean;
+}
+
+export const DASHBOARD_FOOTER_ACTIONS = {
+    MODAL: [
+        { key: 'Enter', label: 'Confirm' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const,
+    STANDARD: (options: DashboardStandardActionsOptions): ActionItem[] => {
+        const { status, hasPending, hasApplied } = options;
+        const actions: ActionItem[] = [
+            { key: '↑↓', label: 'Nav' },
+            { key: '→/Ent', label: 'View' },
+            { key: '←', label: 'Collapse' },
+            { key: 'L', label: 'Log' },
+        ];
+        if (hasPending) actions.push({ key: 'A', label: 'Approve All' });
+        if (hasApplied) actions.push({ key: 'C', label: 'Commit' });
+        actions.push({ key: 'P', label: status === DASHBOARD_STATUS.PAUSED ? 'Resume' : 'Pause' });
+        actions.push({ key: 'Q', label: 'Quit' });
+        return actions;
+    },
+};
 ```
 
 ## File: eslint.config.js
@@ -259,207 +319,66 @@ export default [
 }
 ```
 
-## File: src/components/ActionFooter.tsx
+## File: src/types/domain.types.ts
 ```typescript
-import { Box, Text } from 'ink';
-import { useStdoutDimensions } from '../utils';
-import { UI_CONFIG } from '../config/ui.config';
-import type { ActionItem } from '../types/actions.types';
+// --- Core Domain Models ---
 
-interface ActionFooterProps {
-    actions: readonly ActionItem[];
+/** The type of change applied to a file. */
+export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
+
+/** The review status of a file within a transaction. */
+export type FileReviewStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' | 'RE_APPLYING';
+
+/** The result of a script execution. */
+export interface ScriptResult {
+    command: string;
+    success: boolean;
+    duration: number;
+    summary: string;
+    output: string;
 }
 
-const Action = ({ item }: { item: ActionItem }) => (
-    <Text>
-        (<Text color="cyan" bold>{item.key}</Text>) {item.label}
-    </Text>
-);
+/** The unified representation of a file change within a transaction. */
+export interface FileItem {
+    id: string;
+    path: string;
+    diff: string;
+    linesAdded: number;
+    linesRemoved: number;
+    type: FileChangeType;
+    strategy?: 'replace' | 'standard-diff';
+}
 
-const ActionFooter = ({ actions }: ActionFooterProps) => {
-    const [width] = useStdoutDimensions();
-    const { horizontalPadding, actionSeparator } = UI_CONFIG.footer;
-    const separatorWidth = actionSeparator.length;
+/** The lifecycle status of a transaction. */
+export type TransactionStatus =
+    | 'PENDING'
+    | 'APPLIED'
+    | 'COMMITTING'
+    | 'COMMITTED'
+    | 'FAILED'
+    | 'REVERTED'
+    | 'IN-PROGRESS'
+    | 'HANDOFF'
+    | 'REJECTED';
 
-    // Calculate required width for a single line
-    const formattedActions = actions.map(a => `(${a.key}) ${a.label}`);
-    const singleLineWidth = formattedActions.join(actionSeparator).length;
-
-    // 1. Render horizontally if it fits
-    if (singleLineWidth <= width - horizontalPadding * 2) {
-        return (
-            <Box>
-                {actions.map((item, index) => (
-                    <Text key={item.key}>
-                        <Action item={item} />
-                        {index < actions.length - 1 && <Text>{actionSeparator}</Text>}
-                    </Text>
-                ))}
-            </Box>
-        );
-    }
-
-    // 2. If it doesn't fit, calculate multi-column layout
-    const itemWidths = formattedActions.map(a => a.length);
-    const maxItemWidth = Math.max(...itemWidths);
-    
-    // Determine how many columns can fit, ensuring at least one
-    const availableWidth = width - horizontalPadding * 2;
-    // Calculate columns based on the widest item, ensuring we don't try to make more columns than items
-    const numColumns = Math.min(
-        actions.length,
-        Math.max(1, Math.floor(availableWidth / (maxItemWidth + separatorWidth))),
-    );
-    
-    const itemsPerColumn = Math.ceil(actions.length / numColumns);
-    const columns: ActionItem[][] = Array.from({ length: numColumns }, () => []);
-
-    actions.forEach((action, index) => {
-        const columnIndex = Math.floor(index / itemsPerColumn);
-        if (columns[columnIndex]) {
-            columns[columnIndex].push(action);
-        }
-    });
-
-    return (
-        <Box flexDirection="row" width="100%">
-            {columns.map((column, colIndex) => (
-                <Box
-                    key={colIndex}
-                    flexDirection="column"
-                    // Use a flex-basis approach for more even distribution if needed,
-                    // but fixed width is better for alignment.
-                    width={maxItemWidth + separatorWidth}
-                >
-                    {column.map(item => (
-                        <Action key={item.key} item={item} />
-                    ))}
-                </Box>
-            ))}
-        </Box>
-    );
-};
-
-export default ActionFooter;
-```
-
-## File: src/utils.ts
-```typescript
-import { useState, useEffect } from 'react';
-
-// Utility for simulation
-export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-type Dimensions = { columns: number; rows: number };
-const subscribers = new Set<(dims: Dimensions) => void>();
-let currentDimensions: Dimensions = {
-    columns: process.stdout.columns || 80,
-    rows: process.stdout.rows || 24,
-};
-
-let listenerAttached = false;
-let debounceTimeout: NodeJS.Timeout | null = null;
-
-const updateAndNotify = () => {
-    const newDimensions = {
-        columns: process.stdout.columns || 80,
-        rows: process.stdout.rows || 24,
+/** The central data model for a code modification transaction. */
+export interface Transaction {
+    id: string;
+    timestamp: number;
+    status: TransactionStatus;
+    hash: string;
+    message: string;
+    prompt?: string;
+    reasoning?: string;
+    error?: string;
+    files?: FileItem[];
+    scripts?: ScriptResult[];
+    stats?: {
+        files: number;
+        linesAdded: number;
+        linesRemoved: number;
     };
-
-    if (newDimensions.columns !== currentDimensions.columns || newDimensions.rows !== currentDimensions.rows) {
-        currentDimensions = newDimensions;
-        subscribers.forEach(subscriber => subscriber(currentDimensions));
-    }
-};
-
-const debouncedUpdateAndNotify = () => {
-    if (debounceTimeout) {
-        clearTimeout(debounceTimeout);
-    }
-    debounceTimeout = setTimeout(updateAndNotify, 150); // Debounce resize event
-};
-
-if (!listenerAttached) {
-    process.stdout.on('resize', debouncedUpdateAndNotify);
-    listenerAttached = true;
 }
-
-export const useStdoutDimensions = (): [number, number] => {
-    const [dimensions, setDimensions] = useState(currentDimensions);
-
-    useEffect(() => {
-        const subscriber = (newDims: Dimensions) => setDimensions(newDims);
-        subscribers.add(subscriber);
-
-        // On mount, check if dimensions are stale and update if needed for this hook instance.
-        setDimensions(dims => {
-            const latestDims = {
-                columns: process.stdout.columns || 80,
-                rows: process.stdout.rows || 24,
-            };
-            if (latestDims.columns !== dims.columns || latestDims.rows !== dims.rows) {
-                return latestDims;
-            }
-            return dims;
-        });
-
-        return () => {
-            subscribers.delete(subscriber);
-        };
-    }, []);
-
-    return [dimensions.columns, dimensions.rows];
-};
-```
-
-## File: src/hooks/useViewport.ts
-```typescript
-import { useState, useEffect } from 'react';
-import { useStdoutDimensions } from '../utils';
-import { useLayout, type LayoutConfig } from './useLayout';
-
-interface UseViewportOptions {
-	selectedIndex: number;
-	itemCount: number;
-	layoutConfig: LayoutConfig;
-}
-
-export const useViewport = ({ selectedIndex, itemCount, layoutConfig }: UseViewportOptions) => {
-	const { remainingHeight: viewportHeight } = useLayout(layoutConfig);
-	const [viewOffset, setViewOffset] = useState(0);
-
-	useEffect(() => {
-		setViewOffset(0);
-	}, [itemCount]);
-
-	useEffect(() => {
-		if (selectedIndex >= 0 && selectedIndex < viewOffset) {
-            setViewOffset(selectedIndex);
-        } else if (selectedIndex >= viewOffset + viewportHeight) {
-            setViewOffset(selectedIndex - viewportHeight + 1);
-        }
-    }, [selectedIndex, viewOffset, viewportHeight]);
-
-    return {
-        viewOffset,
-        viewportHeight,
-        width: useStdoutDimensions()[0],
-    };
-};
-```
-
-## File: src/components/Separator.tsx
-```typescript
-import {Text} from 'ink';
-import { useStdoutDimensions } from '../utils';
-
-const Separator = ({ width: propWidth }: { width?: number }) => {
-	const [columns] = useStdoutDimensions();
-	const width = propWidth ?? columns;
-	return <Text>{'─'.repeat(width)}</Text>;
-};
-
-export default Separator;
 ```
 
 ## File: package.json
@@ -499,207 +418,277 @@ export default Separator;
 }
 ```
 
-## File: src/components/GlobalHelpScreen.tsx
+## File: src/constants/review.constants.ts
 ```typescript
-import { Box, Text } from 'ink';
-import { useStdoutDimensions } from '../utils';
-import ModalLayout from './layout/ModalLayout';
+import type { ApplyStep } from '../stores/review.store';
+import type { ActionItem } from '../types/actions.types';
 
-const HELP_SECTIONS = [
-    {
-        title: 'GLOBAL',
-        shortcuts: [
-            { key: '?', label: 'Toggle this help screen' },
-            { key: 'Q/Esc', label: 'Quit or Go Back' },
-            { key: 'Ctrl+V', label: 'Process Clipboard' },
-            { key: 'Ctrl+B', label: 'Toggle Debug Menu' },
-            { key: 'Ctrl+L', label: 'Toggle Debug Log' },
-        ],
-    },
-    {
-        title: 'DASHBOARD',
-        shortcuts: [
-            { key: '↑↓', label: 'Navigate event stream' },
-            { key: '→/Enter', label: 'Expand / View Details' },
-            { key: '←', label: 'Collapse Item' },
-            { key: 'P', label: 'Pause / Resume clipboard watcher' },
-            { key: 'A', label: 'Approve All Pending' },
-            { key: 'C', label: 'Commit All Applied' },
-            { key: 'L', label: 'View History Log' },
-        ],
-    },
-    {
-        title: 'HISTORY',
-        shortcuts: [
-            { key: '↑↓', label: 'Navigate Items' },
-            { key: '→/←', label: 'Expand / Collapse' },
-            { key: 'Space', label: 'Select for Bulk Action' },
-            { key: 'Enter', label: 'View Details' },
-            { key: 'F', label: 'Filter History' },
-            { key: 'B', label: 'Open Bulk Actions Menu' },
-            { key: 'C', label: 'Copy Selected Items' },
-        ],
-    },
-    {
-        title: 'REVIEW SCREEN',
-        shortcuts: [
-            { key: '↑↓', label: 'Navigate Items' },
-            { key: 'D/Enter', label: 'View File Diff' },
-            { key: 'R', label: 'Show / Collapse Reasoning' },
-            { key: 'Space', label: 'Toggle Approval State' },
-            { key: 'A', label: 'Apply Approved Changes' },
-            { key: 'T/Shift+T', label: 'Repair / Bulk Repair Failed Files' },
-            { key: 'I/Shift+I', label: 'Instruct / Bulk Instruct Rejected' },
-            { key: 'C', label: 'Open Copy Menu' },
-        ],
-    },
-    {
-        title: 'DETAIL SCREEN',
-        shortcuts: [
-            { key: '↑↓', label: 'Navigate Sections/Files' },
-            { key: '→/←', label: 'Expand / Collapse' },
-            { key: 'Enter', label: 'Drill-in / View Diff' },
-            { key: 'U', label: 'Revert Transaction' },
-            { key: 'C', label: 'Open Copy Menu' },
-            { key: 'O', label: 'Open File/YAML in Editor' },
-        ],
-    },
+/**
+ * Constants for the Review screen and process.
+ */
+export const INITIAL_APPLY_STEPS: ApplyStep[] = [
+    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
+    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
+    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
+    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
 ];
 
-const KEY_PADDING = 12;
+export const REVIEW_BODY_VIEWS = {
+    DIFF: 'diff',
+    PROMPT: 'prompt',
+    REASONING: 'reasoning',
+    SCRIPT_OUTPUT: 'script_output',
+    BULK_REPAIR: 'bulk_repair',
+    CONFIRM_HANDOFF: 'confirm_handoff',
+    BULK_INSTRUCT: 'bulk_instruct',
+    NONE: 'none',
+} as const;
 
-const Shortcut = ({ shortcut }: { shortcut: { key: string; label: string } }) => (
-    <Text>
-        {'  '}
-        <Text color="cyan" bold>{shortcut.key.padEnd(KEY_PADDING)}</Text>
-        {shortcut.label}
-    </Text>
-);
+export const PATCH_STATUS = {
+    SUCCESS: 'SUCCESS',
+    PARTIAL_FAILURE: 'PARTIAL_FAILURE',
+} as const;
 
-const GlobalHelpScreen = () => {
-    const [width] = useStdoutDimensions();
+export const BULK_REPAIR_OPTIONS = [
+    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
+    '(2) Bulk Change Strategy & Re-apply',
+    '(3) Handoff to External Agent',
+    '(4) Bulk Abandon All Failed Files',
+    '(Esc) Cancel',
+] as const;
 
-    // 90% view width, minus 2 padding on each side.
-    const availableWidth = Math.floor(width * 0.9) - 4;
+export const BULK_INSTRUCT_OPTIONS = [
+    '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
+    '(2) Handoff to External Agent',
+    '(3) Bulk Un-reject All Files (revert to original)',
+    '(4) Cancel',
+] as const;
 
-    // Calculate max width needed for one column of content
-    const allShortcutLines = HELP_SECTIONS.flatMap(s => 
-        s.shortcuts.map(sc => `  ${sc.key.padEnd(KEY_PADDING)} ${sc.label}`)
-    );
-    const allLines = [...allShortcutLines, ...HELP_SECTIONS.map(s => s.title)];
-    const maxContentWidth = Math.max(...allLines.map(line => line.length));
+interface ReviewFooterConfig {
+    isFileSelected: boolean;
+    fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
+    currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
+    hasFailedFiles: boolean;
+    hasRejectedFiles: boolean;
+    hasApprovedFiles: boolean;
+}
 
-    const GAP = 4;
-    // Determine optimal number of columns
-    const numColumns = Math.max(1, Math.min(
-        HELP_SECTIONS.length, // Don't make more columns than sections
-        Math.floor(availableWidth / (maxContentWidth + GAP))
-    ));
+export const REVIEW_FOOTER_ACTIONS = {
+    DIFF_VIEW: [
+        { key: '↑↓', label: 'Next/Prev File' },
+        { key: 'PgUp/PgDn', label: 'Scroll' },
+        { key: '←/D/Esc', label: 'Back' },
+    ] as const,
+    PROMPT_VIEW: [
+        { key: '↑↓', label: 'Next/Prev Item' },
+        { key: 'PgUp/PgDn', label: 'Scroll' },
+        { key: '←/P/Ent', label: 'Collapse' },
+        { key: 'C', label: 'Copy Mode' },
+    ] as const,
+    REASONING_VIEW: [
+        { key: '↑↓', label: 'Next/Prev Item' },
+        { key: 'PgUp/PgDn', label: 'Scroll' },
+        { key: '←/R/Ent', label: 'Collapse' },
+        { key: 'C', label: 'Copy Mode' },
+    ] as const,
+    SCRIPT_OUTPUT_VIEW: [
+        { key: '↑↓', label: 'Next/Prev Item' },
+        { key: 'PgUp/PgDn', label: 'Scroll' },
+        { key: 'J↓/K↑', label: 'Next/Prev Error' },
+        { key: 'C', label: 'Copy Output' },
+        { key: '←/Ent/Esc', label: 'Back' },
+    ] as const,
+    BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+    BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
+    HANDOFF_CONFIRM_VIEW: [
+        { key: 'Enter', label: 'Confirm Handoff' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const,
+    MAIN_VIEW: (config: ReviewFooterConfig): ActionItem[] => {
+        const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
 
-    // Distribute sections into columns
-    const columns: typeof HELP_SECTIONS[] = Array.from({ length: numColumns }, () => []);
-    const sectionsPerColumn = Math.ceil(HELP_SECTIONS.length / numColumns);
-
-    HELP_SECTIONS.forEach((section, index) => {
-        const columnIndex = Math.floor(index / sectionsPerColumn);
-        if (columns[columnIndex]) {
-            columns[columnIndex].push(section);
+        if (config.isFileSelected) {
+            if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
+            actions.push({ key: 'D/Ent', label: 'Diff' });
+            if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
+            if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
+        } else if (config.currentItemType === 'script') {
+            actions.push({ key: 'Ent', label: 'Expand Details' });
+        } else {
+            actions.push({ key: 'Ent', label: 'Expand' });
         }
-    });
 
-    return (
-        <ModalLayout width="90%">
-            <Box
-                flexDirection="column"
-                paddingX={2}
-                paddingY={2}
-            >
-                <Box justifyContent="center" marginBottom={1}>
-                    <Text bold>
-                        <Text color="yellow">▲ relaycode</Text>
-                        <Text color="cyan"> · Keyboard Shortcuts</Text>
-                    </Text>
-                </Box>
+        if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
+        if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
+        if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
 
-                <Box flexDirection="row" gap={GAP}>
-                    {columns.map((sectionList, i) => (
-                        <Box key={i} flexDirection="column" gap={1} flexGrow={1} flexShrink={1} flexBasis={0}>
-                            {sectionList.map(section => (
-                                <Box key={section.title} flexDirection="column">
-                                    <Text bold color="cyan">{section.title}</Text>
-                                    {section.shortcuts.map(shortcut => (
-                                        <Shortcut key={shortcut.label} shortcut={shortcut} />
-                                    ))}
-                                </Box>
-                            ))}
-                        </Box>
-                    ))}
-                </Box>
-            </Box>
-            <Box justifyContent="center" marginTop={1}>
-                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
-            </Box>
-        </ModalLayout>
-    );
+        actions.push({ key: 'C', label: 'Copy' });
+
+        if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
+        actions.push({ key: 'X', label: 'Reject Tx' });
+        actions.push({ key: '←/Q/Esc', label: 'Back' });
+        return actions;
+    },
 };
 
-export default GlobalHelpScreen;
+export const getReviewProcessingFooterActions = (
+    isSkippable: boolean,
+): readonly ActionItem[] => {
+    const actions: ActionItem[] = [{ key: 'Ctrl+C', label: 'Cancel Process' }];
+    if (isSkippable) {
+        actions.push({ key: 'S', label: 'Skip Script' });
+    }
+    return actions;
+};
 ```
 
-## File: src/components/CopyScreen.tsx
+## File: src/hooks/useDashboardScreen.tsx
 ```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
-import { useCopyScreen } from '../hooks/useCopyScreen';
-import ModalLayout from './layout/ModalLayout';
-import { COPY_SCREEN_FOOTER_ACTIONS } from '../constants/copy.constants';
+import { useState, useEffect, useRef } from 'react';
+import { useInput } from 'ink';
+import { useDashboardStore } from '../stores/dashboard.store';
+import { useAppStore } from '../stores/app.store';
+import { useCommitStore } from '../stores/commit.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+import { useReviewStore } from '../stores/review.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useHistoryStore } from '../stores/history.store';
+import type { LayoutConfig } from './useLayout';
+import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+import { useViewport } from './useViewport';
+import { useListNavigator } from './useListNavigator';
 
-const CopyScreen = () => {
+export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
     const {
-        title,
-        itemsInView,
-        selectedIndex,
-        selectedIds,
-        lastCopiedMessage,
+        status,
+        selectedTransactionIndex,
+        expandedTransactionId,
+    } = useDashboardStore();
+    const transactions = useTransactionStore(s => s.transactions);
+    const [newTransactionIds, setNewTransactionIds] = useState(new Set<string>());
+    const prevTransactionIds = useRef(new Set(transactions.map(t => t.id)));
+
+    const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
+    const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex: selectedTransactionIndex,
+        itemCount: transactions.length,
+        layoutConfig,
+    });
+
+    useEffect(() => {
+        const currentIds = new Set(transactions.map(t => t.id));
+        const newIds = new Set<string>();
+
+        for (const id of currentIds) {
+            if (!prevTransactionIds.current.has(id)) {
+                newIds.add(id);
+            }
+        }
+
+        if (newIds.size > 0) {
+            setNewTransactionIds(current => new Set([...current, ...newIds]));
+            newIds.forEach(id => {
+                setTimeout(() => {
+                    setNewTransactionIds(current => {
+                        const next = new Set(current);
+                        next.delete(id);
+                        return next;
+                    });
+                }, 1000);
+            });
+        }
+
+        prevTransactionIds.current = currentIds;
+    }, [transactions]);
+
+    const {
+        togglePause,
+        startApproveAll,
+        confirmAction,
+        cancelAction,
+        toggleExpand,
+    } = useDashboardStore(s => s.actions);
+    const appActions = useAppStore(s => s.actions);
+    const commitActions = useCommitStore(s => s.actions);
+
+    const pendingApprovals = pendingTransactions.length;
+    const pendingCommits = appliedTransactions.length;
+
+    const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
+    const isProcessing = status === DASHBOARD_STATUS.APPROVING;
+
+    const viewDetails = () => {
+        const selectedTx = transactions[selectedTransactionIndex];
+        if (!selectedTx) return;
+
+        if (selectedTx.status === 'PENDING') {
+            useReviewStore.getState().actions.load(selectedTx.id);
+            appActions.showReviewScreen();
+        } else {
+            useDetailStore.getState().actions.load(selectedTx.id);
+            appActions.showTransactionDetailScreen();
+        }
+    };
+
+    useInput((_input, key) => {
+        if (key.return) confirmAction();
+        if (key.escape) cancelAction();
+    }, { isActive: isModal });
+
+    useListNavigator({
+        itemCount: transactions.length,
+        viewportHeight,
+        selectedIndex: selectedTransactionIndex,
+        onIndexChange: (index) => {
+            useDashboardStore.getState().actions.setSelectedIndex(index);
+            useDashboardStore.getState().actions.setExpandedTransactionId(null);
+        },
+        isActive: !isModal && !isProcessing,
+        onKey: (input, key) => {
+            if (key.leftArrow) {
+                if (expandedTransactionId) toggleExpand();
+                return;
+            }
+            if (key.rightArrow) {
+                if (transactions[selectedTransactionIndex]) {
+                    if (!expandedTransactionId) toggleExpand();
+                    else viewDetails();
+                }
+                return;
+            }
+            if (key.return) viewDetails();
+            if (input.toLowerCase() === 'p') togglePause();
+            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
+            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            }
+            if (input.toLowerCase() === 'l') {
+                useHistoryStore.getState().actions.load();
+                appActions.showTransactionHistoryScreen();
+            }
+        },
+    });
+
+    const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
+
+    return {
+        status,
+        transactions,
+        selectedTransactionIndex,
+        expandedTransactionId,
+        pendingApprovals,
+        pendingCommits,
+        isModal,
+        isProcessing,
+        newTransactionIds,
         viewOffset,
-    } = useCopyScreen();
-    const [width] = useStdoutDimensions();
-
-    return (
-        <ModalLayout>
-            <Box
-                flexDirection="column"
-                paddingX={2}
-                width="100%"
-            >
-                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                <Box flexDirection="column" marginY={1}>
-                    <Text>{title}</Text>
-                    <Box flexDirection="column" marginTop={1}>
-                        {itemsInView.map((item, index) => {
-                            const isSelected = (index + viewOffset) === selectedIndex;
-                            const isChecked = selectedIds.has(item.id);
-                            return (
-                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
-                                    {isSelected ? '> ' : '  '}
-                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                </Box>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <ActionFooter actions={COPY_SCREEN_FOOTER_ACTIONS}/>
-            </Box>
-        </ModalLayout>
-    );
+        viewportHeight,
+        transactionsToConfirm,
+    };
 };
-
-export default CopyScreen;
 ```
 
 ## File: index.tsx
@@ -788,65 +777,1515 @@ const main = () => {
 main();
 ```
 
-## File: src/App.tsx
+## File: src/hooks/useReviewScreen.tsx
 ```typescript
-import { Box } from 'ink';
-import { useAppStore } from './stores/app.store';
-import SplashScreen from './components/SplashScreen';
-import InitializationScreen from './components/InitializationScreen';
-import DashboardScreen from './components/DashboardScreen';
-import ReviewScreen from './components/ReviewScreen';
-import ReviewProcessingScreen from './components/ReviewProcessingScreen';
-import GitCommitScreen from './components/GitCommitScreen';
-import TransactionDetailScreen from './components/TransactionDetailScreen';
-import TransactionHistoryScreen from './components/TransactionHistoryScreen';
-import DebugMenu from './components/DebugMenu'; 
-import DebugLogScreen from './components/DebugLogScreen';
-import GlobalHelpScreen from './components/GlobalHelpScreen';
-import CopyScreen from './components/CopyScreen';
-import NotificationScreen from './components/NotificationScreen';
-import { useViewStore } from './stores/view.store';
-import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+import { useMemo } from 'react';
+import { useInput, type Key } from 'ink';
+import { useReviewStore } from '../stores/review.store';
+import { useAppStore } from '../stores/app.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useCopyStore } from '../stores/copy.store';
+import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
+import type { FileItem } from '../types/domain.types';
+import { useLayout } from './useLayout';
+import { useContentViewport } from './useContentViewport';
+import { UI_CONFIG } from '../config/ui.config';
+import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
+import { useListNavigator } from './useListNavigator';
+import type { ReviewBodyView } from '../stores/review.store';
+import { useViewport } from './useViewport';
 
-const App = () => {
-    const currentScreen = useAppStore(state => state.currentScreen);
-    const activeOverlay = useViewStore(s => s.activeOverlay);
-    const isOverlayOpen = activeOverlay !== 'none';
+type NavigableItem =
+    | { type: 'prompt' }
+    | { type: 'reasoning' }
+    | { type: 'script'; id: string }
+    | { type: 'file'; id: string };
 
-    // Global hotkeys are active if no modal-like component is open
-    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log' && activeOverlay !== 'notification'; // These overlays have their own input handlers
-    useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+export const useReviewScreen = () => {
+    const store = useReviewStore();
+    const {
+        selectedItemIndex,
+        bodyView,
+        patchStatus,
+        selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
+    } = store;
 
-    const renderMainScreen = () => {
-        if (currentScreen === 'splash') return <SplashScreen />;
-        if (currentScreen === 'init') return <InitializationScreen />;
-        if (currentScreen === 'dashboard') return <DashboardScreen />;
-        if (currentScreen === 'review') return <ReviewScreen />;
-        if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
-        if (currentScreen === 'git-commit') return <GitCommitScreen />;
-        if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
-        if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
-        return null;
+    const transaction = useTransactionStore(selectSelectedTransaction);
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const scriptCount = transaction?.scripts?.length || 0;
+    const fileCount = transaction?.files?.length || 0;
+
+    const layout = UI_CONFIG.layout.review;
+
+    // Layout for the main navigable item list (prompt, reasoning, files, etc.)
+    const mainListLayoutConfig = useMemo(() => ({
+        header: layout.header,
+        fixedRows: layout.fixedRows,
+        marginsY: layout.marginsY,
+        separators: layout.separators,
+        footer: layout.footer,
+        dynamicRows: {
+            count: bodyView !== REVIEW_BODY_VIEWS.NONE ? layout.bodyHeightReservation : 0,
+        },
+    }), [bodyView, layout]);
+
+    const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
+    const { viewOffset } = useViewport({
+        selectedIndex: selectedItemIndex,
+        itemCount: 100,
+        layoutConfig: mainListLayoutConfig,
+    });
+
+    // Layout for the body content (diff, reasoning, etc.)
+    const bodyLayoutConfig = useMemo(() => ({
+        header: layout.header,
+        separators: layout.separators,
+        fixedRows: 2, // meta
+        marginsY: 1 + 1 + 1, // meta, scripts, files
+        footer: 2,
+        dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
+    }), [layout, scriptCount, fileCount]);
+
+    const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
+
+    const navigableItems = useMemo((): NavigableItem[] => {
+        if (!transaction) return [];
+        const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
+        const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
+        return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+    }, [transaction]);
+
+    const contentLineCount = useMemo(() => {
+        const currentItem = navigableItems[selectedItemIndex];
+        switch (bodyView) { //
+            case REVIEW_BODY_VIEWS.REASONING:
+                return (transaction?.reasoning || '').split('\n').length;
+            case REVIEW_BODY_VIEWS.PROMPT:
+                return (transaction?.prompt || '').split('\n').length;
+            case REVIEW_BODY_VIEWS.DIFF: {
+                if (currentItem?.type !== 'file') return 0;
+                const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
+                return (selectedFile?.diff || '').split('\n').length;
+            }
+            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: {
+                if (currentItem?.type !== 'script') return 0;
+                const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
+                return (selectedScript?.output || '').split('\n').length;
+            }
+            default: return 0;
+        }
+    }, [bodyView, navigableItems, selectedItemIndex, transaction]);
+    const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
+
+    // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
+    const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
+    const fileReviewStates = useReviewStore(s => s.fileReviewStates);
+
+    const reviewStats = useMemo(() => {
+        const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+        return {
+            totalFiles: files.length,
+            totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
+            totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
+            numFiles: files.length,
+            approvedFilesCount: approvedFiles.length,
+        };
+    }, [files, fileReviewStates]);
+
+    const hasRejectedFiles = useMemo(() => {
+        if (!fileReviewStates) return false;
+        return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
+    }, [fileReviewStates]);
+
+    const { approvedFilesCount } = reviewStats;
+
+    const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
+
+    const scripts = transaction?.scripts || [];
+
+    const {
+        setSelectedItemIndex, toggleBodyView, setBodyView, startApplySimulation, approve,
+        rejectTransaction, tryRepairFile, tryInstruct, showBulkRepair, showBulkInstruct,
+        executeBulkRepairOption, executeBulkInstructOption, confirmHandoff,
+        navigateScriptErrorUp, navigateScriptErrorDown, toggleFileApproval,
+        rejectAllFiles, navigateBulkRepairUp, navigateBulkRepairDown,
+        navigateBulkInstructUp, navigateBulkInstructDown,
+    } = store.actions;
+
+    const openCopyMode = () => {
+        if (!transaction) return;
+        const currentItem = navigableItems[selectedItemIndex];
+        const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+        useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
     };
 
-    return (
-        <>
-            <Box
-                width="100%"
-                height="100%"
-                flexDirection="column"
-                display={isOverlayOpen ? 'none' : 'flex'}
-            >
-                {renderMainScreen()}
+    const handleIndexChange = (newIndex: number) => {
+        setSelectedItemIndex(newIndex);
+        contentViewport.actions.resetScroll();
+    };
+
+    const navigateToNextFile = () => {
+        const nextFileIndex = navigableItems.findIndex(
+            (item, index) => index > selectedItemIndex && item.type === 'file',
+        );
+        if (nextFileIndex !== -1) {
+            setSelectedItemIndex(nextFileIndex);
+        }
+    };
+
+    const navigateToPreviousFile = () => {
+        // Find the last index of a file before the current one
+        const prevFileIndex = navigableItems
+            .slice(0, selectedItemIndex)
+            .findLastIndex(item => item.type === 'file');
+
+        if (prevFileIndex !== -1) {
+            setSelectedItemIndex(prevFileIndex);
+        }
+    };
+
+    // --- Input Handlers ---
+
+    const handleGlobalInput = (input: string, key: Key): boolean => {
+        if (input === '1' && transaction) { // For demo purposes
+            startApplySimulation(transaction.id, 'success'); return true;
+        }
+        if (input === '2' && transaction) { // For demo purposes
+            startApplySimulation(transaction.id, 'failure'); return true;
+        }
+        // The 'q' (quit/back) is now handled by the global hotkey hook.
+
+        const currentItem = navigableItems[selectedItemIndex];
+        if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+            toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+            return true;
+        }
+
+        if (key.escape) {
+            switch (bodyView) {
+                case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                    toggleBodyView(bodyView);
+                    break;
+                default:
+                    if (bodyView !== REVIEW_BODY_VIEWS.NONE) {
+                        setBodyView(REVIEW_BODY_VIEWS.NONE);
+                    }
+                    break;
+            }
+            return true;
+        }
+        return false;
+    };
+
+    const handleHandoffConfirmInput = (_input: string, key: Key): void => {
+        if (key.return) confirmHandoff();
+    };
+
+    const handleBulkRepairInput = (input: string, key: Key): void => {
+        if (key.upArrow) navigateBulkRepairUp();
+        if (key.downArrow) navigateBulkRepairDown();
+        if (key.return) {
+            executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
+            return;
+        }
+
+        if (input >= '1' && input <= '4') {
+            executeBulkRepairOption(parseInt(input));
+        }
+    };
+    
+    const handleBulkInstructInput = (input: string, key: Key): void => {
+        if (key.upArrow) navigateBulkInstructUp();
+        if (key.downArrow) navigateBulkInstructDown();
+        if (key.return) {
+            executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
+            return;
+        }
+
+        if (input >= '1' && input <= '3') {
+            executeBulkInstructOption(parseInt(input));
+        }
+    };
+
+    const handleContentScrollInput = (key: Key): boolean => {
+        const contentViews: ReviewBodyView[] = [
+            REVIEW_BODY_VIEWS.REASONING,
+            REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+            REVIEW_BODY_VIEWS.DIFF,
+            REVIEW_BODY_VIEWS.PROMPT,
+        ];
+        if (!contentViews.includes(bodyView)) return false;
+
+        if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+        if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
+        return false;
+    };
+
+    const handleReasoningInput = (input: string, _key: Key): void => {
+        if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+    };
+
+    const handleScriptOutputInput = (input: string, _key: Key): void => {
+        if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+        if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+        if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
+            if (selectedScript) {
+                useNotificationStore.getState().actions.show({
+                    type: 'success',
+                    title: 'Copied to Clipboard',
+                    message: `Copied script output for: ${selectedScript.command}`,
+                });
+            }
+        }
+    };
+
+    const handleDiffInput = (input: string, key: Key) => {
+        if (key.upArrow) {
+            navigateToPreviousFile();
+            return;
+        }
+        if (key.downArrow) {
+            navigateToNextFile();
+            return;
+        }
+        if (input.toLowerCase() === 'd') toggleBodyView('diff');
+    };
+
+    const handleMainNavigationInput = (input: string, key: Key): void => {
+        if (key.leftArrow) {
+            showDashboardScreen();
+            return;
+        }
+
+        // Handle Shift+R for reject all
+        if (key.shift && input.toLowerCase() === 'r') {
+            if (approvedFilesCount > 0 && transaction) {
+                rejectAllFiles();
+            }
+            return;
+        }
+
+        const currentItem = navigableItems[selectedItemIndex];
+
+        if (input === ' ') {
+            if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState && fileState.status !== 'FAILED') {
+                    toggleFileApproval(currentItem.id);
+                }
+            }
+        }
+
+        if (input.toLowerCase() === 'p') {
+            toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+        }
+
+        if (input.toLowerCase() === 'r') {
+            toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+        }
+
+        if (key.return) { // Enter key
+            if (currentItem?.type === 'file') {
+                toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+            } else if (currentItem?.type === 'prompt') {
+                toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+            } else if (currentItem?.type === 'reasoning') {
+                toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+            } else if (currentItem?.type === 'script') {
+                toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
+            }
+        }
+
+        if (input.toLowerCase() === 'a') {
+            if (approvedFilesCount > 0) {
+                approve();
+                showDashboardScreen();
+            }
+        }
+
+        if (input.toLowerCase() === 'x') {
+            rejectTransaction();
+        }
+
+        if (input.toLowerCase() === 'c') {
+            openCopyMode();
+        }
+
+        if (input.toLowerCase() === 't') {
+            if (key.shift) {
+                const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+                if (hasFailedFiles) showBulkRepair();
+            } else if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+            }
+        }
+
+        if (input.toLowerCase() === 'i') {
+            if (key.shift) {
+                if (hasRejectedFiles) showBulkInstruct();
+            } else if (currentItem?.type === 'file') {
+                const fileState = fileReviewStates.get(currentItem.id);
+                if (fileState?.status === 'REJECTED') {
+                    tryInstruct(currentItem.id);
+                }
+            }
+        }
+    };
+
+    const listNavigableBodyViews: ReviewBodyView[] = [
+        REVIEW_BODY_VIEWS.PROMPT,
+        REVIEW_BODY_VIEWS.REASONING,
+        REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+    ];
+    const isListNavigationActive = bodyView === REVIEW_BODY_VIEWS.NONE || listNavigableBodyViews.includes(bodyView);
+    const arePageKeysForListNav = bodyView === REVIEW_BODY_VIEWS.NONE;
+
+    useListNavigator({
+        itemCount: navigableItems.length,
+        viewportHeight: listViewportHeight,
+        selectedIndex: selectedItemIndex,
+        onIndexChange: handleIndexChange,
+        isActive: isListNavigationActive,
+        disablePageKeys: !arePageKeysForListNav,
+        onKey: arePageKeysForListNav ? handleMainNavigationInput : undefined,
+    });
+
+    useInput((input: string, key: Key) => {
+        if (handleGlobalInput(input, key)) return;
+
+        if (key.leftArrow) {
+            // Allow left arrow to collapse any open body view
+            setBodyView(REVIEW_BODY_VIEWS.NONE);
+            return;
+        }
+
+        // Global "Enter to collapse" handler for non-modal views
+        if (key.return) {
+            if (
+                bodyView !== REVIEW_BODY_VIEWS.BULK_REPAIR &&
+                bodyView !== REVIEW_BODY_VIEWS.BULK_INSTRUCT &&
+                bodyView !== REVIEW_BODY_VIEWS.CONFIRM_HANDOFF &&
+                bodyView !== REVIEW_BODY_VIEWS.NONE
+            ) {
+                setBodyView(REVIEW_BODY_VIEWS.NONE);
+                return;
+            }
+        }
+        // Handle content scrolling (PgUp/PgDn)
+        if (handleContentScrollInput(key)) return;
+
+        switch (bodyView) {
+            case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
+            case REVIEW_BODY_VIEWS.BULK_REPAIR: return handleBulkRepairInput(input, key);
+            case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
+            case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
+            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
+            case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input, key);
+        }
+    }, { isActive: bodyView !== REVIEW_BODY_VIEWS.NONE });
+
+    return {
+        ...store,
+        fileReviewStates,
+        selectedItemIndex,
+        transaction,
+        files,
+        scripts,
+        patchStatus,
+        navigableItems,
+        isFileSelected,
+        navigableItemsInView,
+        viewOffset,
+        contentScrollIndex: contentViewport.scrollIndex,
+        availableBodyHeight,
+        selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
+        ...reviewStats,
+        hasRejectedFiles,
+    };
+};
+```
+
+## File: src/components/ReviewScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import ContentView from './ContentView';
+import type { ScriptResult, FileItem, FileChangeType } from '../types/domain.types';
+import { useReviewScreen } from '../hooks/useReviewScreen';
+import { REVIEW_BODY_VIEWS, REVIEW_FOOTER_ACTIONS, BULK_REPAIR_OPTIONS, BULK_INSTRUCT_OPTIONS } from '../constants/review.constants';
+import ActionFooter from './ActionFooter';
+import { FILE_STATUS_UI } from '../constants/ui.constants';
+import ScreenLayout from './layout/ScreenLayout';
+
+// --- Sub-components ---
+
+const FileItemRow = ({ file, reviewState, isFocused }: {
+    file: FileItem;
+    reviewState: { status: string; error?: string; details?: string };
+    isFocused: boolean;
+}) => {
+    const ui = FILE_STATUS_UI[reviewState.status as keyof typeof FILE_STATUS_UI] || { icon: '[?]', color: 'gray' };
+
+    const typeColor = (type: FileChangeType) => {
+        switch (type) {
+            case 'ADD': return 'green';
+            case 'DEL': return 'red';
+            case 'REN': return 'yellow';
+            default: return 'white';
+        }
+    };
+
+    const diffStats = <Text>(+<Text color="green">{file.linesAdded}</Text>/-<Text color="red">{file.linesRemoved}</Text>)</Text>;
+    const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
+    const prefix = isFocused ? '> ' : '  ';
+    const colorProps = isFocused ? { bold: true, color: 'cyan' } : {};
+
+    if (reviewState.status === 'FAILED') {
+        return (
+            <Box>
+                <Text {...colorProps}>
+                    {prefix}<Text color={ui.color}>{ui.icon} FAILED {file.path}</Text>
+                    <Text color="red">    ({reviewState.error})</Text>
+                </Text>
             </Box>
-            {activeOverlay === 'help' && <GlobalHelpScreen />}
-            {activeOverlay === 'copy' && <CopyScreen />}
-            {activeOverlay === 'log' && <DebugLogScreen />}
-            {activeOverlay === 'debug' && <DebugMenu />}
-            {activeOverlay === 'notification' && <NotificationScreen />}
-        </>
+        );
+    }
+
+    if (reviewState.status === 'AWAITING') {
+        return (
+            <Box>
+                <Text {...colorProps}>
+                    {prefix}<Text color={ui.color}>{ui.icon} AWAITING {file.path}</Text>
+                    <Text color="yellow">    ({reviewState.details})</Text>
+                </Text>
+            </Box>
+        );
+    }
+
+    if (reviewState.status === 'RE_APPLYING') {
+        return (
+             <Box>
+                <Text {...colorProps}>
+                    {prefix}<Text color={ui.color}>{ui.icon} RE-APPLYING... {file.path}</Text>
+                    <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
+                </Text>
+            </Box>
+        );
+    }
+
+    return (
+        <Box>
+            <Text {...colorProps}>
+                {prefix}<Text color={ui.color}>{ui.icon}</Text> {file.type}{' '}
+                <Text color={typeColor(file.type)}>{file.path}</Text>{' '}
+                {diffStats} [{strategy}]
+            </Text>
+        </Box>
     );
 };
 
-export default App;
+const ScriptItemRow = ({
+    script,
+    isSelected,
+    isExpanded,
+}: {
+    script: ScriptResult;
+    isSelected: boolean;
+    isExpanded: boolean;
+}) => {
+    const icon = script.success ? '✓' : '✗';
+    const iconColor = script.success ? 'green' : 'red';
+    const arrow = isExpanded ? '▾' : '▸';
+    const prefix = isSelected ? '> ' : '  ';
+    
+    // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
+    const scriptType = script.command.includes('test') ? 'Post-Command' : 
+                      script.command.includes('lint') ? 'Linter' : 
+                      'Script';
+
+    return (
+        <Box>
+            <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
+                {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
+                {script.summary}
+            </Text>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const ReviewScreen = () => {
+    const {
+        transaction,
+        files,
+        scripts = [],
+        patchStatus,
+        selectedItemIndex,
+        bodyView,
+        scriptErrorIndex,
+        fileReviewStates,
+        numFiles,
+        approvedFilesCount,
+        totalLinesAdded,
+        totalLinesRemoved,
+        selectedBulkRepairOptionIndex,
+        selectedBulkInstructOptionIndex,
+        navigableItems,
+        navigableItemsInView,
+        viewOffset,
+        contentScrollIndex,
+        availableBodyHeight,
+        hasRejectedFiles,
+    } = useReviewScreen();
+
+    if (!transaction) {
+        return <Text>Loading review...</Text>;
+    }
+    const { hash, message, prompt = '', reasoning = '' } = transaction;
+
+    const renderBody = () => {
+        if (bodyView === REVIEW_BODY_VIEWS.NONE) return null;
+
+        if (bodyView === REVIEW_BODY_VIEWS.PROMPT) {
+            const promptText = prompt || '';
+            return (
+                <Box flexDirection="column">
+                    <ContentView
+                        title="PROMPT"
+                        content={promptText}
+                        scrollIndex={contentScrollIndex}
+                        maxHeight={Math.max(1, availableBodyHeight)}
+                    />
+                </Box>
+            );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.REASONING) {
+            const reasoningText = reasoning || '';
+            const reasoningLinesCount = reasoningText.split('\n').length;
+            const visibleLinesCount = 10;
+            return (
+                <Box flexDirection="column">
+                    <ContentView
+                        title="REASONING"
+                        content={reasoningText}
+                        scrollIndex={contentScrollIndex}
+                        maxHeight={Math.max(1, availableBodyHeight)}
+                    />
+                    {reasoningLinesCount > visibleLinesCount && (
+                        <Text color="gray">
+                            Showing lines {contentScrollIndex + 1}-{Math.min(contentScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
+                            of {reasoningLinesCount}
+                        </Text>
+                    )}
+                </Box>
+            );
+        }
+        
+        if (bodyView === REVIEW_BODY_VIEWS.DIFF) {
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+            if (!selectedFile) return null;
+            return (
+                <ContentView
+                    title={`DIFF: ${selectedFile.path}`}
+                    content={selectedFile.diff}
+                    highlight="diff"
+                    isExpanded={true}
+                    scrollIndex={contentScrollIndex}
+                />
+            );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT) {
+             const currentItem = navigableItems[selectedItemIndex];
+             const scriptItems = navigableItems.filter((i): i is { type: 'script'; id: string } => i.type === 'script');
+             const scriptIndex = currentItem?.type === 'script'
+                ? scriptItems.findIndex(i => i.id === currentItem.id)
+                : -1;
+             const selectedScript = scripts[scriptIndex] || null;
+             if (!selectedScript) return null;
+             
+             const outputLines = selectedScript.output.split('\n');
+             const errorLines = outputLines.filter((line: string) =>
+                line.includes('Error') || line.includes('Warning'),
+             );
+             
+             return (
+                <Box flexDirection="column">
+                    <Text>
+                        {selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`
+                    </Text>
+                    <Box marginTop={1} flexDirection="column">
+                        {outputLines.map((line: string, index: number) => {
+                            const isError = line.includes('Error');
+                            const isWarning = line.includes('Warning');
+                            const isHighlighted = errorLines[scriptErrorIndex] === line;
+                            
+                            return (
+                                <Text 
+                                    key={index} 
+                                    color={isError ? 'red' : isWarning ? 'yellow' : undefined}
+                                    bold={isHighlighted}
+                                    backgroundColor={isHighlighted ? 'blue' : undefined}
+                                >
+                                    {line}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                    {errorLines.length > 0 && (
+                        <Text color="gray">
+                            Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
+                        </Text>
+                    )}
+                </Box>
+             );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.CONFIRM_HANDOFF) {
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
+                    <Box flexDirection="column">
+                        <Text>This action will:</Text>
+                        <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
+                        <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
+                        <Text>3. Assume that you and the external agent will complete the work.</Text>
+                    </Box>
+                    <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
+                    <Text bold color="yellow">Are you sure you want to proceed?</Text>
+                </Box>
+            );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_REPAIR) {
+            const failedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'FAILED');
+
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>BULK REPAIR ACTION</Text>
+
+                    <Box flexDirection="column">
+                        <Text>The following {failedFiles.length} files failed to apply:</Text>
+                        {failedFiles.map((file: FileItem) => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                    </Box>
+
+                    <Text>How would you like to proceed?</Text>
+
+                    <Box flexDirection="column">
+                        {BULK_REPAIR_OPTIONS.map((opt, i) => (
+                            <Text key={i} color={selectedBulkRepairOptionIndex === i ? 'cyan' : undefined}>
+                                {selectedBulkRepairOptionIndex === i ? '> ' : '  '}
+                                {opt}
+                            </Text>
+                        ))}
+                    </Box>
+                </Box>
+            );
+        }
+
+        if (bodyView === REVIEW_BODY_VIEWS.BULK_INSTRUCT) {
+            const rejectedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'REJECTED');
+
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text bold>BULK INSTRUCTION ACTION</Text>
+
+                    <Box flexDirection="column">
+                        <Text>The following {rejectedFiles.length} files were rejected:</Text>
+                        {rejectedFiles.map((file: FileItem) => (
+                            <Text key={file.id}>- {file.path}</Text>
+                        ))}
+                    </Box>
+                    <Box flexDirection="column" marginTop={1}>
+                        {BULK_INSTRUCT_OPTIONS.map((opt, i) => (
+                            <Text key={i} color={selectedBulkInstructOptionIndex === i ? 'cyan' : undefined}>
+                                {selectedBulkInstructOptionIndex === i ? '> ' : '  '}
+                                {opt}
+                            </Text>
+                        ))}
+                    </Box>
+                </Box>
+            );
+        }
+
+        return null;
+    };
+
+    const renderFooter = () => {
+        // Contextual footer for body views
+        switch (bodyView) {
+            case REVIEW_BODY_VIEWS.PROMPT:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.PROMPT_VIEW} />;
+            case REVIEW_BODY_VIEWS.DIFF:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.DIFF_VIEW}/>;
+            case REVIEW_BODY_VIEWS.REASONING:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.REASONING_VIEW}/>;
+            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.SCRIPT_OUTPUT_VIEW}/>;
+            case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                return <Text>{REVIEW_FOOTER_ACTIONS.BULK_REPAIR_VIEW.text}</Text>;
+            case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                return <Text>{REVIEW_FOOTER_ACTIONS.BULK_INSTRUCT_VIEW.text}</Text>;
+            case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.HANDOFF_CONFIRM_VIEW}/>;
+        }
+
+        // Dynamic Main footer
+        const currentItem = navigableItems[selectedItemIndex];
+        const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+        const fileState = currentItem?.type === 'file' ? fileReviewStates.get(currentItem.id) : undefined;
+
+        const footerConfig = {
+            isFileSelected: currentItem?.type === 'file',
+            fileStatus: fileState?.status as 'FAILED' | 'REJECTED' | 'OTHER' | undefined,
+            currentItemType: currentItem?.type as 'file' | 'script' | 'reasoning' | 'prompt' | undefined,
+            hasFailedFiles,
+            hasRejectedFiles,
+            hasApprovedFiles: approvedFilesCount > 0,
+        };
+        return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.MAIN_VIEW(footerConfig)} />;
+    };
+
+    return (
+        <ScreenLayout title="REVIEW" footer={renderFooter()}>
+            {/* Navigator Section */}
+            <Box flexDirection="column" marginY={1}>
+                <Box flexDirection="column">
+                    <Text>{hash} · {message}</Text>
+                    <Box>
+                        <Text>
+                            (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>)
+                            {' '}| {numFiles} Files · ({approvedFilesCount}/{numFiles} Appr)
+                            {' '}| Showing {viewOffset + 1}-
+                            {Math.min(viewOffset + navigableItemsInView.length, navigableItems.length)}{' '}
+                            of {navigableItems.length}
+                        </Text>
+                        {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && (
+                            <Text> · Scripts: SKIPPED</Text>
+                        )}
+                        {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
+                    </Box>
+                </Box>
+
+                <Box flexDirection="column" marginTop={1}>
+                    <Text color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' : undefined}>
+                        {navigableItems[selectedItemIndex]?.type === 'prompt' ? '> ' : '  '}
+                        (P)rompt ▸ {(prompt || '').substring(0, 50)}...
+                    </Text>
+                    <Text color={navigableItems[selectedItemIndex]?.type === 'reasoning' ? 'cyan' : undefined}>
+                        {navigableItems[selectedItemIndex]?.type === 'reasoning' ? '> ' : '  '}
+                        (R)easoning ({(reasoning || '').split('\n\n').length} steps){' '}
+                        {bodyView === REVIEW_BODY_VIEWS.REASONING ? '▾' : '▸'}{' '}
+                        {((reasoning || '').split('\n')[0] ?? '').substring(0, 40)}...
+                    </Text>
+                </Box>
+            </Box>
+
+            {/* Script Results (if any) */}
+            {scripts.length > 0 && navigableItemsInView.some(i => i.type === 'script') && (
+                <>
+                    <Box flexDirection="column" marginY={1}>
+                        {scripts.map((script: ScriptResult) => {
+                            const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'script' && i.id === script.command);
+                            if (itemInViewIndex === -1) return null;
+                            
+                            const isSelected = selectedItemIndex === viewOffset + itemInViewIndex;
+                            return (
+                                <ScriptItemRow
+                                    key={script.command} script={script}
+                                    isSelected={isSelected}
+                                    isExpanded={bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT && isSelected}
+                                />
+                            );
+                        })}
+                    </Box>
+                </>
+            )}
+            
+            {/* Files Section */}
+            <Box flexDirection="column" marginY={1}>
+                <Text bold>FILES</Text>
+                {files.map((file: FileItem) => {
+                    const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'file' && i.id === file.id);
+                    if (itemInViewIndex === -1) return null; // Only render if visible
+
+                    const isFocused = selectedItemIndex === viewOffset + itemInViewIndex;
+                    const reviewState = fileReviewStates.get(file.id);
+                    
+                    return (
+                        <FileItemRow key={file.id} file={file} isFocused={isFocused} reviewState={reviewState || { status: 'AWAITING' }} />
+                    );
+                })}
+            </Box>
+
+            {/* Body Viewport */}
+            {bodyView !== REVIEW_BODY_VIEWS.NONE && (
+                <Box marginY={1}>
+                    {renderBody()}
+                </Box>
+            )}
+        </ScreenLayout>
+    );
+};
+
+export default ReviewScreen;
+```
+
+## File: src/stores/review.store.ts
+```typescript
+import { create } from 'zustand';
+import { useAppStore } from './app.store';
+import { useTransactionStore } from './transaction.store';
+import { useViewStore } from './view.store';
+import { ReviewService, type SimulationResult } from '../services/review.service';
+import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS, BULK_INSTRUCT_OPTIONS, BULK_REPAIR_OPTIONS } from '../constants/review.constants';
+import { sleep } from '../utils';
+import type { FileReviewStatus } from '../types/domain.types';
+
+export interface ApplyStep {
+    id: string;
+    title: string;
+    status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+    details?: string;
+    substeps?: ApplyStep[];
+    startTime?: number;
+    duration?: number;
+}
+
+export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof REVIEW_BODY_VIEWS];
+export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
+export type ApplyUpdate =
+    | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+    | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
+    | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
+
+interface ReviewState {
+    patchStatus: PatchStatus;
+    applySteps: ApplyStep[];
+    selectedItemIndex: number;
+    bodyView: ReviewBodyView;
+    scriptErrorIndex: number;
+    processingStartTime: number | null;
+    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
+
+    selectedBulkRepairOptionIndex: number;
+    selectedBulkInstructOptionIndex: number;
+    isCancelling: boolean;
+    isSkipping: boolean;
+
+    actions: {
+        load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+        setSelectedItemIndex: (index: number) => void;
+        toggleBodyView: (view: Extract<
+            ReviewBodyView, 'prompt' | 'bulk_instruct' |
+            'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+        >) => void;
+        setBodyView: (view: ReviewBodyView) => void;
+        approve: () => void;
+        rejectTransaction: () => void;
+        startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
+        tryRepairFile: (fileId: string) => void;
+        showBulkRepair: () => void;
+        executeBulkRepairOption: (option: number) => Promise<void>;
+        skipCurrentStep: () => void;
+        resetSkip: () => void;
+        tryInstruct: (fileId: string) => void;
+        cancelProcessing: () => void;
+        showBulkInstruct: () => void;
+        executeBulkInstructOption: (option: number) => Promise<void>;
+        confirmHandoff: () => void;
+        navigateScriptErrorUp: () => void;
+        navigateScriptErrorDown: () => void;
+        updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
+        addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+        updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+        updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
+        toggleFileApproval: (fileId: string) => void;
+        rejectAllFiles: () => void;
+        navigateBulkRepairUp: () => void;
+        navigateBulkRepairDown: () => void;
+        navigateBulkInstructUp: () => void;
+        navigateBulkInstructDown: () => void;
+    };
+}
+
+export const useReviewStore = create<ReviewState>((set, get) => ({
+    patchStatus: PATCH_STATUS.SUCCESS,
+    applySteps: INITIAL_APPLY_STEPS,
+    selectedItemIndex: 0,
+    bodyView: REVIEW_BODY_VIEWS.NONE,
+    scriptErrorIndex: 0,
+    processingStartTime: null,
+    fileReviewStates: new Map(),
+    selectedBulkRepairOptionIndex: 0,
+    selectedBulkInstructOptionIndex: 0,
+    isCancelling: false,
+    isSkipping: false,
+
+    actions: {
+        load: (transactionId, initialState) => {
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction) return;
+
+            // This logic is preserved from the deleted `prepareTransactionForReview`
+            // to allow debug screens to jump directly to a pre-populated review state
+            // without running the full simulation.
+            const isFailureCase = transaction.id === '1';
+            const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+            (transaction.files || []).forEach((file, index) => {
+                if (isFailureCase) {
+                    const isFailedFile = index > 0;
+                    const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                    const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                    fileReviewStates.set(file.id, { status, error });
+                } else {
+                    fileReviewStates.set(file.id, { status: 'APPROVED' });
+                }
+            });
+            const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+            set({
+                patchStatus,
+                fileReviewStates,
+                processingStartTime: null,
+                selectedItemIndex: 0,
+                bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
+                scriptErrorIndex: 0,
+                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                selectedBulkRepairOptionIndex: 0,
+                selectedBulkInstructOptionIndex: 0,
+                ...initialState,
+            });
+        },
+        setSelectedItemIndex: (index) => set({ selectedItemIndex: index }),
+        toggleBodyView: (view) => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            const files = tx?.files || [];
+            if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+            return {
+                bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
+            };
+        }),
+        setBodyView: (view) => set({ bodyView: view }),
+        approve: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (selectedTransactionId) {
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                useAppStore.getState().actions.showDashboardScreen();
+            }
+        },
+        rejectTransaction: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (selectedTransactionId) {
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REJECTED');
+                useAppStore.getState().actions.showDashboardScreen();
+            }
+        },
+        startApplySimulation: async (transactionId, scenario) => {
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction?.files) return;
+
+            const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
+
+            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+            set({
+                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                processingStartTime: Date.now(),
+                isCancelling: false,
+                isSkipping: false,
+                fileReviewStates: new Map(), // Clear previous states
+            });
+
+            showReviewProcessingScreen();
+            const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
+            let simulationResult: SimulationResult;
+
+            // Manually iterate to get the return value from the async generator
+            const iterator = simulationGenerator[Symbol.asyncIterator]();
+            while (true) {
+                const { value, done } = await iterator.next();
+                if (done) {
+                    simulationResult = value as SimulationResult;
+                    break;
+                }
+                const update = value;
+                if (update.type === 'UPDATE_STEP') {
+                    updateApplyStep(update.payload.id, update.payload.status, update.payload.details);
+                } else if (update.type === 'ADD_SUBSTEP') {
+                    addApplySubstep(update.payload.parentId, update.payload.substep);
+                } else if (update.type === 'UPDATE_SUBSTEP') {
+                    updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                }
+            }
+
+            await sleep(1000);
+            set({
+                processingStartTime: null,
+                fileReviewStates: simulationResult.fileReviewStates,
+                patchStatus: simulationResult.patchStatus,
+            });
+            showReviewScreen();
+        },
+        tryRepairFile: (fileId) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const { fileReviewStates } = get();
+            if (!selectedTransactionId) return;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            const file = tx?.files?.find(f => f.id === fileId);
+            if (!file) return;
+
+            const { status, error } = fileReviewStates.get(file.id) || {};
+            if (status !== 'FAILED') return;
+            
+            ReviewService.tryRepairFile(file, error);
+            get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+        },
+        tryInstruct: (fileId) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const { fileReviewStates } = get();
+            if (!selectedTransactionId) return;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            const file = tx?.files?.find(f => f.id === fileId);
+            if (!tx || !file) return;
+
+            const { status } = fileReviewStates.get(file.id) || {};
+            if (status !== 'REJECTED') return;
+            
+            ReviewService.tryInstructFile(file, tx);
+            get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+        },
+        showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+        cancelProcessing: () => set({ isCancelling: true }),
+        skipCurrentStep: () => set({ isSkipping: true }),
+        resetSkip: () => set({ isSkipping: false }),
+        executeBulkInstructOption: async (option) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            if (!tx?.files) return;
+
+            const rejectedFiles = tx.files.filter(
+                f => get().fileReviewStates.get(f.id)?.status === 'REJECTED',
+            );
+            if (rejectedFiles.length === 0) {
+                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                return;
+            }
+
+            switch (option) {
+                case 1:
+                    ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                case 2:
+                    get().actions.setBodyView('confirm_handoff');
+                    break;
+                case 3:
+                    rejectedFiles.forEach(file => {
+                        get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                    });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                default:
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+            }
+        },
+
+        showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+        executeBulkRepairOption: async (option) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            if (!tx?.files) return;
+
+            const failedFiles = tx.files.filter(
+                f => get().fileReviewStates.get(f.id)?.status === 'FAILED',
+            );
+            if (failedFiles.length === 0) {
+                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                return;
+            }
+
+            switch (option) {
+                case 1:
+                    ReviewService.generateBulkRepairPrompt(failedFiles);
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                case 2: {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                    const results = await ReviewService.runBulkReapply(failedFiles);
+                    results.forEach(result => {
+                        get().actions.updateFileReviewStatus(
+                            result.id, result.status, result.error,
+                        );
+                    });
+                    break;
+                }
+                case 3:
+                    get().actions.setBodyView('confirm_handoff');
+                    break;
+                case 4:
+                    failedFiles.forEach(file => {
+                        get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                    });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                default:
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+            }
+        },
+        confirmHandoff: () => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx?.files) return;
+            const { fileReviewStates } = get();
+            ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+            ReviewService.performHandoff(tx.hash);
+        },
+        navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+        navigateScriptErrorDown: () => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx?.scripts || !tx?.files) return {};
+            const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+            if (selectedScript?.output) {
+                const errorLines = selectedScript.output
+                    .split('\n')
+                    .filter(line => line.includes('Error') || line.includes('Warning'));
+                return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+            }
+            return {};
+        }),
+        updateApplyStep: (id, status, details) => {
+            set(state => {
+                const newSteps = state.applySteps.map(s => {
+                    if (s.id === id) {
+                        const newStep: ApplyStep = { ...s, status };
+                        if (status === 'active') {
+                            newStep.startTime = Date.now();
+                        } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                            newStep.duration = (Date.now() - s.startTime) / 1000;
+                        }
+                        if (details !== undefined) newStep.details = details;
+                        return newStep;
+                    }
+                    return s;
+                });
+                return { applySteps: newSteps };
+            });
+        },
+        updateApplySubstep: (parentId, substepId, status, title) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId && s.substeps) {
+                        const newSubsteps = s.substeps.map(sub => {
+                            if (sub.id === substepId) {
+                                const newSub: ApplyStep = { ...sub, status };
+                                if (status === 'active') {
+                                    newSub.startTime = Date.now();
+                                } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                    newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                }
+                                if (title) newSub.title = title;
+                                return newSub;
+                            }
+                            return sub;
+                        });
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
+        addApplySubstep: (parentId, substep) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId) {
+                        const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
+        updateFileReviewStatus: (fileId, status, error, details) => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                newStates.set(fileId, { status, error, details });
+                return { fileReviewStates: newStates };
+            });
+        },
+        toggleFileApproval: (fileId) => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                const current = newStates.get(fileId);
+                if (current) {
+                    const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                    newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
+                }
+                return { fileReviewStates: newStates };
+            });
+        },
+        rejectAllFiles: () => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                for (const [fileId, reviewState] of newStates.entries()) {
+                    if (reviewState.status === 'APPROVED') {
+                        newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
+                    }
+                }
+                return { fileReviewStates: newStates };
+            });
+        },
+        navigateBulkRepairUp: () => set(state => ({
+            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex - 1 + BULK_REPAIR_OPTIONS.length) % BULK_REPAIR_OPTIONS.length,
+        })),
+        navigateBulkRepairDown: () => set(state => ({
+            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex + 1) % BULK_REPAIR_OPTIONS.length,
+        })),
+        navigateBulkInstructUp: () => set(state => ({
+            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex - 1 + BULK_INSTRUCT_OPTIONS.length) % BULK_INSTRUCT_OPTIONS.length,
+        })),
+        navigateBulkInstructDown: () => set(state => ({
+            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex + 1) % BULK_INSTRUCT_OPTIONS.length,
+        })),
+    },
+}));
+```
+
+## File: src/components/DashboardScreen.tsx
+```typescript
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
+import { useDashboardScreen } from '../hooks/useDashboardScreen';
+import { UI_CONFIG } from '../config/ui.config'; //
+import ActionFooter from './ActionFooter';
+import ScreenLayout from './layout/ScreenLayout';
+import { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';
+import { TRANSACTION_STATUS_UI, FILE_CHANGE_ICONS } from '../constants/ui.constants';
+
+// --- Sub-components & Helpers ---
+
+const getStatusIcon = (status: TransactionStatus) => {
+    if (status === 'IN-PROGRESS' || status === 'COMMITTING') return <Spinner type="dots" />;
+    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
+    if (!ui) return <Text> </Text>;
+    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
+};
+
+const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m`;
+};
+
+const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
+    const stats = transaction.stats;
+    const files = transaction.files || [];
+
+    return (
+        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
+            {stats && (
+                <Text color="gray">
+                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
+                </Text>
+            )}
+             <Box flexDirection="column" paddingLeft={1}>
+                {files.map(file => (
+                    <Text key={file.id}>
+                        <Text color="gray">{FILE_CHANGE_ICONS[file.type]}</Text> {file.path}
+                    </Text>
+                ))}
+             </Box>
+        </Box>
+    );
+};
+const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {
+    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
+    const [isStatusFlashing, setIsStatusFlashing] = useState(false);
+    const prevStatus = useRef(transaction.status);
+
+    useEffect(() => {
+        if (isNew) {
+            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isNew]);
+
+    useEffect(() => {
+        if (prevStatus.current !== transaction.status) {
+            setIsStatusFlashing(true);
+            const timer = setTimeout(() => setIsStatusFlashing(false), 500);
+            prevStatus.current = transaction.status;
+            return () => clearTimeout(timer);
+        }
+    }, [transaction.status]);
+
+    const icon = getStatusIcon(transaction.status);
+    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
+    const statusText = transaction.status.padEnd(11, ' ');
+    const expandIcon = isExpanded ? '▾' : '▸';
+    
+    const messageNode =
+        transaction.status === 'IN-PROGRESS' || transaction.status === 'COMMITTING'
+            ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
+            : transaction.message;
+    
+    const content = (
+        <Text>
+            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}
+            <Text color="gray">{transaction.hash}</Text>
+            {' '}· {messageNode}
+        </Text>
+    );
+
+    if (isSelected) {
+        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;
+    }
+
+    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;
+});
+
+const ConfirmationContent = ({
+    transactionsToConfirm,
+}: {
+    transactionsToConfirm: Transaction[];
+}) => {
+    const actionText = 'APPROVE';
+    
+    return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
+            <Text>
+                The following {transactionsToConfirm.length} transaction(s) will be approved:
+            </Text>
+            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+                {transactionsToConfirm.map(tx => (
+                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
+                ))}
+            </Box>
+        </Box>
+    );
+};
+
+// --- Main Component ---
+
+const DashboardScreen = () => {
+    const {
+        status,
+        transactions,
+        selectedTransactionIndex,
+        pendingApprovals,
+        pendingCommits,
+        isModal,
+        isProcessing,
+        viewOffset,
+        viewportHeight,
+        transactionsToConfirm,
+        expandedTransactionId,
+        newTransactionIds,
+    } = useDashboardScreen({
+        layoutConfig: UI_CONFIG.layout.dashboard,
+    });
+
+    const renderStatusBar = () => {
+        let statusText: string;
+        let statusIcon: React.ReactNode;
+        switch (status) {
+            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
+            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
+            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
+            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; //
+        }
+
+        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
+        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
+
+        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
+        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {
+            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
+        }
+        
+        return (
+            <Text>
+                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
+            </Text>
+        );
+    };
+
+    const renderFooter = () => {
+        if (isModal) return (
+            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>
+        );
+        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
+
+		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD({
+            status,
+            hasPending: pendingApprovals > 0,
+            hasApplied: pendingCommits > 0,
+        })} />;
+    };
+    
+    return (
+        <ScreenLayout
+            title="DASHBOARD"
+            footer={renderFooter()}
+        >
+            <Box flexDirection="column" flexGrow={1}>
+                <Box>
+                    {renderStatusBar()}
+                </Box>
+                
+                {isModal && (
+                    <Box marginY={1}>
+                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
+                    </Box>
+                )}
+                
+                <Box marginTop={1}><Text bold underline> EVENT STREAM (Last 15 minutes)</Text></Box>
+                <Box flexDirection="column" marginTop={1} flexGrow={1}>
+                    {transactions.length === 0 && (
+                         <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
+                    )}
+                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
+                        const actualIndex = viewOffset + index;
+                        const isExpanded = expandedTransactionId === tx.id;
+                        const isNew = newTransactionIds.has(tx.id);
+                        return (
+                            <React.Fragment key={tx.id}>
+                                <EventStreamItem
+                                    transaction={tx}
+                                    isSelected={!isModal && actualIndex === selectedTransactionIndex}
+                                    isExpanded={isExpanded}
+                                    isNew={isNew}
+                                />
+                                {isExpanded && <ExpandedEventInfo transaction={tx} />}
+                            </React.Fragment>
+                        );
+                    })}
+                </Box>
+            </Box>
+        </ScreenLayout>
+    );
+};
+
+export default DashboardScreen;
 ```

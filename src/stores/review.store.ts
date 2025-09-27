@@ -42,7 +42,7 @@ interface ReviewState {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
         setSelectedItemIndex: (index: number) => void;
         toggleBodyView: (view: Extract<
-            ReviewBodyView, 'prompt' | 'bulk_instruct' |
+            ReviewBodyView, 'prompt' | 'bulk_instruct' | 'commit_message' |
             'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
         >) => void;
         setBodyView: (view: ReviewBodyView) => void;

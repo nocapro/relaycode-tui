@@ -15,12 +15,13 @@ import type { ReviewBodyView } from '../stores/review.store';
 import { useViewport } from './useViewport';
 
 type NavigableItem =
+    | { type: 'commit_message' }
     | { type: 'prompt' }
     | { type: 'reasoning' }
     | { type: 'script'; id: string }
     | { type: 'file'; id: string };
 
-export const useReviewScreen = () => {
+export const useReviewScreen = () => { // eslint-disable-line max-lines-per-function
     const store = useReviewStore();
     const {
         selectedItemIndex,
@@ -73,12 +74,14 @@ export const useReviewScreen = () => {
         if (!transaction) return [];
         const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
         const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
-        return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+        return [{ type: 'commit_message' }, { type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
     }, [transaction]);
 
     const contentLineCount = useMemo(() => {
         const currentItem = navigableItems[selectedItemIndex];
         switch (bodyView) { //
+            case REVIEW_BODY_VIEWS.COMMIT_MESSAGE:
+                return (transaction?.message || '').split('\n').length;
             case REVIEW_BODY_VIEWS.REASONING:
                 return (transaction?.reasoning || '').split('\n').length;
             case REVIEW_BODY_VIEWS.PROMPT:
@@ -303,6 +306,10 @@ export const useReviewScreen = () => {
             }
         }
 
+        if (input.toLowerCase() === 'm') {
+            toggleBodyView(REVIEW_BODY_VIEWS.COMMIT_MESSAGE);
+        }
+
         if (input.toLowerCase() === 'p') {
             toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
         }
@@ -314,6 +321,8 @@ export const useReviewScreen = () => {
         if (key.return) { // Enter key
             if (currentItem?.type === 'file') {
                 toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+            } else if (currentItem?.type === 'commit_message') {
+                toggleBodyView(REVIEW_BODY_VIEWS.COMMIT_MESSAGE);
             } else if (currentItem?.type === 'prompt') {
                 toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
             } else if (currentItem?.type === 'reasoning') {

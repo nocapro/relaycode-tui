@@ -12,6 +12,7 @@ export const INITIAL_APPLY_STEPS: ApplyStep[] = [
 ];
 
 export const REVIEW_BODY_VIEWS = {
+    COMMIT_MESSAGE: 'commit_message',
     DIFF: 'diff',
     PROMPT: 'prompt',
     REASONING: 'reasoning',
@@ -45,7 +46,7 @@ export const BULK_INSTRUCT_OPTIONS = [
 interface ReviewFooterConfig {
     isFileSelected: boolean;
     fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
-    currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
+    currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt' | 'commit_message';
     hasFailedFiles: boolean;
     hasRejectedFiles: boolean;
     hasApprovedFiles: boolean;
@@ -67,6 +68,12 @@ export const REVIEW_FOOTER_ACTIONS = {
         { key: '↑↓', label: 'Next/Prev Item' },
         { key: 'PgUp/PgDn', label: 'Scroll' },
         { key: '←/R/Ent', label: 'Collapse' },
+        { key: 'C', label: 'Copy Mode' },
+    ] as const,
+    COMMIT_MESSAGE_VIEW: [
+        { key: '↑↓', label: 'Next/Prev Item' },
+        { key: 'PgUp/PgDn', label: 'Scroll' },
+        { key: '←/M/Ent', label: 'Collapse' },
         { key: 'C', label: 'Copy Mode' },
     ] as const,
     SCRIPT_OUTPUT_VIEW: [
@@ -96,7 +103,9 @@ export const REVIEW_FOOTER_ACTIONS = {
             actions.push({ key: 'Ent', label: 'Expand' });
         }
 
-        if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
+        actions.push({ key: 'M', label: 'Message' });
+        actions.push({ key: 'P', label: 'Prompt' });
+        actions.push({ key: 'R', label: 'Reasoning' });
         if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
         if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
 

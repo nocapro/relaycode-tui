@@ -137,6 +137,20 @@ const ReviewScreen = () => {
     const renderBody = () => {
         if (bodyView === REVIEW_BODY_VIEWS.NONE) return null;
 
+        if (bodyView === REVIEW_BODY_VIEWS.COMMIT_MESSAGE) {
+            const messageText = message || '';
+            return (
+                <Box flexDirection="column">
+                    <ContentView
+                        title="COMMIT MESSAGE"
+                        content={messageText}
+                        scrollIndex={contentScrollIndex}
+                        maxHeight={Math.max(1, availableBodyHeight)}
+                    />
+                </Box>
+            );
+        }
+
         if (bodyView === REVIEW_BODY_VIEWS.PROMPT) {
             const promptText = prompt || '';
             return (
@@ -309,6 +323,8 @@ const ReviewScreen = () => {
     const renderFooter = () => {
         // Contextual footer for body views
         switch (bodyView) {
+            case REVIEW_BODY_VIEWS.COMMIT_MESSAGE:
+                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.COMMIT_MESSAGE_VIEW}/>;
             case REVIEW_BODY_VIEWS.PROMPT:
                 return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.PROMPT_VIEW} />;
             case REVIEW_BODY_VIEWS.DIFF:
@@ -363,6 +379,11 @@ const ReviewScreen = () => {
                 </Box>
 
                 <Box flexDirection="column" marginTop={1}>
+                    <Text color={navigableItems[selectedItemIndex]?.type === 'commit_message' ? 'cyan' : undefined}>
+                        {navigableItems[selectedItemIndex]?.type === 'commit_message' ? '> ' : '  '}
+                        (M)essage {bodyView === REVIEW_BODY_VIEWS.COMMIT_MESSAGE ? '▾' : '▸'}{' '}
+                        {(message || '').substring(0, 50)}...
+                    </Text>
                     <Text color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' : undefined}>
                         {navigableItems[selectedItemIndex]?.type === 'prompt' ? '> ' : '  '}
                         (P)rompt ▸ {(prompt || '').substring(0, 50)}...

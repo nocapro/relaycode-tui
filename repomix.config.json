@@ -28,17 +28,7 @@
     "eslint.config.js",
     "tsconfig.json",
     "index.tsx",
-    // "src"
-    "src/App.tsx",
-    "src/hooks/useLayout.ts",
-    "src/hooks/useViewport.ts",
-    "src/components/Separator.tsx",
-    "src/components/ActionFooter.tsx",
-    "src/components/GlobalHelpScreen.tsx",
-    "src/components/CopyScreen.tsx",
-    "src/utils.ts",
-    "index.tsx",
-    "src/components/layout/ScreenLayout.tsx"
+    "src"
 
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"
