@@ -1,0 +1,601 @@
+uuid: f1936c53-b09e-4c3e-8f2e-4b72607a9763
+projectId: relaycode-tui
+createdAt: '2025-09-27T10:50:42.902Z'
+gitCommitMsg: >-
+  fix(ts): Remove unused variable in review store
+
+  Completely removes the `_autoFixResult` variable declaration and assignment
+  within the `startAiAutoFix` action. This variable was unused, causing a
+  `noUnusedLocals` compiler error.
+promptSummary: >-
+  Fixing a persistent TypeScript error for an unused variable in the review
+  store.
+reasoning:
+  - >-
+    You are absolutely right. My previous fix was incomplete. Prefixing the
+    variable with an underscore satisfies some linters but not the TypeScript
+    compiler's `noUnusedLocals` rule when a value is assigned but never read.
+  - >-
+    The correct solution is to remove the variable declaration and its
+    assignment entirely, since it's not being used yet. My apologies for that
+    oversight.
+  - 'Here is the patch to fix it properly:'
+  - >-
+    This removes the unused variable, which will resolve the final TypeScript
+    error.
+operations:
+  - type: write
+    path: src/stores/review.store.ts
+    content: |+
+      --- src/stores/review.store.ts
+      +++ src/stores/review.store.ts
+      @@ -254,12 +254,10 @@
+                   showAiProcessingScreen();
+       
+                   const autoFixGenerator = AiService.runAutoFix(failedFiles, tx);
+      -            let _autoFixResult: { newPatch: string };
+       
+                   const iterator = autoFixGenerator[Symbol.asyncIterator]();
+                   while (true) {
+                       const { value, done } = await iterator.next();
+                       if (done) {
+      -                    _autoFixResult = value as { newPatch: string };
+                           break;
+                       }
+                       const update = value;
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/review.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useAppStore } from './app.store';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { useViewStore } from './view.store';
+
+    import { AiService } from '../services/ai.service';
+
+    import { ReviewService, type SimulationResult } from
+    '../services/review.service';
+
+    import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS,
+    BULK_INSTRUCT_OPTIONS, BULK_REPAIR_OPTIONS, INITIAL_AI_PROCESSING_STEPS }
+    from '../constants/review.constants';
+
+    import { sleep } from '../utils';
+
+    import type { FileReviewStatus } from '../types/domain.types';
+
+
+    export interface ApplyStep {
+        id: string;
+        title: string;
+        status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+        details?: string;
+        substeps?: ApplyStep[];
+        startTime?: number;
+        duration?: number;
+    }
+
+
+    export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof
+    REVIEW_BODY_VIEWS];
+
+    export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
+
+    export type ApplyUpdate =
+        | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+        | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
+        | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
+
+    interface ReviewState {
+        patchStatus: PatchStatus;
+        applySteps: ApplyStep[];
+        selectedItemIndex: number;
+        bodyView: ReviewBodyView;
+        scriptErrorIndex: number;
+        processingStartTime: number | null;
+        fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
+
+        selectedBulkRepairOptionIndex: number;
+        selectedBulkInstructOptionIndex: number;
+        isCancelling: boolean;
+        isSkipping: boolean;
+
+        // AI auto-repair state
+        aiProcessingSteps: ApplyStep[];
+        aiProcessingStartTime: number | null;
+
+        actions: {
+            load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+            setSelectedItemIndex: (index: number) => void;
+            toggleBodyView: (view: Extract<
+                ReviewBodyView, 'prompt' | 'bulk_instruct' | 'commit_message' |
+                'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+            >) => void;
+            setBodyView: (view: ReviewBodyView) => void;
+            approve: () => void;
+            rejectTransaction: () => void;
+            startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
+            tryRepairFile: (fileId: string) => void;
+            showBulkRepair: () => void;
+            executeBulkRepairOption: (option: number) => Promise<void>;
+            skipCurrentStep: () => void;
+            resetSkip: () => void;
+            tryInstruct: (fileId: string) => void;
+            cancelProcessing: () => void;
+            startAiAutoFix: () => void;
+            showBulkInstruct: () => void;
+            executeBulkInstructOption: (option: number) => Promise<void>;
+            confirmHandoff: () => void;
+            navigateScriptErrorUp: () => void;
+            navigateScriptErrorDown: () => void;
+            updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
+            addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+            updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+            updateAiProcessingStep: (id: string, status: ApplyStep['status'], details?: string) => void;
+            addAiProcessingSubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+            updateAiProcessingSubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+            updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
+            toggleFileApproval: (fileId: string) => void;
+            rejectAllFiles: () => void;
+            navigateBulkRepairUp: () => void;
+            navigateBulkRepairDown: () => void;
+            navigateBulkInstructUp: () => void;
+            navigateBulkInstructDown: () => void;
+        };
+    }
+
+
+    export const useReviewStore = create<ReviewState>((set, get) => ({
+        patchStatus: PATCH_STATUS.SUCCESS,
+        applySteps: INITIAL_APPLY_STEPS,
+        selectedItemIndex: 0,
+        bodyView: REVIEW_BODY_VIEWS.NONE,
+        scriptErrorIndex: 0,
+        processingStartTime: null,
+        fileReviewStates: new Map(),
+        selectedBulkRepairOptionIndex: 0,
+        selectedBulkInstructOptionIndex: 0,
+        isCancelling: false,
+        isSkipping: false,
+        aiProcessingSteps: [],
+        aiProcessingStartTime: null,
+
+        actions: {
+            load: (transactionId, initialState) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction) return;
+
+                // This logic is preserved from the deleted `prepareTransactionForReview`
+                // to allow debug screens to jump directly to a pre-populated review state
+                // without running the full simulation.
+                const isFailureCase = transaction.id === '1';
+                const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+                (transaction.files || []).forEach((file, index) => {
+                    if (isFailureCase) {
+                        const isFailedFile = index > 0;
+                        const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                        const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                        fileReviewStates.set(file.id, { status, error });
+                    } else {
+                        fileReviewStates.set(file.id, { status: 'APPROVED' });
+                    }
+                });
+                const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    patchStatus,
+                    fileReviewStates,
+                    processingStartTime: null,
+                    selectedItemIndex: 0,
+                    bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
+                    scriptErrorIndex: 0,
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    selectedBulkRepairOptionIndex: 0,
+                    selectedBulkInstructOptionIndex: 0,
+                    ...initialState,
+                });
+            },
+            setSelectedItemIndex: (index) => set({ selectedItemIndex: index }),
+            toggleBodyView: (view) => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                const files = tx?.files || [];
+                if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+                return {
+                    bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
+                };
+            }),
+            setBodyView: (view) => set({ bodyView: view }),
+            approve: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            rejectTransaction: () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                if (selectedTransactionId) {
+                    useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REJECTED');
+                    useAppStore.getState().actions.showDashboardScreen();
+                }
+            },
+            startApplySimulation: async (transactionId, scenario) => {
+                const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!transaction?.files) return;
+
+                const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
+
+                useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+                set({
+                    applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                    processingStartTime: Date.now(),
+                    isCancelling: false,
+                    isSkipping: false,
+                    fileReviewStates: new Map(), // Clear previous states
+                });
+
+                showReviewProcessingScreen();
+                const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
+                let simulationResult: SimulationResult;
+
+                // Manually iterate to get the return value from the async generator
+                const iterator = simulationGenerator[Symbol.asyncIterator]();
+                while (true) {
+                    const { value, done } = await iterator.next();
+                    if (done) {
+                        simulationResult = value as SimulationResult;
+                        break;
+                    }
+                    const update = value;
+                    if (update.type === 'UPDATE_STEP') {
+                        updateApplyStep(update.payload.id, update.payload.status, update.payload.details);
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        addApplySubstep(update.payload.parentId, update.payload.substep);
+                    } else if (update.type === 'UPDATE_SUBSTEP') {
+                        updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                    }
+                }
+
+                await sleep(1000);
+                set({
+                    processingStartTime: null,
+                    fileReviewStates: simulationResult.fileReviewStates,
+                    patchStatus: simulationResult.patchStatus,
+                });
+                showReviewScreen();
+            },
+            tryRepairFile: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!file) return;
+
+                const { status, error } = fileReviewStates.get(file.id) || {};
+                if (status !== 'FAILED') return;
+                
+                ReviewService.tryRepairFile(file, error);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+            },
+            tryInstruct: (fileId) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const { fileReviewStates } = get();
+                if (!selectedTransactionId) return;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                const file = tx?.files?.find(f => f.id === fileId);
+                if (!tx || !file) return;
+
+                const { status } = fileReviewStates.get(file.id) || {};
+                if (status !== 'REJECTED') return;
+                
+                ReviewService.tryInstructFile(file, tx);
+                get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+            },
+            showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+            cancelProcessing: () => set({ isCancelling: true }),
+            startAiAutoFix: async () => {
+                const { selectedTransactionId } = useViewStore.getState();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx || !tx.files) return;
+
+                const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+                if (failedFiles.length === 0) return;
+
+                const { showAiProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+                const { updateAiProcessingStep, addAiProcessingSubstep, updateAiProcessingSubstep } = get().actions;
+
+                set({
+                    bodyView: REVIEW_BODY_VIEWS.NONE,
+                    aiProcessingSteps: JSON.parse(JSON.stringify(INITIAL_AI_PROCESSING_STEPS)),
+                    aiProcessingStartTime: Date.now(),
+                });
+
+                showAiProcessingScreen();
+
+                const autoFixGenerator = AiService.runAutoFix(failedFiles, tx);
+                let _autoFixResult: { newPatch: string };
+
+                const iterator = autoFixGenerator[Symbol.asyncIterator]();
+                while (true) {
+                    const { value, done } = await iterator.next();
+                    if (done) {
+                        _autoFixResult = value as { newPatch: string };
+                        break;
+                    }
+                    const update = value;
+                    if (update.type === 'UPDATE_STEP') {
+                        updateAiProcessingStep(update.payload.id, update.payload.status, update.payload.details);
+                    } else if (update.type === 'ADD_SUBSTEP') {
+                        addAiProcessingSubstep(update.payload.parentId, update.payload.substep);
+                    } else if (update.type === 'UPDATE_SUBSTEP') {
+                        updateAiProcessingSubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                    }
+                }
+
+                await sleep(1500); // Give user time to see final state
+                set({ aiProcessingStartTime: null });
+                showReviewScreen();
+            },
+            skipCurrentStep: () => set({ isSkipping: true }),
+            resetSkip: () => set({ isSkipping: false }),
+            executeBulkInstructOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const rejectedFiles = tx.files.filter(
+                    f => get().fileReviewStates.get(f.id)?.status === 'REJECTED',
+                );
+                if (rejectedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 3:
+                        rejectedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 5:
+                        get().actions.startAiAutoFix();
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+
+            showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+            executeBulkRepairOption: async (option) => {
+                const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+                if (!tx?.files) return;
+
+                const failedFiles = tx.files.filter(
+                    f => get().fileReviewStates.get(f.id)?.status === 'FAILED',
+                );
+                if (failedFiles.length === 0) {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    return;
+                }
+
+                switch (option) {
+                    case 1:
+                        ReviewService.generateBulkRepairPrompt(failedFiles);
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    case 2: {
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                        const results = await ReviewService.runBulkReapply(failedFiles);
+                        results.forEach(result => {
+                            get().actions.updateFileReviewStatus(
+                                result.id, result.status, result.error,
+                            );
+                        });
+                        break;
+                    }
+                    case 3:
+                        get().actions.setBodyView('confirm_handoff');
+                        break;
+                    case 4:
+                        failedFiles.forEach(file => {
+                            get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                        });
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                        break;
+                    default:
+                        set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                }
+            },
+            confirmHandoff: () => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.files) return;
+                const { fileReviewStates } = get();
+                ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+                ReviewService.performHandoff(tx.hash);
+            },
+            navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+            navigateScriptErrorDown: () => set(state => {
+                const transactionId = useViewStore.getState().selectedTransactionId;
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+                if (!tx?.scripts || !tx?.files) return {};
+                const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+                if (selectedScript?.output) {
+                    const errorLines = selectedScript.output
+                        .split('\n')
+                        .filter(line => line.includes('Error') || line.includes('Warning'));
+                    return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+                }
+                return {};
+            }),
+            updateApplyStep: (id, status, details) => {
+                set(state => {
+                    const newSteps = state.applySteps.map(s => {
+                        if (s.id === id) {
+                            const newStep: ApplyStep = { ...s, status };
+                            if (status === 'active') {
+                                newStep.startTime = Date.now();
+                            } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                                newStep.duration = (Date.now() - s.startTime) / 1000;
+                            }
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    });
+                    return { applySteps: newSteps };
+                });
+            },
+            updateApplySubstep: (parentId, substepId, status, title) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId && s.substeps) {
+                            const newSubsteps = s.substeps.map(sub => {
+                                if (sub.id === substepId) {
+                                    const newSub: ApplyStep = { ...sub, status };
+                                    if (status === 'active') {
+                                        newSub.startTime = Date.now();
+                                    } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                        newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                    }
+                                    if (title) newSub.title = title;
+                                    return newSub;
+                                }
+                                return sub;
+                            });
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            addApplySubstep: (parentId, substep) => {
+                set(state => ({
+                    applySteps: state.applySteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateAiProcessingStep: (id, status, details) => {
+                set(state => {
+                    const newSteps = state.aiProcessingSteps.map(s => {
+                        if (s.id === id) {
+                            const newStep: ApplyStep = { ...s, status };
+                            if (status === 'active') {
+                                newStep.startTime = Date.now();
+                            } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                                newStep.duration = (Date.now() - s.startTime) / 1000;
+                            }
+                            if (details !== undefined) newStep.details = details;
+                            return newStep;
+                        }
+                        return s;
+                    });
+                    return { aiProcessingSteps: newSteps };
+                });
+            },
+            updateAiProcessingSubstep: (parentId, substepId, status, title) => {
+                set(state => ({
+                    aiProcessingSteps: state.aiProcessingSteps.map(s => {
+                        if (s.id === parentId && s.substeps) {
+                            const newSubsteps = s.substeps.map(sub => {
+                                if (sub.id === substepId) {
+                                    const newSub: ApplyStep = { ...sub, status };
+                                    if (status === 'active') {
+                                        newSub.startTime = Date.now();
+                                    } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                        newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                    }
+                                    if (title) newSub.title = title;
+                                    return newSub;
+                                }
+                                return sub;
+                            });
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            addAiProcessingSubstep: (parentId, substep) => {
+                set(state => ({
+                    aiProcessingSteps: state.aiProcessingSteps.map(s => {
+                        if (s.id === parentId) {
+                            const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                            return { ...s, substeps: newSubsteps };
+                        }
+                        return s;
+                    }),
+                }));
+            },
+            updateFileReviewStatus: (fileId, status, error, details) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    newStates.set(fileId, { status, error, details });
+                    return { fileReviewStates: newStates };
+                });
+            },
+            toggleFileApproval: (fileId) => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    const current = newStates.get(fileId);
+                    if (current) {
+                        const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                        newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            rejectAllFiles: () => {
+                set(state => {
+                    const newStates = new Map(state.fileReviewStates);
+                    for (const [fileId, reviewState] of newStates.entries()) {
+                        if (reviewState.status === 'APPROVED') {
+                            newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
+                        }
+                    }
+                    return { fileReviewStates: newStates };
+                });
+            },
+            navigateBulkRepairUp: () => set(state => ({
+                selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex - 1 + BULK_REPAIR_OPTIONS.length) % BULK_REPAIR_OPTIONS.length,
+            })),
+            navigateBulkRepairDown: () => set(state => ({
+                selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex + 1) % BULK_REPAIR_OPTIONS.length,
+            })),
+            navigateBulkInstructUp: () => set(state => ({
+                selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex - 1 + BULK_INSTRUCT_OPTIONS.length) % BULK_INSTRUCT_OPTIONS.length,
+            })),
+            navigateBulkInstructDown: () => set(state => ({
+                selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex + 1) % BULK_INSTRUCT_OPTIONS.length,
+            })),
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 233

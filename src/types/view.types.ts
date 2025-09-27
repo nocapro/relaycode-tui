@@ -1,8 +1,11 @@
-import type { APP_SCREENS } from '../constants/app.constants';
-
-// --- UI / View-Specific Types ---
-
-// app.store
-type ObjectValues<T> = T[keyof T];
-
-export type AppScreen = ObjectValues<typeof APP_SCREENS>;
+export type AppScreen =
+    | 'splash'
+    | 'init'
+    | 'dashboard'
+    | 'review'
+    | 'review-processing'
+    | 'ai-processing'
+    | 'git-commit'
+    | 'transaction-detail'
+    | 'transaction-history'
+    | 'settings';

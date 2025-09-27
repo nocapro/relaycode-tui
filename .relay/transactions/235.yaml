@@ -1,0 +1,689 @@
+uuid: ffd05d53-a16f-47de-9856-11f3d8a8b13d
+projectId: relaycode-tui
+createdAt: '2025-09-27T11:05:25.725Z'
+gitCommitMsg: |-
+  feat(ui): Enhance AI processing simulation and refactor settings screen
+  - Expands the mock file list in `ai.service.ts` to create a more
+    engaging and visually impressive AI processing simulation.
+  - Refactors the settings screen to make the "AI Provider" field a
+    typeable, searchable dropdown, consistent with the "Model" field.
+  - Updates `useSettingsScreen` hook and `SettingsScreen` component to
+    support the new searchable provider list interaction.
+promptSummary: >-
+  Update AI processing screen simulation and make settings screen provider field
+  a searchable dropdown.
+reasoning:
+  - >-
+    I've updated the AI processing simulation and refactored the settings screen
+    as requested.
+  - >-
+    First, I've enhanced the AI auto-repair simulation by adding more mock files
+    to the process. This makes the `AiProcessingScreen` more engaging to watch,
+    as it now appears to handle a larger batch of files, aligning with your
+    request for a more enjoyable user experience.
+  - >-
+    Second, I've redesigned the "AI Provider" selection on the `SettingsScreen`
+    to be a "typeable dropdown," matching the behavior of the "Model" field. You
+    can now type to search for a provider, and the list of options will filter
+    dynamically. This provides a more consistent and efficient user interface
+    for configuring the AI settings.
+  - 'Here are the changes:'
+  - '### 1. Enhance AI Processing Simulation'
+  - >-
+    I've expanded the list of mock files in `ai.service.ts` and increased the
+    number of files processed in the simulation to make the `AiProcessingScreen`
+    more dynamic.
+  - '### 2. Refactor Settings Screen'
+  - >-
+    I've refactored `useSettingsScreen.tsx` to handle the provider selection as
+    a searchable input field and updated `SettingsScreen.tsx` to reflect this
+    new interaction model.
+  - >-
+    These changes bring the settings screen in line with the modern, searchable
+    UI pattern you described and make the AI processing simulation more robust
+    for demonstration purposes.
+  - '---'
+operations:
+  - type: write
+    path: src/services/ai.service.ts
+    content: |+
+      --- src/services/ai.service.ts
+      +++ src/services/ai.service.ts
+      @@ -5,16 +5,24 @@
+       // From review.service.ts to make the simulation more interesting
+       const mockAiFixFiles = [
+           'src/components/Button.tsx',
+      -    'src/components/Input.tsx',
+      -    'src/components/Modal.tsx',
+      +    'src/components/data-table/DataTable.tsx',
+      +    'src/components/forms/Input.tsx',
+           'src/hooks/useForm.ts',
+           'src/hooks/useDebounce.ts',
+           'src/styles/theme.css',
+      -    'src/utils/formatters.ts',
+      +    'src/utils/string-formatters.ts',
+           'src/pages/HomePage.tsx',
+           'src/pages/AboutPage.tsx',
+      -    'src/services/api.ts',
+      +    'src/services/api-client.ts',
+           'src/stores/user.store.ts',
+           'src/constants/routes.ts',
+      +    'src/features/auth/LoginScreen.tsx',
+      +    'src/features/auth/SignupForm.tsx',
+      +    'src/features/dashboard/components/OverviewChart.tsx',
+      +    'src/features/settings/ProfileEditor.tsx',
+      +    'src/core/App.tsx',
+      +    'src/services/payment.gateway.ts',
+      +    'src/services/notification.service.ts',
+      +    'src/components/UserProfile.tsx',
+       ];
+       
+       // Mock function to simulate running an auto-fix with an AI
+      @@ -34,7 +42,7 @@
+           // Use a larger list of files for a better demo
+           const filesToFix: Pick<FileItem, 'id' | 'path'>[] = [
+               ...failedFiles,
+      -        ...mockAiFixFiles.slice(0, 8).map(path => ({ id: path, path })),
+      +        ...mockAiFixFiles.slice(0, 20).map(path => ({ id: path, path })),
+           ];
+       
+           for (const file of filesToFix) {
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useSettingsScreen.tsx
+    content: >
+      --- src/hooks/useSettingsScreen.tsx
+
+      +++ src/hooks/useSettingsScreen.tsx
+
+      @@ -7,21 +7,33 @@
+       
+       export const useSettingsScreen = () => {
+           const { provider, apiKey, model, actions: settingsActions } = useSettingsStore();
+      -    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+      +    const { showDashboardScreen } = useAppStore((s) => s.actions);
+       
+           const [activeField, setActiveField] = useState<SettingsField>('provider');
+      -    const [localProvider, setLocalProvider] =
+      useState<AiProvider>(provider);
+
+      +
+
+      +    // State for inputs and their backing values
+
+      +    const [providerValue, setProviderValue] =
+      useState<AiProvider>(provider);
+
+      +    const [providerInput, setProviderInput] = useState(() =>
+      AI_PROVIDERS.find((p) => p.value === provider)?.label || '');
+           const [localApiKey, setLocalApiKey] = useState<string>(apiKey);
+           const [localModel, setLocalModel] = useState<string>(model);
+      -    const [providerSelectionIndex, setProviderSelectionIndex] = useState(
+
+      -        () => AI_PROVIDERS.findIndex(p => p.value === provider)
+
+      -    );
+
+      +
+
+      +    // State for filtered lists and selection indices
+
+      +    const [filteredProviders, setFilteredProviders] = useState<{ value:
+      AiProvider; label: string }[]>([]);
+
+      +    const [providerSelectionIndex, setProviderSelectionIndex] =
+      useState(0);
+           const [filteredModels, setFilteredModels] = useState<readonly string[]>([]);
+           const [modelSelectionIndex, setModelSelectionIndex] = useState(0);
+       
+           // Sync local state with global store when component mounts
+           useEffect(() => {
+      -        setLocalProvider(provider);
+
+      +        setProviderValue(provider);
+
+      +        setProviderInput(AI_PROVIDERS.find((p) => p.value ===
+      provider)?.label || '');
+               setLocalApiKey(apiKey);
+               setLocalModel(model);
+      -        setProviderSelectionIndex(AI_PROVIDERS.findIndex(p => p.value ===
+      provider));
+           }, [provider, apiKey, model]);
+      +
+
+      +    // Filter providers based on input
+
+      +    useEffect(() => {
+
+      +        if (activeField === 'provider') {
+
+      +            const lowerCaseInput = providerInput.toLowerCase();
+
+      +            const filtered = AI_PROVIDERS.filter((p) =>
+      p.label.toLowerCase().includes(lowerCaseInput));
+
+      +            setFilteredProviders(filtered);
+
+      +            setProviderSelectionIndex(0);
+
+      +        } else {
+
+      +            setFilteredProviders([]);
+
+      +        }
+
+      +    }, [providerInput, activeField]);
+       
+           // Filter models based on input
+           useEffect(() => {
+      @@ -34,7 +46,9 @@
+           }, [localModel, activeField]);
+       
+           const saveAndExit = () => {
+      -        settingsActions.setProvider(localProvider);
+
+      +        // On save, determine the provider 'value' from the input 'label'
+
+      +        const matchedProvider = AI_PROVIDERS.find((p) =>
+      p.label.toLowerCase() === providerInput.toLowerCase());
+
+      +        settingsActions.setProvider(matchedProvider?.value ||
+      providerValue);
+               settingsActions.setApiKey(localApiKey);
+               settingsActions.setModel(localModel);
+               showDashboardScreen();
+      @@ -57,15 +71,18 @@
+               }
+       
+               if (activeField === 'provider') {
+      -            if (key.upArrow) {
+
+      -                setProviderSelectionIndex(prev => (prev - 1 +
+      AI_PROVIDERS.length) % AI_PROVIDERS.length);
+
+      -            }
+
+      -            if (key.downArrow) {
+
+      -                setProviderSelectionIndex(prev => (prev + 1) %
+      AI_PROVIDERS.length);
+
+      +            if (filteredProviders.length > 0) {
+
+      +                if (key.upArrow) {
+
+      +                    setProviderSelectionIndex((prev) => (prev > 0 ? prev
+      - 1 : filteredProviders.length - 1));
+
+      +                }
+
+      +                if (key.downArrow) {
+
+      +                    setProviderSelectionIndex((prev) => (prev <
+      filteredProviders.length - 1 ? prev + 1 : 0));
+
+      +                }
+                   }
+                   if (key.return) {
+      -                const selectedProvider =
+      AI_PROVIDERS[providerSelectionIndex];
+
+      +                const selectedProvider =
+      filteredProviders[providerSelectionIndex];
+                       if (selectedProvider) {
+      -                    setLocalProvider(selectedProvider.value);
+
+      +                    setProviderInput(selectedProvider.label);
+
+      +                    setProviderValue(selectedProvider.value);
+                       }
+                       setActiveField('apiKey');
+                   }
+      @@ -87,20 +104,18 @@
+               }
+           }, { isActive: true });
+       
+      -    // Update localProvider whenever selection index changes
+
+      -    useEffect(() => {
+
+      -        const selectedProvider = AI_PROVIDERS[providerSelectionIndex];
+
+      -        if (selectedProvider) {
+
+      -            setLocalProvider(selectedProvider.value);
+
+      -        }
+
+      -    }, [providerSelectionIndex]);
+
+      -
+           return {
+               activeField,
+      -        provider: localProvider,
+
+      +        provider: providerInput,
+
+      +        setProvider: setProviderInput,
+
+      +        filteredProviders,
+
+      +        providerSelectionIndex,
+
+      +
+               apiKey: localApiKey,
+      +        setApiKey: setLocalApiKey,
+
+      +
+               model: localModel,
+      -        setApiKey: setLocalApiKey,
+               setModel: setLocalModel,
+      -        providerSelectionIndex,
+
+      +
+
+      +        isProviderFocused: activeField === 'provider',
+               isApiKeyFocused: activeField === 'apiKey',
+               isModelFocused: activeField === 'model',
+               filteredModels,
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SettingsScreen.tsx
+    content: >+
+      --- src/components/SettingsScreen.tsx
+
+      +++ src/components/SettingsScreen.tsx
+
+      @@ -8,11 +8,14 @@
+       const SettingsScreen = () => {
+           const {
+               activeField,
+      +        provider,
+
+      +        setProvider,
+
+      +        filteredProviders,
+
+      +        providerSelectionIndex,
+               apiKey,
+      +        setApiKey,
+               model,
+      -        setApiKey,
+               setModel,
+      -        providerSelectionIndex,
+               isApiKeyFocused,
+               isModelFocused,
+               filteredModels,
+      @@ -28,16 +31,29 @@
+                       <Text>Configure your AI provider. Your API key will be stored locally.</Text>
+       
+                       <Box flexDirection="column" marginTop={1}>
+      -                    <Text bold={activeField === 'provider'}>
+
+      -                        {activeField === 'provider' ? '> ' : '  '}AI
+      Provider:
+
+      +                    <Text bold={activeField === 'provider'}>
+
+      +                        {activeField === 'provider' ? '> ' : '  '}AI
+      Provider: (type to search)
+                           </Text>
+      -                    <Box flexDirection="column" paddingLeft={2}>
+
+      -                        {AI_PROVIDERS.map((p, index) => (
+
+      -                            <Text key={p.value}
+      color={providerSelectionIndex === index ? 'cyan' : undefined}>
+
+      -                                {p.label}
+
+      -                            </Text>
+
+      -                        ))}
+
+      +                    <Box paddingLeft={2}>
+
+      +                        <TextInput
+
+      +                            value={provider}
+
+      +                            onChange={setProvider}
+
+      +                            onSubmit={() => {}}
+
+      +                            placeholder="OpenRouter"
+
+      +                            focus={activeField === 'provider'}
+
+      +                        />
+                           </Box>
+      +                    {activeField === 'provider' &&
+      filteredProviders.length > 0 && provider !==
+      (filteredProviders[providerSelectionIndex]?.label || '') && (
+
+      +                        <Box flexDirection="column" paddingLeft={4}
+      marginTop={1}>
+
+      +                            {filteredProviders.map((p, index) => (
+
+      +                                <Text key={p.value}
+      color={providerSelectionIndex === index ? 'cyan' : undefined}>
+
+      +                                    {p.label}
+
+      +                                </Text>
+
+      +                            ))}
+
+      +                        </Box>
+
+      +                    )}
+                       </Box>
+       
+                       <Box flexDirection="column">
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useSettingsScreen.tsx: >-
+    import { useState, useEffect } from 'react';
+
+    import { useInput } from 'ink';
+
+    import { useSettingsStore, type AiProvider } from
+    '../stores/settings.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { AI_PROVIDERS, AI_MODELS } from '../constants/settings.constants';
+
+
+    type SettingsField = 'provider' | 'apiKey' | 'model';
+
+
+    export const useSettingsScreen = () => {
+        const { provider, apiKey, model, actions: settingsActions } = useSettingsStore();
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const [activeField, setActiveField] = useState<SettingsField>('provider');
+        const [localProvider, setLocalProvider] = useState<AiProvider>(provider);
+        const [localApiKey, setLocalApiKey] = useState<string>(apiKey);
+        const [localModel, setLocalModel] = useState<string>(model);
+        const [providerSelectionIndex, setProviderSelectionIndex] = useState(
+            () => AI_PROVIDERS.findIndex(p => p.value === provider)
+        );
+        const [filteredModels, setFilteredModels] = useState<readonly string[]>([]);
+        const [modelSelectionIndex, setModelSelectionIndex] = useState(0);
+
+        // Sync local state with global store when component mounts
+        useEffect(() => {
+            setLocalProvider(provider);
+            setLocalApiKey(apiKey);
+            setLocalModel(model);
+            setProviderSelectionIndex(AI_PROVIDERS.findIndex(p => p.value === provider));
+        }, [provider, apiKey, model]);
+
+        // Filter models based on input
+        useEffect(() => {
+            if (activeField === 'model' && localModel) {
+                const lowerCaseModel = localModel.toLowerCase();
+                const filtered = AI_MODELS.filter(m => m.toLowerCase().includes(lowerCaseModel));
+                setFilteredModels(filtered);
+                setModelSelectionIndex(0);
+            } else {
+                setFilteredModels([]);
+            }
+        }, [localModel, activeField]);
+
+        const saveAndExit = () => {
+            settingsActions.setProvider(localProvider);
+            settingsActions.setApiKey(localApiKey);
+            settingsActions.setModel(localModel);
+            showDashboardScreen();
+        };
+
+        useInput((_input, key) => {
+            if (key.escape) {
+                saveAndExit();
+                return;
+            }
+
+            if (key.tab) {
+                setActiveField(current => {
+                    if (current === 'provider') return 'apiKey';
+                    if (current === 'apiKey') return 'model';
+                    return 'provider';
+                });
+                return;
+            }
+
+            if (activeField === 'provider') {
+                if (key.upArrow) {
+                    setProviderSelectionIndex(prev => (prev - 1 + AI_PROVIDERS.length) % AI_PROVIDERS.length);
+                }
+                if (key.downArrow) {
+                    setProviderSelectionIndex(prev => (prev + 1) % AI_PROVIDERS.length);
+                }
+                if (key.return) {
+                    const selectedProvider = AI_PROVIDERS[providerSelectionIndex];
+                    if (selectedProvider) {
+                        setLocalProvider(selectedProvider.value);
+                    }
+                    setActiveField('apiKey');
+                }
+            } else if (activeField === 'model') {
+                if (filteredModels.length > 0) {
+                    if (key.upArrow) {
+                        setModelSelectionIndex(prev => (prev > 0 ? prev - 1 : filteredModels.length - 1));
+                    }
+                    if (key.downArrow) {
+                        setModelSelectionIndex(prev => (prev < filteredModels.length - 1 ? prev + 1 : 0));
+                    }
+                }
+                if (key.return) {
+                    if (filteredModels.length > 0 && filteredModels[modelSelectionIndex]) {
+                        setLocalModel(filteredModels[modelSelectionIndex]!);
+                    }
+                    setActiveField('provider'); // Cycle to next field
+                }
+            }
+        }, { isActive: true });
+
+        // Update localProvider whenever selection index changes
+        useEffect(() => {
+            const selectedProvider = AI_PROVIDERS[providerSelectionIndex];
+            if (selectedProvider) {
+                setLocalProvider(selectedProvider.value);
+            }
+        }, [providerSelectionIndex]);
+
+        return {
+            activeField,
+            provider: localProvider,
+            apiKey: localApiKey,
+            model: localModel,
+            setApiKey: setLocalApiKey,
+            setModel: setLocalModel,
+            providerSelectionIndex,
+            isApiKeyFocused: activeField === 'apiKey',
+            isModelFocused: activeField === 'model',
+            filteredModels,
+            modelSelectionIndex,
+        };
+    };
+  src/components/SettingsScreen.tsx: >-
+    import { Box, Text } from 'ink';
+
+    import TextInput from 'ink-text-input';
+
+    import ScreenLayout from './layout/ScreenLayout';
+
+    import { useSettingsScreen } from '../hooks/useSettingsScreen';
+
+    import { AI_PROVIDERS, SETTINGS_FOOTER_ACTIONS } from
+    '../constants/settings.constants';
+
+    import ActionFooter from './ActionFooter';
+
+
+    const SettingsScreen = () => {
+        const {
+            activeField,
+            apiKey,
+            model,
+            setApiKey,
+            setModel,
+            providerSelectionIndex,
+            isApiKeyFocused,
+            isModelFocused,
+            filteredModels,
+            modelSelectionIndex,
+        } = useSettingsScreen();
+
+        return (
+            <ScreenLayout
+                title="SETTINGS"
+                footer={<ActionFooter actions={SETTINGS_FOOTER_ACTIONS} />}
+            >
+                <Box flexDirection="column" gap={1}>
+                    <Text>Configure your AI provider. Your API key will be stored locally.</Text>
+
+                    <Box flexDirection="column" marginTop={1}>
+                        <Text bold={activeField === 'provider'}>
+                            {activeField === 'provider' ? '> ' : '  '}AI Provider:
+                        </Text>
+                        <Box flexDirection="column" paddingLeft={2}>
+                            {AI_PROVIDERS.map((p, index) => (
+                                <Text key={p.value} color={providerSelectionIndex === index ? 'cyan' : undefined}>
+                                    {p.label}
+                                </Text>
+                            ))}
+                        </Box>
+                    </Box>
+
+                    <Box flexDirection="column">
+                        <Text bold={isApiKeyFocused}>
+                            {isApiKeyFocused ? '> ' : '  '}API Key:
+                        </Text>
+                        <Box paddingLeft={2}>
+                            <TextInput
+                                value={apiKey}
+                                onChange={setApiKey}
+                                onSubmit={() => {}}
+                                placeholder="sk-or-v1-..."
+                                mask="*"
+                                focus={isApiKeyFocused}
+                            />
+                        </Box>
+                    </Box>
+
+                    <Box flexDirection="column">
+                        <Text bold={isModelFocused}>
+                            {isModelFocused ? '> ' : '  '}Model: (type to search)
+                        </Text>
+                        <Box paddingLeft={2}>
+                             <TextInput
+                                value={model}
+                                onChange={setModel}
+                                onSubmit={() => {}}
+                                placeholder="meta-llama/llama-3-8b-instruct"
+                                focus={isModelFocused}
+                            />
+                        </Box>
+                        {isModelFocused && filteredModels.length > 0 && model !== (filteredModels[modelSelectionIndex] || '') && (
+                            <Box flexDirection="column" paddingLeft={4} marginTop={1}>
+                                {filteredModels.map((m, index) => (
+                                    <Text key={m} color={modelSelectionIndex === index ? 'cyan' : undefined}>
+                                        {m}
+                                    </Text>
+                                ))}
+                            </Box>
+                        )}
+                    </Box>
+                </Box>
+            </ScreenLayout>
+        );
+    };
+
+
+    export default SettingsScreen;
+  src/services/ai.service.ts: |-
+    import { useSettingsStore } from '../stores/settings.store';
+    import { sleep } from '../utils';
+    import type { Transaction, FileItem } from '../types/domain.types';
+
+    // From review.service.ts to make the simulation more interesting
+    const mockAiFixFiles = [
+        'src/components/Button.tsx',
+        'src/components/Input.tsx',
+        'src/components/Modal.tsx',
+        'src/hooks/useForm.ts',
+        'src/hooks/useDebounce.ts',
+        'src/styles/theme.css',
+        'src/utils/formatters.ts',
+        'src/pages/HomePage.tsx',
+        'src/pages/AboutPage.tsx',
+        'src/services/api.ts',
+        'src/stores/user.store.ts',
+        'src/constants/routes.ts',
+    ];
+
+    // Mock function to simulate running an auto-fix with an AI
+    export async function* runAutoFix(
+        failedFiles: FileItem[],
+        _transaction: Transaction,
+    ): AsyncGenerator<any, { newPatch: string }, unknown> {
+        const { model } = useSettingsStore.getState();
+
+        yield { type: 'UPDATE_STEP', payload: { id: 'prompt', status: 'active' } };
+        await sleep(200);
+        // In a real app, you would generate a detailed prompt here.
+        yield { type: 'UPDATE_STEP', payload: { id: 'prompt', status: 'done', details: `Generated prompts for ${failedFiles.length} files.` } };
+
+        yield { type: 'UPDATE_STEP', payload: { id: 'request', status: 'active' } };
+
+        // Use a larger list of files for a better demo
+        const filesToFix: Pick<FileItem, 'id' | 'path'>[] = [
+            ...failedFiles,
+            ...mockAiFixFiles.slice(0, 8).map(path => ({ id: path, path })),
+        ];
+
+        for (const file of filesToFix) {
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'request', substep: { id: file.id, title: `Fixing: ${file.path}`, status: 'active' }}};
+            await sleep(Math.random() * 500 + 200); // Simulate network latency
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'request', substepId: file.id, status: 'done' }};
+        }
+        yield { type: 'UPDATE_STEP', payload: { id: 'request', status: 'done', details: `Received responses from '${model}'` } };
+        
+        yield { type: 'UPDATE_STEP', payload: { id: 'patch', status: 'active' } };
+        await sleep(500);
+        // In a real app, this would be the actual patch from the AI.
+        const newPatch = `--- a/src/services/payment.gateway.ts
+    +++ b/src/services/payment.gateway.ts
+    @@ -10,7 +10,7 @@
+      */
+     export class PaymentGateway {
+     -    private static instance: PaymentGateway;
+    +    private static instance: PaymentGateway | null = null;
+         private apiKey: string;
+     
+         private constructor(apiKey: string) {
+    `;
+        yield { type: 'UPDATE_STEP', payload: { id: 'patch', status: 'done', details: 'Validated and formatted new patch.' } };
+
+        await sleep(500);
+
+        return { newPatch };
+    }
+
+    export const AiService = {
+        runAutoFix,
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 235

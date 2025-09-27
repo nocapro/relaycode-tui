@@ -1,0 +1,638 @@
+uuid: e4e92a0d-c0b7-4a0b-8d39-3d142b6b0b5c
+projectId: relaycode-tui
+createdAt: '2025-09-27T10:44:51.538Z'
+gitCommitMsg: >-
+  feat(debug): integrate AI and settings screens into debug tools
+
+  Adds menu items and command-line flags to access the new AI-related screens
+  directly for rapid prototyping and testing.
+
+  - Adds "Settings Screen" to the debug menu and as a `debug-screen` CLI option.
+  - Adds "AI Processing Screen (Simulated)" to the debug menu and CLI, which
+  triggers the auto-fix flow on a mock failed transaction.
+promptSummary: Add AI features to debug menu and CLI runner for easier testing.
+reasoning:
+  - >-
+    Executing Part 4, which is all about making our new AI features easily
+    testable. I'll wire up the Settings and AI Processing screens to both the
+    debug menu (`Ctrl+B`) and the command-line launcher. This ensures we can
+    jump directly to any state needed for development and prototyping, keeping
+    our workflow fast and efficient.
+  - '### Step 1: Add New Screens to the Debug Menu'
+  - >-
+    I'll update `useDebugMenu.tsx` to include two new entries: one to open the
+    new Settings screen directly, and another to simulate the AI auto-repair
+    process on a failed transaction.
+  - '### Step 2: Add CLI Shortcuts for New Screens'
+  - >-
+    Next, I'll modify `index.tsx` to allow launching directly into the new
+    screens from the command line, which is perfect for rapid testing cycles.
+operations:
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: |+
+      --- src/hooks/useDebugMenu.tsx
+      +++ src/hooks/useDebugMenu.tsx
+      @@ -253,6 +253,14 @@
+                       reviewActions.load('1');
+                       reviewActions.startApplySimulation('1', 'failure');
+                   },
+      +        },
+      +        {
+      +            title: 'AI Processing Screen (Simulated)',
+      +            action: () => {
+      +                // Use tx '1' which is the failure case
+      +                reviewActions.load('1');
+      +                reviewActions.startAiAutoFix();
+      +            },
+               },
+               {
+                   title: 'Git Commit Screen',
+      @@ -406,6 +414,12 @@
+                       historyActions.prepareDebugState('bulk');
+                       appActions.showTransactionHistoryScreen();
+                   },
+      +        },
+      +        {
+      +            title: 'Settings Screen',
+      +            action: () => {
+      +                appActions.showSettingsScreen();
+      +            },
+               },
+           ];
+           return { menuItems };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: index.tsx
+    content: >+
+      --- index.tsx
+
+      +++ index.tsx
+
+      @@ -58,6 +58,14 @@
+                           type: 'success', title: 'DEBUG', message: 'This is a test notification.',
+                       });
+                       break;
+      +            case 'SettingsScreen':
+
+      +                appActions.showSettingsScreen();
+
+      +                break;
+
+      +            case 'AiProcessingScreen':
+
+      +                useReviewStore.getState().actions.load('1'); // load
+      failure case
+
+      +                useReviewStore.getState().actions.startAiAutoFix();
+
+      +                break;
+                   default:
+                       process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                       process.exit(1);
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { CopyService } from '../services/copy.service';
+
+    import type { MenuItem } from '../types/debug.types';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { ClipboardService } from '../services/clipboard.service';
+
+    import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from
+    '../constants/init.constants';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { OVERLAYS } from '../constants/view.constants';
+
+    import { useViewport } from './useViewport';
+
+    import { useListNavigator } from './useListNavigator';
+
+    export type { MenuItem } from '../types/debug.types';
+
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: notificationActions } = useNotificationStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Simulate Pasting Valid Patch',
+                action: () => ClipboardService.processClipboardContent(true),
+            },
+            {
+                title: 'Simulate Pasting Invalid Text',
+                action: () => ClipboardService.processClipboardContent(false),
+            },
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Show Success Notification',
+                action: () => notificationActions.show({
+                    type: 'success',
+                    title: 'Operation Successful',
+                    message: 'The requested operation completed without errors.',
+                }),
+            },
+            {
+                title: 'Show Error Notification',
+                action: () => notificationActions.show({
+                    type: 'error',
+                    title: 'Operation Failed',
+                    message: 'An unexpected error occurred. Check the debug log for details.',
+                }),
+            },
+            {
+                title: 'Show Info Notification',
+                action: () => notificationActions.show({
+                    type: 'info',
+                    title: 'Information',
+                    message: 'This is an informational message for the user.',
+                }),
+            },
+            {
+                title: 'Show Warning Notification',
+                action: () => notificationActions.show({
+                    type: 'warning',
+                    title: 'Warning',
+                    message: 'This action may have unintended side effects.',
+                }),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Splash Screen: Update Failed',
+                action: () => {
+                    appActions.setSplashScreenDebugState('update-failed');
+                    appActions.showSplashScreen();
+                },
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Git Not Found Prompt',
+                action: () => {
+                    initActions.resetInit();
+                    initActions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+                    initActions.setAnalysisResults('relaycode-tui', true, false);
+                    initActions.setPhase('GIT_INIT_PROMPT');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('2', 'success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('1', 'failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen (Failure State)',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    // Fire-and-forget, the UI will update from the store
+                    commitActions.commit(true);
+                },
+            },
+            {
+                title: 'Git Commit: Copy Mode',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    const transactionsToCommit = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                    const { finalCommitMessage } = useCommitStore.getState();
+                    const items = CopyService.getCopyItemsForCommit(
+                        transactionsToCommit,
+                        finalCommitMessage,
+                    );
+                    useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useListNavigator({
+            itemCount: menuItems.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG,
+            onKey: (input, key) => {
+                if (key.return) {
+                    const item = menuItems[selectedIndex];
+                    if (item) {
+                        useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                        item.action();
+                    }
+                    return;
+                }
+                if (key.escape || key.leftArrow) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    return;
+                }
+
+                // No ctrl/meta keys for selection shortcuts, and only single characters
+                if (key.ctrl || key.meta || input.length !== 1) return;
+
+                if (input >= '1' && input <= '9') {
+                    const targetIndex = parseInt(input, 10) - 1;
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                    const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                }
+            },
+        });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+  index.tsx: |-
+    import { render } from 'ink';
+    import App from './src/App';
+    import { useAppStore } from './src/stores/app.store';
+    import { useViewStore } from './src/stores/view.store';
+    import { useDetailStore } from './src/stores/detail.store';
+    import { useHistoryStore } from './src/stores/history.store';
+    import { useReviewStore } from './src/stores/review.store';
+    import { useTransactionStore } from './src/stores/transaction.store';
+    import { useCommitStore } from './src/stores/commit.store';
+    import { useNotificationStore } from './src/stores/notification.store';
+
+    const main = () => {
+        // Initialize stores
+        useTransactionStore.getState().actions.loadTransactions();
+        const args = process.argv.slice(2);
+
+        if (args[0] === 'debug-screen' && args[1]) {
+            const screenName = args[1].replace(/\.tsx$/, '');
+            const { actions: appActions } = useAppStore.getState();
+
+            switch (screenName) {
+                case 'DashboardScreen':
+                    appActions.showDashboardScreen();
+                    break;
+                case 'GitCommitScreen':
+                    useCommitStore.getState().actions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    break;
+                case 'ReviewProcessingScreen':
+                    useReviewStore.getState().actions.load('1'); // Tx '1' is failure case
+                    useReviewStore.getState().actions.startApplySimulation('1', 'failure');
+                    break;
+                case 'ReviewScreen':
+                    useReviewStore.getState().actions.load('1');
+                    appActions.showReviewScreen();
+                    break;
+                case 'TransactionDetailScreen':
+                    useDetailStore.getState().actions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    break;
+                case 'TransactionHistoryScreen':
+                    useHistoryStore.getState().actions.load();
+                    appActions.showTransactionHistoryScreen();
+                    break;
+                case 'InitializationScreen':
+                     appActions.showInitScreen();
+                     break;
+                case 'SplashScreen':
+                     appActions.showSplashScreen();
+                     break;
+                case 'DebugMenu':
+                    appActions.showDashboardScreen();
+                    useViewStore.getState().actions.setActiveOverlay('debug');
+                    break;
+                case 'DebugLogScreen':
+                    appActions.showDashboardScreen();
+                    useViewStore.getState().actions.setActiveOverlay('log');
+                    break;
+                case 'NotificationScreen':
+                    appActions.showDashboardScreen();
+                    useNotificationStore.getState().actions.show({
+                        type: 'success', title: 'DEBUG', message: 'This is a test notification.',
+                    });
+                    break;
+                default:
+                    process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
+                    process.exit(1);
+            }
+        }
+
+        // Check if we're running in an interactive terminal
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+            // eslint-disable-next-line no-console
+            console.clear();
+            render(<App />);
+        } else {
+            process.stderr.write('Interactive terminal required. Please run in a terminal that supports raw input mode.\n');
+            process.exit(1);
+        }
+    };
+
+    main();
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 231

@@ -217,7 +217,7 @@ export const useReviewScreen = () => { // eslint-disable-line max-lines-per-func
             return;
         }
 
-        if (input >= '1' && input <= '4') {
+        if (input >= '1' && input <= '5') {
             executeBulkRepairOption(parseInt(input));
         }
     };

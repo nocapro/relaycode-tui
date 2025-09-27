@@ -4,6 +4,8 @@ import SplashScreen from './components/SplashScreen';
 import InitializationScreen from './components/InitializationScreen';
 import DashboardScreen from './components/DashboardScreen';
 import ReviewScreen from './components/ReviewScreen';
+import SettingsScreen from './components/SettingsScreen';
+import AiProcessingScreen from './components/AiProcessingScreen';
 import ReviewProcessingScreen from './components/ReviewProcessingScreen';
 import GitCommitScreen from './components/GitCommitScreen';
 import TransactionDetailScreen from './components/TransactionDetailScreen';
@@ -31,6 +33,8 @@ const App = () => {
         if (currentScreen === 'init') return <InitializationScreen />;
         if (currentScreen === 'dashboard') return <DashboardScreen />;
         if (currentScreen === 'review') return <ReviewScreen />;
+        if (currentScreen === 'settings') return <SettingsScreen />;
+        if (currentScreen === 'ai-processing') return <AiProcessingScreen />;
         if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
         if (currentScreen === 'git-commit') return <GitCommitScreen />;
         if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;

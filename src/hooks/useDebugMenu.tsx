@@ -246,6 +246,14 @@ const useDebugMenuActions = () => {
             },
         },
         {
+            title: 'AI Processing Screen (Simulated)',
+            action: () => {
+                // Use tx '1' which is the failure case
+                reviewActions.load('1');
+                reviewActions.startAiAutoFix();
+            },
+        },
+        {
             title: 'Git Commit Screen',
             action: () => {
                 commitActions.prepareCommitScreen();
@@ -363,6 +371,12 @@ const useDebugMenuActions = () => {
             action: () => {
                 historyActions.prepareDebugState('bulk');
                 appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'Settings Screen',
+            action: () => {
+                appActions.showSettingsScreen();
             },
         },
     ];

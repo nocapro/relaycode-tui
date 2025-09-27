@@ -11,6 +11,13 @@ export const INITIAL_APPLY_STEPS: ApplyStep[] = [
     { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
 ];
 
+export const INITIAL_AI_PROCESSING_STEPS: ApplyStep[] = [
+    { id: 'prompt', title: 'Preparing auto-repair prompts...', status: 'pending' },
+    { id: 'request', title: 'Requesting fixes from AI...', status: 'pending', substeps: [] },
+    { id: 'parse', title: 'Parsing AI responses...', status: 'pending' },
+    { id: 'apply', title: 'Applying new patches...', status: 'pending', substeps: [] },
+];
+
 export const REVIEW_BODY_VIEWS = {
     COMMIT_MESSAGE: 'commit_message',
     DIFF: 'diff',
@@ -33,6 +40,7 @@ export const BULK_REPAIR_OPTIONS = [
     '(2) Bulk Change Strategy & Re-apply',
     '(3) Handoff to External Agent',
     '(4) Bulk Abandon All Failed Files',
+    '(5) Auto-repair with AI',
     '(Esc) Cancel',
 ] as const;
 

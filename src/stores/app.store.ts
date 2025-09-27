@@ -6,8 +6,10 @@ interface AppState {
     currentScreen: AppScreen;
     splashScreenDebugState: 'default' | 'update-failed';
     actions: {
+        showAiProcessingScreen: () => void;
         showInitScreen: () => void;
         showReviewProcessingScreen: () => void;
+        showSettingsScreen: () => void;
         showDashboardScreen: () => void;
         showReviewScreen: () => void;
         showGitCommitScreen: () => void;
@@ -23,8 +25,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     currentScreen: 'splash',
     splashScreenDebugState: 'default',
     actions: {
+        showAiProcessingScreen: () => set({ currentScreen: 'ai-processing' }),
         showInitScreen: () => set({ currentScreen: 'init' }),
         showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+        showSettingsScreen: () => set({ currentScreen: 'settings' }),
         showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
         showReviewScreen: () => set({ currentScreen: 'review' }),
         showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),

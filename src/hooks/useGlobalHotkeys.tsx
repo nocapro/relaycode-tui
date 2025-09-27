@@ -22,6 +22,11 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
             setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
             return;
         }
+        if (key.ctrl && input === 's') {
+            // This is a temporary location. In a real app, this might live elsewhere
+            // or be disabled on certain screens.
+            useAppStore.getState().actions.showSettingsScreen();
+        }
 
         if (key.ctrl && input === 'v') {
             ClipboardService.processClipboardContent();

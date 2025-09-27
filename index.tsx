@@ -62,6 +62,13 @@ const main = () => {
                     type: 'success', title: 'DEBUG', message: 'This is a test notification.',
                 });
                 break;
+            case 'SettingsScreen':
+                appActions.showSettingsScreen();
+                break;
+            case 'AiProcessingScreen':
+                useReviewStore.getState().actions.load('1'); // load failure case
+                useReviewStore.getState().actions.startAiAutoFix();
+                break;
             default:
                 process.stderr.write(`Unknown debug screen: ${args[1]}\n`);
                 process.exit(1);

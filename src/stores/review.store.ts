@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import { useAppStore } from './app.store';
 import { useTransactionStore } from './transaction.store';
 import { useViewStore } from './view.store';
+import { AiService } from '../services/ai.service';
 import { ReviewService, type SimulationResult } from '../services/review.service';
-import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS, BULK_INSTRUCT_OPTIONS, BULK_REPAIR_OPTIONS } from '../constants/review.constants';
+import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS, BULK_INSTRUCT_OPTIONS, BULK_REPAIR_OPTIONS, INITIAL_AI_PROCESSING_STEPS } from '../constants/review.constants';
 import { sleep } from '../utils';
 import type { FileReviewStatus } from '../types/domain.types';
 
@@ -38,6 +39,10 @@ interface ReviewState {
     isCancelling: boolean;
     isSkipping: boolean;
 
+    // AI auto-repair state
+    aiProcessingSteps: ApplyStep[];
+    aiProcessingStartTime: number | null;
+
     actions: {
         load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
         setSelectedItemIndex: (index: number) => void;
@@ -56,6 +61,7 @@ interface ReviewState {
         resetSkip: () => void;
         tryInstruct: (fileId: string) => void;
         cancelProcessing: () => void;
+        startAiAutoFix: () => void;
         showBulkInstruct: () => void;
         executeBulkInstructOption: (option: number) => Promise<void>;
         confirmHandoff: () => void;
@@ -64,6 +70,9 @@ interface ReviewState {
         updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
         addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
         updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+        updateAiProcessingStep: (id: string, status: ApplyStep['status'], details?: string) => void;
+        addAiProcessingSubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+        updateAiProcessingSubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
         updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
         toggleFileApproval: (fileId: string) => void;
         rejectAllFiles: () => void;
@@ -86,6 +95,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     selectedBulkInstructOptionIndex: 0,
     isCancelling: false,
     isSkipping: false,
+    aiProcessingSteps: [],
+    aiProcessingStartTime: null,
 
     actions: {
         load: (transactionId, initialState) => {
@@ -223,6 +234,47 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         },
         showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
         cancelProcessing: () => set({ isCancelling: true }),
+        startAiAutoFix: async () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            if (!tx || !tx.files) return;
+
+            const failedFiles = tx.files.filter(f => get().fileReviewStates.get(f.id)?.status === 'FAILED');
+            if (failedFiles.length === 0) return;
+
+            const { showAiProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            const { updateAiProcessingStep, addAiProcessingSubstep, updateAiProcessingSubstep } = get().actions;
+
+            set({
+                bodyView: REVIEW_BODY_VIEWS.NONE,
+                aiProcessingSteps: JSON.parse(JSON.stringify(INITIAL_AI_PROCESSING_STEPS)),
+                aiProcessingStartTime: Date.now(),
+            });
+
+            showAiProcessingScreen();
+
+            const autoFixGenerator = AiService.runAutoFix(failedFiles, tx);
+
+            const iterator = autoFixGenerator[Symbol.asyncIterator]();
+            while (true) {
+                const { value, done } = await iterator.next();
+                if (done) {
+                    break;
+                }
+                const update = value;
+                if (update.type === 'UPDATE_STEP') {
+                    updateAiProcessingStep(update.payload.id, update.payload.status, update.payload.details);
+                } else if (update.type === 'ADD_SUBSTEP') {
+                    addAiProcessingSubstep(update.payload.parentId, update.payload.substep);
+                } else if (update.type === 'UPDATE_SUBSTEP') {
+                    updateAiProcessingSubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                }
+            }
+
+            await sleep(1500); // Give user time to see final state
+            set({ aiProcessingStartTime: null });
+            showReviewScreen();
+        },
         skipCurrentStep: () => set({ isSkipping: true }),
         resetSkip: () => set({ isSkipping: false }),
         executeBulkInstructOption: async (option) => {
@@ -251,6 +303,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                         get().actions.updateFileReviewStatus(file.id, 'APPROVED');
                     });
                     set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                case 5:
+                    get().actions.startAiAutoFix();
                     break;
                 default:
                     set({ bodyView: REVIEW_BODY_VIEWS.NONE });
@@ -295,6 +350,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                         get().actions.updateFileReviewStatus(file.id, 'REJECTED');
                     });
                     set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                case 5: // AI Auto-repair
+                    get().actions.startAiAutoFix();
                     break;
                 default:
                     set({ bodyView: REVIEW_BODY_VIEWS.NONE });
@@ -366,6 +424,58 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         addApplySubstep: (parentId, substep) => {
             set(state => ({
                 applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId) {
+                        const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
+        updateAiProcessingStep: (id, status, details) => {
+            set(state => {
+                const newSteps = state.aiProcessingSteps.map(s => {
+                    if (s.id === id) {
+                        const newStep: ApplyStep = { ...s, status };
+                        if (status === 'active') {
+                            newStep.startTime = Date.now();
+                        } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                            newStep.duration = (Date.now() - s.startTime) / 1000;
+                        }
+                        if (details !== undefined) newStep.details = details;
+                        return newStep;
+                    }
+                    return s;
+                });
+                return { aiProcessingSteps: newSteps };
+            });
+        },
+        updateAiProcessingSubstep: (parentId, substepId, status, title) => {
+            set(state => ({
+                aiProcessingSteps: state.aiProcessingSteps.map(s => {
+                    if (s.id === parentId && s.substeps) {
+                        const newSubsteps = s.substeps.map(sub => {
+                            if (sub.id === substepId) {
+                                const newSub: ApplyStep = { ...sub, status };
+                                if (status === 'active') {
+                                    newSub.startTime = Date.now();
+                                } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                    newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                }
+                                if (title) newSub.title = title;
+                                return newSub;
+                            }
+                            return sub;
+                        });
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
+        addAiProcessingSubstep: (parentId, substep) => {
+            set(state => ({
+                aiProcessingSteps: state.aiProcessingSteps.map(s => {
                     if (s.id === parentId) {
                         const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
                         return { ...s, substeps: newSubsteps };

@@ -1,0 +1,849 @@
+uuid: c2570d58-b1aa-4d7a-8f92-563b7e28b813
+projectId: relaycode-tui
+createdAt: '2025-09-27T10:29:38.972Z'
+gitCommitMsg: >-
+  feat: add AI settings and processing screens
+
+  Implements the foundational components for the internal AI auto-repair
+  feature.
+
+  - Adds a new Settings screen (accessible via Ctrl+S) for configuring AI
+  provider, API key, and model, with a corresponding Zustand store. - Creates a
+  mock `AiService` to simulate auto-fix logic, including prompt generation and
+  receiving a corrected patch. - Introduces a new `AiProcessingScreen` to
+  provide user feedback during the simulated AI repair process, similar to the
+  existing patch apply screen. - Integrates these new screens and stores into
+  the main application navigation and state management.
+promptSummary: >-
+  The user requested to implement the foundational UI and logic for an internal
+  AI auto-fix feature. This included a new settings screen for AI provider
+  configuration, a mock AI service, and a new processing screen to show feedback
+  during the auto-fix simulation, all following a borderless UI design.
+reasoning:
+  - >-
+    Here is the implementation for Parts 1 and 2, which establishes the
+    foundational AI configuration, services, and processing flow.
+  - >-
+    First, I'll create a new type file for application screens, which is
+    currently implicitly expected by the app store.
+  - >-
+    I'll also create a type definition for footer actions, which is used in
+    several constant files.
+  - >-
+    Now, I'll set up the store to manage AI settings. This will hold the
+    provider, API key, and model information.
+  - >-
+    Next, I'll create constants for the new Settings screen, including the list
+    of providers and footer actions.
+  - >-
+    Here's the custom hook that will manage the state and logic for the Settings
+    screen UI.
+  - >-
+    This is the UI component for the Settings screen, built to match the
+    borderless mockup.
+  - >-
+    Now I'll create the mock AI service. This service simulates generating
+    prompts and receiving a corrected patch from an AI.
+  - This hook provides the state for the AI processing screen.
+  - >-
+    This is the UI for the AI processing screen, which gives the user feedback
+    while the auto-repair is running.
+  - >-
+    I'll update the main application store to include actions for showing the
+    new screens.
+  - >-
+    Next, I'll integrate the new screens into the main `App` component's render
+    logic.
+  - >-
+    Finally, I'll add a global hotkey (`Ctrl+S`) to open the new Settings screen
+    from anywhere in the app.
+operations:
+  - type: write
+    path: src/types/view.types.ts
+    content: |-
+      export type AppScreen =
+          | 'splash'
+          | 'init'
+          | 'dashboard'
+          | 'review'
+          | 'review-processing'
+          | 'ai-processing'
+          | 'git-commit'
+          | 'transaction-detail'
+          | 'transaction-history'
+          | 'settings';
+    patchStrategy: replace
+  - type: write
+    path: src/types/actions.types.ts
+    content: |-
+      export interface ActionItem {
+          key: string;
+          label: string;
+      }
+    patchStrategy: replace
+  - type: write
+    path: src/stores/settings.store.ts
+    content: |-
+      import { create } from 'zustand';
+
+      // In a real app, this would be persisted to a config file.
+      // For the demo, we'll just keep it in memory.
+
+      export type AiProvider = 'openrouter' | 'groq' | 'together' | 'custom';
+
+      interface SettingsState {
+          provider: AiProvider;
+          apiKey: string;
+          model: string;
+          actions: {
+              setProvider: (provider: AiProvider) => void;
+              setApiKey: (apiKey: string) => void;
+              setModel: (model: string) => void;
+          };
+      }
+
+      export const useSettingsStore = create<SettingsState>((set) => ({
+          provider: 'openrouter',
+          apiKey: '',
+          model: 'meta-llama/llama-3-8b-instruct',
+          actions: {
+              setProvider: (provider) => set({ provider }),
+              setApiKey: (apiKey) => set({ apiKey }),
+              setModel: (model) => set({ model }),
+          },
+      }));
+    patchStrategy: replace
+  - type: write
+    path: src/constants/settings.constants.ts
+    content: |-
+      import type { ActionItem } from '../types/actions.types';
+      import type { AiProvider } from '../stores/settings.store';
+
+      export const AI_PROVIDERS: { value: AiProvider; label: string }[] = [
+          { value: 'openrouter', label: 'OpenRouter' },
+          { value: 'groq', label: 'Groq' },
+          { value: 'together', label: 'Together AI' },
+          { value: 'custom', label: 'Custom (OpenAI compatible)' },
+      ];
+
+      export const SETTINGS_FOOTER_ACTIONS: readonly ActionItem[] = [
+          { key: '↑↓', label: 'Nav Options' },
+          { key: 'Enter', label: 'Select' },
+          { key: 'Tab', label: 'Next Field' },
+          { key: 'Esc', label: 'Close & Save' },
+      ] as const;
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useSettingsScreen.tsx
+    content: >-
+      import { useState, useEffect } from 'react';
+
+      import { useInput } from 'ink';
+
+      import { useSettingsStore, type AiProvider } from
+      '../stores/settings.store';
+
+      import { useAppStore } from '../stores/app.store';
+
+      import { AI_PROVIDERS } from '../constants/settings.constants';
+
+
+      type SettingsField = 'provider' | 'apiKey' | 'model';
+
+
+      export const useSettingsScreen = () => {
+          const { provider, apiKey, model, actions: settingsActions } = useSettingsStore();
+          const { showDashboardScreen } = useAppStore(s => s.actions);
+
+          const [activeField, setActiveField] = useState<SettingsField>('provider');
+          const [localProvider, setLocalProvider] = useState<AiProvider>(provider);
+          const [localApiKey, setLocalApiKey] = useState<string>(apiKey);
+          const [localModel, setLocalModel] = useState<string>(model);
+          const [providerSelectionIndex, setProviderSelectionIndex] = useState(
+              () => AI_PROVIDERS.findIndex(p => p.value === provider)
+          );
+
+          // Sync local state with global store when component mounts
+          useEffect(() => {
+              setLocalProvider(provider);
+              setLocalApiKey(apiKey);
+              setLocalModel(model);
+              setProviderSelectionIndex(AI_PROVIDERS.findIndex(p => p.value === provider));
+          }, [provider, apiKey, model]);
+
+          const saveAndExit = () => {
+              settingsActions.setProvider(localProvider);
+              settingsActions.setApiKey(localApiKey);
+              settingsActions.setModel(localModel);
+              showDashboardScreen();
+          };
+
+          useInput((input, key) => {
+              if (key.escape) {
+                  saveAndExit();
+                  return;
+              }
+
+              if (key.tab) {
+                  setActiveField(current => {
+                      if (current === 'provider') return 'apiKey';
+                      if (current === 'apiKey') return 'model';
+                      return 'provider';
+                  });
+                  return;
+              }
+
+              if (activeField === 'provider') {
+                  if (key.upArrow) {
+                      setProviderSelectionIndex(prev => (prev - 1 + AI_PROVIDERS.length) % AI_PROVIDERS.length);
+                  }
+                  if (key.downArrow) {
+                      setProviderSelectionIndex(prev => (prev + 1) % AI_PROVIDERS.length);
+                  }
+                  if (key.return) {
+                      const selectedProvider = AI_PROVIDERS[providerSelectionIndex];
+                      if (selectedProvider) {
+                          setLocalProvider(selectedProvider.value);
+                      }
+                      setActiveField('apiKey');
+                  }
+              }
+          }, { isActive: true });
+
+          // Update localProvider whenever selection index changes
+          useEffect(() => {
+              const selectedProvider = AI_PROVIDERS[providerSelectionIndex];
+              if (selectedProvider) {
+                  setLocalProvider(selectedProvider.value);
+              }
+          }, [providerSelectionIndex]);
+
+          return {
+              activeField,
+              provider: localProvider,
+              apiKey: localApiKey,
+              model: localModel,
+              setApiKey: setLocalApiKey,
+              setModel: setLocalModel,
+              providerSelectionIndex,
+              isApiKeyFocused: activeField === 'apiKey',
+              isModelFocused: activeField === 'model',
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/SettingsScreen.tsx
+    content: >-
+      import { Box, Text } from 'ink';
+
+      import TextInput from 'ink-text-input';
+
+      import ScreenLayout from './layout/ScreenLayout';
+
+      import { useSettingsScreen } from '../hooks/useSettingsScreen';
+
+      import { AI_PROVIDERS, SETTINGS_FOOTER_ACTIONS } from
+      '../constants/settings.constants';
+
+      import ActionFooter from './ActionFooter';
+
+
+      const SettingsScreen = () => {
+          const {
+              activeField,
+              apiKey,
+              model,
+              setApiKey,
+              setModel,
+              providerSelectionIndex,
+              isApiKeyFocused,
+              isModelFocused,
+          } = useSettingsScreen();
+
+          return (
+              <ScreenLayout
+                  title="SETTINGS"
+                  footer={<ActionFooter actions={SETTINGS_FOOTER_ACTIONS} />}
+              >
+                  <Box flexDirection="column" gap={1}>
+                      <Text>Configure your AI provider. Your API key will be stored locally.</Text>
+
+                      <Box flexDirection="column" marginTop={1}>
+                          <Text bold={activeField === 'provider'}>
+                              {activeField === 'provider' ? '> ' : '  '}AI Provider:
+                          </Text>
+                          <Box flexDirection="column" paddingLeft={2}>
+                              {AI_PROVIDERS.map((p, index) => (
+                                  <Text key={p.value} color={providerSelectionIndex === index ? 'cyan' : undefined}>
+                                      {p.label}
+                                  </Text>
+                              ))}
+                          </Box>
+                      </Box>
+
+                      <Box flexDirection="column">
+                          <Text bold={isApiKeyFocused}>
+                              {isApiKeyFocused ? '> ' : '  '}API Key:
+                          </Text>
+                          <Box paddingLeft={2}>
+                              <TextInput
+                                  value={apiKey}
+                                  onChange={setApiKey}
+                                  onSubmit={() => {}}
+                                  placeholder="sk-or-v1-..."
+                                  mask="*"
+                                  focus={isApiKeyFocused}
+                              />
+                          </Box>
+                      </Box>
+
+                      <Box flexDirection="column">
+                          <Text bold={isModelFocused}>
+                              {isModelFocused ? '> ' : '  '}Model: (type to search)
+                          </Text>
+                          <Box paddingLeft={2}>
+                               <TextInput
+                                  value={model}
+                                  onChange={setModel}
+                                  onSubmit={() => {}}
+                                  placeholder="meta-llama/llama-3-8b-instruct"
+                                  focus={isModelFocused}
+                              />
+                          </Box>
+                      </Box>
+                  </Box>
+              </ScreenLayout>
+          );
+      };
+
+
+      export default SettingsScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/services/ai.service.ts
+    content: |-
+      import { useSettingsStore } from '../stores/settings.store';
+      import { useReviewStore } from '../stores/review.store';
+      import { sleep } from '../utils';
+      import type { Transaction, FileItem } from '../types/domain.types';
+
+      // Mock function to simulate running an auto-fix with an AI
+      export async function* runAutoFix(
+          failedFiles: FileItem[],
+          transaction: Transaction,
+      ): AsyncGenerator<any, { newPatch: string }, unknown> {
+          const { model } = useSettingsStore.getState();
+          const { actions: reviewActions } = useReviewStore.getState();
+
+          reviewActions.updateAiProcessingStep('prompt', 'active');
+          await sleep(200);
+          // In a real app, you would generate a detailed prompt here.
+          reviewActions.updateAiProcessingStep('prompt', 'done', `Generated prompts for ${failedFiles.length} files.`);
+
+          reviewActions.updateAiProcessingStep('request', 'active');
+          yield { type: 'ADD_SUBSTEP', payload: { parentId: 'request', substep: { id: failedFiles[0]!.id, title: `Fixing: ${failedFiles[0]!.path}`, status: 'active' }}};
+          await sleep(1500); // Simulate network latency
+          yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'request', substepId: failedFiles[0]!.id, status: 'done' }};
+          if (failedFiles.length > 1) {
+              yield { type: 'ADD_SUBSTEP', payload: { parentId: 'request', substep: { id: failedFiles[1]!.id, title: `Fixing: ${failedFiles[1]!.path}`, status: 'active' }}};
+              await sleep(1200);
+              yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'request', substepId: failedFiles[1]!.id, status: 'done' }};
+          }
+          reviewActions.updateAiProcessingStep('request', 'done', `Received responses from '${model}'`);
+          
+          reviewActions.updateAiProcessingStep('patch', 'active');
+          await sleep(500);
+          // In a real app, this would be the actual patch from the AI.
+          const newPatch = `--- a/src/services/payment.gateway.ts
+      +++ b/src/services/payment.gateway.ts
+      @@ -10,7 +10,7 @@
+        */
+       export class PaymentGateway {
+       -    private static instance: PaymentGateway;
+      +    private static instance: PaymentGateway | null = null;
+           private apiKey: string;
+       
+           private constructor(apiKey: string) {
+      `;
+          reviewActions.updateAiProcessingStep('patch', 'done', 'Validated and formatted new patch.');
+
+          await sleep(500);
+
+          return { newPatch };
+      }
+
+      export const AiService = {
+          runAutoFix,
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/hooks/useAiProcessingScreen.tsx
+    content: >-
+      import { useState, useEffect } from 'react';
+
+      import { useReviewStore } from '../stores/review.store';
+
+      import { useTransactionStore, selectSelectedTransaction } from
+      '../stores/transaction.store';
+
+
+      export const useAiProcessingScreen = () => {
+          const transaction = useTransactionStore(selectSelectedTransaction);
+          const { aiProcessingSteps, aiProcessingStartTime } = useReviewStore(s => ({
+              aiProcessingSteps: s.aiProcessingSteps,
+              aiProcessingStartTime: s.aiProcessingStartTime,
+          }));
+
+          const [now, setNow] = useState(Date.now());
+          
+          useEffect(() => {
+              const timer = setInterval(() => setNow(Date.now()), 100);
+              return () => clearInterval(timer);
+          }, []);
+
+          const elapsedTime = aiProcessingStartTime ? (now - aiProcessingStartTime) / 1000 : 0;
+          
+          const isProcessing = !!aiProcessingStartTime;
+
+          return {
+              transaction,
+              aiProcessingSteps,
+              isProcessing,
+              elapsedTime,
+              now,
+          };
+      };
+    patchStrategy: replace
+  - type: write
+    path: src/components/AiProcessingScreen.tsx
+    content: >-
+      import { Box, Text } from 'ink';
+
+      import Spinner from 'ink-spinner';
+
+      import { type ApplyStep, useReviewStore } from '../stores/review.store';
+      // ApplyStep can be reused
+
+      import ActionFooter from './ActionFooter';
+
+      import { useAiProcessingScreen } from '../hooks/useAiProcessingScreen';
+
+      import Separator from './Separator';
+
+      import ScreenLayout from './layout/ScreenLayout';
+
+
+      // This component is nearly identical to a row in ReviewProcessingScreen.
+
+      // In a real app, this could be extracted into a shared component.
+
+      const ProcessingStepRow = ({ step, now }: {
+          step: ApplyStep;
+          now: number;
+      }) => {
+          let symbol;
+          let color;
+          switch (step.status) {
+              case 'pending': symbol = '( )'; break;
+              case 'active': symbol = '(●)'; color = 'cyan'; break;
+              case 'done': symbol = '[✓]'; color = 'green'; break;
+              case 'failed': symbol = '[!]'; color = 'red'; break;
+              case 'skipped': symbol = '(-)'; color = 'gray'; break;
+          }
+
+          let durationText = '';
+          if (step.status === 'active' && step.startTime) {
+              durationText = ` (${((now - step.startTime) / 1000).toFixed(1)}s)`;
+          } else if (step.duration) {
+              durationText = ` (${step.duration.toFixed(1)}s)`;
+          }
+
+          return (
+              <Box flexDirection="column">
+                  <Text>
+                      <Text color={color}>{symbol}</Text> {step.title}{durationText}
+                  </Text>
+                  {step.details && (
+                      <Text color="gray">
+                          {'     └─ '}{step.details}
+                      </Text>
+                  )}
+                  {step.substeps?.map((sub: ApplyStep, i: number) => (
+                      <Box key={i} paddingLeft={5}>
+                           <Text color={sub.status === 'done' ? 'green' : sub.status === 'failed' ? 'red' : 'gray'}>
+                              {sub.status === 'active' ? <Text color="cyan"><Spinner type="dots" /></Text> : sub.status === 'done' ? '✓' : '○'}{' '}{sub.title}
+                           </Text>
+                      </Box>
+                  ))}
+              </Box>
+          );
+      };
+
+
+      const AiProcessingScreen = () => {
+          const {
+              transaction,
+              aiProcessingSteps,
+              isProcessing,
+              elapsedTime,
+              now,
+          } = useAiProcessingScreen();
+
+          const renderFooter = () => {
+              if (isProcessing) {
+                  return (
+                      <Box flexDirection="column" gap={1}>
+                          <Text>Elapsed: {elapsedTime.toFixed(1)}s · Processing... Please wait.</Text>
+                          <Separator />
+                          <ActionFooter actions={[{ key: 'Ctrl+C', label: 'Cancel Process' }]} />
+                      </Box>
+                  );
+              }
+              return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Repair complete. Transitioning...</Text>;
+          };
+
+          if (!transaction) {
+              return <Text>Loading...</Text>;
+          }
+
+          const failedFilesCount = Array.from(
+              useReviewStore.getState().fileReviewStates.values()
+          ).filter(s => s.status === 'FAILED').length;
+
+          return (
+              <ScreenLayout
+                  title="AI AUTO-REPAIR"
+                  footer={renderFooter()}
+              >
+                  <Box flexDirection="column">
+                      <Text>Attempting to auto-repair {failedFilesCount} failed files... ({transaction.message})</Text>
+                      <Box flexDirection="column" marginTop={1} gap={1}>
+                          {aiProcessingSteps.map((step: ApplyStep) => <ProcessingStepRow key={step.id} step={step} now={now} />)}
+                      </Box>
+                  </Box>
+              </ScreenLayout>
+          );
+      };
+
+
+      export default AiProcessingScreen;
+    patchStrategy: replace
+  - type: write
+    path: src/stores/app.store.ts
+    content: >+
+      --- src/stores/app.store.ts
+
+      +++ src/stores/app.store.ts
+
+      @@ -1,13 +1,15 @@
+       import { create } from 'zustand';
+       import type { AppScreen } from '../types/view.types';
+       import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
+       
+       interface AppState {
+           currentScreen: AppScreen;
+           splashScreenDebugState: 'default' | 'update-failed';
+           actions: {
+      +        showAiProcessingScreen: () => void;
+               showInitScreen: () => void;
+               showReviewProcessingScreen: () => void;
+      +        showSettingsScreen: () => void;
+               showDashboardScreen: () => void;
+               showReviewScreen: () => void;
+               showGitCommitScreen: () => void;
+      @@ -21,8 +23,10 @@
+           currentScreen: 'splash',
+           splashScreenDebugState: 'default',
+           actions: {
+      +        showAiProcessingScreen: () => set({ currentScreen:
+      'ai-processing' }),
+               showInitScreen: () => set({ currentScreen: 'init' }),
+               showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+      +        showSettingsScreen: () => set({ currentScreen: 'settings' }),
+               showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+               showReviewScreen: () => set({ currentScreen: 'review' }),
+               showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/App.tsx
+    content: >+
+      --- src/App.tsx
+
+      +++ src/App.tsx
+
+      @@ -4,6 +4,8 @@
+       import InitializationScreen from './components/InitializationScreen';
+       import DashboardScreen from './components/DashboardScreen';
+       import ReviewScreen from './components/ReviewScreen';
+      +import SettingsScreen from './components/SettingsScreen';
+
+      +import AiProcessingScreen from './components/AiProcessingScreen';
+       import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+       import GitCommitScreen from './components/GitCommitScreen';
+       import TransactionDetailScreen from './components/TransactionDetailScreen';
+      @@ -29,6 +31,8 @@
+               if (currentScreen === 'init') return <InitializationScreen />;
+               if (currentScreen === 'dashboard') return <DashboardScreen />;
+               if (currentScreen === 'review') return <ReviewScreen />;
+      +        if (currentScreen === 'settings') return <SettingsScreen />;
+
+      +        if (currentScreen === 'ai-processing') return <AiProcessingScreen
+      />;
+               if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+               if (currentScreen === 'git-commit') return <GitCommitScreen />;
+               if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: >+
+      --- src/hooks/useGlobalHotkeys.tsx
+
+      +++ src/hooks/useGlobalHotkeys.tsx
+
+      @@ -19,6 +19,11 @@
+                   setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                   return;
+               }
+      +        if (key.ctrl && input === 's') {
+
+      +            // This is a temporary location. In a real app, this might
+      live elsewhere
+
+      +            // or be disabled on certain screens.
+
+      +            useAppStore.getState().actions.showSettingsScreen();
+
+      +        }
+       
+               if (key.ctrl && input === 'v') {
+                   ClipboardService.processClipboardContent();
+
+    patchStrategy: standard-diff
+snapshot:
+  src/constants/settings.constants.ts: null
+  src/stores/settings.store.ts: null
+  src/components/SettingsScreen.tsx: null
+  src/components/AiProcessingScreen.tsx: null
+  src/hooks/useAiProcessingScreen.tsx: null
+  src/hooks/useSettingsScreen.tsx: null
+  src/services/ai.service.ts: null
+  src/App.tsx: >-
+    import { Box } from 'ink';
+
+    import { useAppStore } from './stores/app.store';
+
+    import SplashScreen from './components/SplashScreen';
+
+    import InitializationScreen from './components/InitializationScreen';
+
+    import DashboardScreen from './components/DashboardScreen';
+
+    import ReviewScreen from './components/ReviewScreen';
+
+    import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+
+    import GitCommitScreen from './components/GitCommitScreen';
+
+    import TransactionDetailScreen from './components/TransactionDetailScreen';
+
+    import TransactionHistoryScreen from
+    './components/TransactionHistoryScreen';
+
+    import DebugMenu from './components/DebugMenu'; 
+
+    import DebugLogScreen from './components/DebugLogScreen';
+
+    import GlobalHelpScreen from './components/GlobalHelpScreen';
+
+    import CopyScreen from './components/CopyScreen';
+
+    import NotificationScreen from './components/NotificationScreen';
+
+    import { DimensionsProvider } from './contexts/DimensionsContext';
+
+    import { useViewStore } from './stores/view.store';
+
+    import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+
+    const App = () => {
+        const currentScreen = useAppStore(state => state.currentScreen);
+        const activeOverlay = useViewStore(s => s.activeOverlay);
+        const isOverlayOpen = activeOverlay !== 'none';
+
+        // Global hotkeys are active if no modal-like component is open
+        const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log' && activeOverlay !== 'notification'; // These overlays have their own input handlers
+        useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+        const renderMainScreen = () => {
+            if (currentScreen === 'splash') return <SplashScreen />;
+            if (currentScreen === 'init') return <InitializationScreen />;
+            if (currentScreen === 'dashboard') return <DashboardScreen />;
+            if (currentScreen === 'review') return <ReviewScreen />;
+            if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+            if (currentScreen === 'git-commit') return <GitCommitScreen />;
+            if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+            if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
+            return null;
+        };
+
+        return (
+            <DimensionsProvider>
+                <Box
+                    width="100%"
+                    height="100%"
+                    flexDirection="column"
+                    display={isOverlayOpen ? 'none' : 'flex'}
+                >
+                    {renderMainScreen()}
+                </Box>
+                {activeOverlay === 'help' && <GlobalHelpScreen />}
+                {activeOverlay === 'copy' && <CopyScreen />}
+                {activeOverlay === 'log' && <DebugLogScreen />}
+                {activeOverlay === 'debug' && <DebugMenu />}
+                {activeOverlay === 'notification' && <NotificationScreen />}
+            </DimensionsProvider>
+        );
+    };
+
+
+    export default App;
+  src/types/view.types.ts: |-
+    import type { APP_SCREENS } from '../constants/app.constants';
+
+    // --- UI / View-Specific Types ---
+
+    // app.store
+    type ObjectValues<T> = T[keyof T];
+
+    export type AppScreen = ObjectValues<typeof APP_SCREENS>;
+  src/types/actions.types.ts: |-
+    /**
+     * Represents a single action item for display in a responsive footer.
+     */
+    export interface ActionItem {
+        key: string;
+        label: string;
+    }
+  src/stores/app.store.ts: >-
+    import { create } from 'zustand';
+
+    import type { AppScreen } from '../types/view.types';
+
+    import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from
+    '../constants/app.constants';
+
+
+    interface AppState {
+        currentScreen: AppScreen;
+        splashScreenDebugState: 'default' | 'update-failed';
+        actions: {
+            showInitScreen: () => void;
+            showReviewProcessingScreen: () => void;
+            showDashboardScreen: () => void;
+            showReviewScreen: () => void;
+            showGitCommitScreen: () => void;
+            showSplashScreen: () => void;
+            showTransactionHistoryScreen: () => void;
+            showTransactionDetailScreen: () => void;
+            navigateBack: () => void;
+            setSplashScreenDebugState: (state: 'default' | 'update-failed') => void;
+        };
+    }
+
+
+    export const useAppStore = create<AppState>((set, get) => ({
+        currentScreen: 'splash',
+        splashScreenDebugState: 'default',
+        actions: {
+            showInitScreen: () => set({ currentScreen: 'init' }),
+            showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+            showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+            showReviewScreen: () => set({ currentScreen: 'review' }),
+            showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+            showSplashScreen: () => set({ currentScreen: 'splash' }),
+            showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+            showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+            navigateBack: () => {
+                const { currentScreen } = get();
+                if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
+                    get().actions.showDashboardScreen();
+                }
+            },
+            setSplashScreenDebugState: (state) => set({ splashScreenDebugState: state }),
+        },
+    }));
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { ClipboardService } from '../services/clipboard.service';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+                return;
+            }
+            if (key.ctrl && input === 'l') {
+                setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                return;
+            }
+
+            if (key.ctrl && input === 'v') {
+                ClipboardService.processClipboardContent();
+                return;
+            }
+
+            // If an overlay with its own input is open, stop here.
+            if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === OVERLAYS.HELP) {
+                if (key.escape || input === '?') {
+                    setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay(OVERLAYS.HELP);
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q' || key.escape) {
+                const screenBefore = useAppStore.getState().currentScreen;
+                navigateBack();
+                const screenAfter = useAppStore.getState().currentScreen;
+
+                // If navigateBack did not change the screen, it means we are on a root screen.
+                if (screenBefore === screenAfter) {
+                    exit();
+                }
+            }
+        }, { isActive });
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 226

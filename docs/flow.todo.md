@@ -4,7 +4,7 @@ chrome extension suggestion
 
 ===
 
-beside handoff to external AI agent, also add feature where relaycode will fix failed apply using internal AI.
+beside handoff to external AI agent, also add feature where relaycode can auto fix failed apply file/files using internal AI.
 
 so we need additional new screens and new screen states to configure the AI.
 
