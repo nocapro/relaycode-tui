@@ -3,6 +3,7 @@ import { useAppStore } from '../stores/app.store';
 import { useViewStore } from '../stores/view.store';
 import { OVERLAYS } from '../constants/view.constants';
 import { ClipboardService } from '../services/clipboard.service';
+import { useDashboardStore } from '../stores/dashboard.store';
 
 export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
     const { exit } = useApp();
@@ -28,8 +29,18 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
             useAppStore.getState().actions.showSettingsScreen();
         }
 
+        if (key.ctrl && input === 'p') {
+            ClipboardService.copySystemPrompt();
+            return;
+        }
+
         if (key.ctrl && input === 'v') {
             ClipboardService.processClipboardContent();
+            return;
+        }
+
+        if (input.toLowerCase() === 'p') {
+            useDashboardStore.getState().actions.togglePause();
             return;
         }
 

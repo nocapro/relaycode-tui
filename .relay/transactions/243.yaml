@@ -1,0 +1,125 @@
+uuid: f1a6b321-c5d9-48e0-81f1-332e6047547e
+projectId: relaycode-tui
+createdAt: '2025-09-27T23:56:19.709Z'
+gitCommitMsg: >-
+  feat(hotkeys): change system prompt copy hotkey to Ctrl+P
+
+  This commit updates the global hotkey for copying the system prompt from
+  Ctrl+C to Ctrl+P. This avoids conflict with the standard terminal interrupt
+  signal and provides a more mnemonic keybinding (`P` for "prompt").
+promptSummary: >-
+  The user requested to change the hotkey for copying the system prompt from
+  `Ctrl+C` to `Ctrl+P`.
+reasoning:
+  - >-
+    Understood. I'll revise the hotkey for copying the system prompt from
+    `Ctrl+C` to `Ctrl+P`.
+  - This is a single change in the global hotkeys file.
+  - >-
+    Now, pressing `Ctrl+P` will copy the system prompt to your clipboard from
+    anywhere in the application.
+operations:
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: |
+      <<<<<<< SEARCH
+              if (key.ctrl && input === 'c') {
+                  ClipboardService.copySystemPrompt();
+                  return;
+              }
+      =======
+              if (key.ctrl && input === 'p') {
+                  ClipboardService.copySystemPrompt();
+                  return;
+              }
+      >>>>>>> REPLACE
+    patchStrategy: search-replace
+snapshot:
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { ClipboardService } from '../services/clipboard.service';
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+                return;
+            }
+            if (key.ctrl && input === 'l') {
+                setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                return;
+            }
+            if (key.ctrl && input === 's') {
+                // This is a temporary location. In a real app, this might live elsewhere
+                // or be disabled on certain screens.
+                useAppStore.getState().actions.showSettingsScreen();
+            }
+
+            if (key.ctrl && input === 'c') {
+                ClipboardService.copySystemPrompt();
+                return;
+            }
+
+            if (key.ctrl && input === 'v') {
+                ClipboardService.processClipboardContent();
+                return;
+            }
+
+            if (input.toLowerCase() === 'p') {
+                useDashboardStore.getState().actions.togglePause();
+                return;
+            }
+
+            // If an overlay with its own input is open, stop here.
+            if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === OVERLAYS.HELP) {
+                if (key.escape || input === '?') {
+                    setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay(OVERLAYS.HELP);
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q' || key.escape) {
+                const screenBefore = useAppStore.getState().currentScreen;
+                navigateBack();
+                const screenAfter = useAppStore.getState().currentScreen;
+
+                // If navigateBack did not change the screen, it means we are on a root screen.
+                if (screenBefore === screenAfter) {
+                    exit();
+                }
+            }
+        }, { isActive });
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 243

@@ -60,7 +60,6 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
     }, [transactions]);
 
     const {
-        togglePause,
         startApproveAll,
         confirmAction,
         cancelAction,
@@ -115,7 +114,6 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
                 return;
             }
             if (key.return) viewDetails();
-            if (input.toLowerCase() === 'p') togglePause();
             if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
             if (input.toLowerCase() === 'c' && pendingCommits > 0) {
                 commitActions.prepareCommitScreen();

@@ -2,6 +2,7 @@ import { useTransactionStore, type Transaction } from '../stores/transaction.sto
 import { useNotificationStore } from '../stores/notification.store';
 import { useReviewStore } from '../stores/review.store';
 import { LoggerService } from './logger.service';
+import clipboardy from 'clipboardy';
 
 const MOCK_VALID_PATCH = `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
 index 12345..67890 100644
@@ -17,6 +18,16 @@ index 12345..67890 100644
 `;
 
 const MOCK_INVALID_TEXT = 'This is just some regular text, not a patch.';
+
+const MOCK_SYSTEM_PROMPT = `You are an expert AI programmer. To modify a file, you MUST use a code block with a specified patch strategy.
+
+**Syntax:**
+\`\`\`typescript // filePath {patchStrategy}
+... content ...
+\`\`\`
+- \`filePath\`: The path to the file. **If the path contains spaces, it MUST be enclosed in double quotes.**
+- \`patchStrategy\`: (Optional) One of \`standard-diff\`, \`search-replace\`. If omitted, the entire file is replaced (this is the \`replace\` strategy).
+`;
 
 const createTransactionFromPatch = (patchContent: string): Transaction => {
     // In a real app, we would parse this. For demo, we'll create a mock.
@@ -50,6 +61,27 @@ const createTransactionFromPatch = (patchContent: string): Transaction => {
             linesRemoved,
         },
     };
+};
+
+const copySystemPrompt = async () => {
+    try {
+        await clipboardy.write(MOCK_SYSTEM_PROMPT);
+        LoggerService.info('System prompt copied to clipboard.');
+        useNotificationStore.getState().actions.show({
+            type: 'success',
+            title: 'Clipboard Updated',
+            message: 'System prompt has been copied to your clipboard.',
+            duration: 2,
+        });
+    } catch (error) {
+        LoggerService.error(`Failed to copy system prompt to clipboard: ${error}`);
+        useNotificationStore.getState().actions.show({
+            type: 'error',
+            title: 'Clipboard Error',
+            message: 'Could not copy system prompt to clipboard.',
+            duration: 3,
+        });
+    }
 };
 
 /**
@@ -96,4 +128,5 @@ const processClipboardContent = async (forceValidPatch?: boolean) => {
 
 export const ClipboardService = {
     processClipboardContent,
+    copySystemPrompt,
 };

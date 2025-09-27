@@ -2,7 +2,13 @@
 
 chrome extension suggestion
 
-===
+=== DONE
+
+clipboard pause resume should be global from any screen and the change status should appear in the top right header
+
+while changing pause resume status, the system prompt should copied to clipboard
+
+=== DONE
 
 beside handoff to external AI agent, also add feature where relaycode can auto fix failed apply file/files using internal AI.
 

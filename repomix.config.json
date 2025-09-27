@@ -29,28 +29,14 @@
     "tsconfig.json",
     "index.tsx",
     // "src"
-    "src/stores/review.store.ts",
-    "src/hooks/useReviewScreen.tsx",
-    "src/constants/review.constants.ts",
-    "src/App.tsx",
-    "src/hooks/useDebugMenu.tsx",
-    "src/stores/app.store.ts",
-    "src/services/review.service.ts",
-    "src/components/ReviewProcessingScreen.tsx",
+    "src/stores/dashboard.store.ts",
+    "src/stores/view.store.ts",
     "src/hooks/useGlobalHotkeys.tsx",
-    "index.tsx",
-    "src/types/domain.types.ts",
-    "src/types/view.types.ts",
-    "src/types/actions.types.ts",
-    "src/stores/settings.store.ts",
-    "src/constants/settings.constants.ts",
-    "src/hooks/useSettingsScreen.tsx",
-    "src/components/SettingsScreen.tsx",
-    "src/services/ai.service.ts",
-    "src/hooks/useAiProcessingScreen.tsx",
-    "src/components/AiProcessingScreen.tsx",
-    "src/hooks/useReviewProcessingScreen.tsx"
-
+    "src/components/layout/ScreenLayout.tsx",
+    "src/services/clipboard.service.ts",
+    "src/hooks/useDashboardScreen.tsx",
+    "src/stores/notification.store.ts",
+    "src/services/logger.service.ts"
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"
     // "docs/relaycode-tui/dashboard-screen.readme.md"

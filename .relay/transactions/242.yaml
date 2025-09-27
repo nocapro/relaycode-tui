@@ -1,0 +1,243 @@
+uuid: c2570327-0487-4b77-834f-9e32a6117bd7
+projectId: relaycode-tui
+createdAt: '2025-09-27T23:54:53.609Z'
+gitCommitMsg: >-
+  refactor(hotkeys): move system prompt copy to Ctrl+C hotkey
+
+  This change decouples the "copy system prompt" functionality from the
+  clipboard listener's pause/resume toggle.
+
+  - A new global hotkey (Ctrl+C) is added in `useGlobalHotkeys` to trigger
+  `ClipboardService.copySystemPrompt`. - The call to `copySystemPrompt` is
+  removed from the `togglePause` action in the `dashboard.store`.
+
+  This provides a more intuitive and explicit way for the user to copy the
+  system prompt on demand from any screen.
+promptSummary: >-
+  The user requested to change the behavior of the system prompt auto-copy
+  feature. It should now trigger on a global `Ctrl+C` hotkey instead of being
+  tied to the pause/resume (`P`) toggle.
+reasoning:
+  - >-
+    Of course. I will re-wire the system prompt copy functionality to a global
+    `Ctrl+C` hotkey and decouple it from the pause/resume toggle.
+  - '### Step 1: Update Global Hotkeys'
+  - >-
+    First, I'll modify `useGlobalHotkeys.tsx` to listen for `Ctrl+C` and trigger
+    the `copySystemPrompt` function from the `ClipboardService`.
+  - '### Step 2: Decouple from Pause/Resume Logic'
+  - >-
+    Next, I'll remove the call to `copySystemPrompt` from the `togglePause`
+    action in `dashboard.store.ts`, as it's no longer needed there.
+  - >-
+    The system prompt will now be copied to the clipboard only when `Ctrl+C` is
+    pressed, independent of the clipboard listener's pause/resume state.
+operations:
+  - type: write
+    path: src/hooks/useGlobalHotkeys.tsx
+    content: |+
+      --- src/hooks/useGlobalHotkeys.tsx
+      +++ src/hooks/useGlobalHotkeys.tsx
+      @@ -23,6 +23,11 @@
+                   useAppStore.getState().actions.showSettingsScreen();
+               }
+       
+      +        if (key.ctrl && input === 'c') {
+      +            ClipboardService.copySystemPrompt();
+      +            return;
+      +        }
+      +
+               if (key.ctrl && input === 'v') {
+                   ClipboardService.processClipboardContent();
+                   return;
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/dashboard.store.ts
+    content: |+
+      --- src/stores/dashboard.store.ts
+      +++ src/stores/dashboard.store.ts
+      @@ -3,7 +3,6 @@
+       import { DashboardService } from '../services/dashboard.service';
+       import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+       import { useViewStore } from './view.store';
+      -import { ClipboardService } from '../services/clipboard.service';
+       
+       export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
+        
+      @@ -39,7 +38,6 @@
+                       ? 'CLIPBOARD PAUSED'
+                       : 'CLIPBOARD LISTENING';
+                   useViewStore.getState().actions.setHeaderStatus(message);
+      -            ClipboardService.copySystemPrompt();
+               },
+               startApproveAll: () => set(state => ({
+                   status: DASHBOARD_STATUS.CONFIRM_APPROVE,
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useGlobalHotkeys.tsx: |-
+    import { useApp, useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { useViewStore } from '../stores/view.store';
+    import { OVERLAYS } from '../constants/view.constants';
+    import { ClipboardService } from '../services/clipboard.service';
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
+        const { exit } = useApp();
+        const { navigateBack } = useAppStore(s => s.actions);
+        const { activeOverlay, setActiveOverlay } = useViewStore(s => ({
+            activeOverlay: s.activeOverlay,
+            setActiveOverlay: s.actions.setActiveOverlay,
+        }));
+
+        useInput((input, key) => {
+            // Debug Menu toggle is the highest priority global key
+            if (key.ctrl && input === 'b') {
+                setActiveOverlay(activeOverlay === OVERLAYS.DEBUG ? OVERLAYS.NONE : OVERLAYS.DEBUG);
+                return;
+            }
+            if (key.ctrl && input === 'l') {
+                setActiveOverlay(activeOverlay === OVERLAYS.LOG ? OVERLAYS.NONE : OVERLAYS.LOG);
+                return;
+            }
+            if (key.ctrl && input === 's') {
+                // This is a temporary location. In a real app, this might live elsewhere
+                // or be disabled on certain screens.
+                useAppStore.getState().actions.showSettingsScreen();
+            }
+
+            if (key.ctrl && input === 'v') {
+                ClipboardService.processClipboardContent();
+                return;
+            }
+
+            if (input.toLowerCase() === 'p') {
+                useDashboardStore.getState().actions.togglePause();
+                return;
+            }
+
+            // If an overlay with its own input is open, stop here.
+            if (activeOverlay === OVERLAYS.DEBUG || activeOverlay === OVERLAYS.LOG) {
+                return;
+            }
+
+            // Help screen takes precedence over other keys
+            if (activeOverlay === OVERLAYS.HELP) {
+                if (key.escape || input === '?') {
+                    setActiveOverlay(OVERLAYS.NONE);
+                }
+                return;
+            }
+
+            // --- Global hotkeys when no modal/overlay is open ---
+            
+            // Open Help
+            if (input === '?') {
+                setActiveOverlay(OVERLAYS.HELP);
+                return;
+            }
+            
+            // Quit from main screens
+            if (input.toLowerCase() === 'q' || key.escape) {
+                const screenBefore = useAppStore.getState().currentScreen;
+                navigateBack();
+                const screenAfter = useAppStore.getState().currentScreen;
+
+                // If navigateBack did not change the screen, it means we are on a root screen.
+                if (screenBefore === screenAfter) {
+                    exit();
+                }
+            }
+        }, { isActive });
+    };
+  src/stores/dashboard.store.ts: >-
+    import { create } from 'zustand';
+
+    import { useTransactionStore } from './transaction.store';
+
+    import { DashboardService } from '../services/dashboard.service';
+
+    import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+
+    import { useViewStore } from './view.store';
+
+    import { ClipboardService } from '../services/clipboard.service';
+
+
+    export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof
+    DASHBOARD_STATUS];
+     
+    interface DashboardState {
+        status: DashboardStatus;
+        previousStatus: DashboardStatus;
+        selectedTransactionIndex: number;
+        expandedTransactionId: string | null;
+        actions: {
+            togglePause: () => void;
+            startApproveAll: () => void;
+            confirmAction: () => Promise<void>;
+            cancelAction: () => void;
+            setStatus: (status: DashboardStatus) => void;
+            toggleExpand: () => void;
+            setExpandedTransactionId: (id: string | null) => void;
+            setSelectedIndex: (index: number) => void;
+        };
+    }
+
+
+    export const useDashboardStore = create<DashboardState>((set, get) => ({
+        status: DASHBOARD_STATUS.LISTENING,
+        previousStatus: DASHBOARD_STATUS.LISTENING,
+        selectedTransactionIndex: 0,
+        expandedTransactionId: null,
+        actions: {
+            togglePause: () => {
+                const newStatus = get().status === DASHBOARD_STATUS.LISTENING
+                    ? DASHBOARD_STATUS.PAUSED
+                    : DASHBOARD_STATUS.LISTENING;
+
+                set({ status: newStatus });
+
+                const message = newStatus === DASHBOARD_STATUS.PAUSED
+                    ? 'CLIPBOARD PAUSED'
+                    : 'CLIPBOARD LISTENING';
+                useViewStore.getState().actions.setHeaderStatus(message);
+                ClipboardService.copySystemPrompt();
+            },
+            startApproveAll: () => set(state => ({
+                status: DASHBOARD_STATUS.CONFIRM_APPROVE,
+                previousStatus: state.status,
+            })),
+            cancelAction: () => set(state => ({ status: state.previousStatus })),
+            setStatus: (status) => set({ status }),
+            confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+                const previousStatus = get().previousStatus;
+                set({ status: DASHBOARD_STATUS.APPROVING });
+                await DashboardService.approveAll();
+                set({ status: previousStatus });
+            },
+            toggleExpand: () => {
+                const { selectedTransactionIndex, expandedTransactionId } = get();
+                const { transactions } = useTransactionStore.getState();
+                const selectedTx = transactions[selectedTransactionIndex];
+                if (!selectedTx) return;
+
+                if (expandedTransactionId === selectedTx.id) {
+                    set({ expandedTransactionId: null });
+                } else {
+                    set({ expandedTransactionId: selectedTx.id });
+                }
+            },
+            setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+            setSelectedIndex: (index) => set({ selectedTransactionIndex: index }),
+        },
+    }));
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 242

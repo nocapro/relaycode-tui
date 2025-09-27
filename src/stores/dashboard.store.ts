@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useTransactionStore } from './transaction.store';
 import { DashboardService } from '../services/dashboard.service';
 import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+import { useViewStore } from './view.store';
 
 export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
  
@@ -28,9 +29,18 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     selectedTransactionIndex: 0,
     expandedTransactionId: null,
     actions: {
-        togglePause: () => set(state => ({
-            status: state.status === DASHBOARD_STATUS.LISTENING ? DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
-        })),
+        togglePause: () => {
+            const newStatus = get().status === DASHBOARD_STATUS.LISTENING
+                ? DASHBOARD_STATUS.PAUSED
+                : DASHBOARD_STATUS.LISTENING;
+
+            set({ status: newStatus });
+
+            const message = newStatus === DASHBOARD_STATUS.PAUSED
+                ? 'CLIPBOARD PAUSED'
+                : 'CLIPBOARD LISTENING';
+            useViewStore.getState().actions.setHeaderStatus(message);
+        },
         startApproveAll: () => set(state => ({
             status: DASHBOARD_STATUS.CONFIRM_APPROVE,
             previousStatus: state.status,
