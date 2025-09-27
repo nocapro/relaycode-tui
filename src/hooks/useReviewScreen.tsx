@@ -142,18 +142,9 @@ export const useReviewScreen = () => {
         useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
     };
 
-    const navigateToNextItem = () => {
-        if (selectedItemIndex < navigableItems.length - 1) {
-            setSelectedItemIndex(selectedItemIndex + 1);
-            contentViewport.actions.resetScroll();
-        }
-    };
-
-    const navigateToPreviousItem = () => {
-        if (selectedItemIndex > 0) {
-            setSelectedItemIndex(selectedItemIndex - 1);
-            contentViewport.actions.resetScroll();
-        }
+    const handleIndexChange = (newIndex: number) => {
+        setSelectedItemIndex(newIndex);
+        contentViewport.actions.resetScroll();
     };
 
     const navigateToNextFile = () => {
@@ -369,13 +360,22 @@ export const useReviewScreen = () => {
         }
     };
 
+    const listNavigableBodyViews: ReviewBodyView[] = [
+        REVIEW_BODY_VIEWS.PROMPT,
+        REVIEW_BODY_VIEWS.REASONING,
+        REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+    ];
+    const isListNavigationActive = bodyView === REVIEW_BODY_VIEWS.NONE || listNavigableBodyViews.includes(bodyView);
+    const arePageKeysForListNav = bodyView === REVIEW_BODY_VIEWS.NONE;
+
     useListNavigator({
         itemCount: navigableItems.length,
         viewportHeight: listViewportHeight,
         selectedIndex: selectedItemIndex,
-        onIndexChange: setSelectedItemIndex,
-        isActive: bodyView === REVIEW_BODY_VIEWS.NONE,
-        onKey: handleMainNavigationInput,
+        onIndexChange: handleIndexChange,
+        isActive: isListNavigationActive,
+        disablePageKeys: !arePageKeysForListNav,
+        onKey: arePageKeysForListNav ? handleMainNavigationInput : undefined,
     });
 
     useInput((input: string, key: Key) => {
@@ -399,17 +399,6 @@ export const useReviewScreen = () => {
                 return;
             }
         }
-
-        // Allow up/down list navigation even when a content view is open
-        const listNavigableBodyViews: ReviewBodyView[] = [
-            REVIEW_BODY_VIEWS.PROMPT, REVIEW_BODY_VIEWS.REASONING, REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
-        ];
-
-        if (listNavigableBodyViews.includes(bodyView)) {
-            if (key.upArrow) { navigateToPreviousItem(); return; }
-            if (key.downArrow) { navigateToNextItem(); return; }
-        }
-
         // Handle content scrolling (PgUp/PgDn)
         if (handleContentScrollInput(key)) return;
 

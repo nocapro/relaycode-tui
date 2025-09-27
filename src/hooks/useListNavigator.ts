@@ -18,6 +18,7 @@ interface ListNavigatorOptions {
     onIndexChange: (newIndex: number) => void;
     onKey?: (input: string, key: Key) => void;
     isActive: boolean;
+    disablePageKeys?: boolean;
 }
 
 export const useListNavigator = ({
@@ -27,6 +28,7 @@ export const useListNavigator = ({
     onIndexChange,
     onKey,
     isActive,
+    disablePageKeys,
 }: ListNavigatorOptions) => {
     useInput((input, key) => {
         if (key.upArrow) {
@@ -37,13 +39,15 @@ export const useListNavigator = ({
             onIndexChange(moveIndex(selectedIndex, 'down', itemCount));
             return;
         }
-        if (key.pageUp) {
-            onIndexChange(Math.max(0, selectedIndex - viewportHeight));
-            return;
-        }
-        if (key.pageDown) {
-            onIndexChange(Math.min(itemCount - 1, selectedIndex + viewportHeight));
-            return;
+        if (!disablePageKeys) {
+            if (key.pageUp) {
+                onIndexChange(Math.max(0, selectedIndex - viewportHeight));
+                return;
+            }
+            if (key.pageDown) {
+                onIndexChange(Math.min(itemCount - 1, selectedIndex + viewportHeight));
+                return;
+            }
         }
 
         if (onKey) {

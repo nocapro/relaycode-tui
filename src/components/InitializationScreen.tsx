@@ -1,9 +1,9 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import Spinner from 'ink-spinner';
-import Separator from './Separator';
 import type { Task } from '../stores/init.store';
 import { useInitializationScreen } from '../hooks/useInitializationScreen';
+import ScreenLayout from './layout/ScreenLayout';
 
 const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
 	const [isJustDone, setIsJustDone] = useState(false);
@@ -129,15 +129,12 @@ const InitializationScreen = () => {
     };
 
     return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow">
-                {phase === 'FINALIZE' ? ' ▲ relaycode · BOOTSTRAP COMPLETE ' : ' ▲ relaycode · BOOTSTRAP '}
-            </Text>
-            <Separator />
-            <Box marginY={1}>{renderPhase()}</Box>
-            <Separator />
-            {typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
-        </Box>
+        <ScreenLayout
+            title={phase === 'FINALIZE' ? 'BOOTSTRAP COMPLETE' : 'BOOTSTRAP'}
+            footer={typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
+        >
+            {renderPhase()}
+        </ScreenLayout>
     );
 };
 

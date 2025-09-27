@@ -35,7 +35,7 @@ const GitCommitScreen = () => {
 
     return (
         <ScreenLayout
-            title="▲ relaycode · GIT COMMIT"
+            title="GIT COMMIT"
             footer={footer}
         >
             <Box flexDirection="column" paddingX={2}>

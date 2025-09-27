@@ -64,7 +64,7 @@ const DebugLogScreen = () => {
 
     return (
         <ScreenLayout
-            title="▲ relaycode · DEBUG LOG"
+            title="DEBUG LOG"
             footer={<ActionFooter actions={footerActions} />}
         >
             <Box flexDirection="column" flexGrow={1} paddingX={2}>

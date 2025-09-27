@@ -163,7 +163,7 @@ const TransactionDetailScreen = () => {
 
     return (
         <ScreenLayout
-            title="▲ relaycode · TRANSACTION DETAILS"
+            title="TRANSACTION DETAILS"
             footer={renderFooter()}
         >
             {/* Modal takeover for Revert */}

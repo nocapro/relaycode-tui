@@ -1,0 +1,767 @@
+uuid: f193557e-e243-4670-891d-0691458e6587
+projectId: relaycode-tui
+createdAt: '2025-09-27T07:21:16.567Z'
+gitCommitMsg: >-
+  refactor(review): centralize list navigation in useListNavigator
+
+  Refactored the `useReviewScreen` hook to consolidate all main list navigation
+  logic within the `useListNavigator` hook. This eliminates duplicated up/down
+  arrow handling that was previously managed inside a separate `useInput` hook
+  when content views were active.
+
+  - Added a `disablePageKeys` option to `useListNavigator` to allow it to handle
+  up/down arrows without interfering with PageUp/PageDown for content scrolling.
+  - The `useListNavigator` is now active whenever the main list is navigable,
+  unifying the user experience. - The main `useInput` hook in `useReviewScreen`
+  is now simplified, responsible only for context-specific actions when a body
+  view is open.
+promptSummary: >-
+  The user requested to execute Part 3 of a multi-part refactoring plan, which
+  involves harmonizing input handling on the Review Screen.
+reasoning:
+  - >-
+    This is Part 3 of the refactoring plan, focusing on harmonizing input
+    handling in the Review Screen.
+  - >-
+    The `useReviewScreen` hook currently has duplicated logic for list
+    navigation. Some navigation is handled by the `useListNavigator` hook (when
+    no content view is open), while other navigation (up/down arrows when
+    certain content views *are* open) is handled inside a separate, monolithic
+    `useInput` hook. This makes the code harder to understand and maintain.
+  - >-
+    This refactoring centralizes all primary list navigation (moving up and down
+    the main list of files, scripts, etc.) into the `useListNavigator` hook.
+  - >-
+    1.  **Enhance `useListNavigator`**: I've added a `disablePageKeys` option to
+    `useListNavigator`. This allows us to use it for up/down arrow navigation
+    while letting another input handler manage PageUp/PageDown for content
+    scrolling, which is exactly what the Review Screen needs.
+  - '2.  **Consolidate Logic in `useReviewScreen`**:'
+  - >-
+    *   `useListNavigator` is now active whenever the main list is navigable
+    (either in the main view or in specific content views like "Prompt" or
+    "Reasoning"). It uses the new `disablePageKeys` option to avoid interfering
+    with content scrolling.
+  - >-
+    *   The redundant up/down arrow handling has been removed from the main
+    `useInput` hook.
+  - >-
+    *   This leaves the `useInput` hook with a clear, single responsibility:
+    handling actions and context-specific inputs (like navigating between files
+    in the diff view) only when a content panel is open.
+  - >-
+    This change untangles the input logic, improves separation of concerns, and
+    makes the `useReviewScreen` hook significantly cleaner and more aligned with
+    the application's overall interaction patterns.
+operations:
+  - type: write
+    path: src/hooks/useListNavigator.ts
+    content: >+
+      --- src/hooks/useListNavigator.ts
+
+      +++ src/hooks/useListNavigator.ts
+
+      @@ -14,6 +14,7 @@
+           onIndexChange: (newIndex: number) => void;
+           onKey?: (input: string, key: Key) => void;
+           isActive: boolean;
+      +    disablePageKeys?: boolean;
+       }
+       
+       export const useListNavigator = ({
+      @@ -23,6 +24,7 @@
+           onIndexChange,
+           onKey,
+           isActive,
+      +    disablePageKeys,
+       }: ListNavigatorOptions) => {
+           useInput((input, key) => {
+               if (key.upArrow) {
+      @@ -33,16 +35,18 @@
+                   onIndexChange(moveIndex(selectedIndex, 'down', itemCount));
+                   return;
+               }
+      -        if (key.pageUp) {
+
+      -            onIndexChange(Math.max(0, selectedItemIndex -
+      viewportHeight));
+
+      -            return;
+
+      -        }
+
+      -        if (key.pageDown) {
+
+      -            onIndexChange(Math.min(itemCount - 1, selectedIndex +
+      viewportHeight));
+
+      -            return;
+
+      +        if (!disablePageKeys) {
+
+      +            if (key.pageUp) {
+
+      +                onIndexChange(Math.max(0, selectedIndex -
+      viewportHeight));
+
+      +                return;
+
+      +            }
+
+      +            if (key.pageDown) {
+
+      +                onIndexChange(Math.min(itemCount - 1, selectedIndex +
+      viewportHeight));
+
+      +                return;
+
+      +            }
+               }
+       
+               if (onKey) {
+                   onKey(input, key);
+               }
+           }, { isActive });
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useReviewScreen.tsx
+    content: >+
+      --- src/hooks/useReviewScreen.tsx
+
+      +++ src/hooks/useReviewScreen.tsx
+
+      @@ -176,21 +176,11 @@
+               useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+           };
+       
+      -    const navigateToNextItem = () => {
+
+      -        if (selectedItemIndex < navigableItems.length - 1) {
+
+      -            setSelectedItemIndex(selectedItemIndex + 1);
+
+      -            contentViewport.actions.resetScroll();
+
+      -        }
+
+      -    };
+
+      -
+
+      -    const navigateToPreviousItem = () => {
+
+      -        if (selectedItemIndex > 0) {
+
+      -            setSelectedItemIndex(selectedItemIndex - 1);
+
+      -            contentViewport.actions.resetScroll();
+
+      -        }
+
+      +    const handleIndexChange = (newIndex: number) => {
+
+      +        setSelectedItemIndex(newIndex);
+
+      +        contentViewport.actions.resetScroll();
+           };
+       
+           const navigateToNextFile = () => {
+               const nextFileIndex = navigableItems.findIndex(
+      @@ -406,14 +396,25 @@
+               }
+           };
+       
+      +    const listNavigableBodyViews: ReviewBodyView[] = [
+
+      +        REVIEW_BODY_VIEWS.PROMPT,
+
+      +        REVIEW_BODY_VIEWS.REASONING,
+
+      +        REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+
+      +    ];
+
+      +    const isListNavigationActive = bodyView === REVIEW_BODY_VIEWS.NONE ||
+      listNavigableBodyViews.includes(bodyView);
+
+      +    const arePageKeysForListNav = bodyView === REVIEW_BODY_VIEWS.NONE;
+
+      +
+           useListNavigator({
+               itemCount: navigableItems.length,
+               viewportHeight: listViewportHeight,
+               selectedIndex: selectedItemIndex,
+      -        onIndexChange: setSelectedItemIndex,
+
+      -        isActive: bodyView === REVIEW_BODY_VIEWS.NONE,
+
+      -        onKey: handleMainNavigationInput,
+
+      +        onIndexChange: handleIndexChange,
+
+      +        isActive: isListNavigationActive,
+
+      +        disablePageKeys: !arePageKeysForListNav,
+
+      +        onKey: arePageKeysForListNav ? handleMainNavigationInput :
+      undefined,
+           });
+       
+           useInput((input: string, key: Key) => {
+      @@ -437,18 +438,6 @@
+                       return;
+                   }
+               }
+      -
+
+      -        // Allow up/down list navigation even when a content view is open
+
+      -        const listNavigableBodyViews: ReviewBodyView[] = [
+
+      -            REVIEW_BODY_VIEWS.PROMPT, REVIEW_BODY_VIEWS.REASONING,
+      REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+
+      -        ];
+
+      -
+
+      -        if (listNavigableBodyViews.includes(bodyView)) {
+
+      -            if (key.upArrow) { navigateToPreviousItem(); return; }
+
+      -            if (key.downArrow) { navigateToNextItem(); return; }
+
+      -        }
+
+      -
+               // Handle content scrolling (PgUp/PgDn)
+               if (handleContentScrollInput(key)) return;
+       
+
+    patchStrategy: standard-diff
+snapshot:
+  src/hooks/useListNavigator.ts: |-
+    import { useInput, type Key } from 'ink';
+
+    const moveIndex = (
+        currentIndex: number,
+        direction: 'up' | 'down',
+        listSize: number,
+    ): number => {
+        if (direction === 'up') {
+            return Math.max(0, currentIndex - 1);
+        }
+        return Math.min(listSize - 1, currentIndex + 1);
+    };
+
+    interface ListNavigatorOptions {
+        itemCount: number;
+        viewportHeight: number;
+        selectedIndex: number;
+        onIndexChange: (newIndex: number) => void;
+        onKey?: (input: string, key: Key) => void;
+        isActive: boolean;
+    }
+
+    export const useListNavigator = ({
+        itemCount,
+        viewportHeight,
+        selectedIndex,
+        onIndexChange,
+        onKey,
+        isActive,
+    }: ListNavigatorOptions) => {
+        useInput((input, key) => {
+            if (key.upArrow) {
+                onIndexChange(moveIndex(selectedIndex, 'up', itemCount));
+                return;
+            }
+            if (key.downArrow) {
+                onIndexChange(moveIndex(selectedIndex, 'down', itemCount));
+                return;
+            }
+            if (key.pageUp) {
+                onIndexChange(Math.max(0, selectedIndex - viewportHeight));
+                return;
+            }
+            if (key.pageDown) {
+                onIndexChange(Math.min(itemCount - 1, selectedIndex + viewportHeight));
+                return;
+            }
+
+            if (onKey) {
+                onKey(input, key);
+            }
+        }, { isActive });
+    };
+  src/hooks/useReviewScreen.tsx: >-
+    import { useMemo } from 'react';
+
+    import { useInput, type Key } from 'ink';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { useTransactionStore, selectSelectedTransaction } from
+    '../stores/transaction.store';
+
+    import type { FileItem } from '../types/domain.types';
+
+    import { useLayout } from './useLayout';
+
+    import { useContentViewport } from './useContentViewport';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
+
+    import { useListNavigator } from './useListNavigator';
+
+    import type { ReviewBodyView } from '../stores/review.store';
+
+    import { useViewport } from './useViewport';
+
+
+    type NavigableItem =
+        | { type: 'prompt' }
+        | { type: 'reasoning' }
+        | { type: 'script'; id: string }
+        | { type: 'file'; id: string };
+
+    export const useReviewScreen = () => {
+        const store = useReviewStore();
+        const {
+            selectedItemIndex,
+            bodyView,
+            patchStatus,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+        } = store;
+
+        const transaction = useTransactionStore(selectSelectedTransaction);
+        const { showDashboardScreen } = useAppStore(s => s.actions);
+
+        const scriptCount = transaction?.scripts?.length || 0;
+        const fileCount = transaction?.files?.length || 0;
+
+        const layout = UI_CONFIG.layout.review;
+
+        // Layout for the main navigable item list (prompt, reasoning, files, etc.)
+        const mainListLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            fixedRows: layout.fixedRows,
+            marginsY: layout.marginsY,
+            separators: layout.separators,
+            footer: layout.footer,
+            dynamicRows: {
+                count: bodyView !== REVIEW_BODY_VIEWS.NONE ? layout.bodyHeightReservation : 0,
+            },
+        }), [bodyView, layout]);
+
+        const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
+        const { viewOffset } = useViewport({
+            selectedIndex: selectedItemIndex,
+            itemCount: 100,
+            layoutConfig: mainListLayoutConfig,
+        });
+
+        // Layout for the body content (diff, reasoning, etc.)
+        const bodyLayoutConfig = useMemo(() => ({
+            header: layout.header,
+            separators: layout.separators,
+            fixedRows: 2, // meta
+            marginsY: 1 + 1 + 1, // meta, scripts, files
+            footer: 2,
+            dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
+        }), [layout, scriptCount, fileCount]);
+
+        const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
+
+        const navigableItems = useMemo((): NavigableItem[] => {
+            if (!transaction) return [];
+            const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
+            const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
+            return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
+        }, [transaction]);
+
+        const contentLineCount = useMemo(() => {
+            const currentItem = navigableItems[selectedItemIndex];
+            switch (bodyView) { //
+                case REVIEW_BODY_VIEWS.REASONING:
+                    return (transaction?.reasoning || '').split('\n').length;
+                case REVIEW_BODY_VIEWS.PROMPT:
+                    return (transaction?.prompt || '').split('\n').length;
+                case REVIEW_BODY_VIEWS.DIFF: {
+                    if (currentItem?.type !== 'file') return 0;
+                    const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
+                    return (selectedFile?.diff || '').split('\n').length;
+                }
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: {
+                    if (currentItem?.type !== 'script') return 0;
+                    const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
+                    return (selectedScript?.output || '').split('\n').length;
+                }
+                default: return 0;
+            }
+        }, [bodyView, navigableItems, selectedItemIndex, transaction]);
+        const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+        const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
+
+        // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
+        const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
+        const fileReviewStates = useReviewStore(s => s.fileReviewStates);
+
+        const reviewStats = useMemo(() => {
+            const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+            return {
+                totalFiles: files.length,
+                totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
+                totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
+                numFiles: files.length,
+                approvedFilesCount: approvedFiles.length,
+            };
+        }, [files, fileReviewStates]);
+
+        const hasRejectedFiles = useMemo(() => {
+            if (!fileReviewStates) return false;
+            return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
+        }, [fileReviewStates]);
+
+        const { approvedFilesCount } = reviewStats;
+
+        const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
+
+        const scripts = transaction?.scripts || [];
+
+        const {
+            setSelectedItemIndex, toggleBodyView, setBodyView, startApplySimulation, approve,
+            rejectTransaction, tryRepairFile, tryInstruct, showBulkRepair, showBulkInstruct,
+            executeBulkRepairOption, executeBulkInstructOption, confirmHandoff,
+            navigateScriptErrorUp, navigateScriptErrorDown, toggleFileApproval,
+            rejectAllFiles, navigateBulkRepairUp, navigateBulkRepairDown,
+            navigateBulkInstructUp, navigateBulkInstructDown,
+        } = store.actions;
+
+        const openCopyMode = () => {
+            if (!transaction) return;
+            const currentItem = navigableItems[selectedItemIndex];
+            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
+            useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
+        };
+
+        const navigateToNextItem = () => {
+            if (selectedItemIndex < navigableItems.length - 1) {
+                setSelectedItemIndex(selectedItemIndex + 1);
+                contentViewport.actions.resetScroll();
+            }
+        };
+
+        const navigateToPreviousItem = () => {
+            if (selectedItemIndex > 0) {
+                setSelectedItemIndex(selectedItemIndex - 1);
+                contentViewport.actions.resetScroll();
+            }
+        };
+
+        const navigateToNextFile = () => {
+            const nextFileIndex = navigableItems.findIndex(
+                (item, index) => index > selectedItemIndex && item.type === 'file',
+            );
+            if (nextFileIndex !== -1) {
+                setSelectedItemIndex(nextFileIndex);
+            }
+        };
+
+        const navigateToPreviousFile = () => {
+            // Find the last index of a file before the current one
+            const prevFileIndex = navigableItems
+                .slice(0, selectedItemIndex)
+                .findLastIndex(item => item.type === 'file');
+
+            if (prevFileIndex !== -1) {
+                setSelectedItemIndex(prevFileIndex);
+            }
+        };
+
+        // --- Input Handlers ---
+
+        const handleGlobalInput = (input: string, key: Key): boolean => {
+            if (input === '1' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'success'); return true;
+            }
+            if (input === '2' && transaction) { // For demo purposes
+                startApplySimulation(transaction.id, 'failure'); return true;
+            }
+            // The 'q' (quit/back) is now handled by the global hotkey hook.
+
+            const currentItem = navigableItems[selectedItemIndex];
+            if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
+                toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+                return true;
+            }
+
+            if (key.escape) {
+                switch (bodyView) {
+                    case REVIEW_BODY_VIEWS.BULK_REPAIR:
+                    case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
+                    case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
+                        toggleBodyView(bodyView);
+                        break;
+                    default:
+                        if (bodyView !== REVIEW_BODY_VIEWS.NONE) {
+                            setBodyView(REVIEW_BODY_VIEWS.NONE);
+                        }
+                        break;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        const handleHandoffConfirmInput = (_input: string, key: Key): void => {
+            if (key.return) confirmHandoff();
+        };
+
+        const handleBulkRepairInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkRepairUp();
+            if (key.downArrow) navigateBulkRepairDown();
+            if (key.return) {
+                executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '4') {
+                executeBulkRepairOption(parseInt(input));
+            }
+        };
+        
+        const handleBulkInstructInput = (input: string, key: Key): void => {
+            if (key.upArrow) navigateBulkInstructUp();
+            if (key.downArrow) navigateBulkInstructDown();
+            if (key.return) {
+                executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
+                return;
+            }
+
+            if (input >= '1' && input <= '3') {
+                executeBulkInstructOption(parseInt(input));
+            }
+        };
+
+        const handleContentScrollInput = (key: Key): boolean => {
+            const contentViews: ReviewBodyView[] = [
+                REVIEW_BODY_VIEWS.REASONING,
+                REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+                REVIEW_BODY_VIEWS.DIFF,
+                REVIEW_BODY_VIEWS.PROMPT,
+            ];
+            if (!contentViews.includes(bodyView)) return false;
+
+            if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
+            if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
+            return false;
+        };
+
+        const handleReasoningInput = (input: string, _key: Key): void => {
+            if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+        };
+
+        const handleScriptOutputInput = (input: string, _key: Key): void => {
+            if (input.toLowerCase() === 'j') navigateScriptErrorDown();
+            if (input.toLowerCase() === 'k') navigateScriptErrorUp();
+            if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
+                const currentItem = navigableItems[selectedItemIndex];
+                const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
+                if (selectedScript) {
+                    useNotificationStore.getState().actions.show({
+                        type: 'success',
+                        title: 'Copied to Clipboard',
+                        message: `Copied script output for: ${selectedScript.command}`,
+                    });
+                }
+            }
+        };
+
+        const handleDiffInput = (input: string, key: Key) => {
+            if (key.upArrow) {
+                navigateToPreviousFile();
+                return;
+            }
+            if (key.downArrow) {
+                navigateToNextFile();
+                return;
+            }
+            if (input.toLowerCase() === 'd') toggleBodyView('diff');
+        };
+
+        const handleMainNavigationInput = (input: string, key: Key): void => {
+            if (key.leftArrow) {
+                showDashboardScreen();
+                return;
+            }
+
+            // Handle Shift+R for reject all
+            if (key.shift && input.toLowerCase() === 'r') {
+                if (approvedFilesCount > 0 && transaction) {
+                    rejectAllFiles();
+                }
+                return;
+            }
+
+            const currentItem = navigableItems[selectedItemIndex];
+
+            if (input === ' ') {
+                if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState && fileState.status !== 'FAILED') {
+                        toggleFileApproval(currentItem.id);
+                    }
+                }
+            }
+
+            if (input.toLowerCase() === 'p') {
+                toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+            }
+
+            if (input.toLowerCase() === 'r') {
+                toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+            }
+
+            if (key.return) { // Enter key
+                if (currentItem?.type === 'file') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
+                } else if (currentItem?.type === 'prompt') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
+                } else if (currentItem?.type === 'reasoning') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
+                } else if (currentItem?.type === 'script') {
+                    toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
+                }
+            }
+
+            if (input.toLowerCase() === 'a') {
+                if (approvedFilesCount > 0) {
+                    approve();
+                    showDashboardScreen();
+                }
+            }
+
+            if (input.toLowerCase() === 'x') {
+                rejectTransaction();
+            }
+
+            if (input.toLowerCase() === 'c') {
+                openCopyMode();
+            }
+
+            if (input.toLowerCase() === 't') {
+                if (key.shift) {
+                    const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
+                    if (hasFailedFiles) showBulkRepair();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
+                }
+            }
+
+            if (input.toLowerCase() === 'i') {
+                if (key.shift) {
+                    if (hasRejectedFiles) showBulkInstruct();
+                } else if (currentItem?.type === 'file') {
+                    const fileState = fileReviewStates.get(currentItem.id);
+                    if (fileState?.status === 'REJECTED') {
+                        tryInstruct(currentItem.id);
+                    }
+                }
+            }
+        };
+
+        useListNavigator({
+            itemCount: navigableItems.length,
+            viewportHeight: listViewportHeight,
+            selectedIndex: selectedItemIndex,
+            onIndexChange: setSelectedItemIndex,
+            isActive: bodyView === REVIEW_BODY_VIEWS.NONE,
+            onKey: handleMainNavigationInput,
+        });
+
+        useInput((input: string, key: Key) => {
+            if (handleGlobalInput(input, key)) return;
+
+            if (key.leftArrow) {
+                // Allow left arrow to collapse any open body view
+                setBodyView(REVIEW_BODY_VIEWS.NONE);
+                return;
+            }
+
+            // Global "Enter to collapse" handler for non-modal views
+            if (key.return) {
+                if (
+                    bodyView !== REVIEW_BODY_VIEWS.BULK_REPAIR &&
+                    bodyView !== REVIEW_BODY_VIEWS.BULK_INSTRUCT &&
+                    bodyView !== REVIEW_BODY_VIEWS.CONFIRM_HANDOFF &&
+                    bodyView !== REVIEW_BODY_VIEWS.NONE
+                ) {
+                    setBodyView(REVIEW_BODY_VIEWS.NONE);
+                    return;
+                }
+            }
+
+            // Allow up/down list navigation even when a content view is open
+            const listNavigableBodyViews: ReviewBodyView[] = [
+                REVIEW_BODY_VIEWS.PROMPT, REVIEW_BODY_VIEWS.REASONING, REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+            ];
+
+            if (listNavigableBodyViews.includes(bodyView)) {
+                if (key.upArrow) { navigateToPreviousItem(); return; }
+                if (key.downArrow) { navigateToNextItem(); return; }
+            }
+
+            // Handle content scrolling (PgUp/PgDn)
+            if (handleContentScrollInput(key)) return;
+
+            switch (bodyView) {
+                case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_REPAIR: return handleBulkRepairInput(input, key);
+                case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
+                case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
+                case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
+                case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input, key);
+            }
+        }, { isActive: bodyView !== REVIEW_BODY_VIEWS.NONE });
+
+        return {
+            ...store,
+            fileReviewStates,
+            selectedItemIndex,
+            transaction,
+            files,
+            scripts,
+            patchStatus,
+            navigableItems,
+            isFileSelected,
+            navigableItemsInView,
+            viewOffset,
+            contentScrollIndex: contentViewport.scrollIndex,
+            availableBodyHeight,
+            selectedBulkRepairOptionIndex,
+            selectedBulkInstructOptionIndex,
+            ...reviewStats,
+            hasRejectedFiles,
+        };
+    };
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 220

@@ -1,9 +1,8 @@
 import { Box, Text } from 'ink';
-import Separator from './Separator';
 import { useDebugMenu } from '../hooks/useDebugMenu';
-import { useStdoutDimensions } from '../utils';
 import ActionFooter from './ActionFooter';
 import { DEBUG_MENU_FOOTER_ACTIONS } from '../constants/debug.constants';
+import ScreenLayout from './layout/ScreenLayout';
 
 const getKeyForIndex = (index: number): string => {
     if (index < 9) {
@@ -14,18 +13,22 @@ const getKeyForIndex = (index: number): string => {
 
 const DebugMenu = () => {
     const { selectedIndex, menuItems, viewOffset, totalItems } = useDebugMenu();
-    const [width] = useStdoutDimensions();
 
     return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            paddingX={2}
-            paddingY={1}
+        <ScreenLayout
+            title="DEBUG MENU"
+            footer={
+                <Box>
+                    <ActionFooter actions={DEBUG_MENU_FOOTER_ACTIONS}/>
+                    <Box flexGrow={1} />
+                    <Text>
+                        {Math.min(viewOffset + 1, totalItems)}-
+                        {Math.min(viewOffset + menuItems.length, totalItems)} of {totalItems}
+                    </Text>
+                </Box>
+            }
         >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
-            <Separator width={width - 4} />
-            <Box flexDirection="column" marginY={1}>
+            <Box flexDirection="column" paddingX={2}>
                 {menuItems.map((item, index) => {
                     const absoluteIndex = index + viewOffset;
                     return (
@@ -36,16 +39,7 @@ const DebugMenu = () => {
                     );
                 })}
             </Box>
-            <Separator width={width - 4} />
-            <Box>
-                <ActionFooter actions={DEBUG_MENU_FOOTER_ACTIONS}/>
-                <Box flexGrow={1} />
-                <Text>
-                    {Math.min(viewOffset + 1, totalItems)}-
-                    {Math.min(viewOffset + menuItems.length, totalItems)} of {totalItems}
-                </Text>
-            </Box>
-        </Box>
+        </ScreenLayout>
     );
 };
 

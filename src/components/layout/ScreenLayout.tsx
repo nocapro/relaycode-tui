@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import Separator from '../Separator';
 
 interface ScreenLayoutProps {
-    title: React.ReactNode;
+    title: string;
     footer: React.ReactNode;
     children: React.ReactNode;
 }
@@ -10,11 +10,7 @@ interface ScreenLayoutProps {
 const ScreenLayout = ({ title, footer, children }: ScreenLayoutProps) => {
     return (
         <Box flexDirection="column" flexGrow={1}>
-            {typeof title === 'string' ? (
-                <Text bold color="black" backgroundColor="yellow"> {title} </Text>
-            ) : (
-                title
-            )}
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · {title} </Text>
             <Separator />
             <Box flexDirection="column" flexGrow={1} marginY={1}>
                 {children}

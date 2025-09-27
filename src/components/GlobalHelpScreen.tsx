@@ -1,5 +1,6 @@
 import { Box, Text } from 'ink';
 import { useStdoutDimensions } from '../utils';
+import ModalLayout from './layout/ModalLayout';
 
 const HELP_SECTIONS = [
     {
@@ -104,18 +105,11 @@ const GlobalHelpScreen = () => {
     });
 
     return (
-        <Box
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-            width="100%"
-            height="100%"
-        >
+        <ModalLayout width="90%">
             <Box
                 flexDirection="column"
                 paddingX={2}
                 paddingY={2}
-                width="90%"
             >
                 <Box justifyContent="center" marginBottom={1}>
                     <Text bold>
@@ -139,10 +133,10 @@ const GlobalHelpScreen = () => {
                     ))}
                 </Box>
             </Box>
-            <Box marginTop={1}>
+            <Box justifyContent="center" marginTop={1}>
                 <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
             </Box>
-        </Box>
+        </ModalLayout>
     );
 };
 

@@ -162,7 +162,7 @@ const TransactionHistoryScreen = () => {
     };
 
     return (
-        <ScreenLayout title="▲ relaycode · TRANSACTION HISTORY" footer={renderFooter()}>
+        <ScreenLayout title="TRANSACTION HISTORY" footer={renderFooter()}>
             <Box>
                 <Text>Filter: </Text>
                 {mode === HISTORY_VIEW_MODES.FILTER ? (

@@ -174,7 +174,7 @@ const DashboardScreen = () => {
     
     return (
         <ScreenLayout
-            title={<Text color="cyan">▲ relaycode dashboard</Text>}
+            title="DASHBOARD"
             footer={renderFooter()}
         >
             <Box flexDirection="column" flexGrow={1}>

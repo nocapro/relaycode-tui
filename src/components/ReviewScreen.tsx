@@ -342,7 +342,7 @@ const ReviewScreen = () => {
     };
 
     return (
-        <ScreenLayout title="▲ relaycode · REVIEW" footer={renderFooter()}>
+        <ScreenLayout title="REVIEW" footer={renderFooter()}>
             {/* Navigator Section */}
             <Box flexDirection="column" marginY={1}>
                 <Box flexDirection="column">

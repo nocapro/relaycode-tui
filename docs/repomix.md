@@ -2,39 +2,97 @@
 ```
 src/
   components/
+    layout/
+      ModalLayout.tsx
+      ScreenLayout.tsx
     ActionFooter.tsx
+    ContentView.tsx
     CopyScreen.tsx
     DashboardScreen.tsx
     DebugLogScreen.tsx
     DebugMenu.tsx
+    GitCommitScreen.tsx
+    GlobalHelpScreen.tsx
+    InitializationScreen.tsx
+    NotificationScreen.tsx
+    ReviewProcessingScreen.tsx
     ReviewScreen.tsx
+    Separator.tsx
+    SplashScreen.tsx
     TransactionDetailScreen.tsx
     TransactionHistoryScreen.tsx
+  config/
+    ui.config.ts
   constants/
     app.constants.ts
+    commit.constants.ts
+    copy.constants.ts
     dashboard.constants.ts
+    debug.constants.ts
     detail.constants.ts
     history.constants.ts
+    init.constants.ts
+    log.constants.ts
+    notification.constants.ts
     review.constants.ts
+    splash.constants.ts
+    ui.constants.ts
     view.constants.ts
+  data/
+    mocks.ts
   hooks/
+    useContentViewport.ts
     useCopyScreen.tsx
     useDashboardScreen.tsx
     useDebugLogScreen.tsx
     useDebugMenu.tsx
+    useGitCommitScreen.tsx
     useGlobalHotkeys.tsx
+    useInitializationScreen.tsx
+    useLayout.ts
     useListNavigator.ts
+    useNotificationScreen.tsx
+    useReviewProcessingScreen.tsx
     useReviewScreen.tsx
+    useSplashScreen.tsx
     useTransactionDetailScreen.tsx
     useTransactionHistoryScreen.tsx
+    useViewport.ts
+  services/
+    clipboard.service.ts
+    commit.service.ts
+    copy.service.ts
+    dashboard.service.ts
+    editor.service.ts
+    fs.service.ts
+    init.service.ts
+    logger.service.ts
+    review.service.ts
+    transaction.service.ts
   stores/
     app.store.ts
+    commit.store.ts
+    copy.store.ts
+    dashboard.store.ts
     detail.store.ts
     history.store.ts
+    init.store.ts
+    log.store.ts
     navigation.utils.ts
+    notification.store.ts
+    review.store.ts
+    transaction.store.ts
+    view.store.ts
   types/
     actions.types.ts
+    copy.types.ts
+    debug.types.ts
+    domain.types.ts
+    log.types.ts
+    notification.types.ts
+    view.types.ts
   App.tsx
+  utils.ts
 eslint.config.js
 index.tsx
 package.json
@@ -42,6 +100,256 @@ tsconfig.json
 ```
 
 # Files
+
+## File: src/components/layout/ModalLayout.tsx
+```typescript
+import { Box } from 'ink';
+
+interface ModalLayoutProps {
+    children: React.ReactNode;
+    width?: string | number;
+}
+
+const ModalLayout = ({ children, width = '80%' }: ModalLayoutProps) => {
+    return (
+        <Box
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            width="100%"
+            height="100%"
+        >
+            <Box
+                flexDirection="column"
+                paddingY={1}
+                width={width}
+                backgroundColor="black"
+            >
+                {children}
+            </Box>
+        </Box>
+    );
+};
+
+export default ModalLayout;
+```
+
+## File: src/components/layout/ScreenLayout.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from '../Separator';
+
+interface ScreenLayoutProps {
+    title: string;
+    footer: React.ReactNode;
+    children: React.ReactNode;
+}
+
+const ScreenLayout = ({ title, footer, children }: ScreenLayoutProps) => {
+    return (
+        <Box flexDirection="column" flexGrow={1}>
+            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · {title} </Text>
+            <Separator />
+            <Box flexDirection="column" flexGrow={1} marginY={1}>
+                {children}
+            </Box>
+            <Separator />
+            <Box>
+                {footer}
+            </Box>
+        </Box>
+    );
+};
+
+export default ScreenLayout;
+```
+
+## File: src/components/ContentView.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { UI_CONFIG } from '../config/ui.config';
+
+interface ContentViewProps {
+    title: string;
+    content: string;
+    isExpanded?: boolean;
+    scrollIndex?: number;
+    maxHeight?: number;
+    highlight?: 'diff' | 'none';
+}
+const ContentView = ({
+    title,
+    content,
+    isExpanded = true,
+    scrollIndex = 0,
+    maxHeight,
+    highlight = 'none',
+}: ContentViewProps) => {
+    const lines = content.split('\n');
+    const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
+    const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
+
+    const renderContent = () => {
+        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
+            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
+            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
+            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
+
+            return (
+                <>
+                    {topLines.map((line, i) => renderLine(line, i))}
+                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
+                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
+                </>
+            );
+        }
+        // Handle vertical scrolling for expanded view
+        if (isExpanded && maxHeight) {
+            const visibleLines = lines.slice(scrollIndex, scrollIndex + maxHeight);
+            return visibleLines.map((line, i) => renderLine(line, scrollIndex + i));
+        }
+        return lines.map((line, i) => renderLine(line, i));
+    };
+
+    const renderLine = (line: string, key: number) => {
+        let color = 'white';
+        if (highlight === 'diff') {
+            if (line.startsWith('+')) color = 'green';
+            if (line.startsWith('-')) color = 'red';
+            if (line.startsWith('@@')) color = 'cyan';
+        }
+        return <Text key={key} color={color}>{line}</Text>;
+    };
+
+    return (
+        <Box flexDirection="column">
+            <Text>{title}</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {renderContent()}
+            </Box>
+        </Box>
+    );
+};
+
+export default ContentView;
+```
+
+## File: src/constants/debug.constants.ts
+```typescript
+import type { ActionItem } from '../types/actions.types';
+
+export const DEBUG_MENU_FOOTER_ACTIONS: readonly ActionItem[] = [
+    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+    { key: '1-9,a-z', label: 'Jump' },
+    { key: 'Enter', label: 'Select' },
+    { key: 'Esc/Ctrl+B', label: 'Close' },
+] as const;
+```
+
+## File: src/constants/init.constants.ts
+```typescript
+import type { Task } from '../stores/init.store';
+
+/**
+ * Constants for the Initialization process.
+ */
+export const INITIAL_ANALYZE_TASKS: Task[] = [
+    { id: 'scan', title: 'Scanning project structure...', subtext: 'Finding package.json', status: 'pending' },
+    { id: 'project-id', title: 'Determining Project ID', status: 'pending' },
+    { id: 'gitignore', title: 'Checking for existing .gitignore', status: 'pending' },
+];
+
+export const INITIAL_CONFIGURE_TASKS: Task[] = [
+    { id: 'config', title: 'Creating relay.config.json', subtext: 'Writing default configuration with Project ID', status: 'pending' },
+    { id: 'state-dir', title: 'Initializing .relay state directory', status: 'pending' },
+    { id: 'prompt', title: 'Generating system prompt template', status: 'pending' },
+];
+```
+
+## File: src/constants/notification.constants.ts
+```typescript
+import type { ActionItem } from '../types/actions.types';
+import type { NotificationType } from '../types/notification.types';
+
+export const NOTIFICATION_DEFAULT_DURATION = 5; // seconds
+
+export const NOTIFICATION_FOOTER_ACTIONS: readonly ActionItem[] = [
+    { key: 'Enter/Esc', label: 'Dismiss' },
+] as const;
+
+export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { color: string; title: string }> = {
+    success: { color: 'green', title: '✓ SUCCESS' },
+    error: { color: 'red', title: '✗ ERROR' },
+    info: { color: 'blue', title: 'ℹ INFO' },
+    warning: { color: 'yellow', title: '⚠ WARNING' },
+};
+```
+
+## File: src/constants/splash.constants.ts
+```typescript
+export const SPLASH_TIPS = [
+    'Tip: Press Ctrl+V at any time to process a patch from your clipboard.',
+    'Tip: Use Ctrl+B to open the debug menu and explore different application states.',
+    'Tip: The "?" key opens a global hotkey reference screen.',
+    'Tip: On the Dashboard, use "L" to view the complete transaction history.',
+    'Tip: Use Ctrl+L to quickly view the debug log from any screen.',
+] as const;
+```
+
+## File: src/hooks/useLayout.ts
+```typescript
+import { useMemo } from 'react';
+import { useStdoutDimensions } from '../utils';
+
+export interface LayoutConfig {
+    header?: number;
+    footer?: number;
+    separators?: number;
+    marginsY?: number; // Total vertical margin
+    paddingY?: number; // Total vertical padding
+    fixedRows?: number; // For any other static rows
+    dynamicRows?: {
+        count: number;
+        lineHeight?: number; // Default to 1
+    };
+}
+
+export interface LayoutInfo {
+    totalHeight: number;
+    remainingHeight: number;
+}
+
+/**
+ * Calculates available vertical space based on terminal height and a declarative layout config.
+ * @param config A declarative object describing static and dynamic rows to reserve.
+ * @returns An object with total terminal height and the calculated remaining height for content.
+ */
+export const useLayout = (config: LayoutConfig): LayoutInfo => {
+    const [, totalHeight] = useStdoutDimensions();
+
+    const reservedHeight = useMemo(() => {
+        let reserved = 0;
+        reserved += config.header || 0;
+        reserved += config.footer || 0;
+        reserved += config.separators || 0;
+        reserved += config.marginsY || 0;
+        reserved += config.paddingY || 0;
+        reserved += config.fixedRows || 0;
+
+        if (config.dynamicRows) {
+            reserved += config.dynamicRows.count * (config.dynamicRows.lineHeight || 1);
+        }
+        return reserved;
+    }, [config]);
+
+    const remainingHeight = Math.max(1, totalHeight - reservedHeight);
+
+    return {
+        totalHeight,
+        remainingHeight,
+    };
+};
+```
 
 ## File: src/hooks/useListNavigator.ts
 ```typescript
@@ -65,6 +373,7 @@ interface ListNavigatorOptions {
     onIndexChange: (newIndex: number) => void;
     onKey?: (input: string, key: Key) => void;
     isActive: boolean;
+    disablePageKeys?: boolean;
 }
 
 export const useListNavigator = ({
@@ -74,6 +383,7 @@ export const useListNavigator = ({
     onIndexChange,
     onKey,
     isActive,
+    disablePageKeys,
 }: ListNavigatorOptions) => {
     useInput((input, key) => {
         if (key.upArrow) {
@@ -84,13 +394,15 @@ export const useListNavigator = ({
             onIndexChange(moveIndex(selectedIndex, 'down', itemCount));
             return;
         }
-        if (key.pageUp) {
-            onIndexChange(Math.max(0, selectedIndex - viewportHeight));
-            return;
-        }
-        if (key.pageDown) {
-            onIndexChange(Math.min(itemCount - 1, selectedIndex + viewportHeight));
-            return;
+        if (!disablePageKeys) {
+            if (key.pageUp) {
+                onIndexChange(Math.max(0, selectedIndex - viewportHeight));
+                return;
+            }
+            if (key.pageDown) {
+                onIndexChange(Math.min(itemCount - 1, selectedIndex + viewportHeight));
+                return;
+            }
         }
 
         if (onKey) {
@@ -98,6 +410,193 @@ export const useListNavigator = ({
         }
     }, { isActive });
 };
+```
+
+## File: src/hooks/useNotificationScreen.tsx
+```typescript
+import { useState, useEffect } from 'react';
+import { useInput } from 'ink';
+import { useNotificationStore } from '../stores/notification.store';
+import { NOTIFICATION_DEFAULT_DURATION } from '../constants/notification.constants';
+
+export const useNotificationScreen = () => {
+    const { isVisible, notification, actions } = useNotificationStore(state => ({
+        isVisible: state.isVisible,
+        notification: state.notification,
+        actions: state.actions,
+    }));
+    const [countdown, setCountdown] = useState(notification?.duration || NOTIFICATION_DEFAULT_DURATION);
+
+    // This effect runs ONLY when the notification itself changes, resetting the countdown.
+    useEffect(() => {
+        if (notification) {
+            setCountdown(notification.duration || NOTIFICATION_DEFAULT_DURATION);
+        }
+    }, [notification]);
+
+    // This effect handles the ticking and dismissal logic.
+    useEffect(() => {
+        if (isVisible) {
+            if (countdown <= 0) {
+                actions.hide();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [isVisible, countdown, actions]);
+
+    useInput((_, key) => {
+        if (key.return || key.escape) {
+            actions.hide();
+        }
+    }, { isActive: isVisible });
+
+    return {
+        notification,
+        countdown,
+    };
+};
+```
+
+## File: src/hooks/useReviewProcessingScreen.tsx
+```typescript
+import { useState, useEffect, useMemo } from 'react';
+import { useInput } from 'ink';
+import { useReviewStore } from '../stores/review.store';
+import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
+
+export const useReviewProcessingScreen = () => {
+    const {
+        applySteps,
+        processingStartTime,
+        isCancelling,
+        patchStatus,
+        actions: { cancelProcessing, skipCurrentStep },
+    } = useReviewStore();
+
+    const transaction = useTransactionStore(selectSelectedTransaction);
+    const isProcessing = processingStartTime !== null;
+
+    const [now, setNow] = useState(Date.now());
+
+    useEffect(() => {
+        if (!isProcessing) return;
+        const timer = setInterval(() => setNow(Date.now()), 100);
+        return () => clearInterval(timer);
+    }, [isProcessing]);
+
+    const elapsedTime = isProcessing ? (now - processingStartTime) / 1000 : 0;
+
+    const isSkippable = useMemo(() => {
+        const activeStep = applySteps.find(step => step.status === 'active');
+        return activeStep?.id === 'post-command';
+    }, [applySteps]);
+
+    // --- Input Handling ---
+
+    // Handle Ctrl+C by listening to stdin. This is more reliable than useInput for Ctrl+C,
+    // as it prevents the default terminal behavior of exiting the process.
+    useEffect(() => {
+        const onData = (data: Buffer) => {
+            // Check for Ctrl+C
+            if (data.toString() === '\u0003') {
+                cancelProcessing();
+            }
+        };
+
+        if (isProcessing && !isCancelling) {
+            process.stdin.on('data', onData);
+            return () => {
+                process.stdin.removeListener('data', onData);
+            };
+        }
+    }, [isProcessing, isCancelling, cancelProcessing]);
+
+    useInput(
+        (input) => {
+            if (input.toLowerCase() === 's' && isSkippable) {
+                skipCurrentStep();
+            }
+        },
+        { isActive: isProcessing && !isCancelling },
+    );
+
+    return {
+        transaction,
+        applySteps,
+        isProcessing,
+        isCancelling,
+        patchStatus,
+        elapsedTime,
+        now,
+        isSkippable,
+    };
+};
+```
+
+## File: src/services/fs.service.ts
+```typescript
+import { sleep } from '../utils';
+
+/**
+ * Mock file system service.
+ * In a real application, this would interact with the actual filesystem.
+ */
+const readFileContent = async (filePath: string): Promise<string> => {
+    // Simulate async file read
+    await sleep(50 + Math.random() * 100);
+
+    const lang = filePath.split('.').pop() || '';
+    
+    return `// Mock content for ${filePath}
+// Language: ${lang}
+// In a real implementation, this would read from the filesystem.
+
+function helloWorld() {
+    console.log("Hello from ${filePath}!");
+}
+`;
+};
+
+export const FileSystemService = {
+    readFileContent,
+};
+```
+
+## File: src/stores/notification.store.ts
+```typescript
+import { create } from 'zustand';
+import { useViewStore } from './view.store';
+import type { NotificationPayload } from '../types/notification.types';
+
+interface NotificationState {
+    isVisible: boolean;
+    notification: NotificationPayload | null;
+    actions: {
+        show: (payload: NotificationPayload) => void;
+        hide: () => void;
+    };
+}
+
+export const useNotificationStore = create<NotificationState>((set) => ({
+    isVisible: false,
+    notification: null,
+    actions: {
+        show: (payload) => {
+            set({ isVisible: true, notification: payload });
+            useViewStore.getState().actions.setActiveOverlay('notification');
+        },
+        hide: () => {
+            set({ isVisible: false, notification: null });
+            useViewStore.getState().actions.setActiveOverlay('none');
+        },
+    },
+}));
 ```
 
 ## File: src/types/actions.types.ts
@@ -111,28 +610,101 @@ export interface ActionItem {
 }
 ```
 
-## File: src/constants/app.constants.ts
+## File: src/types/debug.types.ts
+```typescript
+export interface MenuItem {
+    title: string;
+    action: () => void;
+}
+```
+
+## File: src/types/log.types.ts
 ```typescript
 /**
- * Application-level screens and navigation constants.
+ * Log level for a log entry.
  */
-export const APP_SCREENS = {
-    SPLASH: 'splash',
-    INIT: 'init',
-    DASHBOARD: 'dashboard',
-    REVIEW: 'review',
-    REVIEW_PROCESSING: 'review-processing',
-    GIT_COMMIT: 'git-commit',
-    TRANSACTION_DETAIL: 'transaction-detail',
-    TRANSACTION_HISTORY: 'transaction-history',
-} as const;
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
-export const SCREENS_WITH_DASHBOARD_BACK_ACTION = [
-    APP_SCREENS.REVIEW,
-    APP_SCREENS.GIT_COMMIT,
-    APP_SCREENS.TRANSACTION_DETAIL,
-    APP_SCREENS.TRANSACTION_HISTORY,
-];
+/**
+ * Represents a single log entry in the system.
+ */
+export interface LogEntry {
+    timestamp: number;
+    level: LogLevel;
+    message: string;
+}
+```
+
+## File: src/types/notification.types.ts
+```typescript
+/**
+ * The type of notification to display.
+ */
+export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+
+/**
+ * The data payload for a notification.
+ */
+export interface NotificationPayload {
+    type: NotificationType;
+    title: string;
+    message: string;
+    duration?: number; // in seconds
+}
+```
+
+## File: src/components/NotificationScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useNotificationScreen } from '../hooks/useNotificationScreen';
+import ActionFooter from './ActionFooter';
+import ModalLayout from './layout/ModalLayout';
+import { NOTIFICATION_FOOTER_ACTIONS, NOTIFICATION_TYPE_CONFIG } from '../constants/notification.constants';
+
+const NotificationScreen = () => {
+    const { notification, countdown } = useNotificationScreen();
+
+    if (!notification) {
+        return null;
+    }
+
+    const config = NOTIFICATION_TYPE_CONFIG[notification.type];
+
+    return (
+        <ModalLayout>
+            <Box paddingX={2} marginBottom={1} backgroundColor={config.color}>
+                <Text bold color="black">{config.title}</Text>
+            </Box>
+            <Box paddingX={2}>
+                <Text>{notification.message}</Text>
+            </Box>
+            <Box marginTop={1}>
+                <Box paddingX={2}>
+                    <Text color="gray">(Dismissing in {countdown}s...)</Text>
+                </Box>
+            </Box>
+            <Box marginTop={1}>
+                <ActionFooter actions={NOTIFICATION_FOOTER_ACTIONS} />
+            </Box>
+        </ModalLayout>
+    );
+};
+
+export default NotificationScreen;
+```
+
+## File: src/constants/commit.constants.ts
+```typescript
+export const COMMIT_FOOTER_ACTIONS = {
+    BASE: [
+        { key: 'Enter', label: 'Confirm & Commit' },
+        { key: 'C', label: 'Copy' },
+        { key: 'Esc', label: 'Cancel' },
+    ] as const,
+    FAILURE: [
+        { key: 'R', label: 'Retry' }, { key: 'C', label: 'Copy Command' }, { key: 'Esc', label: 'Cancel' },
+    ] as const,
+};
 ```
 
 ## File: src/constants/dashboard.constants.ts
@@ -173,6 +745,285 @@ export const DASHBOARD_FOOTER_ACTIONS = {
         actions.push({ key: 'Q', label: 'Quit' });
         return actions;
     },
+};
+```
+
+## File: src/constants/log.constants.ts
+```typescript
+export const MAX_LOGS = 200;
+
+export const DEBUG_LOG_MODES = {
+    LIST: 'LIST',
+    FILTER: 'FILTER',
+} as const;
+
+export const LOG_LEVEL_COLORS = {
+    DEBUG: 'gray',
+    INFO: 'white',
+    WARN: 'yellow',
+    ERROR: 'red',
+};
+
+export const LOG_LEVEL_TAGS = {
+    DEBUG: { color: 'white', backgroundColor: 'gray' },
+    INFO: { color: 'black', backgroundColor: 'cyan' },
+    WARN: { color: 'black', backgroundColor: 'yellow' },
+    ERROR: { color: 'white', backgroundColor: 'red' },
+};
+
+export const DEBUG_LOG_FOOTER_ACTIONS = {
+    FILTER_MODE: [{ key: 'Enter/Esc', label: 'Apply & Close Filter' }] as const,
+    LIST_MODE: (hasLogs: boolean) => {
+        const actions = [
+            { key: '↑↓/PgUp/PgDn', label: 'Scroll' },
+            { key: 'F', label: 'Filter' },
+        ];
+        if (hasLogs) actions.push({ key: 'C', label: 'Clear' });
+        actions.push({ key: 'Esc/Ctrl+L', label: 'Close' });
+        return actions;
+    },
+};
+```
+
+## File: src/constants/ui.constants.ts
+```typescript
+export const TRANSACTION_STATUS_UI = {
+    COMMITTED: { text: '✓ Committed', color: 'green' },
+    HANDOFF: { text: '→ Handoff', color: 'magenta' },
+    REVERTED: { text: '↩ Reverted', color: 'gray' },
+    REJECTED: { text: '✗ Rejected', color: 'red' },
+    APPLIED: { text: '✓ Applied', color: 'blue' },
+    COMMITTING: { text: '→ Committing', color: 'magenta' },
+    PENDING: { text: '? Pending', color: 'yellow' },
+    FAILED: { text: '✗ Failed', color: 'red' },
+} as const;
+
+export const FILE_STATUS_UI = {
+    APPROVED: { icon: '[✓]', color: 'green' },
+    REJECTED: { icon: '[✗]', color: 'red' },
+    FAILED: { icon: '[!]', color: 'red' },
+    AWAITING: { icon: '[●]', color: 'yellow' },
+    RE_APPLYING: { icon: '[●]', color: 'cyan' },
+} as const;
+
+export const FILE_CHANGE_ICONS = {
+    MOD: '[MOD]',
+    ADD: '[ADD]',
+    DEL: '[DEL]',
+    REN: '[REN]',
+} as const;
+```
+
+## File: src/hooks/useContentViewport.ts
+```typescript
+import { useState, useEffect, useMemo, useCallback } from 'react';
+
+interface ContentViewportConfig {
+    contentLineCount: number;
+    viewportHeight: number;
+}
+
+export interface ContentViewport {
+    scrollIndex: number;
+    canScrollUp: boolean;
+    canScrollDown: boolean;
+    actions: {
+        scrollUp: (lines?: number) => void;
+        scrollDown: (lines?: number) => void;
+        pageUp: () => void;
+        pageDown: () => void;
+        resetScroll: () => void;
+    };
+}
+
+/**
+ * Manages the scrolling state (index) for a block of content within a fixed viewport.
+ * @param config Configuration including total content lines and the height of the visible area.
+ * @returns State and actions for controlling the scroll position.
+ */
+export const useContentViewport = ({
+    contentLineCount,
+    viewportHeight,
+}: ContentViewportConfig): ContentViewport => {
+    const [scrollIndex, setScrollIndex] = useState(0);
+
+    const maxScrollIndex = useMemo(
+        () => Math.max(0, contentLineCount - viewportHeight),
+        [contentLineCount, viewportHeight],
+    );
+
+    const resetScroll = useCallback(() => {
+        setScrollIndex(0);
+    }, []);
+
+    // Effect to reset scroll when content changes, which is a good default.
+    useEffect(() => {
+        resetScroll();
+    }, [contentLineCount, resetScroll]);
+
+    // Effect to clamp scrollIndex if content or viewport size changes
+    useEffect(() => {
+        if (scrollIndex > maxScrollIndex) {
+            setScrollIndex(maxScrollIndex);
+        }
+    }, [scrollIndex, maxScrollIndex]);
+
+    const canScrollUp = useMemo(() => scrollIndex > 0, [scrollIndex]);
+    const canScrollDown = useMemo(() => scrollIndex < maxScrollIndex, [scrollIndex, maxScrollIndex]);
+
+    const scrollUp = useCallback((lines = 1) => {
+        setScrollIndex(i => Math.max(0, i - lines));
+    }, []);
+
+    const scrollDown = useCallback((lines = 1) => {
+        setScrollIndex(i => Math.min(maxScrollIndex, i + lines));
+    }, [maxScrollIndex]);
+
+    const pageUp = useCallback(() => {
+        setScrollIndex(i => Math.max(0, i - viewportHeight));
+    }, [viewportHeight]);
+
+    const pageDown = useCallback(() => {
+        setScrollIndex(i => Math.min(maxScrollIndex, i + viewportHeight));
+    }, [maxScrollIndex, viewportHeight]);
+
+    return {
+        scrollIndex,
+        canScrollUp,
+        canScrollDown,
+        actions: {
+            scrollUp,
+            scrollDown,
+            pageUp,
+            pageDown,
+            resetScroll,
+        },
+    };
+};
+```
+
+## File: src/services/clipboard.service.ts
+```typescript
+import { useTransactionStore, type Transaction } from '../stores/transaction.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useReviewStore } from '../stores/review.store';
+import { LoggerService } from './logger.service';
+
+const MOCK_VALID_PATCH = `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index 12345..67890 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -1,5 +1,6 @@
+-import React from 'react';
++import React, { useState } from 'react';
+
+ const Button = () => <button>Click Me</button>;
+
+ export default Button;
+`;
+
+const MOCK_INVALID_TEXT = 'This is just some regular text, not a patch.';
+
+const createTransactionFromPatch = (patchContent: string): Transaction => {
+    // In a real app, we would parse this. For demo, we'll create a mock.
+    const lines = patchContent.split('\n');
+    const linesAdded = lines.filter(l => l.startsWith('+')).length;
+    const linesRemoved = lines.filter(l => l.startsWith('-')).length;
+    const filePath = lines.find(l => l.startsWith('--- a/'))?.split(' a/')[1] || 'unknown/file.ts';
+
+    return {
+        id: (Math.random() * 1000).toFixed(0),
+        timestamp: Date.now(),
+        status: 'PENDING',
+        hash: Math.random().toString(16).substring(2, 10),
+        message: 'feat: apply patch from clipboard',
+        prompt: 'A patch was manually pasted into the application.',
+        reasoning: 'The user pasted clipboard content which was identified as a valid patch and processed into a new transaction.',
+        files: [
+            {
+                id: `${(Math.random() * 1000).toFixed(0)}-1`,
+                type: 'MOD',
+                path: filePath,
+                linesAdded,
+                linesRemoved,
+                diff: patchContent,
+                strategy: 'standard-diff',
+            },
+        ],
+        stats: {
+            files: 1,
+            linesAdded,
+            linesRemoved,
+        },
+    };
+};
+
+/**
+ * Simulates processing the clipboard content.
+ * @param forceValidPatch For debug purposes, force the outcome. If undefined, it will be random.
+ */
+const processClipboardContent = async (forceValidPatch?: boolean) => {
+    LoggerService.info('Manual paste detected. Processing clipboard content...');
+    
+    // Simulate reading from clipboardy
+    const isActuallyValid = forceValidPatch === true || (forceValidPatch === undefined && Math.random() > 0.5);
+    const clipboardContent = isActuallyValid ? MOCK_VALID_PATCH : MOCK_INVALID_TEXT;
+
+    // Simulate checking if it's a valid patch
+    if (clipboardContent.includes('diff --git')) {
+        LoggerService.debug('Valid patch detected in clipboard. Creating transaction.');
+        const newTransaction = createTransactionFromPatch(clipboardContent);
+
+        // Add to store so it exists for the review process
+        useTransactionStore.getState().actions.addTransaction(newTransaction);
+
+        // Immediately start the review simulation
+        LoggerService.debug(`Starting apply simulation for new transaction ${newTransaction.id}`);
+        // Forcing 'success' scenario for pasted patches. The simulation itself can
+        // result in a failure state which is then handled by the review screen.
+        useReviewStore.getState().actions.startApplySimulation(newTransaction.id, 'success');
+
+        useNotificationStore.getState().actions.show({
+            type: 'info',
+            title: 'Processing Pasted Patch',
+            message: `Applying new transaction "${newTransaction.hash}"...`,
+            duration: 2,
+        });
+    } else {
+        LoggerService.debug('No valid patch detected in clipboard content.');
+        useNotificationStore.getState().actions.show({
+            type: 'info',
+            title: 'Clipboard Ignored',
+            message: 'Pasted content was not a valid patch.',
+            duration: 3,
+        });
+    }
+};
+
+export const ClipboardService = {
+    processClipboardContent,
+};
+```
+
+## File: src/services/editor.service.ts
+```typescript
+import { LoggerService } from './logger.service';
+
+/**
+ * Mock editor service.
+ * In a real application, this would interact with the user's default editor.
+ */
+const openFileInEditor = async (filePath: string): Promise<void> => {
+    LoggerService.debug(`[EDITOR MOCK] Opening file in default editor: ${filePath}`);
+};
+
+const getTransactionYamlPath = (transactionHash: string): string => {
+    return `.relay/transactions/${transactionHash}.yml`;
+};
+
+export const EditorService = {
+    openFileInEditor,
+    getTransactionYamlPath,
 };
 ```
 
@@ -413,6 +1264,269 @@ const ActionFooter = ({ actions }: ActionFooterProps) => {
 export default ActionFooter;
 ```
 
+## File: src/constants/app.constants.ts
+```typescript
+/**
+ * Application-level screens and navigation constants.
+ */
+export const APP_SCREENS = {
+    SPLASH: 'splash',
+    INIT: 'init',
+    DASHBOARD: 'dashboard',
+    REVIEW: 'review',
+    REVIEW_PROCESSING: 'review-processing',
+    GIT_COMMIT: 'git-commit',
+    TRANSACTION_DETAIL: 'transaction-detail',
+    TRANSACTION_HISTORY: 'transaction-history',
+} as const;
+
+export const SCREENS_WITH_DASHBOARD_BACK_ACTION = [
+    APP_SCREENS.REVIEW,
+    APP_SCREENS.GIT_COMMIT,
+    APP_SCREENS.TRANSACTION_DETAIL,
+    APP_SCREENS.TRANSACTION_HISTORY,
+];
+```
+
+## File: src/constants/copy.constants.ts
+```typescript
+import type { ActionItem } from '../types/actions.types';
+
+/**
+ * Constants for the Copy/Clipboard feature.
+ */
+export const COPYABLE_ITEMS = {
+    UUID: 'UUID',
+    MESSAGE: 'Git Message',
+    PROMPT: 'Prompt',
+    REASONING: 'Reasoning',
+    FILE_DIFF: 'Diff for',
+    ALL_DIFFS: 'All Diffs',
+    CONTEXT_FILES: 'Context Files (latest)',
+    FULL_YAML: 'Full YAML representation',
+    // For multi-selection contexts
+    MESSAGES: 'Git Messages',
+    PROMPTS: 'Prompts',
+    REASONINGS: 'Reasonings',
+    DIFFS: 'Diffs',
+    UUIDS: 'UUIDs',
+} as const;
+
+export const COPY_SCREEN_FOOTER_ACTIONS: readonly ActionItem[] = [
+    { key: '↑↓/PgUp/PgDn', label: 'Nav' },
+    { key: 'Spc/Hotkey', label: 'Toggle' },
+    { key: 'Enter', label: 'Copy' },
+    { key: 'Esc', label: 'Close' },
+];
+```
+
+## File: src/stores/log.store.ts
+```typescript
+import { create } from 'zustand';
+import type { LogEntry, LogLevel } from '../types/log.types';
+import { MAX_LOGS } from '../constants/log.constants';
+
+interface LogState {
+    logs: LogEntry[];
+    actions: {
+        addLog: (level: LogLevel, message: string) => void;
+        clearLogs: () => void;
+    };
+}
+
+export const useLogStore = create<LogState>((set) => ({
+    logs: [],
+    actions: {
+        addLog: (level, message) => {
+            set(state => {
+                const newLog: LogEntry = {
+                    level,
+                    message,
+                    timestamp: Date.now(),
+                };
+                // Prepend new log and trim the array to max size
+                const updatedLogs = [newLog, ...state.logs].slice(0, MAX_LOGS);
+                return { logs: updatedLogs };
+            });
+        },
+        clearLogs: () => set({ logs: [] }),
+    },
+}));
+```
+
+## File: src/stores/view.store.ts
+```typescript
+import { create } from 'zustand';
+import { OVERLAYS } from '../constants/view.constants';
+
+export type Overlay = (typeof OVERLAYS)[keyof typeof OVERLAYS];
+
+interface ViewState {
+    selectedTransactionId: string | null;
+    activeOverlay: Overlay;
+    actions: {
+        setSelectedTransactionId: (id: string | null) => void;
+        setActiveOverlay: (overlay: ViewState['activeOverlay']) => void;
+    };
+}
+
+export const useViewStore = create<ViewState>((set) => ({
+    selectedTransactionId: null,
+    activeOverlay: OVERLAYS.NONE,
+    actions: {
+        setSelectedTransactionId: (id) => set({ selectedTransactionId: id }),
+        setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
+    },
+}));
+```
+
+## File: src/types/view.types.ts
+```typescript
+import type { APP_SCREENS } from '../constants/app.constants';
+
+// --- UI / View-Specific Types ---
+
+// app.store
+type ObjectValues<T> = T[keyof T];
+
+export type AppScreen = ObjectValues<typeof APP_SCREENS>;
+```
+
+## File: src/utils.ts
+```typescript
+import { useState, useEffect } from 'react';
+
+// Utility for simulation
+export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+type Dimensions = { columns: number; rows: number };
+const subscribers = new Set<(dims: Dimensions) => void>();
+let currentDimensions: Dimensions = {
+    columns: process.stdout.columns || 80,
+    rows: process.stdout.rows || 24,
+};
+
+let listenerAttached = false;
+
+const updateAndNotify = () => {
+    const newDimensions = {
+        columns: process.stdout.columns || 80,
+        rows: process.stdout.rows || 24,
+    };
+
+    if (newDimensions.columns !== currentDimensions.columns || newDimensions.rows !== currentDimensions.rows) {
+        currentDimensions = newDimensions;
+        subscribers.forEach(subscriber => subscriber(currentDimensions));
+    }
+};
+
+if (!listenerAttached) {
+    process.stdout.on('resize', updateAndNotify);
+    listenerAttached = true;
+}
+
+export const useStdoutDimensions = (): [number, number] => {
+    const [dimensions, setDimensions] = useState(currentDimensions);
+
+    useEffect(() => {
+        const subscriber = (newDims: Dimensions) => setDimensions(newDims);
+        subscribers.add(subscriber);
+
+        // On mount, check if dimensions are stale and update if needed for this hook instance.
+        setDimensions(dims => {
+            const latestDims = {
+                columns: process.stdout.columns || 80,
+                rows: process.stdout.rows || 24,
+            };
+            if (latestDims.columns !== dims.columns || latestDims.rows !== dims.rows) {
+                return latestDims;
+            }
+            return dims;
+        });
+
+        return () => {
+            subscribers.delete(subscriber);
+        };
+    }, []);
+
+    return [dimensions.columns, dimensions.rows];
+};
+```
+
+## File: src/config/ui.config.ts
+```typescript
+/**
+ * Centralized UI configuration.
+ * This object is the single source of truth for layout constants, thresholds,
+ * and other UI-related magic numbers.
+ */
+export const UI_CONFIG = {
+    diffScreen: {
+        collapseThreshold: 20, // Lines before collapsing
+        collapseShowLines: 8,  // Lines to show at top/bottom when collapsed
+    },
+    splash: {
+        initialCountdown: 6, // Seconds before auto-skip
+    },
+    footer: {
+        horizontalPadding: 2, // Minimum space from the left/right edges of the screen
+        actionSeparator: ' · ',
+    },
+    layout: {
+        dashboard: {
+            header: 1,
+            separators: 2,
+            fixedRows: 2, // status bar, event stream header
+            marginsY: 3, // for status bar, event stream list, separator
+            footer: 2,
+        },
+        transactionDetail: {
+            header: 2,
+            fixedRows: 4,
+            separators: 2,
+            marginsY: 1,
+            footer: 2,
+        },
+        copyScreen: {
+            header: 1,
+            separators: 2,
+            fixedRows: 2, // title, status
+            marginsY: 1,
+            footer: 1,
+        },
+        debugLog: {
+            paddingY: 2,
+            header: 1,
+            separators: 2,
+            fixedRows: 1, // filter line
+            marginsY: 1,
+            footer: 1,
+        },
+        debugMenu: {
+            paddingY: 2,
+            header: 1,
+            separators: 2,
+            footer: 1,
+        },
+        history: {
+            header: 1,
+            separators: 2,
+            fixedRows: 1, // filter row
+            marginsY: 1,
+            footer: 2,
+        },
+        review: {
+            header: 2,
+            fixedRows: 3, // meta, prompt, reasoning headers
+            marginsY: 2, // meta container, body
+            separators: 4, // after title, meta, scripts/files, body
+            footer: 2,
+            bodyHeightReservation: 10,
+        },
+    },
+} as const;
+```
+
 ## File: src/constants/history.constants.ts
 ```typescript
 import type { ActionItem } from '../types/actions.types';
@@ -455,6 +1569,262 @@ export const HISTORY_FOOTER_ACTIONS = {
         return actions;
     },
 };
+```
+
+## File: src/constants/view.constants.ts
+```typescript
+export const OVERLAYS = {
+    NONE: 'none',
+    HELP: 'help',
+    COPY: 'copy',
+    DEBUG: 'debug',
+    LOG: 'log',
+    NOTIFICATION: 'notification',
+} as const;
+```
+
+## File: src/hooks/useViewport.ts
+```typescript
+import { useState, useEffect } from 'react';
+import { useStdoutDimensions } from '../utils';
+import { useLayout, type LayoutConfig } from './useLayout';
+
+interface UseViewportOptions {
+	selectedIndex: number;
+	itemCount: number;
+	layoutConfig: LayoutConfig;
+}
+
+export const useViewport = ({ selectedIndex, itemCount, layoutConfig }: UseViewportOptions) => {
+	const { remainingHeight: viewportHeight } = useLayout(layoutConfig);
+	const [viewOffset, setViewOffset] = useState(0);
+
+	useEffect(() => {
+		setViewOffset(0);
+	}, [itemCount]);
+
+	useEffect(() => {
+		if (selectedIndex >= 0 && selectedIndex < viewOffset) {
+            setViewOffset(selectedIndex);
+        } else if (selectedIndex >= viewOffset + viewportHeight) {
+            setViewOffset(selectedIndex - viewportHeight + 1);
+        }
+    }, [selectedIndex, viewOffset, viewportHeight]);
+
+    return {
+        viewOffset,
+        viewportHeight,
+        width: useStdoutDimensions()[0],
+    };
+};
+```
+
+## File: src/services/dashboard.service.ts
+```typescript
+import { sleep } from '../utils';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+import { LoggerService } from './logger.service';
+
+const approveAll = async () => {
+    LoggerService.info('Starting bulk approval process...');
+    const pendingTransactions = selectTransactionsByStatus('PENDING')(useTransactionStore.getState());
+    const pendingTxIds = pendingTransactions.map(tx => tx.id);
+    LoggerService.debug(`Found ${pendingTxIds.length} pending transactions to approve.`);
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
+    pendingTxIds.forEach(id => {
+        updateTransactionStatus(id, 'IN-PROGRESS');
+        LoggerService.debug(`Transaction ${id} status set to IN-PROGRESS.`);
+    });
+
+    await sleep(2000); // Simulate approval process
+
+    // Mark them as applied
+    pendingTxIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+    LoggerService.info(`Bulk approval complete. ${pendingTxIds.length} transactions applied.`);
+};
+
+export const DashboardService = {
+    approveAll,
+};
+```
+
+## File: src/services/logger.service.ts
+```typescript
+import { useLogStore } from '../stores/log.store';
+
+let simulatorInterval: ReturnType<typeof setInterval> | null = null;
+
+const mockClipboardContents = [
+    'feat(dashboard): implement new UI components',
+    'const clipboardy = require(\'clipboardy\');',
+    'diff --git a/src/App.tsx b/src/App.tsx\nindex 12345..67890 100644\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -1,5 +1,6 @@\n import React from \'react\';',
+    'All changes have been applied successfully. You can now commit them.',
+    '{\n  "id": "123",\n  "status": "PENDING"\n}',
+    'Can you refactor this to use a switch statement?',
+];
+let currentClipboardIndex = 0;
+
+const startSimulator = () => {
+    if (simulatorInterval) return;
+
+    // Initial burst of logs to populate the view
+    LoggerService.info('Log simulator started.');
+    LoggerService.debug('Initializing clipboard watcher...');
+    setTimeout(() => LoggerService.debug('Clipboard watcher active.'), 250);
+
+    simulatorInterval = setInterval(() => {
+        const random = Math.random();
+        if (random < 0.6) {
+            LoggerService.debug('Clipboard watcher polling...');
+        } else if (random < 0.8) {
+            LoggerService.debug('No clipboard change detected.');
+        } else {
+            const newContent = mockClipboardContents[currentClipboardIndex]!;
+            currentClipboardIndex = (currentClipboardIndex + 1) % mockClipboardContents.length;
+            const excerpt = newContent.replace(/\n/g, ' ').substring(0, 50).trim();
+            LoggerService.info(`Clipboard content changed. Excerpt: "${excerpt}..."`);
+        }
+    }, 2000);
+};
+
+const stopSimulator = () => {
+    if (simulatorInterval) {
+        clearInterval(simulatorInterval);
+        simulatorInterval = null;
+        LoggerService.info('Log simulator stopped.');
+    }
+};
+
+const debug = (message: string) => useLogStore.getState().actions.addLog('DEBUG', message);
+const info = (message: string) => useLogStore.getState().actions.addLog('INFO', message);
+const warn = (message: string) => useLogStore.getState().actions.addLog('WARN', message);
+const error = (message: string) => useLogStore.getState().actions.addLog('ERROR', message);
+
+export const LoggerService = {
+    debug,
+    info,
+    warn,
+    error,
+    startSimulator,
+    stopSimulator,
+};
+```
+
+## File: src/stores/navigation.utils.ts
+```typescript
+import type { Transaction } from '../types/domain.types';
+
+export const moveIndex = (
+    currentIndex: number,
+    direction: 'up' | 'down',
+    listSize: number,
+): number => {
+    if (direction === 'up') {
+        return Math.max(0, currentIndex - 1);
+    }
+    return Math.min(listSize - 1, currentIndex + 1);
+};
+
+export const findNextPath = (currentPath: string, visiblePaths: string[]): string => {
+    const currentIndex = visiblePaths.indexOf(currentPath);
+    if (currentIndex < visiblePaths.length - 1) {
+        return visiblePaths[currentIndex + 1]!;
+    }
+    return currentPath;
+};
+
+export const findPrevPath = (currentPath: string, visiblePaths: string[]): string => {
+    const currentIndex = visiblePaths.indexOf(currentPath);
+    if (currentIndex > 0) {
+        return visiblePaths[currentIndex - 1]!;
+    }
+    return currentPath;
+};
+
+export const getParentPath = (path: string): string | null => path.includes('/') ? path.split('/')[0]! : null;
+
+export const getVisibleItemPaths = (
+    transactions: Transaction[],
+    expandedIds: Set<string>,
+): string[] => {
+    const paths: string[] = [];
+    for (const tx of transactions) {
+        paths.push(tx.id);
+        if (expandedIds.has(tx.id)) {
+            paths.push(`${tx.id}/message`);
+            paths.push(`${tx.id}/prompt`);
+            paths.push(`${tx.id}/reasoning`);
+            if (tx.files) {
+                for (const file of tx.files) {
+                    paths.push(`${tx.id}/file/${file.id}`);
+                }
+            }
+        }
+    }
+    return paths;
+};
+```
+
+## File: src/types/domain.types.ts
+```typescript
+// --- Core Domain Models ---
+
+/** The type of change applied to a file. */
+export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
+
+/** The review status of a file within a transaction. */
+export type FileReviewStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' | 'RE_APPLYING';
+
+/** The result of a script execution. */
+export interface ScriptResult {
+    command: string;
+    success: boolean;
+    duration: number;
+    summary: string;
+    output: string;
+}
+
+/** The unified representation of a file change within a transaction. */
+export interface FileItem {
+    id: string;
+    path: string;
+    diff: string;
+    linesAdded: number;
+    linesRemoved: number;
+    type: FileChangeType;
+    strategy?: 'replace' | 'standard-diff';
+}
+
+/** The lifecycle status of a transaction. */
+export type TransactionStatus =
+    | 'PENDING'
+    | 'APPLIED'
+    | 'COMMITTING'
+    | 'COMMITTED'
+    | 'FAILED'
+    | 'REVERTED'
+    | 'IN-PROGRESS'
+    | 'HANDOFF'
+    | 'REJECTED';
+
+/** The central data model for a code modification transaction. */
+export interface Transaction {
+    id: string;
+    timestamp: number;
+    status: TransactionStatus;
+    hash: string;
+    message: string;
+    prompt?: string;
+    reasoning?: string;
+    error?: string;
+    files?: FileItem[];
+    scripts?: ScriptResult[];
+    stats?: {
+        files: number;
+        linesAdded: number;
+        linesRemoved: number;
+    };
+}
 ```
 
 ## File: src/constants/detail.constants.ts
@@ -507,16 +1877,80 @@ export const DETAIL_FOOTER_ACTIONS = {
 };
 ```
 
-## File: src/constants/view.constants.ts
+## File: src/data/mocks.ts
 ```typescript
-export const OVERLAYS = {
-    NONE: 'none',
-    HELP: 'help',
-    COPY: 'copy',
-    DEBUG: 'debug',
-    LOG: 'log',
-    NOTIFICATION: 'notification',
-} as const;
+import type { Transaction } from '../types/domain.types';
+
+const mockReasoning1 = `1. Identified a potential uncaught exception in the \`restoreSnapshot\` function
+   if a file operation fails midway through a loop of many files. This could
+   leave the project in a partially-reverted, inconsistent state.
+
+2. Wrapped the file restoration loop in a \`Promise.all\` and added a dedicated
+   error collection array. This ensures that all file operations are
+   attempted and that a comprehensive list of failures is available
+   afterward for better error reporting or partial rollback logic.
+`;
+
+export const allMockTransactions: Transaction[] = [
+    {
+        id: '1',
+        timestamp: Date.now() - 10 * 1000,
+        status: 'PENDING',
+        hash: 'e4a7c112',
+        message: 'fix: add missing error handling',
+        prompt: 'Rename the `calculateChanges` utility to `computeDelta` across all files and update imports accordingly.',
+        reasoning: mockReasoning1,
+        files: [
+            { id: '1-1', type: 'MOD', path: 'src/core/transaction.ts', linesAdded: 18, linesRemoved: 5, diff: '--- a/src/core/transaction.ts\n+++ b/src/core/transaction.ts\n@@ -15,7 +15,7 @@ export class Transaction {\n   }\n\n-  calculateChanges(): ChangeSet {\n+  computeDelta(): ChangeSet {\n     return this.changes;\n   }\n }', strategy: 'replace' },
+            { id: '1-2', type: 'MOD', path: 'src/utils/logger.ts', linesAdded: 0, linesRemoved: 0, diff: '', strategy: 'standard-diff' },
+            { id: '1-3', type: 'MOD', path: 'src/commands/apply.ts', linesAdded: 0, linesRemoved: 0, diff: '', strategy: 'standard-diff' },
+        ],
+        stats: { files: 3, linesAdded: 18, linesRemoved: 5 },
+    },
+    {
+        id: '2',
+        timestamp: Date.now() - 15 * 1000,
+        status: 'PENDING',
+        hash: '4b9d8f03',
+        message: 'refactor: simplify clipboard logic',
+        prompt: 'Simplify the clipboard logic using an external library...',
+        reasoning: 'The existing clipboard logic was complex and platform-dependent. Using the `clipboardy` library simplifies the code and improves reliability across different operating systems.',
+        files: [
+            { id: '2-1', type: 'MOD', path: 'src/core/clipboard.ts', linesAdded: 15, linesRemoved: 8, diff: '--- a/src/core/clipboard.ts\n+++ b/src/core/clipboard.ts\n@@ -1,5 +1,6 @@\n import { copy as copyToClipboard } from \'clipboardy\';', strategy: 'replace' },
+            { id: '2-2', type: 'MOD', path: 'src/utils/shell.ts', linesAdded: 7, linesRemoved: 3, diff: '--- a/src/utils/shell.ts\n+++ b/src/utils/shell.ts', strategy: 'standard-diff' },
+        ],
+        stats: { files: 2, linesAdded: 22, linesRemoved: 11 },
+        scripts: [
+            { command: 'bun run test', success: true, duration: 2.3, summary: 'Passed (37 tests)', output: '... test output ...' },
+            { command: 'bun run lint', success: false, duration: 1.2, summary: '1 Error, 3 Warnings', output: 'src/core/clipboard.ts\n  45:12  Error    \'clipboardy\' is assigned a value but never used. (@typescript-eslint/no-unused-vars)\n  88:5   Warning  Unexpected console statement. (no-console)' },
+        ],
+    },
+    {
+        id: '3',
+        timestamp: Date.now() - 5 * 60 * 1000,
+        status: 'APPLIED',
+        hash: '8a3f21b8',
+        message: 'feat: implement new dashboard UI',
+        prompt: 'The user requested to add more robust error handling to the `restoreSnapshot` function. Specifically, it should not halt on the first error but instead attempt all file restorations and then report a summary of any failures.',
+        reasoning: mockReasoning1,
+        files: [
+            { id: '3-1', type: 'MOD', path: 'src/core/transaction.ts', linesAdded: 18, linesRemoved: 5, diff: '... diff ...' },
+            { id: '3-2', type: 'MOD', path: 'src/utils/logger.ts', linesAdded: 7, linesRemoved: 3, diff: '... diff ...' },
+            { id: '3-3', type: 'DEL', path: 'src/utils/old-helper.ts', linesAdded: 0, linesRemoved: 30, diff: '... diff ...' },
+        ],
+        stats: { files: 3, linesAdded: 25, linesRemoved: 38 },
+    },
+    { id: '4', timestamp: Date.now() - 8 * 60 * 1000, status: 'REVERTED', hash: 'b2c9e04d', message: 'Reverting transaction 9c2e1a05' },
+    { id: '5', timestamp: Date.now() - 9 * 60 * 1000, status: 'FAILED', hash: '9c2e1a05', message: 'style: update button component (Linter errors: 5)' },
+    { id: '6', timestamp: Date.now() - 12 * 60 * 1000, status: 'COMMITTED', hash: 'c7d6b5e0', message: 'docs: update readme with TUI spec' },
+];
+
+/**
+ * Creates a deep copy of the mock transactions to prevent state mutations.
+ */
+export const createMockTransactions = (): Transaction[] => {
+    return JSON.parse(JSON.stringify(allMockTransactions));
+};
 ```
 
 ## File: src/hooks/useCopyScreen.tsx
@@ -586,58 +2020,403 @@ export const useCopyScreen = () => {
 };
 ```
 
-## File: src/stores/navigation.utils.ts
+## File: src/types/copy.types.ts
 ```typescript
-import type { Transaction } from '../types/domain.types';
+export interface CopyItem {
+    id: string;
+    key: string;
+    label: string;
+    getData: () => string | Promise<string>;
+    isDefaultSelected?: boolean;
+}
+```
 
-export const moveIndex = (
-    currentIndex: number,
-    direction: 'up' | 'down',
-    listSize: number,
-): number => {
-    if (direction === 'up') {
-        return Math.max(0, currentIndex - 1);
-    }
-    return Math.min(listSize - 1, currentIndex + 1);
+## File: src/components/DebugLogScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import ActionFooter from './ActionFooter';
+import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
+import { DEBUG_LOG_FOOTER_ACTIONS, DEBUG_LOG_MODES, LOG_LEVEL_COLORS, LOG_LEVEL_TAGS } from '../constants/log.constants';
+import type { LogEntry } from '../types/log.types';
+import ScreenLayout from './layout/ScreenLayout';
+
+const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
+    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
+    const color = LOG_LEVEL_COLORS[entry.level];
+    const tagColors = LOG_LEVEL_TAGS[entry.level];
+
+    return (
+        <Text color={color}>
+            {isSelected ? '> ' : '  '}
+            <Text color="gray">{time}</Text>
+            {' '}
+            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
+                {' '}{entry.level.padEnd(5, ' ')}{' '}
+            </Text>
+            {' '}
+            {entry.message}
+        </Text>
+    );
 };
 
-export const findNextPath = (currentPath: string, visiblePaths: string[]): string => {
-    const currentIndex = visiblePaths.indexOf(currentPath);
-    if (currentIndex < visiblePaths.length - 1) {
-        return visiblePaths[currentIndex + 1]!;
-    }
-    return currentPath;
+const DebugLogScreen = () => {
+    const {
+        logsInView,
+        logCount,
+        filteredLogCount,
+        selectedIndex,
+        mode,
+        filterQuery,
+        setFilterQuery,
+        viewOffset,
+    } = useDebugLogScreen();
+
+    const renderFilter = () => (
+        <Box>
+            <Text>Filter: </Text>
+            {mode === DEBUG_LOG_MODES.FILTER ? (
+                <TextInput
+                    value={filterQuery}
+                    onChange={setFilterQuery}
+                    placeholder="Type to filter log messages..."
+                />
+            ) : (
+                <Text color="gray">{filterQuery || '(none)'}</Text>
+            )}
+            <Box flexGrow={1} /> 
+            <Text>
+                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
+                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
+            </Text> 
+        </Box>
+    );
+
+    const footerActions =
+        mode === DEBUG_LOG_MODES.FILTER
+            ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
+            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE(logCount > 0);
+
+    return (
+        <ScreenLayout
+            title="DEBUG LOG"
+            footer={<ActionFooter actions={footerActions} />}
+        >
+            <Box flexDirection="column" flexGrow={1} paddingX={2}>
+                {renderFilter()}
+                <Box flexDirection="column" flexGrow={1} marginTop={1}>
+                    {logsInView.map((entry, index) => (
+                        <LogEntryRow
+                            key={`${entry.timestamp}-${index}`}
+                            entry={entry}
+                            isSelected={selectedIndex === index + viewOffset}
+                        />
+                    ))}
+                    {logCount > 0 && filteredLogCount === 0 && (
+                        <Text color="gray">No logs match your filter.</Text>
+                    )}
+                    {logCount === 0 && (
+                        <Text color="gray">No log entries yet. Waiting for system activity...</Text>
+                    )}
+                </Box>
+            </Box>
+        </ScreenLayout>
+    );
 };
 
-export const findPrevPath = (currentPath: string, visiblePaths: string[]): string => {
-    const currentIndex = visiblePaths.indexOf(currentPath);
-    if (currentIndex > 0) {
-        return visiblePaths[currentIndex - 1]!;
-    }
-    return currentPath;
+export default DebugLogScreen;
+```
+
+## File: src/components/GlobalHelpScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useStdoutDimensions } from '../utils';
+import ModalLayout from './layout/ModalLayout';
+
+const HELP_SECTIONS = [
+    {
+        title: 'GLOBAL',
+        shortcuts: [
+            { key: '?', label: 'Toggle this help screen' },
+            { key: 'Q/Esc', label: 'Quit or Go Back' },
+            { key: 'Ctrl+V', label: 'Process Clipboard' },
+            { key: 'Ctrl+B', label: 'Toggle Debug Menu' },
+            { key: 'Ctrl+L', label: 'Toggle Debug Log' },
+        ],
+    },
+    {
+        title: 'DASHBOARD',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate event stream' },
+            { key: '→/Enter', label: 'Expand / View Details' },
+            { key: '←', label: 'Collapse Item' },
+            { key: 'P', label: 'Pause / Resume clipboard watcher' },
+            { key: 'A', label: 'Approve All Pending' },
+            { key: 'C', label: 'Commit All Applied' },
+            { key: 'L', label: 'View History Log' },
+        ],
+    },
+    {
+        title: 'HISTORY',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate Items' },
+            { key: '→/←', label: 'Expand / Collapse' },
+            { key: 'Space', label: 'Select for Bulk Action' },
+            { key: 'Enter', label: 'View Details' },
+            { key: 'F', label: 'Filter History' },
+            { key: 'B', label: 'Open Bulk Actions Menu' },
+            { key: 'C', label: 'Copy Selected Items' },
+        ],
+    },
+    {
+        title: 'REVIEW SCREEN',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate Items' },
+            { key: 'D/Enter', label: 'View File Diff' },
+            { key: 'R', label: 'Show / Collapse Reasoning' },
+            { key: 'Space', label: 'Toggle Approval State' },
+            { key: 'A', label: 'Apply Approved Changes' },
+            { key: 'T/Shift+T', label: 'Repair / Bulk Repair Failed Files' },
+            { key: 'I/Shift+I', label: 'Instruct / Bulk Instruct Rejected' },
+            { key: 'C', label: 'Open Copy Menu' },
+        ],
+    },
+    {
+        title: 'DETAIL SCREEN',
+        shortcuts: [
+            { key: '↑↓', label: 'Navigate Sections/Files' },
+            { key: '→/←', label: 'Expand / Collapse' },
+            { key: 'Enter', label: 'Drill-in / View Diff' },
+            { key: 'U', label: 'Revert Transaction' },
+            { key: 'C', label: 'Open Copy Menu' },
+            { key: 'O', label: 'Open File/YAML in Editor' },
+        ],
+    },
+];
+
+const KEY_PADDING = 12;
+
+const Shortcut = ({ shortcut }: { shortcut: { key: string; label: string } }) => (
+    <Text>
+        {'  '}
+        <Text color="cyan" bold>{shortcut.key.padEnd(KEY_PADDING)}</Text>
+        {shortcut.label}
+    </Text>
+);
+
+const GlobalHelpScreen = () => {
+    const [width] = useStdoutDimensions();
+
+    // 90% view width, minus 2 padding on each side.
+    const availableWidth = Math.floor(width * 0.9) - 4;
+
+    // Calculate max width needed for one column of content
+    const allShortcutLines = HELP_SECTIONS.flatMap(s => 
+        s.shortcuts.map(sc => `  ${sc.key.padEnd(KEY_PADDING)} ${sc.label}`)
+    );
+    const allLines = [...allShortcutLines, ...HELP_SECTIONS.map(s => s.title)];
+    const maxContentWidth = Math.max(...allLines.map(line => line.length));
+
+    const GAP = 4;
+    // Determine optimal number of columns
+    const numColumns = Math.max(1, Math.min(
+        HELP_SECTIONS.length, // Don't make more columns than sections
+        Math.floor(availableWidth / (maxContentWidth + GAP))
+    ));
+
+    // Distribute sections into columns
+    const columns: typeof HELP_SECTIONS[] = Array.from({ length: numColumns }, () => []);
+    const sectionsPerColumn = Math.ceil(HELP_SECTIONS.length / numColumns);
+
+    HELP_SECTIONS.forEach((section, index) => {
+        const columnIndex = Math.floor(index / sectionsPerColumn);
+        if (columns[columnIndex]) {
+            columns[columnIndex].push(section);
+        }
+    });
+
+    return (
+        <ModalLayout width="90%">
+            <Box
+                flexDirection="column"
+                paddingX={2}
+                paddingY={2}
+            >
+                <Box justifyContent="center" marginBottom={1}>
+                    <Text bold>
+                        <Text color="yellow">▲ relaycode</Text>
+                        <Text color="cyan"> · Keyboard Shortcuts</Text>
+                    </Text>
+                </Box>
+
+                <Box flexDirection="row" gap={GAP}>
+                    {columns.map((sectionList, i) => (
+                        <Box key={i} flexDirection="column" gap={1} flexGrow={1} flexShrink={1} flexBasis={0}>
+                            {sectionList.map(section => (
+                                <Box key={section.title} flexDirection="column">
+                                    <Text bold color="cyan">{section.title}</Text>
+                                    {section.shortcuts.map(shortcut => (
+                                        <Shortcut key={shortcut.label} shortcut={shortcut} />
+                                    ))}
+                                </Box>
+                            ))}
+                        </Box>
+                    ))}
+                </Box>
+            </Box>
+            <Box justifyContent="center" marginTop={1}>
+                <Text bold>(Press <Text color="cyan" bold>?</Text> or <Text color="cyan" bold>Esc</Text> to close)</Text>
+            </Box>
+        </ModalLayout>
+    );
 };
 
-export const getParentPath = (path: string): string | null => path.includes('/') ? path.split('/')[0]! : null;
+export default GlobalHelpScreen;
+```
 
-export const getVisibleItemPaths = (
-    transactions: Transaction[],
-    expandedIds: Set<string>,
-): string[] => {
-    const paths: string[] = [];
-    for (const tx of transactions) {
-        paths.push(tx.id);
-        if (expandedIds.has(tx.id)) {
-            paths.push(`${tx.id}/message`);
-            paths.push(`${tx.id}/prompt`);
-            paths.push(`${tx.id}/reasoning`);
-            if (tx.files) {
-                for (const file of tx.files) {
-                    paths.push(`${tx.id}/file/${file.id}`);
-                }
+## File: src/components/Separator.tsx
+```typescript
+import {Text} from 'ink';
+import { useStdoutDimensions } from '../utils';
+
+const Separator = ({ width: propWidth }: { width?: number }) => {
+	const [columns] = useStdoutDimensions();
+	const width = propWidth ?? columns;
+	return <Text>{'─'.repeat(width)}</Text>;
+};
+
+export default Separator;
+```
+
+## File: src/hooks/useInitializationScreen.tsx
+```typescript
+import { useEffect } from 'react';
+import { Text, useApp, useInput } from 'ink';
+import { useInitStore } from '../stores/init.store';
+import { useAppStore } from '../stores/app.store';
+import { InitService } from '../services/init.service';
+
+export const useInitializationScreen = () => {
+    const phase = useInitStore(s => s.phase);
+    const interactiveChoice = useInitStore(s => s.interactiveChoice);
+    const actions = useInitStore(s => s.actions);
+    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+    const { exit } = useApp();
+
+    useInput((input, key) => {
+        if (phase === 'INTERACTIVE') {
+            if (key.return) {
+                actions.setInteractiveChoice('ignore');
+            } else if (input.toLowerCase() === 's') {
+                actions.setInteractiveChoice('share');
             }
         }
+        if (phase === 'FINALIZE') {
+            if (input.toLowerCase() === 'w') {
+                showDashboardScreen();
+            }
+            if (input.toLowerCase() === 'q') {
+                exit();
+            }
+        }
+    });
+
+    useEffect(() => {
+        InitService.runInitializationProcess();
+    }, []);
+
+    useEffect(() => {
+        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+            InitService.resumeInitializationProcess();
+        }
+    }, [interactiveChoice, phase]);
+
+    const {
+        analyzeTasks,
+        configureTasks,
+        projectId,
+    } = useInitStore();
+
+    let footerText;
+    switch (phase) {
+        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
     }
-    return paths;
+
+    return {
+        phase,
+        analyzeTasks,
+        configureTasks,
+        interactiveChoice,
+        projectId,
+        footerText,
+    };
+};
+```
+
+## File: src/services/init.service.ts
+```typescript
+import { useInitStore } from '../stores/init.store';
+import { sleep } from '../utils';
+import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
+import { LoggerService } from './logger.service';
+
+const runInitializationProcess = async () => {
+    LoggerService.info('Starting initialization process...');
+    const { actions } = useInitStore.getState();
+    actions.resetInit();
+    actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+
+    actions.setPhase('ANALYZE');
+    LoggerService.debug('Phase set to ANALYZE');
+    for (const task of INITIAL_ANALYZE_TASKS) {
+        actions.updateAnalyzeTask(task.id, 'active');
+        LoggerService.debug(`Analyzing task active: ${task.title}`);
+        await sleep(800);
+        actions.updateAnalyzeTask(task.id, 'done');
+    }
+    actions.setAnalysisResults('relaycode (from package.json)', true);
+    await sleep(500);
+
+    actions.setPhase('CONFIGURE');
+    LoggerService.debug('Phase set to CONFIGURE');
+    const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
+    for (const task of configTasksUntilInteractive) {
+        actions.updateConfigureTask(task.id, 'active');
+        LoggerService.debug(`Configuring task active: ${task.title}`);
+        await sleep(800);
+        actions.updateConfigureTask(task.id, 'done');
+    }
+    await sleep(500);
+
+    actions.setPhase('INTERACTIVE');
+    LoggerService.debug('Phase set to INTERACTIVE');
+};
+
+const resumeInitializationProcess = async () => {
+    LoggerService.info('Resuming initialization process...');
+    const { actions } = useInitStore.getState();
+    
+    actions.setPhase('CONFIGURE');
+    LoggerService.debug('Phase set to CONFIGURE');
+    const lastTask = INITIAL_CONFIGURE_TASKS[INITIAL_CONFIGURE_TASKS.length - 1];
+    if (lastTask) {
+        actions.updateConfigureTask(lastTask.id, 'active');
+        LoggerService.debug(`Configuring task active: ${lastTask.title}`);
+        await sleep(800);
+        actions.updateConfigureTask(lastTask.id, 'done');
+        await sleep(500);
+
+        actions.setPhase('FINALIZE');
+        LoggerService.info('Initialization process finalized.');
+    }
+};
+
+export const InitService = {
+    runInitializationProcess,
+    resumeInitializationProcess,
 };
 ```
 
@@ -831,100 +2610,41 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 }));
 ```
 
-## File: src/components/DebugLogScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
-import ActionFooter from './ActionFooter';
-import { useDebugLogScreen } from '../hooks/useDebugLogScreen';
-import { DEBUG_LOG_FOOTER_ACTIONS, DEBUG_LOG_MODES, LOG_LEVEL_COLORS, LOG_LEVEL_TAGS } from '../constants/log.constants';
-import type { LogEntry } from '../types/log.types';
-import ScreenLayout from './layout/ScreenLayout';
-
-const LogEntryRow = ({ entry, isSelected }: { entry: LogEntry; isSelected: boolean }) => {
-    const time = new Date(entry.timestamp).toISOString().split('T')[1]?.replace('Z', '');
-    const color = LOG_LEVEL_COLORS[entry.level];
-    const tagColors = LOG_LEVEL_TAGS[entry.level];
-
-    return (
-        <Text color={color}>
-            {isSelected ? '> ' : '  '}
-            <Text color="gray">{time}</Text>
-            {' '}
-            <Text bold color={tagColors.color} backgroundColor={tagColors.backgroundColor}>
-                {' '}{entry.level.padEnd(5, ' ')}{' '}
-            </Text>
-            {' '}
-            {entry.message}
-        </Text>
-    );
-};
-
-const DebugLogScreen = () => {
-    const {
-        logsInView,
-        logCount,
-        filteredLogCount,
-        selectedIndex,
-        mode,
-        filterQuery,
-        setFilterQuery,
-        viewOffset,
-    } = useDebugLogScreen();
-
-    const renderFilter = () => (
-        <Box>
-            <Text>Filter: </Text>
-            {mode === DEBUG_LOG_MODES.FILTER ? (
-                <TextInput
-                    value={filterQuery}
-                    onChange={setFilterQuery}
-                    placeholder="Type to filter log messages..."
-                />
-            ) : (
-                <Text color="gray">{filterQuery || '(none)'}</Text>
-            )}
-            <Box flexGrow={1} /> 
-            <Text>
-                Showing {Math.min(viewOffset + 1, filteredLogCount)}-
-                {Math.min(viewOffset + logsInView.length, filteredLogCount)} of {filteredLogCount}
-            </Text> 
-        </Box>
-    );
-
-    const footerActions =
-        mode === DEBUG_LOG_MODES.FILTER
-            ? DEBUG_LOG_FOOTER_ACTIONS.FILTER_MODE
-            : DEBUG_LOG_FOOTER_ACTIONS.LIST_MODE(logCount > 0);
-
-    return (
-        <ScreenLayout
-            title="▲ relaycode · DEBUG LOG"
-            footer={<ActionFooter actions={footerActions} />}
-        >
-            <Box flexDirection="column" flexGrow={1} paddingX={2}>
-                {renderFilter()}
-                <Box flexDirection="column" flexGrow={1} marginTop={1}>
-                    {logsInView.map((entry, index) => (
-                        <LogEntryRow
-                            key={`${entry.timestamp}-${index}`}
-                            entry={entry}
-                            isSelected={selectedIndex === index + viewOffset}
-                        />
-                    ))}
-                    {logCount > 0 && filteredLogCount === 0 && (
-                        <Text color="gray">No logs match your filter.</Text>
-                    )}
-                    {logCount === 0 && (
-                        <Text color="gray">No log entries yet. Waiting for system activity...</Text>
-                    )}
-                </Box>
-            </Box>
-        </ScreenLayout>
-    );
-};
-
-export default DebugLogScreen;
+## File: package.json
+```json
+{
+  "name": "relaycode-tui",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.tsx",
+    "dev": "bun run --watch index.tsx",
+    "debug-screen": "bun run index.tsx debug-screen",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "clipboardy": "^4.0.0",
+    "ink": "^6.3.1",
+    "ink-select-input": "^4.2.2",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.1.1",
+    "zustand": "^4.5.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.19.17",
+    "@types/react": "^18.3.24",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript": "^5.9.2"
+  }
+}
 ```
 
 ## File: src/constants/review.constants.ts
@@ -1151,6 +2871,152 @@ export const useDebugLogScreen = () => {
 };
 ```
 
+## File: src/hooks/useGitCommitScreen.tsx
+```typescript
+import { useInput } from 'ink';
+import { useCommitStore } from '../stores/commit.store';
+import { useAppStore } from '../stores/app.store';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useCopyStore } from '../stores/copy.store';
+import { CopyService } from '../services/copy.service';
+import { CommitService } from '../services/commit.service';
+
+export const useGitCommitScreen = () => {
+    const { finalCommitMessage, isCommitting, commitError } = useCommitStore();
+    const transactionsToCommit = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+    const { commit, resetCommitState } = useCommitStore(s => s.actions);
+    const { showDashboardScreen } = useAppStore(s => s.actions);
+
+    const handleCommit = (forceFailure?: boolean) => {
+        showDashboardScreen();
+        commit(forceFailure); // Fire-and-forget to allow dashboard to show animation
+    };
+
+    const openCopyMode = () => {
+        const items = CopyService.getCopyItemsForCommit(transactionsToCommit, finalCommitMessage);
+        useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+    };
+
+    useInput((_, key) => {
+        if (isCommitting) return;
+
+        if (commitError) {
+            if (key.escape) {
+                resetCommitState();
+                showDashboardScreen();
+            } else if (_.toLowerCase() === 'r') {
+                handleCommit();
+            } else if (_.toLowerCase() === 'c') {
+                const command = CommitService.getGitCommitCommand(finalCommitMessage);
+                useNotificationStore.getState().actions.show({
+                    type: 'success',
+                    title: 'Copied to Clipboard',
+                    // This is a mock clipboard write for the demo
+                    message: `Command copied: ${command}`,
+                });
+            }
+            return;
+        }
+
+        if (key.return) {
+            handleCommit();
+        } else if (key.escape) {
+            showDashboardScreen();
+        } else if (_.toLowerCase() === 'c') {
+            openCopyMode();
+        }
+    });
+
+    return { transactionsToCommit, finalCommitMessage, isCommitting, commitError };
+};
+```
+
+## File: src/services/commit.service.ts
+```typescript
+import type { Transaction } from '../types/domain.types';
+import { sleep } from '../utils';
+import { useTransactionStore } from '../stores/transaction.store';
+import { LoggerService } from './logger.service';
+
+const generateCommitMessage = (transactions: Transaction[]): string => {
+    LoggerService.info(`Generating commit message for ${transactions.length} transactions.`);
+    if (transactions.length === 0) {
+        LoggerService.warn('generateCommitMessage called with 0 transactions.');
+        return '';
+    }
+    // Using a more complex aggregation for better demo, based on the readme
+    const title = 'feat: implement new dashboard and clipboard logic';
+    const bodyPoints = [
+        '- Adds error handling to the core transaction module to prevent uncaught exceptions during snapshot restoration.',
+        '- Refactors the clipboard watcher for better performance and cross-platform compatibility, resolving issue #42.',
+    ];
+
+    if (transactions.length === 1 && transactions[0]) {
+        LoggerService.debug('Using single transaction message for commit.');
+        return transactions[0].message;
+    }
+
+    LoggerService.debug('Using aggregated message for commit.');
+    return `${title}\n\n${bodyPoints.join('\n\n')}`;
+};
+
+const getGitCommitCommand = (commitMessage: string): string => {
+    const subject = commitMessage.split('\n')[0] || '';
+    return `git add . && git commit -m "${subject.replace(/"/g, '\\"')}"`;
+};
+
+const commit = async (transactionsToCommit: Transaction[], forceFailure?: boolean): Promise<void> => {
+    LoggerService.info(`Committing ${transactionsToCommit.length} transactions to git...`);
+    const { updateTransactionStatus } = useTransactionStore.getState().actions;
+    const txIds = transactionsToCommit.map(tx => tx.id);
+
+    // Phase 1: Mark as 'COMMITTING'
+    txIds.forEach(id => {
+        updateTransactionStatus(id, 'COMMITTING');
+    });
+
+    await sleep(500);
+
+    if (forceFailure) {
+        LoggerService.error('Mock git error: commit failed due to pre-commit hook failure.');
+        // Revert status back to APPLIED on failure to allow retry
+        txIds.forEach(id => updateTransactionStatus(id, 'APPLIED'));
+        throw new Error('Mock git error: commit failed due to pre-commit hook failure.');
+    }
+
+    // In a real app, this would run git commands.
+    // Phase 2: Mark as 'COMMITTED'
+    txIds.forEach(id => {
+        updateTransactionStatus(id, 'COMMITTED');
+    });
+    LoggerService.info('Commit successful.');
+};
+
+export const CommitService = {
+    generateCommitMessage,
+    getGitCommitCommand,
+    commit,
+};
+```
+
+## File: src/services/transaction.service.ts
+```typescript
+import { createMockTransactions } from '../data/mocks';
+import type { Transaction } from '../types/domain.types';
+
+const revertTransaction = (_transactionId: string) => {
+    // In a real app, this would perform the revert operation (e.g., API call).
+    // The state update is now handled by the calling store.
+    // This is a no-op for the simulation, we just need the id.
+};
+
+export const TransactionService = {
+    revertTransaction,
+    getAllTransactions: (): Transaction[] => createMockTransactions(),
+};
+```
+
 ## File: src/stores/detail.store.ts
 ```typescript
 import { create } from 'zustand';
@@ -1294,41 +3160,794 @@ export const useDetailStore = create<DetailState>((set, get) => ({
 }));
 ```
 
-## File: package.json
-```json
-{
-  "name": "relaycode-tui",
-  "module": "index.tsx",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "start": "bun run index.tsx",
-    "dev": "bun run --watch index.tsx",
-    "debug-screen": "bun run index.tsx debug-screen",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
-  },
-  "dependencies": {
-    "clipboardy": "^4.0.0",
-    "ink": "^6.3.1",
-    "ink-select-input": "^4.2.2",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "react": "^19.1.1",
-    "zustand": "^4.5.7"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^20.19.17",
-    "@types/react": "^18.3.24",
-    "@typescript-eslint/eslint-plugin": "^8.44.0",
-    "@typescript-eslint/parser": "^8.44.0",
-    "eslint": "^9.36.0",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "typescript": "^5.9.2"
-  }
+## File: src/services/copy.service.ts
+```typescript
+import type { Transaction, FileItem } from '../types/domain.types';
+import type { CopyItem } from '../types/copy.types';
+import { COPYABLE_ITEMS } from '../constants/copy.constants';
+import { CommitService } from './commit.service';
+import { FileSystemService } from './fs.service';
+
+const formatFileContext = (filePath: string, content: string): string => {
+    const lang = filePath.split('.').pop() || '';
+    return `--- CONTEXT FOR FILE: ${filePath} ---\n\`\`\`${lang}\n${content}\n\`\`\``;
+};
+
+const getContextForFilePaths = async (filePaths: string[]): Promise<string> => {
+    const contentPromises = filePaths.map(path => FileSystemService.readFileContent(path));
+    const resolvedContents = await Promise.all(contentPromises);
+    return filePaths
+        .map((path, index) => formatFileContext(path, resolvedContents[index]!))
+        .join('\n\n');
+};
+
+const createBaseTransactionCopyItems = (transaction: Transaction): CopyItem[] => [
+    { id: 'uuid', key: 'U', label: COPYABLE_ITEMS.UUID, getData: () => transaction.id },
+    { id: 'message', key: 'M', label: COPYABLE_ITEMS.MESSAGE, getData: () => transaction.message },
+    { id: 'prompt', key: 'P', label: COPYABLE_ITEMS.PROMPT, getData: () => transaction.prompt || '' },
+    { id: 'reasoning', key: 'R', label: COPYABLE_ITEMS.REASONING, getData: () => transaction.reasoning || '' },
+];
+
+const getCopyItemsForReview = (
+    transaction: Transaction,
+    files: FileItem[],
+    selectedFile?: FileItem,
+): CopyItem[] => {
+    const allFilePaths = [...new Set(files.map(f => f.path))];
+
+    return [
+        ...createBaseTransactionCopyItems(transaction),
+        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}${selectedFile ? `: ${selectedFile.path}` : ''}`, getData: () => selectedFile?.diff || 'No file selected' },
+        { id: 'all_diffs', key: 'A', label: COPYABLE_ITEMS.ALL_DIFFS, getData: () => files.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') },
+        {
+            id: 'context_files',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
+        },
+    ];
+};
+
+const getCopyItemsForDetail = (
+    transaction: Transaction,
+    selectedFile?: FileItem,
+): CopyItem[] => {
+    const baseItems = createBaseTransactionCopyItems(transaction);
+    const messageItem = { ...baseItems.find(i => i.id === 'message')!, isDefaultSelected: true };
+    const promptItem = baseItems.find(i => i.id === 'prompt')!;
+    const reasoningItem = { ...baseItems.find(i => i.id === 'reasoning')!, isDefaultSelected: true };
+    const uuidItem = baseItems.find(i => i.id === 'uuid')!;
+
+    const allFilePaths = [...new Set((transaction.files || []).map(f => f.path))];
+
+    return [
+        messageItem,
+        promptItem,
+        reasoningItem,
+        { id: 'all_diffs', key: 'A', label: `${COPYABLE_ITEMS.ALL_DIFFS} (${transaction.files?.length || 0} files)`, getData: () => transaction.files?.map(f => `--- FILE: ${f.path} ---\n${f.diff}`).join('\n\n') || '' },
+        { id: 'file_diff', key: 'F', label: `${COPYABLE_ITEMS.FILE_DIFF}: ${selectedFile?.path || 'No file selected'}`, getData: () => selectedFile?.diff || 'No file selected' },
+        {
+            id: 'context_files',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
+        },
+        uuidItem,
+        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' }, // Mocking this
+    ];
+};
+
+const getCopyItemsForHistory = (
+    transactions: Transaction[],
+): CopyItem[] => {
+    if (transactions.length === 0) return [];
+
+    const allFilePaths = [
+        ...new Set(transactions.flatMap(tx => tx.files?.map(f => f.path) || [])),
+    ];
+
+    return [
+        { id: 'messages', key: 'M', label: COPYABLE_ITEMS.MESSAGES, getData: () => transactions.map(tx => tx.message).join('\n'), isDefaultSelected: true },
+        { id: 'prompts', key: 'P', label: COPYABLE_ITEMS.PROMPTS, getData: () => transactions.map(tx => tx.prompt || '').join('\n\n---\n\n'), isDefaultSelected: false },
+        { id: 'reasonings', key: 'R', label: COPYABLE_ITEMS.REASONINGS, getData: () => transactions.map(tx => tx.reasoning || '').join('\n\n---\n\n'), isDefaultSelected: true },
+        { id: 'diffs', key: 'D', label: COPYABLE_ITEMS.DIFFS, getData: () => transactions.flatMap(tx => tx.files?.map(f => `--- TX: ${tx.hash}, FILE: ${f.path} ---\n${f.diff}`)).join('\n\n') },
+        {
+            id: 'context_files_history',
+            key: 'X',
+            label: `${COPYABLE_ITEMS.CONTEXT_FILES} (${allFilePaths.length} files)`,
+            getData: async () => {
+                return getContextForFilePaths(allFilePaths);
+            },
+        },
+        { id: 'uuids', key: 'U', label: COPYABLE_ITEMS.UUIDS, getData: () => transactions.map(tx => tx.id).join('\n') },
+        { id: 'yaml', key: 'Y', label: COPYABLE_ITEMS.FULL_YAML, getData: () => '... YAML representation ...' },
+    ];
+};
+
+const getCopyItemsForCommit = (
+    transactions: Transaction[],
+    finalCommitMessage: string,
+): CopyItem[] => {
+    const subject = finalCommitMessage.split('\n')[0] || '';
+    const body = finalCommitMessage.split('\n').slice(1).join('\n').trim();
+
+    return [
+        { id: 'full_message', key: 'M', label: 'Full Commit Message', getData: () => finalCommitMessage, isDefaultSelected: true },
+        { id: 'subject', key: 'S', label: 'Commit Subject', getData: () => subject },
+        { id: 'body', key: 'B', label: 'Commit Body', getData: () => body },
+        { id: 'hashes', key: 'H', label: `Included Transaction Hashes (${transactions.length})`, getData: () => transactions.map(t => t.hash).join('\n') },
+        { id: 'command', key: 'C', label: 'Git Commit Command', getData: () => CommitService.getGitCommitCommand(finalCommitMessage) },
+    ];
+};
+
+export const CopyService = {
+    getCopyItemsForReview,
+    getCopyItemsForDetail,
+    getCopyItemsForHistory,
+    getCopyItemsForCommit,
+};
+```
+
+## File: src/stores/copy.store.ts
+```typescript
+import { create } from 'zustand';
+import { useViewStore } from './view.store';
+import { useNotificationStore } from './notification.store';
+import { LoggerService } from '../services/logger.service';
+import { CopyService } from '../services/copy.service';
+import type { CopyItem } from '../types/copy.types';
+import type { Transaction, FileItem } from '../types/domain.types';
+
+export type { CopyItem };
+
+interface CopyState {
+    title: string;
+    items: CopyItem[];
+    selectedIds: Set<string>;
+    lastCopiedMessage: string | null;
+    onClose?: () => void;
+
+    actions: {
+        open: (title: string, items: CopyItem[], onClose?: () => void) => void;
+        close: () => void;
+        openForReview: (transaction: Transaction, files: FileItem[], selectedFile?: FileItem) => void;
+        openForDetail: (transaction: Transaction, selectedFile?: FileItem) => void;
+        openForHistory: (transactions: Transaction[]) => void;
+        toggleSelectionById: (id: string) => void;
+        executeCopy: () => void;
+    };
 }
+
+export const useCopyStore = create<CopyState>((set, get) => ({
+    title: '',
+    items: [],
+    selectedIds: new Set(),
+    lastCopiedMessage: null,
+    onClose: undefined,
+
+    actions: {
+        open: (title, items, onClose) => {
+            const defaultSelectedIds = new Set(items.filter(i => i.isDefaultSelected).map(i => i.id));
+            useViewStore.getState().actions.setActiveOverlay('copy');
+            set({
+                title,
+                items,
+                selectedIds: defaultSelectedIds,
+                lastCopiedMessage: null,
+                onClose,
+            });
+        },
+        close: () => {
+            useViewStore.getState().actions.setActiveOverlay('none');
+            get().onClose?.();
+            set({ items: [], onClose: undefined });
+        },
+        openForReview: (transaction, files, selectedFile) => {
+            const { actions } = get();
+            const title = 'Select data to copy from review:';
+            const items = CopyService.getCopyItemsForReview(transaction, files, selectedFile);
+            actions.open(title, items);
+        },
+        openForDetail: (transaction, selectedFile) => {
+            const { actions } = get();
+            const title = `Select data to copy from transaction ${transaction.hash}:`;
+            const items = CopyService.getCopyItemsForDetail(transaction, selectedFile);
+            actions.open(title, items);
+        },
+        openForHistory: (transactions) => {
+            const { actions } = get();
+            const title = `Select data to copy from ${transactions.length} transactions:`;
+            const items = CopyService.getCopyItemsForHistory(transactions);
+            actions.open(title, items);
+        },
+        toggleSelectionById: (id: string) => set(state => {
+            const newSelectedIds = new Set(state.selectedIds);
+            if (newSelectedIds.has(id)) {
+                newSelectedIds.delete(id);
+            } else {
+                newSelectedIds.add(id);
+            }
+            return { selectedIds: newSelectedIds };
+        }),
+        executeCopy: async () => {
+            const { items, selectedIds } = get();
+            const itemsToCopy = items.filter(i => selectedIds.has(i.id));
+            if (itemsToCopy.length === 0) return;
+
+            LoggerService.info(`Copying ${itemsToCopy.length} item(s) to clipboard.`);
+            const dataPromises = itemsToCopy.map(item => item.getData());
+            const resolvedData = await Promise.all(dataPromises);
+
+            const content = itemsToCopy
+                .map((item, index) => `--- ${item.label} ---\n${resolvedData[index]}`)
+                .join('\n\n');
+            const message = `Copied ${itemsToCopy.length} item(s) to clipboard.`;
+            LoggerService.debug(`[CLIPBOARD MOCK] ${message}\n${content.substring(0, 200)}...`);
+            useNotificationStore.getState().actions.show({
+                type: 'success',
+                title: 'Copied to Clipboard',
+                message,
+            });
+            set({ lastCopiedMessage: message });
+        },
+    },
+}));
+```
+
+## File: src/stores/init.store.ts
+```typescript
+import { create } from 'zustand';
+
+// Store Interface
+export type TaskStatus = 'pending' | 'active' | 'done';
+export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' | 'FINALIZE';
+export type GitignoreChoice = 'ignore' | 'share';
+export interface Task {
+    id: string;
+    title: string;
+    subtext?: string;
+    status: TaskStatus;
+}
+ 
+interface InitState {
+    phase: InitPhase;
+    analyzeTasks: Task[];
+    projectId: string | null;
+    gitignoreFound: boolean | null;
+    configureTasks: Task[];
+    interactiveChoice: GitignoreChoice | null;
+
+    actions: {
+        setPhase: (phase: InitPhase) => void;
+        setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+        updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+        setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
+        updateConfigureTask: (id: string, status: TaskStatus) => void;
+        setInteractiveChoice: (choice: GitignoreChoice) => void;
+        resetInit: () => void;
+    };
+}
+
+// Create the store
+export const useInitStore = create<InitState>((set) => ({
+    phase: 'ANALYZE',
+    analyzeTasks: [],
+    projectId: null,
+    gitignoreFound: null,
+    configureTasks: [],
+    interactiveChoice: null,
+
+    actions: {
+        setPhase: (phase) => set({ phase }),
+        setTasks: (analyzeTasks, configureTasks) => set({
+            analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
+            configureTasks: JSON.parse(JSON.stringify(configureTasks)),
+        }),
+        updateAnalyzeTask: (id, status) => set(state => ({
+            analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+        })),
+        setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+        updateConfigureTask: (id, status) => set(state => ({
+            configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+        })),
+        setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+        resetInit: () => set({
+            phase: 'ANALYZE',
+            analyzeTasks: [],
+            projectId: null,
+            gitignoreFound: null,
+            configureTasks: [],
+            interactiveChoice: null,
+        }),
+    },
+}));
+```
+
+## File: src/stores/transaction.store.ts
+```typescript
+import { create } from 'zustand';
+import { TransactionService } from '../services/transaction.service';
+import { useViewStore } from './view.store';
+import { useDashboardStore } from './dashboard.store';
+import type { Transaction, TransactionStatus } from '../types/domain.types';
+
+export type { Transaction };
+
+interface TransactionState {
+    transactions: Transaction[];
+    actions: {
+        loadTransactions: () => void;
+        updateTransactionStatus: (id: string, status: TransactionStatus) => void;
+        addTransaction: (transaction: Transaction) => void;
+        clearTransactions: () => void;
+    };
+}
+
+export const useTransactionStore = create<TransactionState>((set) => ({
+    transactions: [],
+    actions: {
+        loadTransactions: () => {
+            const transactions = TransactionService.getAllTransactions();
+            set({ transactions });
+        },
+        updateTransactionStatus: (id, status) => {
+            set(state => ({
+                transactions: state.transactions.map(tx =>
+                    tx.id === id ? { ...tx, status, timestamp: Date.now() } : tx,
+                ),
+            }));
+        },
+        addTransaction: (transaction) => {
+            set(state => ({
+                transactions: [transaction, ...state.transactions],
+            }));
+            useDashboardStore.getState().actions.setSelectedIndex(0);
+        },
+        clearTransactions: () => set({ transactions: [] }),
+    },
+}));
+
+// --- Selectors ---
+
+/** Selects transactions by their status. */
+export const selectTransactionsByStatus = (status: TransactionStatus) => (state: TransactionState) =>
+    state.transactions.filter(tx => tx.status === status);
+
+/** Selects the transaction currently targeted by the view store. */
+export const selectSelectedTransaction = (state: TransactionState): Transaction | undefined => {
+    const { selectedTransactionId } = useViewStore.getState();
+    return state.transactions.find(t => t.id === selectedTransactionId);
+};
+```
+
+## File: src/components/ReviewProcessingScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
+import { type ApplyStep } from '../stores/review.store';
+import ActionFooter from './ActionFooter';
+import { useReviewProcessingScreen } from '../hooks/useReviewProcessingScreen'; // This will be created
+import { getReviewProcessingFooterActions } from '../constants/review.constants';
+import Separator from './Separator';
+import ScreenLayout from './layout/ScreenLayout';
+
+const ApplyStepRow = ({ step, isSubstep = false, now }: {
+    step: ApplyStep;
+    isSubstep?: boolean;
+    now: number;
+}) => {
+    if (isSubstep) {
+        let color: string | undefined;
+        let symbol: React.ReactNode;
+
+        switch (step.status) {
+            case 'pending':
+                symbol = '○';
+                color = 'gray';
+                break;
+            case 'active':
+                symbol = <Text color="cyan"><Spinner type="dots" /></Text>;
+                break;
+            case 'done':
+                symbol = '✓';
+                color = 'green';
+                break;
+            case 'failed':
+                symbol = '✗';
+                color = 'red';
+                break;
+            default:
+                symbol = ' ';
+        }
+
+        return (
+            <Text color={color}>
+                {'     └─ '}{symbol}{' '}{step.title}
+            </Text>
+        );
+    }
+
+    let symbol;
+    let color;
+    switch (step.status) {
+        case 'pending': symbol = '( )'; break;
+        case 'active': symbol = '(●)'; color = 'cyan'; break;
+        case 'done': symbol = '[✓]'; color = 'green'; break;
+        case 'failed': symbol = '[!]'; color = 'red'; break;
+        case 'skipped': symbol = '(-)'; color = 'gray'; break;
+    }
+
+    let durationText = '';
+    if (!isSubstep) {
+        if (step.status === 'active' && step.startTime) {
+            durationText = ` (${((now - step.startTime) / 1000).toFixed(1)}s)`;
+        } else if (step.duration) {
+            durationText = ` (${step.duration.toFixed(1)}s)`;
+        }
+    }
+
+    return (
+        <Box flexDirection="column">
+            <Text>
+                <Text color={color}>{symbol}</Text> {step.title}{durationText}
+            </Text>
+            {step.details && (
+                <Text color="gray">
+                    {'     └─ '}{step.details}
+                </Text>
+            )}
+            {step.substeps?.map((sub: ApplyStep, i: number) => (
+                <ApplyStepRow key={i} step={sub} isSubstep={true} now={now} />
+            ))}
+        </Box>
+    );
+};
+
+const ReviewProcessingScreen = () => {
+    const {
+        transaction,
+        applySteps,
+        isProcessing,
+        isCancelling,
+        patchStatus,
+        elapsedTime,
+        now,
+        isSkippable,
+    } = useReviewProcessingScreen();
+
+    const failureCase = patchStatus === 'PARTIAL_FAILURE';
+
+    const renderFooter = () => {
+        if (isCancelling) {
+            return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Cancelling... Please wait.</Text>;
+        }
+        if (isProcessing) {
+            return (
+                <Box flexDirection="column" gap={1}>
+                    <Text>Elapsed: {elapsedTime.toFixed(1)}s · Processing... Please wait.</Text>
+                    <Separator />
+                    <ActionFooter actions={getReviewProcessingFooterActions(isSkippable)} />
+                </Box>
+            );
+        }
+        if (failureCase) {
+            return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Transitioning to repair workflow...</Text>;
+        }
+        return <Text>Elapsed: {elapsedTime.toFixed(1)}s · Patch applied successfully. Transitioning...</Text>;
+    };
+
+    if (!transaction) {
+        return <Text>Loading...</Text>;
+    }
+
+    return (
+        <ScreenLayout
+            title="APPLYING PATCH"
+            footer={renderFooter()}
+        >
+            <Box flexDirection="column">
+                <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
+                <Box flexDirection="column" marginTop={1} gap={1}>
+                    {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} now={now} />)}
+                </Box>
+            </Box>
+        </ScreenLayout>
+    );
+};
+
+export default ReviewProcessingScreen;
+```
+
+## File: src/hooks/useSplashScreen.tsx
+```typescript
+import { useState, useEffect, useRef } from 'react';
+import { useInput } from 'ink';
+import { useAppStore } from '../stores/app.store';
+import { UI_CONFIG } from '../config/ui.config';
+import { SPLASH_TIPS } from '../constants/splash.constants';
+import { useNotificationStore } from '../stores/notification.store';
+
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+    const [tip, setTip] = useState('');
+    const [updateStatus, setUpdateStatus] = useState('');
+    const [visibleSections, setVisibleSections] = useState(new Set<string>());
+    const [animationComplete, setAnimationComplete] = useState(false);
+
+    // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+    const clearAllTimeouts = () => {
+        timeouts.current.forEach(clearTimeout);
+        timeouts.current = [];
+    };
+
+    const handleSkip = () => {
+        clearAllTimeouts();
+        setAnimationComplete(true);
+        setVisibleLogoLines(100); // A high number to show all lines
+        setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+        setUpdateStatus('✓ You are up to date.');
+        showInitScreen();
+    };
+
+    useInput((input) => {
+        const lowerInput = input.toLowerCase();
+        if (lowerInput === 'v') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening https://relay.noca.pro in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'x') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening X/Twitter in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'd') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening Discord invite in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'g') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening GitHub repository in your browser...',
+            });
+            return;
+        }
+
+        // Any other key skips
+        handleSkip(); 
+    });
+
+    useEffect(() => {
+        const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+        // Pick a random tip on mount
+        if (!tip) {
+            setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+        }
+
+        // 1. Animate logo
+        const logoTimer = setInterval(() => {
+            setVisibleLogoLines(l => {
+                if (l >= 4) { // Fix: was 3, which cut off the last line of the logo
+                    clearInterval(logoTimer);
+                    
+                    // 2. Animate sections
+                    t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                    t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                    t(() => {
+                        setVisibleSections(s => new Set(s).add('updateCheck'));
+                        setUpdateStatus('Checking for updates...');
+                        t(() => setUpdateStatus('✓ You are up to date.'), 1500);
+                    }, 600);
+
+                    t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
+                    t(() => setVisibleSections(s => new Set(s).add('links')), 1000);
+                    t(() => setAnimationComplete(true), 1200);
+
+                    return l;
+                }
+                return l + 1;
+            });
+        }, 80);
+
+        // Cleanup
+        return () => {
+            clearInterval(logoTimer);
+            clearAllTimeouts();
+        };
+    }, [tip]);
+
+    useEffect(() => {
+        if (!animationComplete) return;
+
+        if (countdown <= 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+        timeouts.current.push(timer);
+        
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen, animationComplete]);
+
+    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
+};
+```
+
+## File: src/components/CopyScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useStdoutDimensions } from '../utils';
+import ActionFooter from './ActionFooter';
+import { useCopyScreen } from '../hooks/useCopyScreen';
+import ModalLayout from './layout/ModalLayout';
+import { COPY_SCREEN_FOOTER_ACTIONS } from '../constants/copy.constants';
+
+const CopyScreen = () => {
+    const {
+        title,
+        itemsInView,
+        selectedIndex,
+        selectedIds,
+        lastCopiedMessage,
+        viewOffset,
+    } = useCopyScreen();
+    const [width] = useStdoutDimensions();
+
+    return (
+        <ModalLayout>
+            <Box
+                flexDirection="column"
+                paddingX={2}
+                width="100%"
+            >
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                <Box flexDirection="column" marginY={1}>
+                    <Text>{title}</Text>
+                    <Box flexDirection="column" marginTop={1}>
+                        {itemsInView.map((item, index) => {
+                            const isSelected = (index + viewOffset) === selectedIndex;
+                            const isChecked = selectedIds.has(item.id);
+                            return (
+                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
+                                    {isSelected ? '> ' : '  '}
+                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                </Box>
+                <Separator width={Math.floor(width * 0.8) - 4} />
+                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
+                <ActionFooter actions={COPY_SCREEN_FOOTER_ACTIONS}/>
+            </Box>
+        </ModalLayout>
+    );
+};
+
+export default CopyScreen;
+```
+
+## File: src/components/SplashScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useSplashScreen } from '../hooks/useSplashScreen';
+
+const SplashScreen = () => {
+    const { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus } = useSplashScreen();
+    const logo = `
+         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀`;
+
+    const logoLines = logo.split('\n');
+
+    return (
+        <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode </Text>
+                <Separator />
+                <Box flexDirection="column">
+                    {logoLines.slice(0, visibleLogoLines).map((line, index) => {
+                        if (index === 0) return <Text key={index}>{line}</Text>;
+                        if (index === 2) return <Text key={index} color="white">{line}</Text>;
+                        return <Text key={index} color="cyan">{line}</Text>;
+                    })}
+                </Box>
+                {visibleSections.has('tagline') && (
+                    <Box flexDirection="column" alignItems="center">
+                        <Text italic>A zero-friction, AI-native patch engine.</Text>
+                        <Text italic color="gray">Built by Arman and contributors · <Text underline color="blue">https://relay.noca.pro</Text></Text>
+                    </Box>
+                )}
+                
+                {visibleSections.has('version') && (
+                    <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                        <Box flexDirection="column" width="45%">
+                            <Text color="yellow">Version 1.1.5</Text>
+                            <Text color="gray">─────────────────────────</Text>
+                            <Text>relaycode</Text>
+                            <Text>relaycode-core</Text>
+                            <Text>apply-multi-diff</Text>
+                            <Text>konro</Text>
+                        </Box>
+                         <Box flexDirection="column" width="45%">
+                            <Text color="yellow">Build Timestamps</Text>
+                            <Text color="gray">─────────────────────────</Text>
+                            <Text>2025-09-20 13:58:05</Text>
+                            <Text>2025-09-20 10:59:05</Text>
+                            <Text>(versioned)</Text>
+                            <Text>(versioned)</Text>
+                        </Box>
+                    </Box>
+                )}
+
+                {visibleSections.has('updateCheck') && (
+                    <Box marginTop={1}>
+                        <Text>{updateStatus}</Text>
+                    </Box>
+                )}
+                
+                {visibleSections.has('promo') && (
+                    <>
+                        <Box marginTop={1}><Separator /></Box>
+                        <Text>If you love this workflow, check out <Text underline color="blue">https://www.noca.pro</Text> for the full</Text>
+                        <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                        <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                    </>
+                )}
+
+                {visibleSections.has('links') && (
+                    <>
+                        <Separator />
+                        <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                    </>
+                )}
+
+                <Separator />
+                {animationComplete && (
+                    <Box marginBottom={1}>
+                        <Text italic color="gray">{tip}</Text>
+                    </Box>
+                )}
+                <Text>
+                    <Text color="gray">
+                        {animationComplete ? 'Loading... ' : 'Loading...'}
+                    </Text>
+                    {animationComplete && <Text color="yellow">{countdown}</Text>}
+                    <Text color="gray"> (Press any key to skip)</Text>
+                </Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default SplashScreen;
 ```
 
 ## File: src/hooks/useGlobalHotkeys.tsx
@@ -1399,60 +4018,124 @@ export const useGlobalHotkeys = ({ isActive }: { isActive: boolean }) => {
 };
 ```
 
-## File: src/components/CopyScreen.tsx
+## File: src/stores/commit.store.ts
+```typescript
+import { create } from 'zustand';
+import { CommitService } from '../services/commit.service';
+import { useTransactionStore, selectTransactionsByStatus } from './transaction.store';
+import { useNotificationStore } from './notification.store';
+
+interface CommitState {
+    finalCommitMessage: string;
+    isCommitting: boolean;
+    commitError: string | null;
+    actions: {
+        prepareCommitScreen: () => void;
+        commit: (forceFailure?: boolean) => Promise<void>;
+        resetCommitState: () => void;
+    }
+}
+
+export const useCommitStore = create<CommitState>((set) => ({
+    finalCommitMessage: '',
+    isCommitting: false,
+    commitError: null,
+    actions: {
+        prepareCommitScreen: () => {
+            const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+            const finalCommitMessage = CommitService.generateCommitMessage(appliedTransactions);
+            set({ finalCommitMessage });
+        },
+        commit: async (forceFailure) => {
+            set({ isCommitting: true, commitError: null });
+            try {
+                const appliedTransactions = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                await CommitService.commit(appliedTransactions, forceFailure);
+                set({ isCommitting: false });
+            } catch (e) {
+                const errorMessage = (e as Error).message;
+                set({ isCommitting: false, commitError: errorMessage });
+                useNotificationStore.getState().actions.show({
+                    type: 'error',
+                    title: 'Commit Failed',
+                    message: errorMessage,
+                });
+            }
+        },
+        resetCommitState: () => {
+            set({ isCommitting: false, commitError: null });
+        },
+    },
+}));
+```
+
+## File: src/components/GitCommitScreen.tsx
 ```typescript
 import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useStdoutDimensions } from '../utils';
+import Spinner from 'ink-spinner';
+import { useGitCommitScreen } from '../hooks/useGitCommitScreen';
 import ActionFooter from './ActionFooter';
-import { useCopyScreen } from '../hooks/useCopyScreen';
-import ModalLayout from './layout/ModalLayout';
-import { COPY_SCREEN_FOOTER_ACTIONS } from '../constants/copy.constants';
+import ScreenLayout from './layout/ScreenLayout';
+import { COMMIT_FOOTER_ACTIONS } from '../constants/commit.constants';
 
-const CopyScreen = () => {
-    const {
-        title,
-        itemsInView,
-        selectedIndex,
-        selectedIds,
-        lastCopiedMessage,
-        viewOffset,
-    } = useCopyScreen();
-    const [width] = useStdoutDimensions();
+const GitCommitScreen = () => {
+    const { transactionsToCommit, finalCommitMessage, isCommitting, commitError } = useGitCommitScreen();
+
+    const messageParts = finalCommitMessage.split('\n');
+    const subject = messageParts[0] || '';
+    const body = messageParts.slice(1).join('\n');
+
+    const renderError = () => (
+        <Box 
+            flexDirection="column" 
+            borderStyle="round" 
+            borderColor="red" 
+            paddingX={2} 
+            marginY={1}
+        >
+            <Text bold color="red">COMMIT FAILED</Text>
+            <Text wrap="wrap">The git operation failed. Please check the error message below and resolve any issues before retrying.</Text>
+            <Box marginTop={1}>
+                <Text color="red">{commitError}</Text>
+            </Box>
+        </Box>
+    );
+
+    const footerActions = commitError ? COMMIT_FOOTER_ACTIONS.FAILURE : COMMIT_FOOTER_ACTIONS.BASE;
+    const footer = isCommitting
+                ? <Text><Spinner type="dots"/> Committing... please wait.</Text>
+                : <ActionFooter actions={footerActions} />;
 
     return (
-        <ModalLayout>
-            <Box
-                flexDirection="column"
-                paddingX={2}
-                width="100%"
-            >
-                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · COPY MODE </Text>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                <Box flexDirection="column" marginY={1}>
-                    <Text>{title}</Text>
-                    <Box flexDirection="column" marginTop={1}>
-                        {itemsInView.map((item, index) => {
-                            const isSelected = (index + viewOffset) === selectedIndex;
-                            const isChecked = selectedIds.has(item.id);
-                            return (
-                                <Text key={item.id} color={isSelected ? 'cyan' : undefined}>
-                                    {isSelected ? '> ' : '  '}
-                                    [{isChecked ? 'x' : ' '}] ({item.key}) {item.label}
-                                </Text>
-                            );
-                        })}
+        <ScreenLayout
+            title="GIT COMMIT"
+            footer={footer}
+        >
+            <Box flexDirection="column" paddingX={2}>
+                <Box flexDirection="column">
+                    <Text>Found {transactionsToCommit.length} new transactions to commit since last git commit.</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text bold>TRANSACTIONS INCLUDED</Text>
+                        {transactionsToCommit.map(tx => (
+                            <Text key={tx.id}>- <Text color="gray">{tx.hash}</Text>: {tx.message}</Text>
+                        ))}
                     </Box>
                 </Box>
-                <Separator width={Math.floor(width * 0.8) - 4} />
-                {lastCopiedMessage && <Text color="green">✓ {lastCopiedMessage}</Text>}
-                <ActionFooter actions={COPY_SCREEN_FOOTER_ACTIONS}/>
+                <Box marginY={1} flexDirection="column">
+                    <Text bold>FINAL COMMIT MESSAGE</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text color="yellow">{subject}</Text>
+                        {body ? <Text>{body}</Text> : null}
+                    </Box>
+                </Box>
+                {commitError && renderError()}
+                {!commitError && <Text>This will run &apos;git add .&apos; and &apos;git commit&apos; with the message above.</Text>}
             </Box>
-        </ModalLayout>
+        </ScreenLayout>
     );
 };
 
-export default CopyScreen;
+export default GitCommitScreen;
 ```
 
 ## File: src/stores/app.store.ts
@@ -1495,6 +4178,201 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
     },
 }));
+```
+
+## File: src/components/InitializationScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useState, useEffect } from 'react';
+import Spinner from 'ink-spinner';
+import type { Task } from '../stores/init.store';
+import { useInitializationScreen } from '../hooks/useInitializationScreen';
+import ScreenLayout from './layout/ScreenLayout';
+
+const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	const [isJustDone, setIsJustDone] = useState(false);
+
+	useEffect(() => {
+		if (task.status === 'done') {
+			setIsJustDone(true);
+			const timer = setTimeout(() => setIsJustDone(false), 300);
+			return () => clearTimeout(timer);
+		}
+	}, [task.status]);
+
+	let symbol: React.ReactNode;
+	switch (task.status) {
+		case 'pending': symbol = '( )'; break;
+		case 'active': symbol = <Text color="cyan"><Spinner type="dots" /></Text>; break;
+		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
+	}
+
+	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
+
+	return (
+		<Box flexDirection="column">
+			<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>
+				{symbol} {title}
+			</Text>
+			{task.subtext && task.status !== 'done' && (
+				<Text italic color="gray">
+					{'     └─ '}{task.subtext}
+				</Text>
+			)}
+		</Box>
+	);
+};
+
+const InitializationScreen = () => {
+    const {
+        phase,
+        analyzeTasks,
+        configureTasks,
+        interactiveChoice,
+        projectId,
+        footerText,
+    } = useInitializationScreen();
+
+    const renderAnalyze = () => (
+        <Box flexDirection="column">
+            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
+            </Box>
+        </Box>
+    );
+
+    const renderContext = () => (
+        <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">CONTEXT</Text>
+            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
+            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
+        </Box>
+    );
+
+    const renderConfigure = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+            </Box>
+        </Box>
+    );
+
+    const renderInteractive = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+                <Box flexDirection="column" marginTop={1}>
+                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
+                    <Text color="yellow">  Do you want to share its state with your team by committing it?</Text>
+                </Box>
+            </Box>
+        </Box>
+    );
+
+    const renderFinalize = () => {
+        const stateText = interactiveChoice === 'share'
+            ? <Text><Text color="cyan">.relay/</Text> directory initialized. It will be committed to git.</Text>
+            : <Text><Text color="cyan">.relay/</Text> directory initialized and added to <Text color="cyan">.gitignore</Text>.</Text>;
+        const stateSubText = interactiveChoice === 'share'
+            ? undefined
+            : 'Local transaction history will be stored here.';
+        
+        return (
+            <Box flexDirection="column">
+                <Text bold color="green">✓ SYSTEM READY</Text>
+                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>Config:</Text>   <Text color="cyan">relay.config.json</Text> created.</Text>
+                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>State:</Text>    {stateText}</Text>
+                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>Prompt:</Text>   System prompt generated at <Text color="cyan">.relay/prompts/system-prompt.md</Text>.</Text>
+                        <Text color="green" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
+                    </Box>
+                </Box>
+            </Box>
+        );
+    };
+
+    const renderPhase = () => {
+        switch (phase) {
+            case 'ANALYZE': return renderAnalyze();
+            case 'CONFIGURE': return renderConfigure();
+            case 'INTERACTIVE': return renderInteractive();
+            case 'FINALIZE': return renderFinalize();
+        }
+    };
+
+    return (
+        <ScreenLayout
+            title={phase === 'FINALIZE' ? 'BOOTSTRAP COMPLETE' : 'BOOTSTRAP'}
+            footer={typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
+        >
+            {renderPhase()}
+        </ScreenLayout>
+    );
+};
+
+export default InitializationScreen;
+```
+
+## File: src/components/DebugMenu.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useDebugMenu } from '../hooks/useDebugMenu';
+import ActionFooter from './ActionFooter';
+import { DEBUG_MENU_FOOTER_ACTIONS } from '../constants/debug.constants';
+import ScreenLayout from './layout/ScreenLayout';
+
+const getKeyForIndex = (index: number): string => {
+    if (index < 9) {
+        return (index + 1).toString();
+    }
+    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+};
+
+const DebugMenu = () => {
+    const { selectedIndex, menuItems, viewOffset, totalItems } = useDebugMenu();
+
+    return (
+        <ScreenLayout
+            title="DEBUG MENU"
+            footer={
+                <Box>
+                    <ActionFooter actions={DEBUG_MENU_FOOTER_ACTIONS}/>
+                    <Box flexGrow={1} />
+                    <Text>
+                        {Math.min(viewOffset + 1, totalItems)}-
+                        {Math.min(viewOffset + menuItems.length, totalItems)} of {totalItems}
+                    </Text>
+                </Box>
+            }
+        >
+            <Box flexDirection="column" paddingX={2}>
+                {menuItems.map((item, index) => {
+                    const absoluteIndex = index + viewOffset;
+                    return (
+                        <Text key={item.title} color={selectedIndex === absoluteIndex ? 'cyan' : undefined}>
+                            {selectedIndex === absoluteIndex ? '> ' : '  '}
+                            ({getKeyForIndex(absoluteIndex)}) {item.title}
+                        </Text>
+                    );
+                })}
+            </Box>
+        </ScreenLayout>
+    );
+};
+
+export default DebugMenu;
 ```
 
 ## File: src/hooks/useDashboardScreen.tsx
@@ -1646,187 +4524,375 @@ export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfi
 };
 ```
 
-## File: src/components/DebugMenu.tsx
+## File: src/services/review.service.ts
 ```typescript
-import { Box, Text } from 'ink';
-import Separator from './Separator';
-import { useDebugMenu } from '../hooks/useDebugMenu';
-import { useStdoutDimensions } from '../utils';
-import ActionFooter from './ActionFooter';
-import { DEBUG_MENU_FOOTER_ACTIONS } from '../constants/debug.constants';
+import { useTransactionStore } from '../stores/transaction.store';
+import { useAppStore } from '../stores/app.store';
+import { useReviewStore } from '../stores/review.store';
+import { sleep } from '../utils';
+import { useNotificationStore } from '../stores/notification.store';
+import type { ApplyUpdate, PatchStatus } from '../stores/review.store';
+import type { Transaction, FileItem, FileReviewStatus } from '../types/domain.types';
 
-const getKeyForIndex = (index: number): string => {
-    if (index < 9) {
-        return (index + 1).toString();
+export interface SimulationResult {
+    patchStatus: PatchStatus;
+    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string }>;
+}
+
+const mockSuccessFiles = [
+    'src/components/Button.tsx',
+    'src/components/Input.tsx',
+    'src/components/Modal.tsx',
+    'src/hooks/useForm.ts',
+    'src/hooks/useDebounce.ts',
+    'src/styles/theme.css',
+    'src/utils/formatters.ts',
+    'src/pages/HomePage.tsx',
+    'src/pages/AboutPage.tsx',
+    'src/services/api.ts',
+    'src/stores/user.store.ts',
+    'src/constants/routes.ts',
+    'src/assets/logo.svg',
+    'src/config/firebase.ts',
+    'src/types/domain.ts',
+    'src/features/auth/Login.tsx',
+    'src/features/auth/Signup.tsx',
+    'src/features/dashboard/Overview.tsx',
+    'src/features/settings/Profile.tsx',
+    'src/App.tsx',
+];
+
+const mockFailureFiles = [
+    'src/services/payment.gateway.ts',
+    'src/services/notification.service.ts',
+    'src/components/UserProfile.tsx',
+    'src/components/complex/DataTable.tsx',
+    'src/hooks/useInfiniteScroll.ts',
+    'src/hooks/useWebSocket.ts',
+    'src/utils/crypto.ts',
+    'src/utils/date.helper.ts',
+    'src/pages/admin/UserManagement.tsx',
+    'src/pages/admin/Analytics.tsx',
+    'src/stores/cart.store.ts',
+    'src/stores/products.store.ts',
+    'src/constants/permissions.ts',
+    'src/assets/icon-error.svg',
+    'src/config/sentry.ts',
+    'src/types/api.ts',
+    'src/features/checkout/AddressForm.tsx',
+    'src/features/checkout/PaymentForm.tsx',
+    'src/features/product/ProductDetail.tsx',
+    'src/features/product/ProductList.tsx',
+];
+
+const generateBulkRepairPrompt = (failedFiles: FileItem[]): string => {
+    return `The previous patch failed to apply to MULTIPLE files. Please generate a new, corrected patch that addresses all the files listed below.
+
+IMPORTANT: The response MUST contain a complete code block for EACH file that needs to be fixed.
+
+${failedFiles.map(file => `--- FILE: ${file.path} ---
+Strategy: ${file.strategy}
+Error: Hunk #1 failed to apply // This is a mock error
+
+ORIGINAL CONTENT:
+---
+// ... original content of ${file.path} ...
+---
+
+FAILED PATCH:
+---
+${file.diff || '// ... failed diff ...'}
+---
+`).join('\n')}
+
+Please analyze all failed files and provide a complete, corrected response.`;
+};
+
+const generateHandoffPrompt = (
+    transaction: Transaction,
+    fileReviewStates: Map<
+        string, { status: FileReviewStatus; error?: string; details?: string }
+    >,
+): string => {
+    const successfulFiles = (transaction.files || []).filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
+    const failedFiles = (transaction.files || []).filter(f => ['FAILED', 'REJECTED'].includes(fileReviewStates.get(f.id)?.status || ''));
+
+    return `I am handing off a failed automated code transaction to you. Your task is to act as my programming assistant and complete the planned changes.
+
+The full plan for this transaction is detailed in the YAML file located at: .relay/transactions/${transaction.hash}.yml. Please use this file as your primary source of truth for the overall goal.
+
+Here is the current status of the transaction:
+
+--- TRANSACTION SUMMARY ---
+Goal: ${transaction.message}
+Reasoning:
+${transaction.reasoning || ''}
+
+--- CURRENT FILE STATUS ---
+SUCCESSFUL CHANGES (already applied, no action needed):
+${successfulFiles.map(f => `- MODIFIED: ${f.path}`).join('\n') || '  (None)'}
+
+FAILED CHANGES (these are the files you need to fix):
+${failedFiles.map(f => `- FAILED: ${f.path} (Error: ${fileReviewStates.get(f.id)?.error})`).join('\n')}
+
+Your job is to now work with me to fix the FAILED files and achieve the original goal of the transaction. Please start by asking me which file you should work on first.`;
+};
+
+const performHandoff = (hash: string) => {
+    // This is a bit of a hack to find the right transaction to update in the demo
+    const txToUpdate = useTransactionStore.getState().transactions.find(tx => tx.hash === hash);
+    if (txToUpdate) {
+        useTransactionStore.getState().actions.updateTransactionStatus(txToUpdate.id, 'HANDOFF');
     }
-    return String.fromCharCode('a'.charCodeAt(0) + (index - 9));
+
+    useAppStore.getState().actions.showDashboardScreen();
 };
 
-const DebugMenu = () => {
-    const { selectedIndex, menuItems, viewOffset, totalItems } = useDebugMenu();
-    const [width] = useStdoutDimensions();
+async function* runApplySimulation(
+    files: FileItem[],
+    scenario: 'success' | 'failure',
+): AsyncGenerator<ApplyUpdate, SimulationResult> {
+    if (scenario === 'success') {
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
+        if (useReviewStore.getState().isCancelling) { return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates: new Map() }; }
 
-    return (
-        <Box
-            flexDirection="column"
-            width="100%"
-            paddingX={2}
-            paddingY={1}
-        >
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · DEBUG MENU </Text>
-            <Separator width={width - 4} />
-            <Box flexDirection="column" marginY={1}>
-                {menuItems.map((item, index) => {
-                    const absoluteIndex = index + viewOffset;
-                    return (
-                        <Text key={item.title} color={selectedIndex === absoluteIndex ? 'cyan' : undefined}>
-                            {selectedIndex === absoluteIndex ? '> ' : '  '}
-                            ({getKeyForIndex(absoluteIndex)}) {item.title}
-                        </Text>
-                    );
-                })}
-            </Box>
-            <Separator width={width - 4} />
-            <Box>
-                <ActionFooter actions={DEBUG_MENU_FOOTER_ACTIONS}/>
-                <Box flexGrow={1} />
-                <Text>
-                    {Math.min(viewOffset + 1, totalItems)}-
-                    {Math.min(viewOffset + menuItems.length, totalItems)} of {totalItems}
-                </Text>
-            </Box>
-        </Box>
-    );
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+        if (files.length > 0) {
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's1', title: `write: ${files[0]!.path} (strategy: replace)`, status: 'pending' } } };
+        }
+        if (files.length > 1) {
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 's2', title: `write: ${files[1]!.path} (strategy: standard-diff)`, status: 'pending' } } };
+        }
+        await sleep(50);
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's1', status: 'active' } };
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'active' } };
+        for (let i = 0; i < mockSuccessFiles.length; i++) {
+            if (useReviewStore.getState().isCancelling) break;
+            const file = mockSuccessFiles[i]!;
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: `s${i + 3}`, title: `write: ${file}`, status: 'pending' } } };
+        }
+        await sleep(50);
+        for (let i = 0; i < mockSuccessFiles.length; i++) {
+            if (useReviewStore.getState().isCancelling) break;
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'active' } };
+            await sleep(50);
+        }
+
+        await sleep(200);
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's1', status: 'done' } };
+        await sleep(150);
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 's2', status: 'done' } };
+        for (let i = 0; i < mockSuccessFiles.length; i++) {
+            if (useReviewStore.getState().isCancelling) break;
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `s${i + 3}`, status: 'done' } };
+            await sleep(80);
+        }
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
+
+        const fileReviewStates = new Map<string, { status: FileReviewStatus }>();
+        files.forEach(file => {
+            fileReviewStates.set(file.id, { status: 'APPROVED' });
+        });
+
+        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'active' } }; await sleep(100);
+        if (useReviewStore.getState().isCancelling) {
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'failed', details: 'Cancelled by user' } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+            return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+        }
+
+        let wasPostCommandSkipped = false;
+        const postCommandStartTime = Date.now();
+        const scriptDuration = 2500; // Mock script duration
+        while (Date.now() - postCommandStartTime < scriptDuration) {
+            if (useReviewStore.getState().isSkipping) {
+                useReviewStore.getState().actions.resetSkip();
+                wasPostCommandSkipped = true;
+                break;
+            }
+            if (useReviewStore.getState().isCancelling) {
+                break; // Let the global cancel check after this step handle the state update
+            }
+            await sleep(50);
+        }
+
+        if (wasPostCommandSkipped) {
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped by user' } };
+        } else if (!useReviewStore.getState().isCancelling) {
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'post-command', substep: { id: 's3', title: '`bun run test` ... Passed', status: 'done' } } };
+            yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'done' } };
+        }
+
+        if (useReviewStore.getState().isCancelling) {
+             yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to cancellation' } };
+             return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+        }
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'active' } }; await sleep(1200);
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'linter', substep: { id: 's4', title: '`bun run lint` ... 0 Errors', status: 'done' } } };
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'done' } };
+
+        await sleep(500);
+
+        return { patchStatus: 'SUCCESS', fileReviewStates };
+
+    } else { // failure scenario
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'active' } }; await sleep(100);
+        yield { type: 'UPDATE_STEP', payload: { id: 'snapshot', status: 'done' } };
+
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'active' } }; await sleep(100);
+        if (files.length > 0) {
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f1', title: `write: ${files[0]!.path} (strategy: replace)`, status: 'pending' } } };
+        }
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f2', title: `write: ${(files[1] || { path: '...' }).path}`, status: 'pending' } } };
+        yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: 'f3', title: `write: ${(files[2] || { path: '...' }).path}`, status: 'pending' } } };
+        await sleep(50);
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f1', status: 'active' } };
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f2', status: 'active' } };
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f3', status: 'active' } };
+        for (let i = 0; i < mockFailureFiles.length; i++) {
+            const file = mockFailureFiles[i]!;
+            yield { type: 'ADD_SUBSTEP', payload: { parentId: 'memory', substep: { id: `f${i + 4}`, title: `write: ${file}`, status: 'pending' } } };
+        }
+        await sleep(50);
+        for (let i = 0; i < mockFailureFiles.length; i++) {
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `f${i + 4}`, status: 'active' } };
+            await sleep(50);
+        }
+        await sleep(150);
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f1', status: 'done' } };
+        await sleep(100);
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f2', status: 'failed', title: `${(files[1] || { path: '...' }).path} (Hunk #1 failed to apply)` } };
+        await sleep(100);
+        yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: 'f3', status: 'failed', title: `${(files[2] || { path: '...' }).path} (Context mismatch at line 92)` } };
+        for (let i = 0; i < mockFailureFiles.length; i++) {
+            const file = mockFailureFiles[i]!;
+            const shouldFail = i % 4 === 0 || i === mockFailureFiles.length - 1; // fail a few, including the last one
+            yield { type: 'UPDATE_SUBSTEP', payload: { parentId: 'memory', substepId: `f${i + 4}`, status: shouldFail ? 'failed' : 'done', title: shouldFail ? `${file} (Could not find insertion point)` : undefined } };
+            await sleep(80);
+        }
+        yield { type: 'UPDATE_STEP', payload: { id: 'memory', status: 'done' } };
+
+        await sleep(100);
+        yield { type: 'UPDATE_STEP', payload: { id: 'post-command', status: 'skipped', details: 'Skipped due to patch application failure' } };
+        await sleep(100);
+        yield { type: 'UPDATE_STEP', payload: { id: 'linter', status: 'skipped', details: 'Skipped due to patch application failure' } };
+
+        await sleep(500);
+
+        const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+        files.forEach((file, index) => {
+            const isFailedFile = index > 0; // Fail all but the first file
+            const status = isFailedFile ? 'FAILED' : 'APPROVED';
+            const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+            fileReviewStates.set(file.id, { status, error });
+        });
+
+        return { patchStatus: 'PARTIAL_FAILURE', fileReviewStates };
+    }
+}
+
+const generateSingleFileRepairPrompt = (file: FileItem, error?: string): string => {
+    return `The patch failed to apply to ${file.path}. Please generate a corrected patch.
+
+Error: ${error || 'Unknown error'}
+Strategy: ${file.strategy}
+
+ORIGINAL CONTENT:
+---
+// ... original file content would be here ...
+---
+
+FAILED PATCH:
+---
+${file.diff || '// ... failed diff would be here ...'}
+---
+
+Please provide a corrected patch that addresses the error.`;
 };
 
-export default DebugMenu;
-```
+const tryRepairFile = (file: FileItem, error?: string): FileItem => {
+    generateSingleFileRepairPrompt(file, error);
+    // Mock clipboard write and show notification
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied Repair Prompt',
+        message: `A repair prompt for ${file.path} has been copied to your clipboard.`,
+    });
+    return file;
+};
 
-## File: src/hooks/useTransactionDetailScreen.tsx
-```typescript
-import { useInput, type Key } from 'ink';
-import { useDetailStore } from '../stores/detail.store';
-import { useViewStore } from '../stores/view.store';
-import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
-import { useMemo } from 'react';
-import { useCopyStore } from '../stores/copy.store';
-import { EditorService } from '../services/editor.service';
-import { useLayout } from './useLayout';
-import { useContentViewport } from './useContentViewport';
-import { OVERLAYS } from '../constants/view.constants';
-import { UI_CONFIG } from '../config/ui.config';
+const generateSingleFileInstructPrompt = (file: FileItem, transaction: Transaction): string => {
+    return `The user REJECTED the last proposed change for the file \`${file.path}\`.
 
-export const useTransactionDetailScreen = () => {
-    const store = useDetailStore();
-    const transaction = useTransactionStore(selectSelectedTransaction);
-    const files = useMemo(() => transaction?.files || [], [transaction]);
+The original high-level goal was:
+---
+${transaction.prompt || transaction.message}
+---
 
-    const {
-        navigateUp,
-        navigateDown,
-        expandOrDrillDown,
-        collapseOrBubbleUp,
-        toggleRevertConfirm,
-        confirmRevert,
-    } = store.actions;
+The rejected change was:
+---
+${file.diff || '// ... rejected diff would be here ...'}
+---
 
-    const isFilesExpanded = store.expandedItemPaths.has('FILES');
-    const layoutConfig = useMemo(() => ({
-        ...UI_CONFIG.layout.transactionDetail,
-        dynamicRows: {
-            count: 3 + (isFilesExpanded ? (files.length || 0) : 0), // navigator items
-        },
-    }), [isFilesExpanded, files.length]); //
+Please provide an alternative solution for \`${file.path}\` that still accomplishes the original goal.
+The response MUST be a complete, corrected patch for this file.`;
+};
 
-    const { remainingHeight: availableBodyHeight } = useLayout(layoutConfig);
-    
-    const contentLineCount = useMemo(() => {
-        if (store.bodyView === 'PROMPT') return (transaction?.prompt || '').split('\n').length;
-        if (store.bodyView === 'REASONING') return (transaction?.reasoning || '').split('\n').length;
-        if (store.bodyView === 'DIFF_VIEW') { //
-            const fileId = store.focusedItemPath.split('/')[1];
-            const file = files.find(f => f.id === fileId);
-            return (file?.diff || '').split('\n').length;
+const tryInstructFile = (file: FileItem, transaction: Transaction): void => {
+    generateSingleFileInstructPrompt(file, transaction);
+    // Mock clipboard write and show notification
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied Instruction Prompt',
+        message: `An instruction prompt for ${file.path} has been copied to your clipboard.`,
+    });
+};
+
+const generateBulkInstructPrompt = (rejectedFiles: FileItem[], transaction: Transaction): string => {
+    // Mock implementation for demo. In a real scenario, this would generate a more complex prompt.
+    const fileList = rejectedFiles.map(f => `- ${f.path}`).join('\n');
+    useNotificationStore.getState().actions.show({
+        type: 'success',
+        title: 'Copied to Clipboard',
+        message: `Copied bulk instruction prompt for ${rejectedFiles.length} files.`,
+        duration: 3,
+    });
+    return `The user has rejected changes in multiple files for the goal: "${transaction.message}".\n\nThe rejected files are:\n${fileList}\n\nPlease provide an alternative patch for all of them.`;
+};
+
+const runBulkReapply = async (
+    failedFiles: FileItem[],
+): Promise<{ id: string; status: FileReviewStatus; error?: string }[]> => {
+    await sleep(1500); // Simulate re-apply
+
+    // Mock a mixed result
+    let first = true;
+    return failedFiles.map(file => {
+        if (first) {
+            first = false;
+            return { id: file.id, status: 'APPROVED' as const };
+        } else {
+            return {
+                id: file.id,
+                status: 'FAILED' as const,
+                error: "'replace' failed: markers not found",
+            };
         }
-        return 0;
-    }, [store.bodyView, store.focusedItemPath, transaction, files]);
+    });
+};
 
-    const viewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
-
-    const openCopyMode = () => {
-        if (!transaction) return;
-        const { focusedItemPath } = store;
-        const fileId = focusedItemPath.split('/')[1];
-        const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
-        useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
-    };
-
-    useInput((input: string, key: Key) => {
-        if (store.bodyView === 'REVERT_CONFIRM') {
-            if (key.escape) toggleRevertConfirm();
-            if (key.return) confirmRevert();
-            return;
-        }
-        
-        // --- Back/Collapse action has priority ---
-        if (key.leftArrow) {
-            collapseOrBubbleUp();
-            return;
-        }
-
-        // --- Content Scrolling ---
-        if (['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
-            if (key.upArrow) {
-                viewport.actions.scrollUp();
-                return;
-            }
-            if (key.downArrow) {
-                viewport.actions.scrollDown();
-                return;
-            }
-            if (key.pageUp) { viewport.actions.pageUp(); return; }
-            if (key.pageDown) { viewport.actions.pageDown(); return; }
-        }
-
-        // --- Main Input ---
-        if (input.toLowerCase() === 'c') {
-            openCopyMode();
-            return;
-        }
-        if (input.toLowerCase() === 'u') {
-            toggleRevertConfirm();
-            return;
-        }
-        if (input.toLowerCase() === 'o') {
-            if (!transaction) return;
-            const { focusedItemPath } = store;
-            if (focusedItemPath.includes('/')) { //
-                const fileId = focusedItemPath.split('/')[1];
-                const file = files.find(f => f.id === fileId);
-                if (file) EditorService.openFileInEditor(file.path);
-            } else { // Is a section, open the transaction YAML
-                const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
-                EditorService.openFileInEditor(yamlPath);
-            }
-        }
-
-        // Navigator movement only if not scrolling content
-        if (!['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
-            if (key.upArrow) navigateUp();
-            if (key.downArrow) navigateDown();
-        }
-        if (key.rightArrow || key.return) expandOrDrillDown();
-    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
-
-    return {
-        transaction,
-        files,
-        focusedItemPath: store.focusedItemPath,
-        expandedItemPaths: store.expandedItemPaths,
-        bodyView: store.bodyView,
-        contentScrollIndex: viewport.scrollIndex,
-        availableBodyHeight,
-    };
+export const ReviewService = {
+    generateBulkRepairPrompt,
+    generateBulkInstructPrompt,
+    generateHandoffPrompt,
+    performHandoff,
+    runApplySimulation,
+    generateSingleFileRepairPrompt,
+    tryRepairFile,
+    generateSingleFileInstructPrompt,
+    tryInstructFile,
+    runBulkReapply,
 };
 ```
 
@@ -1916,6 +4982,147 @@ const main = () => {
 main();
 ```
 
+## File: src/hooks/useTransactionDetailScreen.tsx
+```typescript
+import { useInput, type Key } from 'ink';
+import { useDetailStore } from '../stores/detail.store';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
+import { useMemo } from 'react';
+import { useCopyStore } from '../stores/copy.store';
+import { EditorService } from '../services/editor.service';
+import { useLayout } from './useLayout';
+import { useContentViewport } from './useContentViewport';
+import { OVERLAYS } from '../constants/view.constants';
+import { UI_CONFIG } from '../config/ui.config';
+import { getParentPath } from '../stores/navigation.utils';
+
+export const useTransactionDetailScreen = () => {
+    const store = useDetailStore();
+    const transaction = useTransactionStore(selectSelectedTransaction);
+    const files = useMemo(() => transaction?.files || [], [transaction]);
+
+    const {
+        navigateUp,
+        navigateDown,
+        expandOrDrillDown,
+        collapseOrBubbleUp,
+        toggleRevertConfirm,
+        confirmRevert,
+    } = store.actions;
+
+    const isFilesExpanded = store.expandedItemPaths.has('FILES');
+    const layoutConfig = useMemo(() => ({
+        ...UI_CONFIG.layout.transactionDetail,
+        dynamicRows: {
+            count: 3 + (isFilesExpanded ? (files.length || 0) : 0), // navigator items
+        },
+    }), [isFilesExpanded, files.length]); //
+
+    const { remainingHeight: availableBodyHeight } = useLayout(layoutConfig);
+    
+    const contentLineCount = useMemo(() => {
+        if (store.bodyView === 'PROMPT') return (transaction?.prompt || '').split('\n').length;
+        if (store.bodyView === 'REASONING') return (transaction?.reasoning || '').split('\n').length;
+        if (store.bodyView === 'DIFF_VIEW') { //
+            const fileId = store.focusedItemPath.split('/')[1];
+            const file = files.find(f => f.id === fileId);
+            return (file?.diff || '').split('\n').length;
+        }
+        return 0;
+    }, [store.bodyView, store.focusedItemPath, transaction, files]);
+
+    const viewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
+
+    const openCopyMode = () => {
+        if (!transaction) return;
+        const { focusedItemPath } = store;
+        const fileId = focusedItemPath.split('/')[1];
+        const selectedFile = fileId ? files.find(f => f.id === fileId) : undefined;
+        useCopyStore.getState().actions.openForDetail(transaction, selectedFile);
+    };
+
+    useInput((input: string, key: Key) => {
+        if (store.bodyView === 'REVERT_CONFIRM') {
+            if (key.escape) toggleRevertConfirm();
+            if (key.return) confirmRevert();
+            return;
+        }
+        
+        // --- Back/Collapse action has priority ---
+        if (key.leftArrow) {
+            const { focusedItemPath, expandedItemPaths, bodyView } = store;
+            const canCollapseLocally =
+                bodyView === 'DIFF_VIEW' ||
+                Boolean(getParentPath(focusedItemPath)) ||
+                expandedItemPaths.has(focusedItemPath);
+
+            if (canCollapseLocally) {
+                collapseOrBubbleUp();
+            } else {
+                // Nothing to collapse locally, so trigger screen back navigation.
+                useAppStore.getState().actions.navigateBack();
+            }
+            return;
+        }
+
+        // --- Content Scrolling ---
+        if (['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
+            if (key.upArrow) {
+                viewport.actions.scrollUp();
+                return;
+            }
+            if (key.downArrow) {
+                viewport.actions.scrollDown();
+                return;
+            }
+            if (key.pageUp) { viewport.actions.pageUp(); return; }
+            if (key.pageDown) { viewport.actions.pageDown(); return; }
+        }
+
+        // --- Main Input ---
+        if (input.toLowerCase() === 'c') {
+            openCopyMode();
+            return;
+        }
+        if (input.toLowerCase() === 'u') {
+            toggleRevertConfirm();
+            return;
+        }
+        if (input.toLowerCase() === 'o') {
+            if (!transaction) return;
+            const { focusedItemPath } = store;
+            if (focusedItemPath.includes('/')) { //
+                const fileId = focusedItemPath.split('/')[1];
+                const file = files.find(f => f.id === fileId);
+                if (file) EditorService.openFileInEditor(file.path);
+            } else { // Is a section, open the transaction YAML
+                const yamlPath = EditorService.getTransactionYamlPath(transaction.hash);
+                EditorService.openFileInEditor(yamlPath);
+            }
+        }
+
+        // Navigator movement only if not scrolling content
+        if (!['PROMPT', 'REASONING', 'DIFF_VIEW'].includes(store.bodyView)) {
+            if (key.upArrow) navigateUp();
+            if (key.downArrow) navigateDown();
+        }
+        if (key.rightArrow || key.return) expandOrDrillDown();
+    }, { isActive: useViewStore.getState().activeOverlay === OVERLAYS.NONE });
+
+    return {
+        transaction,
+        files,
+        focusedItemPath: store.focusedItemPath,
+        expandedItemPaths: store.expandedItemPaths,
+        bodyView: store.bodyView,
+        contentScrollIndex: viewport.scrollIndex,
+        availableBodyHeight,
+    };
+};
+```
+
 ## File: src/App.tsx
 ```typescript
 import { Box } from 'ink';
@@ -1977,169 +5184,6 @@ const App = () => {
 };
 
 export default App;
-```
-
-## File: src/hooks/useTransactionHistoryScreen.tsx
-```typescript
-import { useMemo } from 'react';
-import { useInput, type Key } from 'ink';
-import { useHistoryStore } from '../stores/history.store';
-import { useAppStore } from '../stores/app.store';
-import { useNotificationStore } from '../stores/notification.store';
-import { useTransactionStore } from '../stores/transaction.store';
-import { useDetailStore } from '../stores/detail.store';
-import { useCopyStore } from '../stores/copy.store';
-import type { TransactionStatus } from '../types/domain.types';
-import { EditorService } from '../services/editor.service';
-import { getVisibleItemPaths } from '../stores/navigation.utils';
-import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from '../constants/history.constants';
-import { UI_CONFIG } from '../config/ui.config';
-import { useViewport } from './useViewport';
-
-export const useTransactionHistoryScreen = () => {
-    const store = useHistoryStore();
-    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
-    const { showTransactionDetailScreen } = useAppStore(s => s.actions);
-    const transactions = useTransactionStore(s => s.transactions);
-
-    const visibleItemPaths = useMemo(
-        () => getVisibleItemPaths(transactions, expandedIds),
-        [transactions, expandedIds],
-    );
-    const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
-
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex,
-        itemCount: visibleItemPaths.length,
-        layoutConfig: UI_CONFIG.layout.history,
-    });
-
-    const openCopyMode = () => {
-        const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
-
-        if (transactionsToCopy.length === 0) return;
-        useCopyStore.getState().actions.openForHistory(transactionsToCopy);
-    };
-
-    const handleFilterInput = (_input: string, key: Key): void => {
-        if (key.escape) actions.setMode(HISTORY_VIEW_MODES.LIST);
-        if (key.return) actions.applyFilter();
-    };
-
-    const handleBulkActionsInput = (input: string, key: Key): void => {
-        if (key.escape) { //
-            actions.setMode(HISTORY_VIEW_MODES.LIST);
-            return;
-        }
-        if (input >= '1' && input <= '3') {
-            useNotificationStore.getState().actions.show({
-                type: 'info',
-                title: 'Mock Action',
-                message: `Bulk action #${input} would be performed here.`,
-            });
-            actions.setMode(HISTORY_VIEW_MODES.LIST);
-        }
-    };
-
-    const handleListInput = (input: string, key: Key): void => {
-        if (key.upArrow) actions.navigateUp();
-        if (key.downArrow) actions.navigateDown();
-        if (key.rightArrow) actions.expandOrDrillDown();
-        if (key.leftArrow) actions.collapseOrBubbleUp();
-        if (key.pageUp) actions.navigatePageUp(viewportHeight);
-        if (key.pageDown) actions.navigatePageDown(viewportHeight);
-        if (input === ' ') actions.toggleSelection();
-        if (key.return) {
-            const txId = selectedItemPath.split('/')[0];
-            if (txId && !selectedItemPath.includes('/')) { //
-                useDetailStore.getState().actions.load(txId);
-                showTransactionDetailScreen();
-            }
-        }
-        if (input.toLowerCase() === 'o') {
-            const txId = selectedItemPath.split('/')[0];
-            const tx = transactions.find(t => t.id === txId);
-            if (!tx) return;
-
-            if (selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE)) {
-                const fileId = selectedItemPath.split('/')[2];
-                const file = tx.files?.find(f => f.id === fileId);
-                if (file) EditorService.openFileInEditor(file.path);
-            } else {
-                const yamlPath = EditorService.getTransactionYamlPath(tx.hash);
-                EditorService.openFileInEditor(yamlPath);
-            }
-        }
-
-        if (input.toLowerCase() === 'f') actions.setMode(HISTORY_VIEW_MODES.FILTER);
-        if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
-        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode(HISTORY_VIEW_MODES.BULK_ACTIONS);
-    };
-
-    useInput((input: string, key: Key) => { //
-        if (mode === HISTORY_VIEW_MODES.FILTER) {
-            handleFilterInput(input, key);
-            return;
-        }
-        if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
-            handleBulkActionsInput(input, key);
-            return;
-        }
-        handleListInput(input, key);
-    });
-
-    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
-    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
-    const transactionsInView = useMemo(
-        () => transactions.filter(tx => txIdsInView.has(tx.id)),
-        [transactions, txIdsInView],
-    );
-    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
-
-    const filterStatusText = filterQuery ? filterQuery : '(none)';
-    const startItem = Math.min(viewOffset + 1, visibleItemPaths.length);
-    const endItem = Math.min(viewOffset + itemsInView.length, visibleItemPaths.length);
-    const showingStatusText = `Showing ${startItem}-${endItem} of ${visibleItemPaths.length} items`;
-    
-    const hasSelection = selectedForAction.size > 0;
-
-    const statsStatus = useMemo(() => {
-        const stats = transactions.reduce((acc, tx) => {
-            acc[tx.status] = (acc[tx.status] || 0) + 1;
-            return acc;
-        }, {} as Record<TransactionStatus, number>);
-        
-        const parts = [];
-        if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
-        if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
-        if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
-        if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
-        if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
-        if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
-
-        return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
-    }, [transactions]);
-
-    return {
-        mode,
-        filterQuery,
-        selectedForAction,
-        selectedItemPath,
-        expandedIds,
-        actions,
-        transactions,
-        viewOffset,
-        itemsInView,
-        loadingPaths,
-        transactionsInView,
-        pathsInViewSet,
-        filterStatus: filterStatusText,
-        showingStatus: showingStatusText,
-        statsStatus,
-        hasSelection,
-        visibleItemPaths,
-    };
-};
 ```
 
 ## File: src/components/TransactionHistoryScreen.tsx
@@ -2308,7 +5352,7 @@ const TransactionHistoryScreen = () => {
     };
 
     return (
-        <ScreenLayout title="▲ relaycode · TRANSACTION HISTORY" footer={renderFooter()}>
+        <ScreenLayout title="TRANSACTION HISTORY" footer={renderFooter()}>
             <Box>
                 <Text>Filter: </Text>
                 {mode === HISTORY_VIEW_MODES.FILTER ? (
@@ -2385,6 +5429,234 @@ const TransactionHistoryScreen = () => {
 };
 
 export default TransactionHistoryScreen;
+```
+
+## File: src/hooks/useTransactionHistoryScreen.tsx
+```typescript
+import { useMemo } from 'react';
+import { useInput, type Key } from 'ink';
+import { useHistoryStore } from '../stores/history.store';
+import { useAppStore } from '../stores/app.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useTransactionStore } from '../stores/transaction.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useCopyStore } from '../stores/copy.store';
+import type { TransactionStatus } from '../types/domain.types';
+import { EditorService } from '../services/editor.service';
+import { getVisibleItemPaths } from '../stores/navigation.utils';
+import { HISTORY_VIEW_MODES, HISTORY_ITEM_PATH_SEGMENTS } from '../constants/history.constants';
+import { UI_CONFIG } from '../config/ui.config';
+import { useViewport } from './useViewport';
+
+export const useTransactionHistoryScreen = () => {
+    const store = useHistoryStore();
+    const { mode, selectedItemPath, expandedIds, filterQuery, selectedForAction, loadingPaths, actions } = store;
+    const { showTransactionDetailScreen } = useAppStore(s => s.actions);
+    const transactions = useTransactionStore(s => s.transactions);
+
+    const visibleItemPaths = useMemo(
+        () => getVisibleItemPaths(transactions, expandedIds),
+        [transactions, expandedIds],
+    );
+    const selectedIndex = visibleItemPaths.indexOf(selectedItemPath);
+
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        itemCount: visibleItemPaths.length,
+        layoutConfig: UI_CONFIG.layout.history,
+    });
+
+    const openCopyMode = () => {
+        const transactionsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+
+        if (transactionsToCopy.length === 0) return;
+        useCopyStore.getState().actions.openForHistory(transactionsToCopy);
+    };
+
+    const handleFilterInput = (_input: string, key: Key): void => {
+        if (key.escape) actions.setMode(HISTORY_VIEW_MODES.LIST);
+        if (key.return) actions.applyFilter();
+    };
+
+    const handleBulkActionsInput = (input: string, key: Key): void => {
+        if (key.escape) { //
+            actions.setMode(HISTORY_VIEW_MODES.LIST);
+            return;
+        }
+        if (input >= '1' && input <= '3') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Mock Action',
+                message: `Bulk action #${input} would be performed here.`,
+            });
+            actions.setMode(HISTORY_VIEW_MODES.LIST);
+        }
+    };
+
+    const handleListInput = (input: string, key: Key): void => {
+        if (key.upArrow) actions.navigateUp();
+        if (key.downArrow) actions.navigateDown();
+        if (key.rightArrow) actions.expandOrDrillDown();
+        if (key.leftArrow) actions.collapseOrBubbleUp();
+        if (key.pageUp) actions.navigatePageUp(viewportHeight);
+        if (key.pageDown) actions.navigatePageDown(viewportHeight);
+        if (input === ' ') actions.toggleSelection();
+        if (key.return) {
+            const txId = selectedItemPath.split('/')[0];
+            if (txId && !selectedItemPath.includes('/')) { //
+                useDetailStore.getState().actions.load(txId);
+                showTransactionDetailScreen();
+            }
+        }
+        if (input.toLowerCase() === 'o') {
+            const txId = selectedItemPath.split('/')[0];
+            const tx = transactions.find(t => t.id === txId);
+            if (!tx) return;
+
+            if (selectedItemPath.includes(HISTORY_ITEM_PATH_SEGMENTS.FILE)) {
+                const fileId = selectedItemPath.split('/')[2];
+                const file = tx.files?.find(f => f.id === fileId);
+                if (file) EditorService.openFileInEditor(file.path);
+            } else {
+                const yamlPath = EditorService.getTransactionYamlPath(tx.hash);
+                EditorService.openFileInEditor(yamlPath);
+            }
+        }
+
+        if (input.toLowerCase() === 'f') actions.setMode(HISTORY_VIEW_MODES.FILTER);
+        if (input.toLowerCase() === 'c' && selectedForAction.size > 0) openCopyMode();
+        if (input.toLowerCase() === 'b' && selectedForAction.size > 0) actions.setMode(HISTORY_VIEW_MODES.BULK_ACTIONS);
+    };
+
+    useInput((input: string, key: Key) => { //
+        if (mode === HISTORY_VIEW_MODES.FILTER) {
+            handleFilterInput(input, key);
+            return;
+        }
+        if (mode === HISTORY_VIEW_MODES.BULK_ACTIONS) {
+            handleBulkActionsInput(input, key);
+            return;
+        }
+        handleListInput(input, key);
+    });
+
+    const itemsInView = visibleItemPaths.slice(viewOffset, viewOffset + viewportHeight);
+    const txIdsInView = useMemo(() => new Set(itemsInView.map(p => p.split('/')[0])), [itemsInView]);
+    const transactionsInView = useMemo(
+        () => transactions.filter(tx => txIdsInView.has(tx.id)),
+        [transactions, txIdsInView],
+    );
+    const pathsInViewSet = useMemo(() => new Set(itemsInView), [itemsInView]);
+
+    const filterStatusText = filterQuery ? filterQuery : '(none)';
+    const startItem = Math.min(viewOffset + 1, visibleItemPaths.length);
+    const endItem = Math.min(viewOffset + itemsInView.length, visibleItemPaths.length);
+    const showingStatusText = `Showing ${startItem}-${endItem} of ${visibleItemPaths.length} items`;
+    
+    const hasSelection = selectedForAction.size > 0;
+
+    const statsStatus = useMemo(() => {
+        const stats = transactions.reduce((acc, tx) => {
+            acc[tx.status] = (acc[tx.status] || 0) + 1;
+            return acc;
+        }, {} as Record<TransactionStatus, number>);
+        
+        const parts = [];
+        if (stats.COMMITTED) parts.push(`${stats.COMMITTED} Cmt`);
+        if (stats.HANDOFF) parts.push(`${stats.HANDOFF} H/O`);
+        if (stats.REVERTED) parts.push(`${stats.REVERTED} Rev`);
+        if (stats.APPLIED) parts.push(`${stats.APPLIED} App`);
+        if (stats.PENDING) parts.push(`${stats.PENDING} Pend`);
+        if (stats.FAILED) parts.push(`${stats.FAILED} Fail`);
+
+        return parts.length > 0 ? `Stats: ${parts.join(', ')}` : '';
+    }, [transactions]);
+
+    return {
+        mode,
+        filterQuery,
+        selectedForAction,
+        selectedItemPath,
+        expandedIds,
+        actions,
+        transactions,
+        viewOffset,
+        itemsInView,
+        loadingPaths,
+        transactionsInView,
+        pathsInViewSet,
+        filterStatus: filterStatusText,
+        showingStatus: showingStatusText,
+        statsStatus,
+        hasSelection,
+        visibleItemPaths,
+    };
+};
+```
+
+## File: src/stores/dashboard.store.ts
+```typescript
+import { create } from 'zustand';
+import { useTransactionStore } from './transaction.store';
+import { DashboardService } from '../services/dashboard.service';
+import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
+
+export type DashboardStatus = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
+ 
+interface DashboardState {
+    status: DashboardStatus;
+    previousStatus: DashboardStatus;
+    selectedTransactionIndex: number;
+    expandedTransactionId: string | null;
+    actions: {
+        togglePause: () => void;
+        startApproveAll: () => void;
+        confirmAction: () => Promise<void>;
+        cancelAction: () => void;
+        setStatus: (status: DashboardStatus) => void;
+        toggleExpand: () => void;
+        setExpandedTransactionId: (id: string | null) => void;
+        setSelectedIndex: (index: number) => void;
+    };
+}
+
+export const useDashboardStore = create<DashboardState>((set, get) => ({
+    status: DASHBOARD_STATUS.LISTENING,
+    previousStatus: DASHBOARD_STATUS.LISTENING,
+    selectedTransactionIndex: 0,
+    expandedTransactionId: null,
+    actions: {
+        togglePause: () => set(state => ({
+            status: state.status === DASHBOARD_STATUS.LISTENING ? DASHBOARD_STATUS.PAUSED : DASHBOARD_STATUS.LISTENING,
+        })),
+        startApproveAll: () => set(state => ({
+            status: DASHBOARD_STATUS.CONFIRM_APPROVE,
+            previousStatus: state.status,
+        })),
+        cancelAction: () => set(state => ({ status: state.previousStatus })),
+        setStatus: (status) => set({ status }),
+        confirmAction: async () => { // The `if` is redundant as this is only called from that state.
+            const previousStatus = get().previousStatus;
+            set({ status: DASHBOARD_STATUS.APPROVING });
+            await DashboardService.approveAll();
+            set({ status: previousStatus });
+        },
+        toggleExpand: () => {
+            const { selectedTransactionIndex, expandedTransactionId } = get();
+            const { transactions } = useTransactionStore.getState();
+            const selectedTx = transactions[selectedTransactionIndex];
+            if (!selectedTx) return;
+
+            if (expandedTransactionId === selectedTx.id) {
+                set({ expandedTransactionId: null });
+            } else {
+                set({ expandedTransactionId: selectedTx.id });
+            }
+        },
+        setExpandedTransactionId: (id) => set({ expandedTransactionId: id }),
+        setSelectedIndex: (index) => set({ selectedTransactionIndex: index }),
+    },
+}));
 ```
 
 ## File: src/components/TransactionDetailScreen.tsx
@@ -2554,7 +5826,7 @@ const TransactionDetailScreen = () => {
 
     return (
         <ScreenLayout
-            title="▲ relaycode · TRANSACTION DETAILS"
+            title="TRANSACTION DETAILS"
             footer={renderFooter()}
         >
             {/* Modal takeover for Revert */}
@@ -2731,18 +6003,9 @@ export const useReviewScreen = () => {
         useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
     };
 
-    const navigateToNextItem = () => {
-        if (selectedItemIndex < navigableItems.length - 1) {
-            setSelectedItemIndex(selectedItemIndex + 1);
-            contentViewport.actions.resetScroll();
-        }
-    };
-
-    const navigateToPreviousItem = () => {
-        if (selectedItemIndex > 0) {
-            setSelectedItemIndex(selectedItemIndex - 1);
-            contentViewport.actions.resetScroll();
-        }
+    const handleIndexChange = (newIndex: number) => {
+        setSelectedItemIndex(newIndex);
+        contentViewport.actions.resetScroll();
     };
 
     const navigateToNextFile = () => {
@@ -2958,13 +6221,22 @@ export const useReviewScreen = () => {
         }
     };
 
+    const listNavigableBodyViews: ReviewBodyView[] = [
+        REVIEW_BODY_VIEWS.PROMPT,
+        REVIEW_BODY_VIEWS.REASONING,
+        REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
+    ];
+    const isListNavigationActive = bodyView === REVIEW_BODY_VIEWS.NONE || listNavigableBodyViews.includes(bodyView);
+    const arePageKeysForListNav = bodyView === REVIEW_BODY_VIEWS.NONE;
+
     useListNavigator({
         itemCount: navigableItems.length,
         viewportHeight: listViewportHeight,
         selectedIndex: selectedItemIndex,
-        onIndexChange: setSelectedItemIndex,
-        isActive: bodyView === REVIEW_BODY_VIEWS.NONE,
-        onKey: handleMainNavigationInput,
+        onIndexChange: handleIndexChange,
+        isActive: isListNavigationActive,
+        disablePageKeys: !arePageKeysForListNav,
+        onKey: arePageKeysForListNav ? handleMainNavigationInput : undefined,
     });
 
     useInput((input: string, key: Key) => {
@@ -2988,17 +6260,6 @@ export const useReviewScreen = () => {
                 return;
             }
         }
-
-        // Allow up/down list navigation even when a content view is open
-        const listNavigableBodyViews: ReviewBodyView[] = [
-            REVIEW_BODY_VIEWS.PROMPT, REVIEW_BODY_VIEWS.REASONING, REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
-        ];
-
-        if (listNavigableBodyViews.includes(bodyView)) {
-            if (key.upArrow) { navigateToPreviousItem(); return; }
-            if (key.downArrow) { navigateToNextItem(); return; }
-        }
-
         // Handle content scrolling (PgUp/PgDn)
         if (handleContentScrollInput(key)) return;
 
@@ -3380,7 +6641,7 @@ const ReviewScreen = () => {
     };
 
     return (
-        <ScreenLayout title="▲ relaycode · REVIEW" footer={renderFooter()}>
+        <ScreenLayout title="REVIEW" footer={renderFooter()}>
             {/* Navigator Section */}
             <Box flexDirection="column" marginY={1}>
                 <Box flexDirection="column">
@@ -3462,6 +6723,429 @@ const ReviewScreen = () => {
 };
 
 export default ReviewScreen;
+```
+
+## File: src/stores/review.store.ts
+```typescript
+import { create } from 'zustand';
+import { useAppStore } from './app.store';
+import { useTransactionStore } from './transaction.store';
+import { useViewStore } from './view.store';
+import { ReviewService, type SimulationResult } from '../services/review.service';
+import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS, BULK_INSTRUCT_OPTIONS, BULK_REPAIR_OPTIONS } from '../constants/review.constants';
+import { sleep } from '../utils';
+import type { FileReviewStatus } from '../types/domain.types';
+
+export interface ApplyStep {
+    id: string;
+    title: string;
+    status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+    details?: string;
+    substeps?: ApplyStep[];
+    startTime?: number;
+    duration?: number;
+}
+
+export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof REVIEW_BODY_VIEWS];
+export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
+export type ApplyUpdate =
+    | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
+    | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
+    | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
+
+interface ReviewState {
+    patchStatus: PatchStatus;
+    applySteps: ApplyStep[];
+    selectedItemIndex: number;
+    bodyView: ReviewBodyView;
+    scriptErrorIndex: number;
+    processingStartTime: number | null;
+    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
+
+    selectedBulkRepairOptionIndex: number;
+    selectedBulkInstructOptionIndex: number;
+    isCancelling: boolean;
+    isSkipping: boolean;
+
+    actions: {
+        load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
+        setSelectedItemIndex: (index: number) => void;
+        toggleBodyView: (view: Extract<
+            ReviewBodyView, 'prompt' | 'bulk_instruct' |
+            'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
+        >) => void;
+        setBodyView: (view: ReviewBodyView) => void;
+        approve: () => void;
+        rejectTransaction: () => void;
+        startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
+        tryRepairFile: (fileId: string) => void;
+        showBulkRepair: () => void;
+        executeBulkRepairOption: (option: number) => Promise<void>;
+        skipCurrentStep: () => void;
+        resetSkip: () => void;
+        tryInstruct: (fileId: string) => void;
+        cancelProcessing: () => void;
+        showBulkInstruct: () => void;
+        executeBulkInstructOption: (option: number) => Promise<void>;
+        confirmHandoff: () => void;
+        navigateScriptErrorUp: () => void;
+        navigateScriptErrorDown: () => void;
+        updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
+        addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
+        updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
+        updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
+        toggleFileApproval: (fileId: string) => void;
+        rejectAllFiles: () => void;
+        navigateBulkRepairUp: () => void;
+        navigateBulkRepairDown: () => void;
+        navigateBulkInstructUp: () => void;
+        navigateBulkInstructDown: () => void;
+    };
+}
+
+export const useReviewStore = create<ReviewState>((set, get) => ({
+    patchStatus: PATCH_STATUS.SUCCESS,
+    applySteps: INITIAL_APPLY_STEPS,
+    selectedItemIndex: 0,
+    bodyView: REVIEW_BODY_VIEWS.NONE,
+    scriptErrorIndex: 0,
+    processingStartTime: null,
+    fileReviewStates: new Map(),
+    selectedBulkRepairOptionIndex: 0,
+    selectedBulkInstructOptionIndex: 0,
+    isCancelling: false,
+    isSkipping: false,
+
+    actions: {
+        load: (transactionId, initialState) => {
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction) return;
+
+            // This logic is preserved from the deleted `prepareTransactionForReview`
+            // to allow debug screens to jump directly to a pre-populated review state
+            // without running the full simulation.
+            const isFailureCase = transaction.id === '1';
+            const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
+            (transaction.files || []).forEach((file, index) => {
+                if (isFailureCase) {
+                    const isFailedFile = index > 0;
+                    const status = isFailedFile ? 'FAILED' : 'APPROVED';
+                    const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
+                    fileReviewStates.set(file.id, { status, error });
+                } else {
+                    fileReviewStates.set(file.id, { status: 'APPROVED' });
+                }
+            });
+            const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
+            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+            set({
+                patchStatus,
+                fileReviewStates,
+                processingStartTime: null,
+                selectedItemIndex: 0,
+                bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
+                scriptErrorIndex: 0,
+                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                selectedBulkRepairOptionIndex: 0,
+                selectedBulkInstructOptionIndex: 0,
+                ...initialState,
+            });
+        },
+        setSelectedItemIndex: (index) => set({ selectedItemIndex: index }),
+        toggleBodyView: (view) => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            const files = tx?.files || [];
+            if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
+            return {
+                bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
+            };
+        }),
+        setBodyView: (view) => set({ bodyView: view }),
+        approve: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (selectedTransactionId) {
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
+                useAppStore.getState().actions.showDashboardScreen();
+            }
+        },
+        rejectTransaction: () => {
+            const { selectedTransactionId } = useViewStore.getState();
+            if (selectedTransactionId) {
+                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REJECTED');
+                useAppStore.getState().actions.showDashboardScreen();
+            }
+        },
+        startApplySimulation: async (transactionId, scenario) => {
+            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!transaction?.files) return;
+
+            const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
+            const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
+
+            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
+            set({
+                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
+                processingStartTime: Date.now(),
+                isCancelling: false,
+                isSkipping: false,
+                fileReviewStates: new Map(), // Clear previous states
+            });
+
+            showReviewProcessingScreen();
+            const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
+            let simulationResult: SimulationResult;
+
+            // Manually iterate to get the return value from the async generator
+            const iterator = simulationGenerator[Symbol.asyncIterator]();
+            while (true) {
+                const { value, done } = await iterator.next();
+                if (done) {
+                    simulationResult = value as SimulationResult;
+                    break;
+                }
+                const update = value;
+                if (update.type === 'UPDATE_STEP') {
+                    updateApplyStep(update.payload.id, update.payload.status, update.payload.details);
+                } else if (update.type === 'ADD_SUBSTEP') {
+                    addApplySubstep(update.payload.parentId, update.payload.substep);
+                } else if (update.type === 'UPDATE_SUBSTEP') {
+                    updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
+                }
+            }
+
+            await sleep(1000);
+            set({
+                processingStartTime: null,
+                fileReviewStates: simulationResult.fileReviewStates,
+                patchStatus: simulationResult.patchStatus,
+            });
+            showReviewScreen();
+        },
+        tryRepairFile: (fileId) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const { fileReviewStates } = get();
+            if (!selectedTransactionId) return;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            const file = tx?.files?.find(f => f.id === fileId);
+            if (!file) return;
+
+            const { status, error } = fileReviewStates.get(file.id) || {};
+            if (status !== 'FAILED') return;
+            
+            ReviewService.tryRepairFile(file, error);
+            get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+        },
+        tryInstruct: (fileId) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const { fileReviewStates } = get();
+            if (!selectedTransactionId) return;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            const file = tx?.files?.find(f => f.id === fileId);
+            if (!tx || !file) return;
+
+            const { status } = fileReviewStates.get(file.id) || {};
+            if (status !== 'REJECTED') return;
+            
+            ReviewService.tryInstructFile(file, tx);
+            get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+        },
+        showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
+        cancelProcessing: () => set({ isCancelling: true }),
+        skipCurrentStep: () => set({ isSkipping: true }),
+        resetSkip: () => set({ isSkipping: false }),
+        executeBulkInstructOption: async (option) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            if (!tx?.files) return;
+
+            const rejectedFiles = tx.files.filter(
+                f => get().fileReviewStates.get(f.id)?.status === 'REJECTED',
+            );
+            if (rejectedFiles.length === 0) {
+                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                return;
+            }
+
+            switch (option) {
+                case 1:
+                    ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                case 2:
+                    get().actions.setBodyView('confirm_handoff');
+                    break;
+                case 3:
+                    rejectedFiles.forEach(file => {
+                        get().actions.updateFileReviewStatus(file.id, 'APPROVED');
+                    });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                default:
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+            }
+        },
+
+        showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
+        executeBulkRepairOption: async (option) => {
+            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
+            if (!tx?.files) return;
+
+            const failedFiles = tx.files.filter(
+                f => get().fileReviewStates.get(f.id)?.status === 'FAILED',
+            );
+            if (failedFiles.length === 0) {
+                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                return;
+            }
+
+            switch (option) {
+                case 1:
+                    ReviewService.generateBulkRepairPrompt(failedFiles);
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                case 2: {
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
+                    const results = await ReviewService.runBulkReapply(failedFiles);
+                    results.forEach(result => {
+                        get().actions.updateFileReviewStatus(
+                            result.id, result.status, result.error,
+                        );
+                    });
+                    break;
+                }
+                case 3:
+                    get().actions.setBodyView('confirm_handoff');
+                    break;
+                case 4:
+                    failedFiles.forEach(file => {
+                        get().actions.updateFileReviewStatus(file.id, 'REJECTED');
+                    });
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+                    break;
+                default:
+                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
+            }
+        },
+        confirmHandoff: () => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx?.files) return;
+            const { fileReviewStates } = get();
+            ReviewService.generateHandoffPrompt(tx, fileReviewStates);
+            ReviewService.performHandoff(tx.hash);
+        },
+        navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
+        navigateScriptErrorDown: () => set(state => {
+            const transactionId = useViewStore.getState().selectedTransactionId;
+            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
+            if (!tx?.scripts || !tx?.files) return {};
+            const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
+            if (selectedScript?.output) {
+                const errorLines = selectedScript.output
+                    .split('\n')
+                    .filter(line => line.includes('Error') || line.includes('Warning'));
+                return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
+            }
+            return {};
+        }),
+        updateApplyStep: (id, status, details) => {
+            set(state => {
+                const newSteps = state.applySteps.map(s => {
+                    if (s.id === id) {
+                        const newStep: ApplyStep = { ...s, status };
+                        if (status === 'active') {
+                            newStep.startTime = Date.now();
+                        } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
+                            newStep.duration = (Date.now() - s.startTime) / 1000;
+                        }
+                        if (details !== undefined) newStep.details = details;
+                        return newStep;
+                    }
+                    return s;
+                });
+                return { applySteps: newSteps };
+            });
+        },
+        updateApplySubstep: (parentId, substepId, status, title) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId && s.substeps) {
+                        const newSubsteps = s.substeps.map(sub => {
+                            if (sub.id === substepId) {
+                                const newSub: ApplyStep = { ...sub, status };
+                                if (status === 'active') {
+                                    newSub.startTime = Date.now();
+                                } else if ((status === 'done' || status === 'failed') && sub.startTime) {
+                                    newSub.duration = (Date.now() - sub.startTime) / 1000;
+                                }
+                                if (title) newSub.title = title;
+                                return newSub;
+                            }
+                            return sub;
+                        });
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
+        addApplySubstep: (parentId, substep) => {
+            set(state => ({
+                applySteps: state.applySteps.map(s => {
+                    if (s.id === parentId) {
+                        const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
+                        return { ...s, substeps: newSubsteps };
+                    }
+                    return s;
+                }),
+            }));
+        },
+        updateFileReviewStatus: (fileId, status, error, details) => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                newStates.set(fileId, { status, error, details });
+                return { fileReviewStates: newStates };
+            });
+        },
+        toggleFileApproval: (fileId) => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                const current = newStates.get(fileId);
+                if (current) {
+                    const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
+                    newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
+                }
+                return { fileReviewStates: newStates };
+            });
+        },
+        rejectAllFiles: () => {
+            set(state => {
+                const newStates = new Map(state.fileReviewStates);
+                for (const [fileId, reviewState] of newStates.entries()) {
+                    if (reviewState.status === 'APPROVED') {
+                        newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
+                    }
+                }
+                return { fileReviewStates: newStates };
+            });
+        },
+        navigateBulkRepairUp: () => set(state => ({
+            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex - 1 + BULK_REPAIR_OPTIONS.length) % BULK_REPAIR_OPTIONS.length,
+        })),
+        navigateBulkRepairDown: () => set(state => ({
+            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex + 1) % BULK_REPAIR_OPTIONS.length,
+        })),
+        navigateBulkInstructUp: () => set(state => ({
+            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex - 1 + BULK_INSTRUCT_OPTIONS.length) % BULK_INSTRUCT_OPTIONS.length,
+        })),
+        navigateBulkInstructDown: () => set(state => ({
+            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex + 1) % BULK_INSTRUCT_OPTIONS.length,
+        })),
+    },
+}));
 ```
 
 ## File: src/components/DashboardScreen.tsx
@@ -3642,7 +7326,7 @@ const DashboardScreen = () => {
     
     return (
         <ScreenLayout
-            title={<Text color="cyan">▲ relaycode dashboard</Text>}
+            title="DASHBOARD"
             footer={renderFooter()}
         >
             <Box flexDirection="column" flexGrow={1}>

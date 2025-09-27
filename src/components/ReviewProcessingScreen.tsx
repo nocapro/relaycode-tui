@@ -1,10 +1,11 @@
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import { type ApplyStep } from '../stores/review.store';
-import Separator from './Separator';
 import ActionFooter from './ActionFooter';
 import { useReviewProcessingScreen } from '../hooks/useReviewProcessingScreen'; // This will be created
 import { getReviewProcessingFooterActions } from '../constants/review.constants';
+import Separator from './Separator';
+import ScreenLayout from './layout/ScreenLayout';
 
 const ApplyStepRow = ({ step, isSubstep = false, now }: {
     step: ApplyStep;
@@ -116,18 +117,17 @@ const ReviewProcessingScreen = () => {
     }
 
     return (
-        <Box flexDirection="column">
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · APPLYING PATCH </Text>
-            <Separator />
-            <Box marginY={1} flexDirection="column">
+        <ScreenLayout
+            title="APPLYING PATCH"
+            footer={renderFooter()}
+        >
+            <Box flexDirection="column">
                 <Text>Applying patch {transaction.hash}... ({transaction.message})</Text>
                 <Box flexDirection="column" marginTop={1} gap={1}>
                     {applySteps.map((step: ApplyStep) => <ApplyStepRow key={step.id} step={step} now={now} />)}
                 </Box>
             </Box>
-            <Separator />
-            {renderFooter()}
-        </Box>
+        </ScreenLayout>
     );
 };
 
