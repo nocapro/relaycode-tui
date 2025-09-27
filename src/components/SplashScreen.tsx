@@ -3,7 +3,7 @@ import Separator from './Separator';
 import { useSplashScreen } from '../hooks/useSplashScreen';
 
 const SplashScreen = () => {
-    const { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus } = useSplashScreen();
+    const { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateState, updateMessage } = useSplashScreen();
     const logo = `
          ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
          ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
@@ -53,7 +53,14 @@ const SplashScreen = () => {
 
                 {visibleSections.has('updateCheck') && (
                     <Box marginTop={1}>
-                        <Text>{updateStatus}</Text>
+                        {updateState === 'checking' && <Text>{updateMessage}</Text>}
+                        {updateState === 'success' && <Text>{updateMessage}</Text>}
+                        {updateState === 'failed' && (
+                            <Box flexDirection="column" alignItems="center">
+                                <Text color="red">{updateMessage}</Text>
+                                <Text>(<Text bold>R</Text>)etry · (<Text bold>S</Text>)kip</Text>
+                            </Box>
+                        )}
                     </Box>
                 )}
                 
@@ -83,7 +90,7 @@ const SplashScreen = () => {
                     <Text color="gray">
                         {animationComplete ? 'Loading... ' : 'Loading...'}
                     </Text>
-                    {animationComplete && <Text color="yellow">{countdown}</Text>}
+                    {animationComplete && updateState !== 'failed' && <Text color="yellow">{countdown}</Text>}
                     <Text color="gray"> (Press any key to skip)</Text>
                 </Text>
             </Box>

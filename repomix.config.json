@@ -28,7 +28,16 @@
     "eslint.config.js",
     "tsconfig.json",
     "index.tsx",
-    "src"
+    // "src"
+    "src/hooks/useDebugMenu.tsx",
+    "src/stores/init.store.ts",
+    "src/components/InitializationScreen.tsx",
+    "src/hooks/useInitializationScreen.tsx",
+    "src/stores/app.store.ts",
+    "src/hooks/useSplashScreen.tsx",
+    "src/components/SplashScreen.tsx",
+    "src/App.tsx",
+    "src/services/init.service.ts"
 
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"

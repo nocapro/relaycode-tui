@@ -2,21 +2,18 @@
 ```
 src/
   components/
-    layout/
-      ScreenLayout.tsx
-    ContentView.tsx
-    DashboardScreen.tsx
-    ReviewScreen.tsx
-  constants/
-    dashboard.constants.ts
-    review.constants.ts
+    InitializationScreen.tsx
+    SplashScreen.tsx
   hooks/
-    useDashboardScreen.tsx
-    useReviewScreen.tsx
+    useDebugMenu.tsx
+    useInitializationScreen.tsx
+    useSplashScreen.tsx
+  services/
+    init.service.ts
   stores/
-    review.store.ts
-  types/
-    domain.types.ts
+    app.store.ts
+    init.store.ts
+  App.tsx
 eslint.config.js
 index.tsx
 package.json
@@ -24,147 +21,6 @@ tsconfig.json
 ```
 
 # Files
-
-## File: src/components/ContentView.tsx
-```typescript
-import { Box, Text } from 'ink';
-import { UI_CONFIG } from '../config/ui.config';
-
-interface ContentViewProps {
-    title: string;
-    content: string;
-    isExpanded?: boolean;
-    scrollIndex?: number;
-    maxHeight?: number;
-    highlight?: 'diff' | 'none';
-}
-const ContentView = ({
-    title,
-    content,
-    isExpanded = true,
-    scrollIndex = 0,
-    maxHeight,
-    highlight = 'none',
-}: ContentViewProps) => {
-    const lines = content.split('\n');
-    const COLLAPSE_THRESHOLD = UI_CONFIG.diffScreen.collapseThreshold;
-    const COLLAPSE_SHOW_LINES = UI_CONFIG.diffScreen.collapseShowLines;
-
-    const renderContent = () => {
-        if (!isExpanded && lines.length > COLLAPSE_THRESHOLD) {
-            const topLines = lines.slice(0, COLLAPSE_SHOW_LINES);
-            const bottomLines = lines.slice(lines.length - COLLAPSE_SHOW_LINES);
-            const hiddenLines = lines.length - (COLLAPSE_SHOW_LINES * 2);
-
-            return (
-                <>
-                    {topLines.map((line, i) => renderLine(line, i))}
-                    <Text color="gray">... {hiddenLines} lines hidden ...</Text>
-                    {bottomLines.map((line, i) => renderLine(line, i + topLines.length + 1))}
-                </>
-            );
-        }
-        // Handle vertical scrolling for expanded view
-        if (isExpanded && maxHeight) {
-            const visibleLines = lines.slice(scrollIndex, scrollIndex + maxHeight);
-            return visibleLines.map((line, i) => renderLine(line, scrollIndex + i));
-        }
-        return lines.map((line, i) => renderLine(line, i));
-    };
-
-    const renderLine = (line: string, key: number) => {
-        let color = 'white';
-        if (highlight === 'diff') {
-            if (line.startsWith('+')) color = 'green';
-            if (line.startsWith('-')) color = 'red';
-            if (line.startsWith('@@')) color = 'cyan';
-        }
-        return <Text key={key} color={color}>{line}</Text>;
-    };
-
-    return (
-        <Box flexDirection="column">
-            <Text>{title}</Text>
-            <Box flexDirection="column" marginTop={1}>
-                {renderContent()}
-            </Box>
-        </Box>
-    );
-};
-
-export default ContentView;
-```
-
-## File: src/components/layout/ScreenLayout.tsx
-```typescript
-import { Box, Text } from 'ink';
-import Separator from '../Separator';
-
-interface ScreenLayoutProps {
-    title: string;
-    footer: React.ReactNode;
-    children: React.ReactNode;
-}
-
-const ScreenLayout = ({ title, footer, children }: ScreenLayoutProps) => {
-    return (
-        <Box flexDirection="column" flexGrow={1}>
-            <Text bold color="black" backgroundColor="yellow"> ▲ relaycode · {title} </Text>
-            <Separator />
-            <Box flexDirection="column" flexGrow={1} marginY={1}>
-                {children}
-            </Box>
-            <Separator />
-            <Box>
-                {footer}
-            </Box>
-        </Box>
-    );
-};
-
-export default ScreenLayout;
-```
-
-## File: src/constants/dashboard.constants.ts
-```typescript
-import type { ActionItem } from '../types/actions.types';
-
-export const DASHBOARD_STATUS = {
-    LISTENING: 'LISTENING',
-    PAUSED: 'PAUSED',
-    CONFIRM_APPROVE: 'CONFIRM_APPROVE',
-    APPROVING: 'APPROVING',
-} as const;
-
-type DashboardStatusValue = (typeof DASHBOARD_STATUS)[keyof typeof DASHBOARD_STATUS];
-
-export interface DashboardStandardActionsOptions {
-    status: DashboardStatusValue;
-    hasPending: boolean;
-    hasApplied: boolean;
-}
-
-export const DASHBOARD_FOOTER_ACTIONS = {
-    MODAL: [
-        { key: 'Enter', label: 'Confirm' },
-        { key: 'Esc', label: 'Cancel' },
-    ] as const,
-    STANDARD: (options: DashboardStandardActionsOptions): ActionItem[] => {
-        const { status, hasPending, hasApplied } = options;
-        const actions: ActionItem[] = [
-            { key: '↑↓', label: 'Nav' },
-            { key: '→/Ent', label: 'View' },
-            { key: '←', label: 'Collapse' },
-            { key: 'L', label: 'Log' },
-        ];
-        if (hasPending) actions.push({ key: 'A', label: 'Approve All' });
-        if (hasApplied) actions.push({ key: 'C', label: 'Commit' });
-        actions.push({ key: 'P', label: status === DASHBOARD_STATUS.PAUSED ? 'Resume' : 'Pause' });
-        actions.push({ key: 'Q', label: 'Quit' });
-        return actions;
-    },
-};
-```
 
 ## File: eslint.config.js
 ```javascript
@@ -319,66 +175,136 @@ export default [
 }
 ```
 
-## File: src/types/domain.types.ts
+## File: src/hooks/useInitializationScreen.tsx
 ```typescript
-// --- Core Domain Models ---
+import { useEffect } from 'react';
+import { Text, useApp, useInput } from 'ink';
+import { useInitStore } from '../stores/init.store';
+import { useAppStore } from '../stores/app.store';
+import { InitService } from '../services/init.service';
 
-/** The type of change applied to a file. */
-export type FileChangeType = 'MOD' | 'ADD' | 'DEL' | 'REN';
+export const useInitializationScreen = () => {
+    const phase = useInitStore(s => s.phase);
+    const interactiveChoice = useInitStore(s => s.interactiveChoice);
+    const actions = useInitStore(s => s.actions);
+    const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+    const { exit } = useApp();
 
-/** The review status of a file within a transaction. */
-export type FileReviewStatus = 'FAILED' | 'APPROVED' | 'REJECTED' | 'AWAITING' | 'RE_APPLYING';
+    useInput((input, key) => {
+        if (phase === 'INTERACTIVE') {
+            if (key.return) {
+                actions.setInteractiveChoice('ignore');
+            } else if (input.toLowerCase() === 's') {
+                actions.setInteractiveChoice('share');
+            }
+        }
+        if (phase === 'FINALIZE') {
+            if (input.toLowerCase() === 'w') {
+                showDashboardScreen();
+            }
+            if (input.toLowerCase() === 'q') {
+                exit();
+            }
+        }
+    });
 
-/** The result of a script execution. */
-export interface ScriptResult {
-    command: string;
-    success: boolean;
-    duration: number;
-    summary: string;
-    output: string;
-}
+    useEffect(() => {
+        InitService.runInitializationProcess();
+    }, []);
 
-/** The unified representation of a file change within a transaction. */
-export interface FileItem {
-    id: string;
-    path: string;
-    diff: string;
-    linesAdded: number;
-    linesRemoved: number;
-    type: FileChangeType;
-    strategy?: 'replace' | 'standard-diff';
-}
+    useEffect(() => {
+        if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+            InitService.resumeInitializationProcess();
+        }
+    }, [interactiveChoice, phase]);
 
-/** The lifecycle status of a transaction. */
-export type TransactionStatus =
-    | 'PENDING'
-    | 'APPLIED'
-    | 'COMMITTING'
-    | 'COMMITTED'
-    | 'FAILED'
-    | 'REVERTED'
-    | 'IN-PROGRESS'
-    | 'HANDOFF'
-    | 'REJECTED';
+    const {
+        analyzeTasks,
+        configureTasks,
+        projectId,
+    } = useInitStore();
 
-/** The central data model for a code modification transaction. */
-export interface Transaction {
-    id: string;
-    timestamp: number;
-    status: TransactionStatus;
-    hash: string;
-    message: string;
-    prompt?: string;
-    reasoning?: string;
-    error?: string;
-    files?: FileItem[];
-    scripts?: ScriptResult[];
-    stats?: {
-        files: number;
-        linesAdded: number;
-        linesRemoved: number;
+    let footerText;
+    switch (phase) {
+        case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+        case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+        case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+        case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+    }
+
+    return {
+        phase,
+        analyzeTasks,
+        configureTasks,
+        interactiveChoice,
+        projectId,
+        footerText,
     };
-}
+};
+```
+
+## File: src/services/init.service.ts
+```typescript
+import { useInitStore } from '../stores/init.store';
+import { sleep } from '../utils';
+import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
+import { LoggerService } from './logger.service';
+
+const runInitializationProcess = async () => {
+    LoggerService.info('Starting initialization process...');
+    const { actions } = useInitStore.getState();
+    actions.resetInit();
+    actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+
+    actions.setPhase('ANALYZE');
+    LoggerService.debug('Phase set to ANALYZE');
+    for (const task of INITIAL_ANALYZE_TASKS) {
+        actions.updateAnalyzeTask(task.id, 'active');
+        LoggerService.debug(`Analyzing task active: ${task.title}`);
+        await sleep(800);
+        actions.updateAnalyzeTask(task.id, 'done');
+    }
+    actions.setAnalysisResults('relaycode (from package.json)', true);
+    await sleep(500);
+
+    actions.setPhase('CONFIGURE');
+    LoggerService.debug('Phase set to CONFIGURE');
+    const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
+    for (const task of configTasksUntilInteractive) {
+        actions.updateConfigureTask(task.id, 'active');
+        LoggerService.debug(`Configuring task active: ${task.title}`);
+        await sleep(800);
+        actions.updateConfigureTask(task.id, 'done');
+    }
+    await sleep(500);
+
+    actions.setPhase('INTERACTIVE');
+    LoggerService.debug('Phase set to INTERACTIVE');
+};
+
+const resumeInitializationProcess = async () => {
+    LoggerService.info('Resuming initialization process...');
+    const { actions } = useInitStore.getState();
+    
+    actions.setPhase('CONFIGURE');
+    LoggerService.debug('Phase set to CONFIGURE');
+    const lastTask = INITIAL_CONFIGURE_TASKS[INITIAL_CONFIGURE_TASKS.length - 1];
+    if (lastTask) {
+        actions.updateConfigureTask(lastTask.id, 'active');
+        LoggerService.debug(`Configuring task active: ${lastTask.title}`);
+        await sleep(800);
+        actions.updateConfigureTask(lastTask.id, 'done');
+        await sleep(500);
+
+        actions.setPhase('FINALIZE');
+        LoggerService.info('Initialization process finalized.');
+    }
+};
+
+export const InitService = {
+    runInitializationProcess,
+    resumeInitializationProcess,
+};
 ```
 
 ## File: package.json
@@ -418,277 +344,492 @@ export interface Transaction {
 }
 ```
 
-## File: src/constants/review.constants.ts
+## File: src/stores/init.store.ts
 ```typescript
-import type { ApplyStep } from '../stores/review.store';
-import type { ActionItem } from '../types/actions.types';
+import { create } from 'zustand';
 
-/**
- * Constants for the Review screen and process.
- */
-export const INITIAL_APPLY_STEPS: ApplyStep[] = [
-    { id: 'snapshot', title: 'Reading initial file snapshot...', status: 'pending' },
-    { id: 'memory', title: 'Applying operations to memory...', status: 'pending', substeps: [] },
-    { id: 'post-command', title: 'Running post-command script...', status: 'pending', substeps: [] },
-    { id: 'linter', title: 'Analyzing changes with linter...', status: 'pending', substeps: [] },
-];
+// Store Interface
+export type TaskStatus = 'pending' | 'active' | 'done';
+export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' | 'FINALIZE';
+export type GitignoreChoice = 'ignore' | 'share';
+export interface Task {
+    id: string;
+    title: string;
+    subtext?: string;
+    status: TaskStatus;
+}
+ 
+interface InitState {
+    phase: InitPhase;
+    analyzeTasks: Task[];
+    projectId: string | null;
+    gitignoreFound: boolean | null;
+    configureTasks: Task[];
+    interactiveChoice: GitignoreChoice | null;
 
-export const REVIEW_BODY_VIEWS = {
-    DIFF: 'diff',
-    PROMPT: 'prompt',
-    REASONING: 'reasoning',
-    SCRIPT_OUTPUT: 'script_output',
-    BULK_REPAIR: 'bulk_repair',
-    CONFIRM_HANDOFF: 'confirm_handoff',
-    BULK_INSTRUCT: 'bulk_instruct',
-    NONE: 'none',
-} as const;
-
-export const PATCH_STATUS = {
-    SUCCESS: 'SUCCESS',
-    PARTIAL_FAILURE: 'PARTIAL_FAILURE',
-} as const;
-
-export const BULK_REPAIR_OPTIONS = [
-    '(1) Copy Bulk Re-apply Prompt (for single-shot AI)',
-    '(2) Bulk Change Strategy & Re-apply',
-    '(3) Handoff to External Agent',
-    '(4) Bulk Abandon All Failed Files',
-    '(Esc) Cancel',
-] as const;
-
-export const BULK_INSTRUCT_OPTIONS = [
-    '(1) Copy Bulk Re-instruct Prompt (for single-shot AI)',
-    '(2) Handoff to External Agent',
-    '(3) Bulk Un-reject All Files (revert to original)',
-    '(4) Cancel',
-] as const;
-
-interface ReviewFooterConfig {
-    isFileSelected: boolean;
-    fileStatus?: 'FAILED' | 'REJECTED' | 'OTHER';
-    currentItemType?: 'file' | 'script' | 'reasoning' | 'prompt';
-    hasFailedFiles: boolean;
-    hasRejectedFiles: boolean;
-    hasApprovedFiles: boolean;
+    actions: {
+        setPhase: (phase: InitPhase) => void;
+        setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+        updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+        setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
+        updateConfigureTask: (id: string, status: TaskStatus) => void;
+        setInteractiveChoice: (choice: GitignoreChoice) => void;
+        resetInit: () => void;
+    };
 }
 
-export const REVIEW_FOOTER_ACTIONS = {
-    DIFF_VIEW: [
-        { key: '↑↓', label: 'Next/Prev File' },
-        { key: 'PgUp/PgDn', label: 'Scroll' },
-        { key: '←/D/Esc', label: 'Back' },
-    ] as const,
-    PROMPT_VIEW: [
-        { key: '↑↓', label: 'Next/Prev Item' },
-        { key: 'PgUp/PgDn', label: 'Scroll' },
-        { key: '←/P/Ent', label: 'Collapse' },
-        { key: 'C', label: 'Copy Mode' },
-    ] as const,
-    REASONING_VIEW: [
-        { key: '↑↓', label: 'Next/Prev Item' },
-        { key: 'PgUp/PgDn', label: 'Scroll' },
-        { key: '←/R/Ent', label: 'Collapse' },
-        { key: 'C', label: 'Copy Mode' },
-    ] as const,
-    SCRIPT_OUTPUT_VIEW: [
-        { key: '↑↓', label: 'Next/Prev Item' },
-        { key: 'PgUp/PgDn', label: 'Scroll' },
-        { key: 'J↓/K↑', label: 'Next/Prev Error' },
-        { key: 'C', label: 'Copy Output' },
-        { key: '←/Ent/Esc', label: 'Back' },
-    ] as const,
-    BULK_REPAIR_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
-    BULK_INSTRUCT_VIEW: { text: 'Use (↑↓) Nav · (Enter) Select · (1-4) Jump · (Esc) Cancel' } as const,
-    HANDOFF_CONFIRM_VIEW: [
-        { key: 'Enter', label: 'Confirm Handoff' },
-        { key: 'Esc', label: 'Cancel' },
-    ] as const,
-    MAIN_VIEW: (config: ReviewFooterConfig): ActionItem[] => {
-        const actions: ActionItem[] = [{ key: '↑↓', label: 'Nav' }];
+// Create the store
+export const useInitStore = create<InitState>((set) => ({
+    phase: 'ANALYZE',
+    analyzeTasks: [],
+    projectId: null,
+    gitignoreFound: null,
+    configureTasks: [],
+    interactiveChoice: null,
 
-        if (config.isFileSelected) {
-            if (config.fileStatus !== 'FAILED') actions.push({ key: 'Spc', label: 'Toggle' });
-            actions.push({ key: 'D/Ent', label: 'Diff' });
-            if (config.fileStatus === 'FAILED') actions.push({ key: 'T', label: 'Try Repair' });
-            if (config.fileStatus === 'REJECTED') actions.push({ key: 'I', label: 'Instruct' });
-        } else if (config.currentItemType === 'script') {
-            actions.push({ key: 'Ent', label: 'Expand Details' });
-        } else {
-            actions.push({ key: 'Ent', label: 'Expand' });
-        }
-
-        if (config.currentItemType !== 'reasoning') actions.push({ key: 'R', label: 'Reasoning' });
-        if (config.hasFailedFiles) actions.push({ key: 'Shift+T', label: 'Bulk Repair' });
-        if (config.hasRejectedFiles) actions.push({ key: 'Shift+I', label: 'Bulk Instruct' });
-
-        actions.push({ key: 'C', label: 'Copy' });
-
-        if (config.hasApprovedFiles) actions.push({ key: 'A', label: 'Approve' });
-        actions.push({ key: 'X', label: 'Reject Tx' });
-        actions.push({ key: '←/Q/Esc', label: 'Back' });
-        return actions;
+    actions: {
+        setPhase: (phase) => set({ phase }),
+        setTasks: (analyzeTasks, configureTasks) => set({
+            analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
+            configureTasks: JSON.parse(JSON.stringify(configureTasks)),
+        }),
+        updateAnalyzeTask: (id, status) => set(state => ({
+            analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+        })),
+        setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+        updateConfigureTask: (id, status) => set(state => ({
+            configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+        })),
+        setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+        resetInit: () => set({
+            phase: 'ANALYZE',
+            analyzeTasks: [],
+            projectId: null,
+            gitignoreFound: null,
+            configureTasks: [],
+            interactiveChoice: null,
+        }),
     },
-};
-
-export const getReviewProcessingFooterActions = (
-    isSkippable: boolean,
-): readonly ActionItem[] => {
-    const actions: ActionItem[] = [{ key: 'Ctrl+C', label: 'Cancel Process' }];
-    if (isSkippable) {
-        actions.push({ key: 'S', label: 'Skip Script' });
-    }
-    return actions;
-};
+}));
 ```
 
-## File: src/hooks/useDashboardScreen.tsx
+## File: src/hooks/useSplashScreen.tsx
 ```typescript
 import { useState, useEffect, useRef } from 'react';
 import { useInput } from 'ink';
-import { useDashboardStore } from '../stores/dashboard.store';
 import { useAppStore } from '../stores/app.store';
-import { useCommitStore } from '../stores/commit.store';
-import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
-import { useReviewStore } from '../stores/review.store';
-import { useDetailStore } from '../stores/detail.store';
-import { useHistoryStore } from '../stores/history.store';
-import type { LayoutConfig } from './useLayout';
-import { DASHBOARD_STATUS } from '../constants/dashboard.constants';
-import { useViewport } from './useViewport';
-import { useListNavigator } from './useListNavigator';
+import { UI_CONFIG } from '../config/ui.config';
+import { SPLASH_TIPS } from '../constants/splash.constants';
+import { useNotificationStore } from '../stores/notification.store';
 
-export const useDashboardScreen = ({ layoutConfig }: { layoutConfig: LayoutConfig }) => {
-    const {
-        status,
-        selectedTransactionIndex,
-        expandedTransactionId,
-    } = useDashboardStore();
-    const transactions = useTransactionStore(s => s.transactions);
-    const [newTransactionIds, setNewTransactionIds] = useState(new Set<string>());
-    const prevTransactionIds = useRef(new Set(transactions.map(t => t.id)));
+export const useSplashScreen = () => {
+    const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+    const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+    const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+    const [tip, setTip] = useState('');
+    const [updateStatus, setUpdateStatus] = useState('');
+    const [visibleSections, setVisibleSections] = useState(new Set<string>());
+    const [animationComplete, setAnimationComplete] = useState(false);
 
-    const pendingTransactions = useTransactionStore(selectTransactionsByStatus('PENDING'));
-    const appliedTransactions = useTransactionStore(selectTransactionsByStatus('APPLIED'));
+    // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+    const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-    const { viewOffset, viewportHeight } = useViewport({
-        selectedIndex: selectedTransactionIndex,
-        itemCount: transactions.length,
-        layoutConfig,
+    const clearAllTimeouts = () => {
+        timeouts.current.forEach(clearTimeout);
+        timeouts.current = [];
+    };
+
+    const handleSkip = () => {
+        clearAllTimeouts();
+        setAnimationComplete(true);
+        setVisibleLogoLines(100); // A high number to show all lines
+        setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+        setUpdateStatus('✓ You are up to date.');
+        showInitScreen();
+    };
+
+    useInput((input) => {
+        const lowerInput = input.toLowerCase();
+        if (lowerInput === 'v') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening https://relay.noca.pro in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'x') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening X/Twitter in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'd') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening Discord invite in your browser...',
+            });
+            return;
+        }
+        if (lowerInput === 'g') {
+            useNotificationStore.getState().actions.show({
+                type: 'info',
+                title: 'Opening Link',
+                message: 'Opening GitHub repository in your browser...',
+            });
+            return;
+        }
+
+        // Any other key skips
+        handleSkip(); 
     });
 
     useEffect(() => {
-        const currentIds = new Set(transactions.map(t => t.id));
-        const newIds = new Set<string>();
+        const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
 
-        for (const id of currentIds) {
-            if (!prevTransactionIds.current.has(id)) {
-                newIds.add(id);
-            }
+        // Pick a random tip on mount
+        if (!tip) {
+            setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
         }
 
-        if (newIds.size > 0) {
-            setNewTransactionIds(current => new Set([...current, ...newIds]));
-            newIds.forEach(id => {
-                setTimeout(() => {
-                    setNewTransactionIds(current => {
-                        const next = new Set(current);
-                        next.delete(id);
-                        return next;
-                    });
-                }, 1000);
-            });
-        }
+        // 1. Animate logo
+        const logoTimer = setInterval(() => {
+            setVisibleLogoLines(l => {
+                if (l >= 4) { // Fix: was 3, which cut off the last line of the logo
+                    clearInterval(logoTimer);
+                    
+                    // 2. Animate sections
+                    t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                    t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                    t(() => {
+                        setVisibleSections(s => new Set(s).add('updateCheck'));
+                        setUpdateStatus('Checking for updates...');
+                        t(() => setUpdateStatus('✓ You are up to date.'), 1500);
+                    }, 600);
 
-        prevTransactionIds.current = currentIds;
-    }, [transactions]);
+                    t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
+                    t(() => setVisibleSections(s => new Set(s).add('links')), 1000);
+                    t(() => setAnimationComplete(true), 1200);
 
-    const {
-        togglePause,
-        startApproveAll,
-        confirmAction,
-        cancelAction,
-        toggleExpand,
-    } = useDashboardStore(s => s.actions);
-    const appActions = useAppStore(s => s.actions);
-    const commitActions = useCommitStore(s => s.actions);
-
-    const pendingApprovals = pendingTransactions.length;
-    const pendingCommits = appliedTransactions.length;
-
-    const isModal = status === DASHBOARD_STATUS.CONFIRM_APPROVE;
-    const isProcessing = status === DASHBOARD_STATUS.APPROVING;
-
-    const viewDetails = () => {
-        const selectedTx = transactions[selectedTransactionIndex];
-        if (!selectedTx) return;
-
-        if (selectedTx.status === 'PENDING') {
-            useReviewStore.getState().actions.load(selectedTx.id);
-            appActions.showReviewScreen();
-        } else {
-            useDetailStore.getState().actions.load(selectedTx.id);
-            appActions.showTransactionDetailScreen();
-        }
-    };
-
-    useInput((_input, key) => {
-        if (key.return) confirmAction();
-        if (key.escape) cancelAction();
-    }, { isActive: isModal });
-
-    useListNavigator({
-        itemCount: transactions.length,
-        viewportHeight,
-        selectedIndex: selectedTransactionIndex,
-        onIndexChange: (index) => {
-            useDashboardStore.getState().actions.setSelectedIndex(index);
-            useDashboardStore.getState().actions.setExpandedTransactionId(null);
-        },
-        isActive: !isModal && !isProcessing,
-        onKey: (input, key) => {
-            if (key.leftArrow) {
-                if (expandedTransactionId) toggleExpand();
-                return;
-            }
-            if (key.rightArrow) {
-                if (transactions[selectedTransactionIndex]) {
-                    if (!expandedTransactionId) toggleExpand();
-                    else viewDetails();
+                    return l;
                 }
-                return;
-            }
-            if (key.return) viewDetails();
-            if (input.toLowerCase() === 'p') togglePause();
-            if (input.toLowerCase() === 'a' && pendingApprovals > 0) startApproveAll();
-            if (input.toLowerCase() === 'c' && pendingCommits > 0) {
-                commitActions.prepareCommitScreen();
-                appActions.showGitCommitScreen();
-            }
-            if (input.toLowerCase() === 'l') {
-                useHistoryStore.getState().actions.load();
-                appActions.showTransactionHistoryScreen();
+                return l + 1;
+            });
+        }, 80);
+
+        // Cleanup
+        return () => {
+            clearInterval(logoTimer);
+            clearAllTimeouts();
+        };
+    }, [tip]);
+
+    useEffect(() => {
+        if (!animationComplete) return;
+
+        if (countdown <= 0) {
+            showInitScreen();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCountdown(c => c - 1);
+        }, 1000);
+        timeouts.current.push(timer);
+        
+        return () => clearTimeout(timer);
+    }, [countdown, showInitScreen, animationComplete]);
+
+    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
+};
+```
+
+## File: src/components/SplashScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import Separator from './Separator';
+import { useSplashScreen } from '../hooks/useSplashScreen';
+
+const SplashScreen = () => {
+    const { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus } = useSplashScreen();
+    const logo = `
+         ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+         ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+         ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀`;
+
+    const logoLines = logo.split('\n');
+
+    return (
+        <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
+            <Box flexDirection="column">
+                <Text bold color="black" backgroundColor="yellow"> ▲ relaycode </Text>
+                <Separator />
+                <Box flexDirection="column">
+                    {logoLines.slice(0, visibleLogoLines).map((line, index) => {
+                        if (index === 0) return <Text key={index}>{line}</Text>;
+                        if (index === 2) return <Text key={index} color="white">{line}</Text>;
+                        return <Text key={index} color="cyan">{line}</Text>;
+                    })}
+                </Box>
+                {visibleSections.has('tagline') && (
+                    <Box flexDirection="column" alignItems="center">
+                        <Text italic>A zero-friction, AI-native patch engine.</Text>
+                        <Text italic color="gray">Built by Arman and contributors · <Text underline color="blue">https://relay.noca.pro</Text></Text>
+                    </Box>
+                )}
+                
+                {visibleSections.has('version') && (
+                    <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                        <Box flexDirection="column" width="45%">
+                            <Text color="yellow">Version 1.1.5</Text>
+                            <Text color="gray">─────────────────────────</Text>
+                            <Text>relaycode</Text>
+                            <Text>relaycode-core</Text>
+                            <Text>apply-multi-diff</Text>
+                            <Text>konro</Text>
+                        </Box>
+                         <Box flexDirection="column" width="45%">
+                            <Text color="yellow">Build Timestamps</Text>
+                            <Text color="gray">─────────────────────────</Text>
+                            <Text>2025-09-20 13:58:05</Text>
+                            <Text>2025-09-20 10:59:05</Text>
+                            <Text>(versioned)</Text>
+                            <Text>(versioned)</Text>
+                        </Box>
+                    </Box>
+                )}
+
+                {visibleSections.has('updateCheck') && (
+                    <Box marginTop={1}>
+                        <Text>{updateStatus}</Text>
+                    </Box>
+                )}
+                
+                {visibleSections.has('promo') && (
+                    <>
+                        <Box marginTop={1}><Separator /></Box>
+                        <Text>If you love this workflow, check out <Text underline color="blue">https://www.noca.pro</Text> for the full</Text>
+                        <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                        <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                    </>
+                )}
+
+                {visibleSections.has('links') && (
+                    <>
+                        <Separator />
+                        <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                    </>
+                )}
+
+                <Separator />
+                {animationComplete && (
+                    <Box marginBottom={1}>
+                        <Text italic color="gray">{tip}</Text>
+                    </Box>
+                )}
+                <Text>
+                    <Text color="gray">
+                        {animationComplete ? 'Loading... ' : 'Loading...'}
+                    </Text>
+                    {animationComplete && <Text color="yellow">{countdown}</Text>}
+                    <Text color="gray"> (Press any key to skip)</Text>
+                </Text>
+            </Box>
+        </Box>
+    );
+};
+
+export default SplashScreen;
+```
+
+## File: src/stores/app.store.ts
+```typescript
+import { create } from 'zustand';
+import type { AppScreen } from '../types/view.types';
+import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
+
+interface AppState {
+    currentScreen: AppScreen;
+    actions: {
+        showInitScreen: () => void;
+        showReviewProcessingScreen: () => void;
+        showDashboardScreen: () => void;
+        showReviewScreen: () => void;
+        showGitCommitScreen: () => void;
+        showSplashScreen: () => void;
+        showTransactionHistoryScreen: () => void;
+        showTransactionDetailScreen: () => void;
+        navigateBack: () => void;
+    };
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
+    currentScreen: 'splash',
+    actions: {
+        showInitScreen: () => set({ currentScreen: 'init' }),
+        showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+        showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+        showReviewScreen: () => set({ currentScreen: 'review' }),
+        showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+        showSplashScreen: () => set({ currentScreen: 'splash' }),
+        showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+        showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+        navigateBack: () => {
+            const { currentScreen } = get();
+            if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
+                get().actions.showDashboardScreen();
             }
         },
-    });
+    },
+}));
+```
 
-    const transactionsToConfirm = status === DASHBOARD_STATUS.CONFIRM_APPROVE ? pendingTransactions : [];
+## File: src/components/InitializationScreen.tsx
+```typescript
+import { Box, Text } from 'ink';
+import { useState, useEffect } from 'react';
+import Spinner from 'ink-spinner';
+import type { Task } from '../stores/init.store';
+import { useInitializationScreen } from '../hooks/useInitializationScreen';
+import ScreenLayout from './layout/ScreenLayout';
 
-    return {
-        status,
-        transactions,
-        selectedTransactionIndex,
-        expandedTransactionId,
-        pendingApprovals,
-        pendingCommits,
-        isModal,
-        isProcessing,
-        newTransactionIds,
-        viewOffset,
-        viewportHeight,
-        transactionsToConfirm,
-    };
+const TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {
+	const [isJustDone, setIsJustDone] = useState(false);
+
+	useEffect(() => {
+		if (task.status === 'done') {
+			setIsJustDone(true);
+			const timer = setTimeout(() => setIsJustDone(false), 300);
+			return () => clearTimeout(timer);
+		}
+	}, [task.status]);
+
+	let symbol: React.ReactNode;
+	switch (task.status) {
+		case 'pending': symbol = '( )'; break;
+		case 'active': symbol = <Text color="cyan"><Spinner type="dots" /></Text>; break;
+		case 'done': symbol = <Text color="green">{doneSymbol}</Text>; break;
+	}
+
+	const title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;
+
+	return (
+		<Box flexDirection="column">
+			<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>
+				{symbol} {title}
+			</Text>
+			{task.subtext && task.status !== 'done' && (
+				<Text italic color="gray">
+					{'     └─ '}{task.subtext}
+				</Text>
+			)}
+		</Box>
+	);
 };
+
+const InitializationScreen = () => {
+    const {
+        phase,
+        analyzeTasks,
+        configureTasks,
+        interactiveChoice,
+        projectId,
+        footerText,
+    } = useInitializationScreen();
+
+    const renderAnalyze = () => (
+        <Box flexDirection="column">
+            <Text bold color="cyan">PHASE 1: ANALYZE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}
+            </Box>
+        </Box>
+    );
+
+    const renderContext = () => (
+        <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">CONTEXT</Text>
+            <Text>  <Text color="green">✓</Text> Project ID: {projectId}</Text>
+            <Text>  <Text color="green">✓</Text> Gitignore:  Found at ./</Text>
+        </Box>
+    );
+
+    const renderConfigure = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1} gap={1}>
+                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+            </Box>
+        </Box>
+    );
+
+    const renderInteractive = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Text bold color="cyan">PHASE 2: CONFIGURE</Text>
+            <Box flexDirection="column" marginTop={1}>
+                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}
+                <Box flexDirection="column" marginTop={1}>
+                    <Text><Text color="cyan">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>
+                    <Text color="yellow">  Do you want to share its state with your team by committing it?</Text>
+                </Box>
+            </Box>
+        </Box>
+    );
+
+    const renderFinalize = () => {
+        const stateText = interactiveChoice === 'share'
+            ? <Text><Text color="cyan">.relay/</Text> directory initialized. It will be committed to git.</Text>
+            : <Text><Text color="cyan">.relay/</Text> directory initialized and added to <Text color="cyan">.gitignore</Text>.</Text>;
+        const stateSubText = interactiveChoice === 'share'
+            ? undefined
+            : 'Local transaction history will be stored here.';
+        
+        return (
+            <Box flexDirection="column">
+                <Text bold color="green">✓ SYSTEM READY</Text>
+                <Box flexDirection="column" marginTop={1} paddingLeft={2} gap={1}>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>Config:</Text>   <Text color="cyan">relay.config.json</Text> created.</Text>
+                        <Text color="gray" italic>          › Edit this file to tune linters, git integration, etc.</Text>
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>State:</Text>    {stateText}</Text>
+                        {stateSubText && <Text color="gray" italic>          › {stateSubText}</Text>}
+                    </Box>
+                    <Box flexDirection="column">
+                        <Text><Text color="green">✓</Text> <Text bold>Prompt:</Text>   System prompt generated at <Text color="cyan">.relay/prompts/system-prompt.md</Text>.</Text>
+                        <Text color="green" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>
+                    </Box>
+                </Box>
+            </Box>
+        );
+    };
+
+    const renderPhase = () => {
+        switch (phase) {
+            case 'ANALYZE': return renderAnalyze();
+            case 'CONFIGURE': return renderConfigure();
+            case 'INTERACTIVE': return renderInteractive();
+            case 'FINALIZE': return renderFinalize();
+        }
+    };
+
+    return (
+        <ScreenLayout
+            title={phase === 'FINALIZE' ? 'BOOTSTRAP COMPLETE' : 'BOOTSTRAP'}
+            footer={typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}
+        >
+            {renderPhase()}
+        </ScreenLayout>
+    );
+};
+
+export default InitializationScreen;
 ```
 
 ## File: index.tsx
@@ -777,1515 +918,479 @@ const main = () => {
 main();
 ```
 
-## File: src/hooks/useReviewScreen.tsx
+## File: src/App.tsx
 ```typescript
-import { useMemo } from 'react';
-import { useInput, type Key } from 'ink';
-import { useReviewStore } from '../stores/review.store';
-import { useAppStore } from '../stores/app.store';
-import { useNotificationStore } from '../stores/notification.store';
-import { useCopyStore } from '../stores/copy.store';
-import { useTransactionStore, selectSelectedTransaction } from '../stores/transaction.store';
-import type { FileItem } from '../types/domain.types';
-import { useLayout } from './useLayout';
-import { useContentViewport } from './useContentViewport';
-import { UI_CONFIG } from '../config/ui.config';
-import { REVIEW_BODY_VIEWS } from '../constants/review.constants';
-import { useListNavigator } from './useListNavigator';
-import type { ReviewBodyView } from '../stores/review.store';
-import { useViewport } from './useViewport';
-
-type NavigableItem =
-    | { type: 'prompt' }
-    | { type: 'reasoning' }
-    | { type: 'script'; id: string }
-    | { type: 'file'; id: string };
-
-export const useReviewScreen = () => {
-    const store = useReviewStore();
-    const {
-        selectedItemIndex,
-        bodyView,
-        patchStatus,
-        selectedBulkRepairOptionIndex,
-        selectedBulkInstructOptionIndex,
-    } = store;
-
-    const transaction = useTransactionStore(selectSelectedTransaction);
-    const { showDashboardScreen } = useAppStore(s => s.actions);
-
-    const scriptCount = transaction?.scripts?.length || 0;
-    const fileCount = transaction?.files?.length || 0;
-
-    const layout = UI_CONFIG.layout.review;
-
-    // Layout for the main navigable item list (prompt, reasoning, files, etc.)
-    const mainListLayoutConfig = useMemo(() => ({
-        header: layout.header,
-        fixedRows: layout.fixedRows,
-        marginsY: layout.marginsY,
-        separators: layout.separators,
-        footer: layout.footer,
-        dynamicRows: {
-            count: bodyView !== REVIEW_BODY_VIEWS.NONE ? layout.bodyHeightReservation : 0,
-        },
-    }), [bodyView, layout]);
-
-    const { remainingHeight: listViewportHeight } = useLayout(mainListLayoutConfig);
-    const { viewOffset } = useViewport({
-        selectedIndex: selectedItemIndex,
-        itemCount: 100,
-        layoutConfig: mainListLayoutConfig,
-    });
-
-    // Layout for the body content (diff, reasoning, etc.)
-    const bodyLayoutConfig = useMemo(() => ({
-        header: layout.header,
-        separators: layout.separators,
-        fixedRows: 2, // meta
-        marginsY: 1 + 1 + 1, // meta, scripts, files
-        footer: 2,
-        dynamicRows: { count: 2 + scriptCount + 1 + fileCount }, // prompt, reasoning, scripts, 'FILES' header, files
-    }), [layout, scriptCount, fileCount]);
-
-    const { remainingHeight: availableBodyHeight } = useLayout(bodyLayoutConfig);
-
-    const navigableItems = useMemo((): NavigableItem[] => {
-        if (!transaction) return [];
-        const scriptItems: NavigableItem[] = (transaction.scripts || []).map(s => ({ type: 'script', id: s.command }));
-        const fileItems: NavigableItem[] = (transaction.files || []).map(f => ({ type: 'file', id: f.id }));
-        return [{ type: 'prompt' }, { type: 'reasoning' }, ...scriptItems, ...fileItems];
-    }, [transaction]);
-
-    const contentLineCount = useMemo(() => {
-        const currentItem = navigableItems[selectedItemIndex];
-        switch (bodyView) { //
-            case REVIEW_BODY_VIEWS.REASONING:
-                return (transaction?.reasoning || '').split('\n').length;
-            case REVIEW_BODY_VIEWS.PROMPT:
-                return (transaction?.prompt || '').split('\n').length;
-            case REVIEW_BODY_VIEWS.DIFF: {
-                if (currentItem?.type !== 'file') return 0;
-                const selectedFile = (transaction?.files || []).find(f => f.id === currentItem.id);
-                return (selectedFile?.diff || '').split('\n').length;
-            }
-            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: {
-                if (currentItem?.type !== 'script') return 0;
-                const selectedScript = (transaction?.scripts || []).find(s => s.command === currentItem.id);
-                return (selectedScript?.output || '').split('\n').length;
-            }
-            default: return 0;
-        }
-    }, [bodyView, navigableItems, selectedItemIndex, transaction]);
-    const contentViewport = useContentViewport({ contentLineCount, viewportHeight: availableBodyHeight });
-
-    const navigableItemsInView = navigableItems.slice(viewOffset, viewOffset + listViewportHeight);
-
-    // Memoize files to prevent re-renders, fixing the exhaustive-deps lint warning.
-    const files: FileItem[] = useMemo(() => transaction?.files || [], [transaction]);
-    const fileReviewStates = useReviewStore(s => s.fileReviewStates);
-
-    const reviewStats = useMemo(() => {
-        const approvedFiles = files.filter(f => fileReviewStates.get(f.id)?.status === 'APPROVED');
-        return {
-            totalFiles: files.length,
-            totalLinesAdded: files.reduce((sum, f) => sum + f.linesAdded, 0),
-            totalLinesRemoved: files.reduce((sum, f) => sum + f.linesRemoved, 0),
-            numFiles: files.length,
-            approvedFilesCount: approvedFiles.length,
-        };
-    }, [files, fileReviewStates]);
-
-    const hasRejectedFiles = useMemo(() => {
-        if (!fileReviewStates) return false;
-        return Array.from(fileReviewStates.values()).some(s => s.status === 'REJECTED');
-    }, [fileReviewStates]);
-
-    const { approvedFilesCount } = reviewStats;
-
-    const isFileSelected = navigableItems[selectedItemIndex]?.type === 'file';
-
-    const scripts = transaction?.scripts || [];
-
-    const {
-        setSelectedItemIndex, toggleBodyView, setBodyView, startApplySimulation, approve,
-        rejectTransaction, tryRepairFile, tryInstruct, showBulkRepair, showBulkInstruct,
-        executeBulkRepairOption, executeBulkInstructOption, confirmHandoff,
-        navigateScriptErrorUp, navigateScriptErrorDown, toggleFileApproval,
-        rejectAllFiles, navigateBulkRepairUp, navigateBulkRepairDown,
-        navigateBulkInstructUp, navigateBulkInstructDown,
-    } = store.actions;
-
-    const openCopyMode = () => {
-        if (!transaction) return;
-        const currentItem = navigableItems[selectedItemIndex];
-        const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
-        useCopyStore.getState().actions.openForReview(transaction, transaction.files || [], selectedFile);
-    };
-
-    const handleIndexChange = (newIndex: number) => {
-        setSelectedItemIndex(newIndex);
-        contentViewport.actions.resetScroll();
-    };
-
-    const navigateToNextFile = () => {
-        const nextFileIndex = navigableItems.findIndex(
-            (item, index) => index > selectedItemIndex && item.type === 'file',
-        );
-        if (nextFileIndex !== -1) {
-            setSelectedItemIndex(nextFileIndex);
-        }
-    };
-
-    const navigateToPreviousFile = () => {
-        // Find the last index of a file before the current one
-        const prevFileIndex = navigableItems
-            .slice(0, selectedItemIndex)
-            .findLastIndex(item => item.type === 'file');
-
-        if (prevFileIndex !== -1) {
-            setSelectedItemIndex(prevFileIndex);
-        }
-    };
-
-    // --- Input Handlers ---
-
-    const handleGlobalInput = (input: string, key: Key): boolean => {
-        if (input === '1' && transaction) { // For demo purposes
-            startApplySimulation(transaction.id, 'success'); return true;
-        }
-        if (input === '2' && transaction) { // For demo purposes
-            startApplySimulation(transaction.id, 'failure'); return true;
-        }
-        // The 'q' (quit/back) is now handled by the global hotkey hook.
-
-        const currentItem = navigableItems[selectedItemIndex];
-        if (input.toLowerCase() === 'd' && currentItem?.type === 'file') {
-            toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
-            return true;
-        }
-
-        if (key.escape) {
-            switch (bodyView) {
-                case REVIEW_BODY_VIEWS.BULK_REPAIR:
-                case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
-                case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
-                    toggleBodyView(bodyView);
-                    break;
-                default:
-                    if (bodyView !== REVIEW_BODY_VIEWS.NONE) {
-                        setBodyView(REVIEW_BODY_VIEWS.NONE);
-                    }
-                    break;
-            }
-            return true;
-        }
-        return false;
-    };
-
-    const handleHandoffConfirmInput = (_input: string, key: Key): void => {
-        if (key.return) confirmHandoff();
-    };
-
-    const handleBulkRepairInput = (input: string, key: Key): void => {
-        if (key.upArrow) navigateBulkRepairUp();
-        if (key.downArrow) navigateBulkRepairDown();
-        if (key.return) {
-            executeBulkRepairOption(selectedBulkRepairOptionIndex + 1); // Options are 1-based
-            return;
-        }
-
-        if (input >= '1' && input <= '4') {
-            executeBulkRepairOption(parseInt(input));
-        }
-    };
-    
-    const handleBulkInstructInput = (input: string, key: Key): void => {
-        if (key.upArrow) navigateBulkInstructUp();
-        if (key.downArrow) navigateBulkInstructDown();
-        if (key.return) {
-            executeBulkInstructOption(selectedBulkInstructOptionIndex + 1); // Options are 1-based
-            return;
-        }
-
-        if (input >= '1' && input <= '3') {
-            executeBulkInstructOption(parseInt(input));
-        }
-    };
-
-    const handleContentScrollInput = (key: Key): boolean => {
-        const contentViews: ReviewBodyView[] = [
-            REVIEW_BODY_VIEWS.REASONING,
-            REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
-            REVIEW_BODY_VIEWS.DIFF,
-            REVIEW_BODY_VIEWS.PROMPT,
-        ];
-        if (!contentViews.includes(bodyView)) return false;
-
-        if (key.pageUp) { contentViewport.actions.pageUp(); return true; }
-        if (key.pageDown) { contentViewport.actions.pageDown(); return true; }
-        return false;
-    };
-
-    const handleReasoningInput = (input: string, _key: Key): void => {
-        if (input.toLowerCase() === 'r') toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
-    };
-
-    const handleScriptOutputInput = (input: string, _key: Key): void => {
-        if (input.toLowerCase() === 'j') navigateScriptErrorDown();
-        if (input.toLowerCase() === 'k') navigateScriptErrorUp();
-        if (input.toLowerCase() === 'c') { // TODO: this copy logic is not great.
-            const currentItem = navigableItems[selectedItemIndex];
-            const selectedScript = currentItem?.type === 'script' ? scripts.find(s => s.command === currentItem.id) : undefined;
-            if (selectedScript) {
-                useNotificationStore.getState().actions.show({
-                    type: 'success',
-                    title: 'Copied to Clipboard',
-                    message: `Copied script output for: ${selectedScript.command}`,
-                });
-            }
-        }
-    };
-
-    const handleDiffInput = (input: string, key: Key) => {
-        if (key.upArrow) {
-            navigateToPreviousFile();
-            return;
-        }
-        if (key.downArrow) {
-            navigateToNextFile();
-            return;
-        }
-        if (input.toLowerCase() === 'd') toggleBodyView('diff');
-    };
-
-    const handleMainNavigationInput = (input: string, key: Key): void => {
-        if (key.leftArrow) {
-            showDashboardScreen();
-            return;
-        }
-
-        // Handle Shift+R for reject all
-        if (key.shift && input.toLowerCase() === 'r') {
-            if (approvedFilesCount > 0 && transaction) {
-                rejectAllFiles();
-            }
-            return;
-        }
-
-        const currentItem = navigableItems[selectedItemIndex];
-
-        if (input === ' ') {
-            if (currentItem?.type === 'file') {
-                const fileState = fileReviewStates.get(currentItem.id);
-                if (fileState && fileState.status !== 'FAILED') {
-                    toggleFileApproval(currentItem.id);
-                }
-            }
-        }
-
-        if (input.toLowerCase() === 'p') {
-            toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
-        }
-
-        if (input.toLowerCase() === 'r') {
-            toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
-        }
-
-        if (key.return) { // Enter key
-            if (currentItem?.type === 'file') {
-                toggleBodyView(REVIEW_BODY_VIEWS.DIFF);
-            } else if (currentItem?.type === 'prompt') {
-                toggleBodyView(REVIEW_BODY_VIEWS.PROMPT);
-            } else if (currentItem?.type === 'reasoning') {
-                toggleBodyView(REVIEW_BODY_VIEWS.REASONING);
-            } else if (currentItem?.type === 'script') {
-                toggleBodyView(REVIEW_BODY_VIEWS.SCRIPT_OUTPUT);
-            }
-        }
-
-        if (input.toLowerCase() === 'a') {
-            if (approvedFilesCount > 0) {
-                approve();
-                showDashboardScreen();
-            }
-        }
-
-        if (input.toLowerCase() === 'x') {
-            rejectTransaction();
-        }
-
-        if (input.toLowerCase() === 'c') {
-            openCopyMode();
-        }
-
-        if (input.toLowerCase() === 't') {
-            if (key.shift) {
-                const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
-                if (hasFailedFiles) showBulkRepair();
-            } else if (currentItem?.type === 'file') {
-                const fileState = fileReviewStates.get(currentItem.id);
-                if (fileState?.status === 'FAILED') tryRepairFile(currentItem.id);
-            }
-        }
-
-        if (input.toLowerCase() === 'i') {
-            if (key.shift) {
-                if (hasRejectedFiles) showBulkInstruct();
-            } else if (currentItem?.type === 'file') {
-                const fileState = fileReviewStates.get(currentItem.id);
-                if (fileState?.status === 'REJECTED') {
-                    tryInstruct(currentItem.id);
-                }
-            }
-        }
-    };
-
-    const listNavigableBodyViews: ReviewBodyView[] = [
-        REVIEW_BODY_VIEWS.PROMPT,
-        REVIEW_BODY_VIEWS.REASONING,
-        REVIEW_BODY_VIEWS.SCRIPT_OUTPUT,
-    ];
-    const isListNavigationActive = bodyView === REVIEW_BODY_VIEWS.NONE || listNavigableBodyViews.includes(bodyView);
-    const arePageKeysForListNav = bodyView === REVIEW_BODY_VIEWS.NONE;
-
-    useListNavigator({
-        itemCount: navigableItems.length,
-        viewportHeight: listViewportHeight,
-        selectedIndex: selectedItemIndex,
-        onIndexChange: handleIndexChange,
-        isActive: isListNavigationActive,
-        disablePageKeys: !arePageKeysForListNav,
-        onKey: arePageKeysForListNav ? handleMainNavigationInput : undefined,
-    });
-
-    useInput((input: string, key: Key) => {
-        if (handleGlobalInput(input, key)) return;
-
-        if (key.leftArrow) {
-            // Allow left arrow to collapse any open body view
-            setBodyView(REVIEW_BODY_VIEWS.NONE);
-            return;
-        }
-
-        // Global "Enter to collapse" handler for non-modal views
-        if (key.return) {
-            if (
-                bodyView !== REVIEW_BODY_VIEWS.BULK_REPAIR &&
-                bodyView !== REVIEW_BODY_VIEWS.BULK_INSTRUCT &&
-                bodyView !== REVIEW_BODY_VIEWS.CONFIRM_HANDOFF &&
-                bodyView !== REVIEW_BODY_VIEWS.NONE
-            ) {
-                setBodyView(REVIEW_BODY_VIEWS.NONE);
-                return;
-            }
-        }
-        // Handle content scrolling (PgUp/PgDn)
-        if (handleContentScrollInput(key)) return;
-
-        switch (bodyView) {
-            case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF: return handleHandoffConfirmInput(input, key);
-            case REVIEW_BODY_VIEWS.BULK_REPAIR: return handleBulkRepairInput(input, key);
-            case REVIEW_BODY_VIEWS.BULK_INSTRUCT: return handleBulkInstructInput(input, key);
-            case REVIEW_BODY_VIEWS.REASONING: return handleReasoningInput(input, key);
-            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT: return handleScriptOutputInput(input, key);
-            case REVIEW_BODY_VIEWS.DIFF: return handleDiffInput(input, key);
-        }
-    }, { isActive: bodyView !== REVIEW_BODY_VIEWS.NONE });
-
-    return {
-        ...store,
-        fileReviewStates,
-        selectedItemIndex,
-        transaction,
-        files,
-        scripts,
-        patchStatus,
-        navigableItems,
-        isFileSelected,
-        navigableItemsInView,
-        viewOffset,
-        contentScrollIndex: contentViewport.scrollIndex,
-        availableBodyHeight,
-        selectedBulkRepairOptionIndex,
-        selectedBulkInstructOptionIndex,
-        ...reviewStats,
-        hasRejectedFiles,
-    };
-};
-```
-
-## File: src/components/ReviewScreen.tsx
-```typescript
-import { Box, Text } from 'ink';
-import ContentView from './ContentView';
-import type { ScriptResult, FileItem, FileChangeType } from '../types/domain.types';
-import { useReviewScreen } from '../hooks/useReviewScreen';
-import { REVIEW_BODY_VIEWS, REVIEW_FOOTER_ACTIONS, BULK_REPAIR_OPTIONS, BULK_INSTRUCT_OPTIONS } from '../constants/review.constants';
-import ActionFooter from './ActionFooter';
-import { FILE_STATUS_UI } from '../constants/ui.constants';
-import ScreenLayout from './layout/ScreenLayout';
-
-// --- Sub-components ---
-
-const FileItemRow = ({ file, reviewState, isFocused }: {
-    file: FileItem;
-    reviewState: { status: string; error?: string; details?: string };
-    isFocused: boolean;
-}) => {
-    const ui = FILE_STATUS_UI[reviewState.status as keyof typeof FILE_STATUS_UI] || { icon: '[?]', color: 'gray' };
-
-    const typeColor = (type: FileChangeType) => {
-        switch (type) {
-            case 'ADD': return 'green';
-            case 'DEL': return 'red';
-            case 'REN': return 'yellow';
-            default: return 'white';
-        }
-    };
-
-    const diffStats = <Text>(+<Text color="green">{file.linesAdded}</Text>/-<Text color="red">{file.linesRemoved}</Text>)</Text>;
-    const strategy = file.strategy === 'standard-diff' ? 'diff' : file.strategy;
-    const prefix = isFocused ? '> ' : '  ';
-    const colorProps = isFocused ? { bold: true, color: 'cyan' } : {};
-
-    if (reviewState.status === 'FAILED') {
-        return (
-            <Box>
-                <Text {...colorProps}>
-                    {prefix}<Text color={ui.color}>{ui.icon} FAILED {file.path}</Text>
-                    <Text color="red">    ({reviewState.error})</Text>
-                </Text>
-            </Box>
-        );
-    }
-
-    if (reviewState.status === 'AWAITING') {
-        return (
-            <Box>
-                <Text {...colorProps}>
-                    {prefix}<Text color={ui.color}>{ui.icon} AWAITING {file.path}</Text>
-                    <Text color="yellow">    ({reviewState.details})</Text>
-                </Text>
-            </Box>
-        );
-    }
-
-    if (reviewState.status === 'RE_APPLYING') {
-        return (
-             <Box>
-                <Text {...colorProps}>
-                    {prefix}<Text color={ui.color}>{ui.icon} RE-APPLYING... {file.path}</Text>
-                    <Text color="cyan"> (using &apos;replace&apos; strategy)</Text>
-                </Text>
-            </Box>
-        );
-    }
-
-    return (
-        <Box>
-            <Text {...colorProps}>
-                {prefix}<Text color={ui.color}>{ui.icon}</Text> {file.type}{' '}
-                <Text color={typeColor(file.type)}>{file.path}</Text>{' '}
-                {diffStats} [{strategy}]
-            </Text>
-        </Box>
-    );
-};
-
-const ScriptItemRow = ({
-    script,
-    isSelected,
-    isExpanded,
-}: {
-    script: ScriptResult;
-    isSelected: boolean;
-    isExpanded: boolean;
-}) => {
-    const icon = script.success ? '✓' : '✗';
-    const iconColor = script.success ? 'green' : 'red';
-    const arrow = isExpanded ? '▾' : '▸';
-    const prefix = isSelected ? '> ' : '  ';
-    
-    // Extract script type from command (e.g., "bun run test" -> "Post-Command", "bun run lint" -> "Linter")
-    const scriptType = script.command.includes('test') ? 'Post-Command' : 
-                      script.command.includes('lint') ? 'Linter' : 
-                      'Script';
-
-    return (
-        <Box>
-            <Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>
-                {prefix}<Text color={iconColor}>{icon}</Text> {scriptType}: `{script.command}` ({script.duration}s) {arrow}{' '}
-                {script.summary}
-            </Text>
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const ReviewScreen = () => {
-    const {
-        transaction,
-        files,
-        scripts = [],
-        patchStatus,
-        selectedItemIndex,
-        bodyView,
-        scriptErrorIndex,
-        fileReviewStates,
-        numFiles,
-        approvedFilesCount,
-        totalLinesAdded,
-        totalLinesRemoved,
-        selectedBulkRepairOptionIndex,
-        selectedBulkInstructOptionIndex,
-        navigableItems,
-        navigableItemsInView,
-        viewOffset,
-        contentScrollIndex,
-        availableBodyHeight,
-        hasRejectedFiles,
-    } = useReviewScreen();
-
-    if (!transaction) {
-        return <Text>Loading review...</Text>;
-    }
-    const { hash, message, prompt = '', reasoning = '' } = transaction;
-
-    const renderBody = () => {
-        if (bodyView === REVIEW_BODY_VIEWS.NONE) return null;
-
-        if (bodyView === REVIEW_BODY_VIEWS.PROMPT) {
-            const promptText = prompt || '';
-            return (
-                <Box flexDirection="column">
-                    <ContentView
-                        title="PROMPT"
-                        content={promptText}
-                        scrollIndex={contentScrollIndex}
-                        maxHeight={Math.max(1, availableBodyHeight)}
-                    />
-                </Box>
-            );
-        }
-
-        if (bodyView === REVIEW_BODY_VIEWS.REASONING) {
-            const reasoningText = reasoning || '';
-            const reasoningLinesCount = reasoningText.split('\n').length;
-            const visibleLinesCount = 10;
-            return (
-                <Box flexDirection="column">
-                    <ContentView
-                        title="REASONING"
-                        content={reasoningText}
-                        scrollIndex={contentScrollIndex}
-                        maxHeight={Math.max(1, availableBodyHeight)}
-                    />
-                    {reasoningLinesCount > visibleLinesCount && (
-                        <Text color="gray">
-                            Showing lines {contentScrollIndex + 1}-{Math.min(contentScrollIndex + visibleLinesCount, reasoningLinesCount)}{' '}
-                            of {reasoningLinesCount}
-                        </Text>
-                    )}
-                </Box>
-            );
-        }
-        
-        if (bodyView === REVIEW_BODY_VIEWS.DIFF) {
-            const currentItem = navigableItems[selectedItemIndex];
-            const selectedFile = currentItem?.type === 'file' ? files.find(f => f.id === currentItem.id) : undefined;
-            if (!selectedFile) return null;
-            return (
-                <ContentView
-                    title={`DIFF: ${selectedFile.path}`}
-                    content={selectedFile.diff}
-                    highlight="diff"
-                    isExpanded={true}
-                    scrollIndex={contentScrollIndex}
-                />
-            );
-        }
-
-        if (bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT) {
-             const currentItem = navigableItems[selectedItemIndex];
-             const scriptItems = navigableItems.filter((i): i is { type: 'script'; id: string } => i.type === 'script');
-             const scriptIndex = currentItem?.type === 'script'
-                ? scriptItems.findIndex(i => i.id === currentItem.id)
-                : -1;
-             const selectedScript = scripts[scriptIndex] || null;
-             if (!selectedScript) return null;
-             
-             const outputLines = selectedScript.output.split('\n');
-             const errorLines = outputLines.filter((line: string) =>
-                line.includes('Error') || line.includes('Warning'),
-             );
-             
-             return (
-                <Box flexDirection="column">
-                    <Text>
-                        {selectedScript.command.includes('lint') ? 'LINTER' : 'SCRIPT'} OUTPUT: `{selectedScript.command}`
-                    </Text>
-                    <Box marginTop={1} flexDirection="column">
-                        {outputLines.map((line: string, index: number) => {
-                            const isError = line.includes('Error');
-                            const isWarning = line.includes('Warning');
-                            const isHighlighted = errorLines[scriptErrorIndex] === line;
-                            
-                            return (
-                                <Text 
-                                    key={index} 
-                                    color={isError ? 'red' : isWarning ? 'yellow' : undefined}
-                                    bold={isHighlighted}
-                                    backgroundColor={isHighlighted ? 'blue' : undefined}
-                                >
-                                    {line}
-                                </Text>
-                            );
-                        })}
-                    </Box>
-                    {errorLines.length > 0 && (
-                        <Text color="gray">
-                            Error {scriptErrorIndex + 1} of {errorLines.length} highlighted
-                        </Text>
-                    )}
-                </Box>
-             );
-        }
-
-        if (bodyView === REVIEW_BODY_VIEWS.CONFIRM_HANDOFF) {
-            return (
-                <Box flexDirection="column" gap={1}>
-                    <Text bold>HANDOFF TO EXTERNAL AGENT</Text>
-                    <Box flexDirection="column">
-                        <Text>This action will:</Text>
-                        <Text>1. Copy a detailed prompt to your clipboard for an agentic AI.</Text>
-                        <Text>2. Mark the current transaction as &apos;Handoff&apos; and close this review.</Text>
-                        <Text>3. Assume that you and the external agent will complete the work.</Text>
-                    </Box>
-                    <Text>Relaycode will NOT wait for a new patch. This is a final action.</Text>
-                    <Text bold color="yellow">Are you sure you want to proceed?</Text>
-                </Box>
-            );
-        }
-
-        if (bodyView === REVIEW_BODY_VIEWS.BULK_REPAIR) {
-            const failedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'FAILED');
-
-            return (
-                <Box flexDirection="column" gap={1}>
-                    <Text bold>BULK REPAIR ACTION</Text>
-
-                    <Box flexDirection="column">
-                        <Text>The following {failedFiles.length} files failed to apply:</Text>
-                        {failedFiles.map((file: FileItem) => (
-                            <Text key={file.id}>- {file.path}</Text>
-                        ))}
-                    </Box>
-
-                    <Text>How would you like to proceed?</Text>
-
-                    <Box flexDirection="column">
-                        {BULK_REPAIR_OPTIONS.map((opt, i) => (
-                            <Text key={i} color={selectedBulkRepairOptionIndex === i ? 'cyan' : undefined}>
-                                {selectedBulkRepairOptionIndex === i ? '> ' : '  '}
-                                {opt}
-                            </Text>
-                        ))}
-                    </Box>
-                </Box>
-            );
-        }
-
-        if (bodyView === REVIEW_BODY_VIEWS.BULK_INSTRUCT) {
-            const rejectedFiles = files.filter((f: FileItem) => fileReviewStates.get(f.id)?.status === 'REJECTED');
-
-            return (
-                <Box flexDirection="column" gap={1}>
-                    <Text bold>BULK INSTRUCTION ACTION</Text>
-
-                    <Box flexDirection="column">
-                        <Text>The following {rejectedFiles.length} files were rejected:</Text>
-                        {rejectedFiles.map((file: FileItem) => (
-                            <Text key={file.id}>- {file.path}</Text>
-                        ))}
-                    </Box>
-                    <Box flexDirection="column" marginTop={1}>
-                        {BULK_INSTRUCT_OPTIONS.map((opt, i) => (
-                            <Text key={i} color={selectedBulkInstructOptionIndex === i ? 'cyan' : undefined}>
-                                {selectedBulkInstructOptionIndex === i ? '> ' : '  '}
-                                {opt}
-                            </Text>
-                        ))}
-                    </Box>
-                </Box>
-            );
-        }
-
+import { Box } from 'ink';
+import { useAppStore } from './stores/app.store';
+import SplashScreen from './components/SplashScreen';
+import InitializationScreen from './components/InitializationScreen';
+import DashboardScreen from './components/DashboardScreen';
+import ReviewScreen from './components/ReviewScreen';
+import ReviewProcessingScreen from './components/ReviewProcessingScreen';
+import GitCommitScreen from './components/GitCommitScreen';
+import TransactionDetailScreen from './components/TransactionDetailScreen';
+import TransactionHistoryScreen from './components/TransactionHistoryScreen';
+import DebugMenu from './components/DebugMenu'; 
+import DebugLogScreen from './components/DebugLogScreen';
+import GlobalHelpScreen from './components/GlobalHelpScreen';
+import CopyScreen from './components/CopyScreen';
+import NotificationScreen from './components/NotificationScreen';
+import { DimensionsProvider } from './contexts/DimensionsContext';
+import { useViewStore } from './stores/view.store';
+import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
+
+const App = () => {
+    const currentScreen = useAppStore(state => state.currentScreen);
+    const activeOverlay = useViewStore(s => s.activeOverlay);
+    const isOverlayOpen = activeOverlay !== 'none';
+
+    // Global hotkeys are active if no modal-like component is open
+    const areGlobalHotkeysActive = activeOverlay !== 'copy' && activeOverlay !== 'log' && activeOverlay !== 'notification'; // These overlays have their own input handlers
+    useGlobalHotkeys({ isActive: areGlobalHotkeysActive });
+
+    const renderMainScreen = () => {
+        if (currentScreen === 'splash') return <SplashScreen />;
+        if (currentScreen === 'init') return <InitializationScreen />;
+        if (currentScreen === 'dashboard') return <DashboardScreen />;
+        if (currentScreen === 'review') return <ReviewScreen />;
+        if (currentScreen === 'review-processing') return <ReviewProcessingScreen />;
+        if (currentScreen === 'git-commit') return <GitCommitScreen />;
+        if (currentScreen === 'transaction-detail') return <TransactionDetailScreen />;
+        if (currentScreen === 'transaction-history') return <TransactionHistoryScreen />;
         return null;
     };
 
-    const renderFooter = () => {
-        // Contextual footer for body views
-        switch (bodyView) {
-            case REVIEW_BODY_VIEWS.PROMPT:
-                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.PROMPT_VIEW} />;
-            case REVIEW_BODY_VIEWS.DIFF:
-                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.DIFF_VIEW}/>;
-            case REVIEW_BODY_VIEWS.REASONING:
-                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.REASONING_VIEW}/>;
-            case REVIEW_BODY_VIEWS.SCRIPT_OUTPUT:
-                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.SCRIPT_OUTPUT_VIEW}/>;
-            case REVIEW_BODY_VIEWS.BULK_REPAIR:
-                return <Text>{REVIEW_FOOTER_ACTIONS.BULK_REPAIR_VIEW.text}</Text>;
-            case REVIEW_BODY_VIEWS.BULK_INSTRUCT:
-                return <Text>{REVIEW_FOOTER_ACTIONS.BULK_INSTRUCT_VIEW.text}</Text>;
-            case REVIEW_BODY_VIEWS.CONFIRM_HANDOFF:
-                return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.HANDOFF_CONFIRM_VIEW}/>;
-        }
-
-        // Dynamic Main footer
-        const currentItem = navigableItems[selectedItemIndex];
-        const hasFailedFiles = Array.from(fileReviewStates.values()).some(s => s.status === 'FAILED');
-        const fileState = currentItem?.type === 'file' ? fileReviewStates.get(currentItem.id) : undefined;
-
-        const footerConfig = {
-            isFileSelected: currentItem?.type === 'file',
-            fileStatus: fileState?.status as 'FAILED' | 'REJECTED' | 'OTHER' | undefined,
-            currentItemType: currentItem?.type as 'file' | 'script' | 'reasoning' | 'prompt' | undefined,
-            hasFailedFiles,
-            hasRejectedFiles,
-            hasApprovedFiles: approvedFilesCount > 0,
-        };
-        return <ActionFooter actions={REVIEW_FOOTER_ACTIONS.MAIN_VIEW(footerConfig)} />;
-    };
-
     return (
-        <ScreenLayout title="REVIEW" footer={renderFooter()}>
-            {/* Navigator Section */}
-            <Box flexDirection="column" marginY={1}>
-                <Box flexDirection="column">
-                    <Text>{hash} · {message}</Text>
-                    <Box>
-                        <Text>
-                            (<Text color="green">+{totalLinesAdded}</Text>/<Text color="red">-{totalLinesRemoved}</Text>)
-                            {' '}| {numFiles} Files · ({approvedFilesCount}/{numFiles} Appr)
-                            {' '}| Showing {viewOffset + 1}-
-                            {Math.min(viewOffset + navigableItemsInView.length, navigableItems.length)}{' '}
-                            of {navigableItems.length}
-                        </Text>
-                        {patchStatus === 'PARTIAL_FAILURE' && scripts.length === 0 && (
-                            <Text> · Scripts: SKIPPED</Text>
-                        )}
-                        {patchStatus === 'PARTIAL_FAILURE' && <Text color="red" bold> · MULTIPLE PATCHES FAILED</Text>}
-                    </Box>
-                </Box>
-
-                <Box flexDirection="column" marginTop={1}>
-                    <Text color={navigableItems[selectedItemIndex]?.type === 'prompt' ? 'cyan' : undefined}>
-                        {navigableItems[selectedItemIndex]?.type === 'prompt' ? '> ' : '  '}
-                        (P)rompt ▸ {(prompt || '').substring(0, 50)}...
-                    </Text>
-                    <Text color={navigableItems[selectedItemIndex]?.type === 'reasoning' ? 'cyan' : undefined}>
-                        {navigableItems[selectedItemIndex]?.type === 'reasoning' ? '> ' : '  '}
-                        (R)easoning ({(reasoning || '').split('\n\n').length} steps){' '}
-                        {bodyView === REVIEW_BODY_VIEWS.REASONING ? '▾' : '▸'}{' '}
-                        {((reasoning || '').split('\n')[0] ?? '').substring(0, 40)}...
-                    </Text>
-                </Box>
+        <DimensionsProvider>
+            <Box
+                width="100%"
+                height="100%"
+                flexDirection="column"
+                display={isOverlayOpen ? 'none' : 'flex'}
+            >
+                {renderMainScreen()}
             </Box>
-
-            {/* Script Results (if any) */}
-            {scripts.length > 0 && navigableItemsInView.some(i => i.type === 'script') && (
-                <>
-                    <Box flexDirection="column" marginY={1}>
-                        {scripts.map((script: ScriptResult) => {
-                            const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'script' && i.id === script.command);
-                            if (itemInViewIndex === -1) return null;
-                            
-                            const isSelected = selectedItemIndex === viewOffset + itemInViewIndex;
-                            return (
-                                <ScriptItemRow
-                                    key={script.command} script={script}
-                                    isSelected={isSelected}
-                                    isExpanded={bodyView === REVIEW_BODY_VIEWS.SCRIPT_OUTPUT && isSelected}
-                                />
-                            );
-                        })}
-                    </Box>
-                </>
-            )}
-            
-            {/* Files Section */}
-            <Box flexDirection="column" marginY={1}>
-                <Text bold>FILES</Text>
-                {files.map((file: FileItem) => {
-                    const itemInViewIndex = navigableItemsInView.findIndex(i => i.type === 'file' && i.id === file.id);
-                    if (itemInViewIndex === -1) return null; // Only render if visible
-
-                    const isFocused = selectedItemIndex === viewOffset + itemInViewIndex;
-                    const reviewState = fileReviewStates.get(file.id);
-                    
-                    return (
-                        <FileItemRow key={file.id} file={file} isFocused={isFocused} reviewState={reviewState || { status: 'AWAITING' }} />
-                    );
-                })}
-            </Box>
-
-            {/* Body Viewport */}
-            {bodyView !== REVIEW_BODY_VIEWS.NONE && (
-                <Box marginY={1}>
-                    {renderBody()}
-                </Box>
-            )}
-        </ScreenLayout>
+            {activeOverlay === 'help' && <GlobalHelpScreen />}
+            {activeOverlay === 'copy' && <CopyScreen />}
+            {activeOverlay === 'log' && <DebugLogScreen />}
+            {activeOverlay === 'debug' && <DebugMenu />}
+            {activeOverlay === 'notification' && <NotificationScreen />}
+        </DimensionsProvider>
     );
 };
 
-export default ReviewScreen;
+export default App;
 ```
 
-## File: src/stores/review.store.ts
+## File: src/hooks/useDebugMenu.tsx
 ```typescript
-import { create } from 'zustand';
-import { useAppStore } from './app.store';
-import { useTransactionStore } from './transaction.store';
-import { useViewStore } from './view.store';
-import { ReviewService, type SimulationResult } from '../services/review.service';
-import { INITIAL_APPLY_STEPS, PATCH_STATUS, REVIEW_BODY_VIEWS, BULK_INSTRUCT_OPTIONS, BULK_REPAIR_OPTIONS } from '../constants/review.constants';
-import { sleep } from '../utils';
-import type { FileReviewStatus } from '../types/domain.types';
+import { useState } from 'react';
+import { useAppStore } from '../stores/app.store';
+import { useViewStore } from '../stores/view.store';
+import { useDashboardStore } from '../stores/dashboard.store';
+import { useReviewStore } from '../stores/review.store';
+import { useDetailStore } from '../stores/detail.store';
+import { useHistoryStore } from '../stores/history.store';
+import { useInitStore } from '../stores/init.store';
+import { useNotificationStore } from '../stores/notification.store';
+import { useCommitStore } from '../stores/commit.store';
+import { useCopyStore } from '../stores/copy.store';
+import { CopyService } from '../services/copy.service';
+import type { MenuItem } from '../types/debug.types';
+import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+import { ClipboardService } from '../services/clipboard.service';
+import { UI_CONFIG } from '../config/ui.config';
+import { OVERLAYS } from '../constants/view.constants';
+import { useViewport } from './useViewport';
+import { useListNavigator } from './useListNavigator';
+export type { MenuItem } from '../types/debug.types';
 
-export interface ApplyStep {
-    id: string;
-    title: string;
-    status: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
-    details?: string;
-    substeps?: ApplyStep[];
-    startTime?: number;
-    duration?: number;
-}
+const useDebugMenuActions = () => {
+    const { actions: appActions } = useAppStore();
+    const { actions: initActions } = useInitStore();
+    const { actions: notificationActions } = useNotificationStore();
+    const { actions: commitActions } = useCommitStore();
+    const { actions: dashboardActions } = useDashboardStore();
+    const { actions: reviewActions } = useReviewStore();
+    const { actions: detailActions } = useDetailStore();
+    const { actions: historyActions } = useHistoryStore();
 
-export type ReviewBodyView = (typeof REVIEW_BODY_VIEWS)[keyof typeof REVIEW_BODY_VIEWS];
-export type PatchStatus = (typeof PATCH_STATUS)[keyof typeof PATCH_STATUS];
-export type ApplyUpdate =
-    | { type: 'UPDATE_STEP'; payload: { id: string; status: ApplyStep['status']; duration?: number; details?: string } }
-    | { type: 'ADD_SUBSTEP'; payload: { parentId: string; substep: Omit<ApplyStep, 'substeps'> } }
-    | { type: 'UPDATE_SUBSTEP'; payload: { parentId: string; substepId: string; status: ApplyStep['status']; title?: string } };
-
-interface ReviewState {
-    patchStatus: PatchStatus;
-    applySteps: ApplyStep[];
-    selectedItemIndex: number;
-    bodyView: ReviewBodyView;
-    scriptErrorIndex: number;
-    processingStartTime: number | null;
-    fileReviewStates: Map<string, { status: FileReviewStatus; error?: string; details?: string }>;
-
-    selectedBulkRepairOptionIndex: number;
-    selectedBulkInstructOptionIndex: number;
-    isCancelling: boolean;
-    isSkipping: boolean;
-
-    actions: {
-        load: (transactionId: string, initialState?: Partial<Pick<ReviewState, 'bodyView' | 'selectedBulkRepairOptionIndex'>>) => void;
-        setSelectedItemIndex: (index: number) => void;
-        toggleBodyView: (view: Extract<
-            ReviewBodyView, 'prompt' | 'bulk_instruct' |
-            'diff' | 'reasoning' | 'script_output' | 'bulk_repair' | 'confirm_handoff'
-        >) => void;
-        setBodyView: (view: ReviewBodyView) => void;
-        approve: () => void;
-        rejectTransaction: () => void;
-        startApplySimulation: (transactionId: string, scenario: 'success' | 'failure') => void;
-        tryRepairFile: (fileId: string) => void;
-        showBulkRepair: () => void;
-        executeBulkRepairOption: (option: number) => Promise<void>;
-        skipCurrentStep: () => void;
-        resetSkip: () => void;
-        tryInstruct: (fileId: string) => void;
-        cancelProcessing: () => void;
-        showBulkInstruct: () => void;
-        executeBulkInstructOption: (option: number) => Promise<void>;
-        confirmHandoff: () => void;
-        navigateScriptErrorUp: () => void;
-        navigateScriptErrorDown: () => void;
-        updateApplyStep: (id: string, status: ApplyStep['status'], details?: string) => void;
-        addApplySubstep: (parentId: string, substep: Omit<ApplyStep, 'substeps'>) => void;
-        updateApplySubstep: (parentId: string, substepId: string, status: ApplyStep['status'], title?: string) => void;
-        updateFileReviewStatus: (fileId: string, status: FileReviewStatus, error?: string, details?: string) => void;
-        toggleFileApproval: (fileId: string) => void;
-        rejectAllFiles: () => void;
-        navigateBulkRepairUp: () => void;
-        navigateBulkRepairDown: () => void;
-        navigateBulkInstructUp: () => void;
-        navigateBulkInstructDown: () => void;
-    };
-}
-
-export const useReviewStore = create<ReviewState>((set, get) => ({
-    patchStatus: PATCH_STATUS.SUCCESS,
-    applySteps: INITIAL_APPLY_STEPS,
-    selectedItemIndex: 0,
-    bodyView: REVIEW_BODY_VIEWS.NONE,
-    scriptErrorIndex: 0,
-    processingStartTime: null,
-    fileReviewStates: new Map(),
-    selectedBulkRepairOptionIndex: 0,
-    selectedBulkInstructOptionIndex: 0,
-    isCancelling: false,
-    isSkipping: false,
-
-    actions: {
-        load: (transactionId, initialState) => {
-            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            if (!transaction) return;
-
-            // This logic is preserved from the deleted `prepareTransactionForReview`
-            // to allow debug screens to jump directly to a pre-populated review state
-            // without running the full simulation.
-            const isFailureCase = transaction.id === '1';
-            const fileReviewStates = new Map<string, { status: FileReviewStatus; error?: string }>();
-            (transaction.files || []).forEach((file, index) => {
-                if (isFailureCase) {
-                    const isFailedFile = index > 0;
-                    const status = isFailedFile ? 'FAILED' : 'APPROVED';
-                    const error = isFailedFile ? (index === 1 ? 'Hunk #1 failed to apply' : 'Context mismatch at line 92') : undefined;
-                    fileReviewStates.set(file.id, { status, error });
-                } else {
-                    fileReviewStates.set(file.id, { status: 'APPROVED' });
-                }
-            });
-            const patchStatus = isFailureCase ? 'PARTIAL_FAILURE' : 'SUCCESS';
-            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
-            set({
-                patchStatus,
-                fileReviewStates,
-                processingStartTime: null,
-                selectedItemIndex: 0,
-                bodyView: initialState?.bodyView ?? REVIEW_BODY_VIEWS.NONE,
-                scriptErrorIndex: 0,
-                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
-                selectedBulkRepairOptionIndex: 0,
-                selectedBulkInstructOptionIndex: 0,
-                ...initialState,
-            });
+    const menuItems: MenuItem[] = [
+        {
+            title: 'Simulate Pasting Valid Patch',
+            action: () => ClipboardService.processClipboardContent(true),
         },
-        setSelectedItemIndex: (index) => set({ selectedItemIndex: index }),
-        toggleBodyView: (view) => set(state => {
-            const transactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            const files = tx?.files || [];
-            if (view === 'diff' && state.selectedItemIndex >= files.length) return {};
-            return {
-                bodyView: state.bodyView === view ? REVIEW_BODY_VIEWS.NONE : view,
-            };
-        }),
-        setBodyView: (view) => set({ bodyView: view }),
-        approve: () => {
-            const { selectedTransactionId } = useViewStore.getState();
-            if (selectedTransactionId) {
-                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'APPLIED');
-                useAppStore.getState().actions.showDashboardScreen();
-            }
+        {
+            title: 'Simulate Pasting Invalid Text',
+            action: () => ClipboardService.processClipboardContent(false),
         },
-        rejectTransaction: () => {
-            const { selectedTransactionId } = useViewStore.getState();
-            if (selectedTransactionId) {
-                useTransactionStore.getState().actions.updateTransactionStatus(selectedTransactionId, 'REJECTED');
-                useAppStore.getState().actions.showDashboardScreen();
-            }
+        {
+            title: 'View Debug Log',
+            action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
         },
-        startApplySimulation: async (transactionId, scenario) => {
-            const transaction = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            if (!transaction?.files) return;
-
-            const { showReviewProcessingScreen, showReviewScreen } = useAppStore.getState().actions;
-            const { updateApplyStep, addApplySubstep, updateApplySubstep } = get().actions;
-
-            useViewStore.getState().actions.setSelectedTransactionId(transaction.id);
-            set({
-                applySteps: JSON.parse(JSON.stringify(INITIAL_APPLY_STEPS)),
-                processingStartTime: Date.now(),
-                isCancelling: false,
-                isSkipping: false,
-                fileReviewStates: new Map(), // Clear previous states
-            });
-
-            showReviewProcessingScreen();
-            const simulationGenerator = ReviewService.runApplySimulation(transaction.files, scenario);
-            let simulationResult: SimulationResult;
-
-            // Manually iterate to get the return value from the async generator
-            const iterator = simulationGenerator[Symbol.asyncIterator]();
-            while (true) {
-                const { value, done } = await iterator.next();
-                if (done) {
-                    simulationResult = value as SimulationResult;
-                    break;
-                }
-                const update = value;
-                if (update.type === 'UPDATE_STEP') {
-                    updateApplyStep(update.payload.id, update.payload.status, update.payload.details);
-                } else if (update.type === 'ADD_SUBSTEP') {
-                    addApplySubstep(update.payload.parentId, update.payload.substep);
-                } else if (update.type === 'UPDATE_SUBSTEP') {
-                    updateApplySubstep(update.payload.parentId, update.payload.substepId, update.payload.status, update.payload.title);
-                }
-            }
-
-            await sleep(1000);
-            set({
-                processingStartTime: null,
-                fileReviewStates: simulationResult.fileReviewStates,
-                patchStatus: simulationResult.patchStatus,
-            });
-            showReviewScreen();
+        {
+            title: 'Show Success Notification',
+            action: () => notificationActions.show({
+                type: 'success',
+                title: 'Operation Successful',
+                message: 'The requested operation completed without errors.',
+            }),
         },
-        tryRepairFile: (fileId) => {
-            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
-            const { fileReviewStates } = get();
-            if (!selectedTransactionId) return;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
-            const file = tx?.files?.find(f => f.id === fileId);
-            if (!file) return;
-
-            const { status, error } = fileReviewStates.get(file.id) || {};
-            if (status !== 'FAILED') return;
-            
-            ReviewService.tryRepairFile(file, error);
-            get().actions.updateFileReviewStatus(file.id, 'AWAITING');
+        {
+            title: 'Show Error Notification',
+            action: () => notificationActions.show({
+                type: 'error',
+                title: 'Operation Failed',
+                message: 'An unexpected error occurred. Check the debug log for details.',
+            }),
         },
-        tryInstruct: (fileId) => {
-            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
-            const { fileReviewStates } = get();
-            if (!selectedTransactionId) return;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
-            const file = tx?.files?.find(f => f.id === fileId);
-            if (!tx || !file) return;
-
-            const { status } = fileReviewStates.get(file.id) || {};
-            if (status !== 'REJECTED') return;
-            
-            ReviewService.tryInstructFile(file, tx);
-            get().actions.updateFileReviewStatus(file.id, 'AWAITING', undefined, 'Instruction prompt copied!');
+        {
+            title: 'Show Info Notification',
+            action: () => notificationActions.show({
+                type: 'info',
+                title: 'Information',
+                message: 'This is an informational message for the user.',
+            }),
         },
-        showBulkInstruct: () => get().actions.setBodyView('bulk_instruct'),
-        cancelProcessing: () => set({ isCancelling: true }),
-        skipCurrentStep: () => set({ isSkipping: true }),
-        resetSkip: () => set({ isSkipping: false }),
-        executeBulkInstructOption: async (option) => {
-            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
-            if (!tx?.files) return;
-
-            const rejectedFiles = tx.files.filter(
-                f => get().fileReviewStates.get(f.id)?.status === 'REJECTED',
-            );
-            if (rejectedFiles.length === 0) {
-                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-                return;
-            }
-
-            switch (option) {
-                case 1:
-                    ReviewService.generateBulkInstructPrompt(rejectedFiles, tx);
-                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-                    break;
-                case 2:
-                    get().actions.setBodyView('confirm_handoff');
-                    break;
-                case 3:
-                    rejectedFiles.forEach(file => {
-                        get().actions.updateFileReviewStatus(file.id, 'APPROVED');
-                    });
-                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-                    break;
-                default:
-                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-            }
+        {
+            title: 'Show Warning Notification',
+            action: () => notificationActions.show({
+                type: 'warning',
+                title: 'Warning',
+                message: 'This action may have unintended side effects.',
+            }),
         },
-
-        showBulkRepair: () => get().actions.toggleBodyView('bulk_repair'),
-        executeBulkRepairOption: async (option) => {
-            const selectedTransactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === selectedTransactionId);
-            if (!tx?.files) return;
-
-            const failedFiles = tx.files.filter(
-                f => get().fileReviewStates.get(f.id)?.status === 'FAILED',
-            );
-            if (failedFiles.length === 0) {
-                set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-                return;
-            }
-
-            switch (option) {
-                case 1:
-                    ReviewService.generateBulkRepairPrompt(failedFiles);
-                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-                    break;
-                case 2: {
-                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-                    failedFiles.forEach(f => get().actions.updateFileReviewStatus(f.id, 'RE_APPLYING'));
-                    const results = await ReviewService.runBulkReapply(failedFiles);
-                    results.forEach(result => {
-                        get().actions.updateFileReviewStatus(
-                            result.id, result.status, result.error,
-                        );
-                    });
-                    break;
-                }
-                case 3:
-                    get().actions.setBodyView('confirm_handoff');
-                    break;
-                case 4:
-                    failedFiles.forEach(file => {
-                        get().actions.updateFileReviewStatus(file.id, 'REJECTED');
-                    });
-                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-                    break;
-                default:
-                    set({ bodyView: REVIEW_BODY_VIEWS.NONE });
-            }
+        {
+            title: 'Splash Screen',
+            action: () => appActions.showSplashScreen(),
         },
-        confirmHandoff: () => {
-            const transactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            if (!tx?.files) return;
-            const { fileReviewStates } = get();
-            ReviewService.generateHandoffPrompt(tx, fileReviewStates);
-            ReviewService.performHandoff(tx.hash);
+        {
+            title: 'Init: Analyze Phase',
+            action: () => {
+                initActions.setPhase('ANALYZE');
+                appActions.showInitScreen();
+            },
         },
-        navigateScriptErrorUp: () => set(state => ({ scriptErrorIndex: Math.max(0, state.scriptErrorIndex - 1) })),
-        navigateScriptErrorDown: () => set(state => {
-            const transactionId = useViewStore.getState().selectedTransactionId;
-            const tx = useTransactionStore.getState().transactions.find(t => t.id === transactionId);
-            if (!tx?.scripts || !tx?.files) return {};
-            const selectedScript = tx.scripts[state.selectedItemIndex - tx.files.length];
-            if (selectedScript?.output) {
-                const errorLines = selectedScript.output
-                    .split('\n')
-                    .filter(line => line.includes('Error') || line.includes('Warning'));
-                return { scriptErrorIndex: Math.min(errorLines.length - 1, state.scriptErrorIndex + 1) };
-            }
-            return {};
-        }),
-        updateApplyStep: (id, status, details) => {
-            set(state => {
-                const newSteps = state.applySteps.map(s => {
-                    if (s.id === id) {
-                        const newStep: ApplyStep = { ...s, status };
-                        if (status === 'active') {
-                            newStep.startTime = Date.now();
-                        } else if ((status === 'done' || status === 'failed' || status === 'skipped') && s.startTime) {
-                            newStep.duration = (Date.now() - s.startTime) / 1000;
-                        }
-                        if (details !== undefined) newStep.details = details;
-                        return newStep;
-                    }
-                    return s;
+        {
+            title: 'Init: Interactive Phase',
+            action: () => {
+                initActions.setPhase('INTERACTIVE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Finalize Phase',
+            action: () => {
+                initActions.setPhase('FINALIZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Listening',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Confirm Approve',
+            action: () => {
+                dashboardActions.startApproveAll();
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Approving',
+            action: () => {
+                dashboardActions.setStatus('APPROVING');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Dashboard: Expanded View',
+            action: () => {
+                dashboardActions.setStatus('LISTENING');
+                dashboardActions.setExpandedTransactionId('1');
+                appActions.showDashboardScreen();
+            },
+        },
+        {
+            title: 'Review: Partial Failure (Default)',
+            action: () => {
+                reviewActions.load('1');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Success',
+            action: () => {
+                reviewActions.load('2');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Diff View',
+            action: () => {
+                reviewActions.load('1');
+                reviewActions.setBodyView('diff');
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Reasoning View',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'reasoning' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Copy Mode',
+            action: () => {
+                reviewActions.load('1');
+                appActions.showReviewScreen();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                if (!tx) return;
+                // On load, selected index is 0, so we can assume the first file.
+                const selectedFile = tx.files && tx.files.length > 0
+                    ? tx.files[0]
+                    : undefined;
+                useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+            },
+        },
+        {
+            title: 'Review: Script Output',
+            action: () => {
+                reviewActions.load('2');
+                appActions.showReviewScreen();
+                reviewActions.setBodyView('script_output');
+            },
+        },
+        {
+            title: 'Review: Bulk Repair',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'bulk_repair' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Bulk Repair (Navigable)',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Bulk Instruct',
+            action: () => {
+                reviewActions.load('2'); // Load success case
+                // Reject some files to enable the workflow
+                reviewActions.toggleFileApproval('2-1');
+                reviewActions.toggleFileApproval('2-2');
+                reviewActions.showBulkInstruct();
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review: Handoff Confirm',
+            action: () => {
+                reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                appActions.showReviewScreen();
+            },
+        },
+        {
+            title: 'Review Processing (Success)',
+            action: () => {
+                // Use tx '2' which is the success case in prepareTransactionForReview
+                reviewActions.load('2');
+                reviewActions.startApplySimulation('2', 'success');
+            },
+        },
+        {
+            title: 'Review Processing (Failure)',
+            action: () => {
+                // Use tx '1' which is the failure case in prepareTransactionForReview
+                reviewActions.load('1');
+                reviewActions.startApplySimulation('1', 'failure');
+            },
+        },
+        {
+            title: 'Git Commit Screen',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+            },
+        },
+        {
+            title: 'Git Commit Screen (Failure State)',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+                // Fire-and-forget, the UI will update from the store
+                commitActions.commit(true);
+            },
+        },
+        {
+            title: 'Git Commit: Copy Mode',
+            action: () => {
+                commitActions.prepareCommitScreen();
+                appActions.showGitCommitScreen();
+                const transactionsToCommit = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                const { finalCommitMessage } = useCommitStore.getState();
+                const items = CopyService.getCopyItemsForCommit(
+                    transactionsToCommit,
+                    finalCommitMessage,
+                );
+                useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+            },
+        },
+        {
+            title: 'Transaction Detail Screen',
+            action: () => {
+                // The dashboard store has transactions, we'll just pick one.
+                detailActions.load('3'); // 'feat: implement new dashboard UI'
+                appActions.showTransactionDetailScreen();
+            },
+        },
+        {
+            title: 'Detail: Copy Mode',
+            action: () => {
+                detailActions.load('3');
+                appActions.showTransactionDetailScreen();
+                const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                if (!tx) return;
+                const selectedFile = tx.files?.[0];
+                useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+            },
+        },
+        {
+            title: 'Detail: Diff View (for File Open action)',
+            action: () => {
+                detailActions.load('3', {
+                    focusedItemPath: 'FILES/3-1',
+                    bodyView: 'DIFF_VIEW',
+                    expandedItemPaths: new Set(['FILES']),
                 });
-                return { applySteps: newSteps };
-            });
+                appActions.showTransactionDetailScreen();
+            },
         },
-        updateApplySubstep: (parentId, substepId, status, title) => {
-            set(state => ({
-                applySteps: state.applySteps.map(s => {
-                    if (s.id === parentId && s.substeps) {
-                        const newSubsteps = s.substeps.map(sub => {
-                            if (sub.id === substepId) {
-                                const newSub: ApplyStep = { ...sub, status };
-                                if (status === 'active') {
-                                    newSub.startTime = Date.now();
-                                } else if ((status === 'done' || status === 'failed') && sub.startTime) {
-                                    newSub.duration = (Date.now() - sub.startTime) / 1000;
-                                }
-                                if (title) newSub.title = title;
-                                return newSub;
-                            }
-                            return sub;
-                        });
-                        return { ...s, substeps: newSubsteps };
-                    }
-                    return s;
-                }),
-            }));
+        {
+            title: 'Detail: Revert Confirm',
+            action: () => {
+                detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                appActions.showTransactionDetailScreen();
+            },
         },
-        addApplySubstep: (parentId, substep) => {
-            set(state => ({
-                applySteps: state.applySteps.map(s => {
-                    if (s.id === parentId) {
-                        const newSubsteps = [...(s.substeps || []), substep as ApplyStep];
-                        return { ...s, substeps: newSubsteps };
-                    }
-                    return s;
-                }),
-            }));
+        {
+            title: 'Transaction History Screen',
+            action: () => {
+                historyActions.load();
+                appActions.showTransactionHistoryScreen();
+            },
         },
-        updateFileReviewStatus: (fileId, status, error, details) => {
-            set(state => {
-                const newStates = new Map(state.fileReviewStates);
-                newStates.set(fileId, { status, error, details });
-                return { fileReviewStates: newStates };
-            });
+        {
+            title: 'History: L1 Drilldown (Content)',
+            action: () => {
+                historyActions.prepareDebugState('l1-drill-content');
+                appActions.showTransactionHistoryScreen();
+            },
         },
-        toggleFileApproval: (fileId) => {
-            set(state => {
-                const newStates = new Map(state.fileReviewStates);
-                const current = newStates.get(fileId);
-                if (current) {
-                    const newStatus: FileReviewStatus = current.status === 'APPROVED' ? 'REJECTED' : 'APPROVED';
-                    newStates.set(fileId, { status: newStatus, error: undefined, details: undefined });
-                }
-                return { fileReviewStates: newStates };
-            });
+        {
+            title: 'History: L2 Drilldown (Reasoning)',
+            action: () => {
+                historyActions.prepareDebugState('l2-drill-reasoning');
+                appActions.showTransactionHistoryScreen();
+            },
         },
-        rejectAllFiles: () => {
-            set(state => {
-                const newStates = new Map(state.fileReviewStates);
-                for (const [fileId, reviewState] of newStates.entries()) {
-                    if (reviewState.status === 'APPROVED') {
-                        newStates.set(fileId, { status: 'REJECTED', error: undefined, details: undefined });
-                    }
-                }
-                return { fileReviewStates: newStates };
-            });
+        {
+            title: 'History: L2 Drilldown (for File Open action)',
+            action: () => {
+                historyActions.prepareDebugState('l2-drill-diff');
+                appActions.showTransactionHistoryScreen();
+            },
         },
-        navigateBulkRepairUp: () => set(state => ({
-            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex - 1 + BULK_REPAIR_OPTIONS.length) % BULK_REPAIR_OPTIONS.length,
-        })),
-        navigateBulkRepairDown: () => set(state => ({
-            selectedBulkRepairOptionIndex: (state.selectedBulkRepairOptionIndex + 1) % BULK_REPAIR_OPTIONS.length,
-        })),
-        navigateBulkInstructUp: () => set(state => ({
-            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex - 1 + BULK_INSTRUCT_OPTIONS.length) % BULK_INSTRUCT_OPTIONS.length,
-        })),
-        navigateBulkInstructDown: () => set(state => ({
-            selectedBulkInstructOptionIndex: (state.selectedBulkInstructOptionIndex + 1) % BULK_INSTRUCT_OPTIONS.length,
-        })),
-    },
-}));
-```
-
-## File: src/components/DashboardScreen.tsx
-```typescript
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import type { Transaction, TransactionStatus } from '../types/domain.types';
-import { useDashboardScreen } from '../hooks/useDashboardScreen';
-import { UI_CONFIG } from '../config/ui.config'; //
-import ActionFooter from './ActionFooter';
-import ScreenLayout from './layout/ScreenLayout';
-import { DASHBOARD_FOOTER_ACTIONS, DASHBOARD_STATUS } from '../constants/dashboard.constants';
-import { TRANSACTION_STATUS_UI, FILE_CHANGE_ICONS } from '../constants/ui.constants';
-
-// --- Sub-components & Helpers ---
-
-const getStatusIcon = (status: TransactionStatus) => {
-    if (status === 'IN-PROGRESS' || status === 'COMMITTING') return <Spinner type="dots" />;
-    const ui = TRANSACTION_STATUS_UI[status as keyof typeof TRANSACTION_STATUS_UI];
-    if (!ui) return <Text> </Text>;
-    return <Text color={ui.color}>{ui.text.split(' ')[0]}</Text>;
+        {
+            title: 'History: Filter Mode',
+            action: () => {
+                historyActions.prepareDebugState('filter');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+        {
+            title: 'History: Copy Mode',
+            action: () => {
+                historyActions.prepareDebugState('copy');
+                appActions.showTransactionHistoryScreen();
+                const { transactions } = useTransactionStore.getState();
+                const { selectedForAction } = useHistoryStore.getState();
+                const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                useCopyStore.getState().actions.openForHistory(txsToCopy);
+            },
+        },
+        {
+            title: 'History: Bulk Actions Mode',
+            action: () => {
+                historyActions.prepareDebugState('bulk');
+                appActions.showTransactionHistoryScreen();
+            },
+        },
+    ];
+    return { menuItems };
 };
 
-const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}m`;
-};
+export const useDebugMenu = () => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const { menuItems } = useDebugMenuActions();
 
-const ExpandedEventInfo = ({ transaction }: { transaction: Transaction }) => {
-    const stats = transaction.stats;
-    const files = transaction.files || [];
-
-    return (
-        <Box flexDirection="column" paddingLeft={4} marginBottom={1} borderStyle="round" borderLeft={true} borderTop={false} borderRight={false} borderBottom={false} borderColor="gray">
-            {stats && (
-                <Text color="gray">
-                    Stats: {stats.files} files, +{stats.linesAdded}/-{stats.linesRemoved}
-                </Text>
-            )}
-             <Box flexDirection="column" paddingLeft={1}>
-                {files.map(file => (
-                    <Text key={file.id}>
-                        <Text color="gray">{FILE_CHANGE_ICONS[file.type]}</Text> {file.path}
-                    </Text>
-                ))}
-             </Box>
-        </Box>
-    );
-};
-const EventStreamItem = React.memo(({ transaction, isSelected, isExpanded, isNew }: { transaction: Transaction, isSelected: boolean, isExpanded: boolean, isNew: boolean }) => {
-    const [isAnimatingIn, setIsAnimatingIn] = useState(isNew);
-    const [isStatusFlashing, setIsStatusFlashing] = useState(false);
-    const prevStatus = useRef(transaction.status);
-
-    useEffect(() => {
-        if (isNew) {
-            const timer = setTimeout(() => setIsAnimatingIn(false), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [isNew]);
-
-    useEffect(() => {
-        if (prevStatus.current !== transaction.status) {
-            setIsStatusFlashing(true);
-            const timer = setTimeout(() => setIsStatusFlashing(false), 500);
-            prevStatus.current = transaction.status;
-            return () => clearTimeout(timer);
-        }
-    }, [transaction.status]);
-
-    const icon = getStatusIcon(transaction.status);
-    const time = formatTimeAgo(transaction.timestamp).padEnd(5, ' ');
-    const statusText = transaction.status.padEnd(11, ' ');
-    const expandIcon = isExpanded ? '▾' : '▸';
+    const { viewOffset, viewportHeight } = useViewport({
+        selectedIndex,
+        itemCount: menuItems.length,
+        layoutConfig: UI_CONFIG.layout.debugMenu,
+    });
     
-    const messageNode =
-        transaction.status === 'IN-PROGRESS' || transaction.status === 'COMMITTING'
-            ? <Text color={isAnimatingIn ? 'yellow' : 'cyan'}>{transaction.message}</Text>
-            : transaction.message;
-    
-    const content = (
-        <Text>
-            {time} {expandIcon} <Text color={isStatusFlashing ? 'yellow' : undefined} bold={isStatusFlashing}>{icon} {statusText}</Text>{' '}
-            <Text color="gray">{transaction.hash}</Text>
-            {' '}· {messageNode}
-        </Text>
-    );
-
-    if (isSelected) {
-        return <Text bold color={isAnimatingIn ? 'yellow' : 'cyan'}>{'> '}{content}</Text>;
-    }
-
-    return <Text color={isAnimatingIn ? 'yellow' : undefined}>{'  '}{content}</Text>;
-});
-
-const ConfirmationContent = ({
-    transactionsToConfirm,
-}: {
-    transactionsToConfirm: Transaction[];
-}) => {
-    const actionText = 'APPROVE';
-    
-    return (
-        <Box flexDirection="column" marginY={1} paddingLeft={2}>
-            <Text bold color="yellow">{actionText} ALL PENDING TRANSACTIONS?</Text>
-            <Text>
-                The following {transactionsToConfirm.length} transaction(s) will be approved:
-            </Text>
-            <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-                {transactionsToConfirm.map(tx => (
-                    <Text key={tx.id}>- {tx.hash}: {tx.message}</Text>
-                ))}
-            </Box>
-        </Box>
-    );
-};
-
-// --- Main Component ---
-
-const DashboardScreen = () => {
-    const {
-        status,
-        transactions,
-        selectedTransactionIndex,
-        pendingApprovals,
-        pendingCommits,
-        isModal,
-        isProcessing,
-        viewOffset,
+    useListNavigator({
+        itemCount: menuItems.length,
         viewportHeight,
-        transactionsToConfirm,
-        expandedTransactionId,
-        newTransactionIds,
-    } = useDashboardScreen({
-        layoutConfig: UI_CONFIG.layout.dashboard,
+        selectedIndex,
+        onIndexChange: setSelectedIndex,
+        isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG,
+        onKey: (input, key) => {
+            if (key.return) {
+                const item = menuItems[selectedIndex];
+                if (item) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    item.action();
+                }
+                return;
+            }
+            if (key.escape || key.leftArrow) {
+                useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                return;
+            }
+
+            // No ctrl/meta keys for selection shortcuts, and only single characters
+            if (key.ctrl || key.meta || input.length !== 1) return;
+
+            if (input >= '1' && input <= '9') {
+                const targetIndex = parseInt(input, 10) - 1;
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                if (targetIndex < menuItems.length) {
+                    setSelectedIndex(targetIndex);
+                }
+            }
+        },
     });
 
-    const renderStatusBar = () => {
-        let statusText: string;
-        let statusIcon: React.ReactNode;
-        switch (status) {
-            case DASHBOARD_STATUS.LISTENING: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; break;
-            case DASHBOARD_STATUS.PAUSED: statusText = 'PAUSED'; statusIcon = <Text color="yellow">||</Text>; break;
-            case DASHBOARD_STATUS.APPROVING: statusText = 'APPROVING...'; statusIcon = <Text color="cyan"><Spinner type="dots"/></Text>; break;
-            default: statusText = 'LISTENING'; statusIcon = <Text color="green">●</Text>; //
-        }
+    const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
 
-        let approvalStr: React.ReactNode = String(pendingApprovals).padStart(2, '0');
-        const commitStr: React.ReactNode = String(pendingCommits).padStart(2, '0');
-
-        if (status === DASHBOARD_STATUS.APPROVING) approvalStr = <Text color="cyan">(<Spinner type="dots"/>)</Text>;
-        if (status === DASHBOARD_STATUS.CONFIRM_APPROVE) {
-            approvalStr = <Text bold color="yellow">┌ {approvalStr} ┐</Text>;
-        }
-        
-        return (
-            <Text>
-                STATUS: {statusIcon} {statusText} · APPROVALS: {approvalStr} · COMMITS: {commitStr}
-            </Text>
-        );
+    return {
+        selectedIndex,
+        menuItems: menuItemsInView,
+        viewOffset,
+        totalItems: menuItems.length,
     };
-
-    const renderFooter = () => {
-        if (isModal) return (
-            <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.MODAL}/>
-        );
-        if (isProcessing) return <Text>Processing... This may take a moment.</Text>;
-
-		return <ActionFooter actions={DASHBOARD_FOOTER_ACTIONS.STANDARD({
-            status,
-            hasPending: pendingApprovals > 0,
-            hasApplied: pendingCommits > 0,
-        })} />;
-    };
-    
-    return (
-        <ScreenLayout
-            title="DASHBOARD"
-            footer={renderFooter()}
-        >
-            <Box flexDirection="column" flexGrow={1}>
-                <Box>
-                    {renderStatusBar()}
-                </Box>
-                
-                {isModal && (
-                    <Box marginY={1}>
-                        <ConfirmationContent transactionsToConfirm={transactionsToConfirm} />
-                    </Box>
-                )}
-                
-                <Box marginTop={1}><Text bold underline> EVENT STREAM (Last 15 minutes)</Text></Box>
-                <Box flexDirection="column" marginTop={1} flexGrow={1}>
-                    {transactions.length === 0 && (
-                         <Box paddingLeft={2}><Text color="gray">Listening for changes... no events yet.</Text></Box>
-                    )}
-                    {transactions.slice(viewOffset, viewOffset + viewportHeight).map((tx, index) => {
-                        const actualIndex = viewOffset + index;
-                        const isExpanded = expandedTransactionId === tx.id;
-                        const isNew = newTransactionIds.has(tx.id);
-                        return (
-                            <React.Fragment key={tx.id}>
-                                <EventStreamItem
-                                    transaction={tx}
-                                    isSelected={!isModal && actualIndex === selectedTransactionIndex}
-                                    isExpanded={isExpanded}
-                                    isNew={isNew}
-                                />
-                                {isExpanded && <ExpandedEventInfo transaction={tx} />}
-                            </React.Fragment>
-                        );
-                    })}
-                </Box>
-            </Box>
-        </ScreenLayout>
-    );
 };
-
-export default DashboardScreen;
 ```

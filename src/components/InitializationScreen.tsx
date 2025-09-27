@@ -76,6 +76,16 @@ const InitializationScreen = () => {
         </Box>
     );
 
+    const renderGitInitPrompt = () => (
+        <Box flexDirection="column">
+            {renderContext()}
+            <Box flexDirection="column" marginTop={1}>
+                <Text><Text color="cyan">&gt;</Text> No git repository found in the current directory.</Text>
+                <Text color="yellow">  relaycode works best with version control. Initialize a new repository?</Text>
+            </Box>
+        </Box>
+    );
+
     const renderInteractive = () => (
         <Box flexDirection="column">
             {renderContext()}
@@ -123,6 +133,7 @@ const InitializationScreen = () => {
         switch (phase) {
             case 'ANALYZE': return renderAnalyze();
             case 'CONFIGURE': return renderConfigure();
+            case 'GIT_INIT_PROMPT': return renderGitInitPrompt();
             case 'INTERACTIVE': return renderInteractive();
             case 'FINALIZE': return renderFinalize();
         }

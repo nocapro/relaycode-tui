@@ -17,7 +17,7 @@ const runInitializationProcess = async () => {
         await sleep(800);
         actions.updateAnalyzeTask(task.id, 'done');
     }
-    actions.setAnalysisResults('relaycode (from package.json)', true);
+    actions.setAnalysisResults('relaycode (from package.json)', true, true);
     await sleep(500);
 
     actions.setPhase('CONFIGURE');

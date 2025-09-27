@@ -4,13 +4,15 @@ chrome extension suggestion
 
 ===
 
-AI reapply
+beside handoff to external AI agent, also add feature where relaycode will fix failed apply using internal AI.
+
+so we need additional new screens and new screen states to configure the AI.
 
 ===
 
 update UI docs
 
-===
+=== DONE
 
 1. add new screen states to debug menu for initialization screen where github is not yet initialized for current working directory... so user can click to let relaycode initialize it
 

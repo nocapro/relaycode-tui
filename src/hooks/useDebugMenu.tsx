@@ -13,6 +13,7 @@ import { CopyService } from '../services/copy.service';
 import type { MenuItem } from '../types/debug.types';
 import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
 import { ClipboardService } from '../services/clipboard.service';
+import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from '../constants/init.constants';
 import { UI_CONFIG } from '../config/ui.config';
 import { OVERLAYS } from '../constants/view.constants';
 import { useViewport } from './useViewport';
@@ -79,9 +80,26 @@ const useDebugMenuActions = () => {
             action: () => appActions.showSplashScreen(),
         },
         {
+            title: 'Splash Screen: Update Failed',
+            action: () => {
+                appActions.setSplashScreenDebugState('update-failed');
+                appActions.showSplashScreen();
+            },
+        },
+        {
             title: 'Init: Analyze Phase',
             action: () => {
                 initActions.setPhase('ANALYZE');
+                appActions.showInitScreen();
+            },
+        },
+        {
+            title: 'Init: Git Not Found Prompt',
+            action: () => {
+                initActions.resetInit();
+                initActions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+                initActions.setAnalysisResults('relaycode-tui', true, false);
+                initActions.setPhase('GIT_INIT_PROMPT');
                 appActions.showInitScreen();
             },
         },

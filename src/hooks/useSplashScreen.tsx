@@ -10,7 +10,8 @@ export const useSplashScreen = () => {
     const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
     const [visibleLogoLines, setVisibleLogoLines] = useState(0);
     const [tip, setTip] = useState('');
-    const [updateStatus, setUpdateStatus] = useState('');
+    const [updateState, setUpdateState] = useState<'checking' | 'success' | 'failed'>('checking');
+    const [updateMessage, setUpdateMessage] = useState('');
     const [visibleSections, setVisibleSections] = useState(new Set<string>());
     const [animationComplete, setAnimationComplete] = useState(false);
 
@@ -27,8 +28,15 @@ export const useSplashScreen = () => {
         setAnimationComplete(true);
         setVisibleLogoLines(100); // A high number to show all lines
         setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
-        setUpdateStatus('✓ You are up to date.');
+        setUpdateState('success');
+        setUpdateMessage('✓ You are up to date.');
         showInitScreen();
+    };
+
+    const runUpdateCheck = () => {
+        setUpdateState('checking');
+        setUpdateMessage('Checking for updates...');
+        timeouts.current.push(setTimeout(() => { setUpdateState('success'); setUpdateMessage('✓ You are up to date.'); }, 1500));
     };
 
     useInput((input) => {
@@ -65,6 +73,16 @@ export const useSplashScreen = () => {
             });
             return;
         }
+        if (updateState === 'failed') {
+            if (lowerInput === 'r') {
+                runUpdateCheck();
+                return;
+            }
+            if (lowerInput === 's') {
+                handleSkip();
+                return;
+            }
+        }
 
         // Any other key skips
         handleSkip(); 
@@ -72,6 +90,22 @@ export const useSplashScreen = () => {
 
     useEffect(() => {
         const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+        const debugState = useAppStore.getState().splashScreenDebugState;
+        if (debugState === 'update-failed') {
+            useAppStore.getState().actions.setSplashScreenDebugState('default');
+            setVisibleLogoLines(100);
+            setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+            setUpdateState('failed');
+            setUpdateMessage('✗ Update check failed. Please check your connection.');
+            // Skip countdown and other animations, but don't auto-skip the screen
+            setAnimationComplete(true);
+            setCountdown(999); // Prevent auto-skip via countdown
+            if (!tip) {
+                setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+            }
+            return;
+        }
 
         // Pick a random tip on mount
         if (!tip) {
@@ -89,8 +123,7 @@ export const useSplashScreen = () => {
                     t(() => setVisibleSections(s => new Set(s).add('version')), 300);
                     t(() => {
                         setVisibleSections(s => new Set(s).add('updateCheck'));
-                        setUpdateStatus('Checking for updates...');
-                        t(() => setUpdateStatus('✓ You are up to date.'), 1500);
+                        runUpdateCheck();
                     }, 600);
 
                     t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
@@ -111,7 +144,7 @@ export const useSplashScreen = () => {
     }, [tip]);
 
     useEffect(() => {
-        if (!animationComplete) return;
+        if (!animationComplete || updateState === 'failed') return;
 
         if (countdown <= 0) {
             showInitScreen();
@@ -124,7 +157,7 @@ export const useSplashScreen = () => {
         timeouts.current.push(timer);
         
         return () => clearTimeout(timer);
-    }, [countdown, showInitScreen, animationComplete]);
+    }, [countdown, showInitScreen, animationComplete, updateState]);
 
-    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
+    return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateState, updateMessage };
 };

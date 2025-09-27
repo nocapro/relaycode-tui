@@ -4,6 +4,7 @@ import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
 
 interface AppState {
     currentScreen: AppScreen;
+    splashScreenDebugState: 'default' | 'update-failed';
     actions: {
         showInitScreen: () => void;
         showReviewProcessingScreen: () => void;
@@ -14,11 +15,13 @@ interface AppState {
         showTransactionHistoryScreen: () => void;
         showTransactionDetailScreen: () => void;
         navigateBack: () => void;
+        setSplashScreenDebugState: (state: 'default' | 'update-failed') => void;
     };
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
     currentScreen: 'splash',
+    splashScreenDebugState: 'default',
     actions: {
         showInitScreen: () => set({ currentScreen: 'init' }),
         showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
@@ -34,5 +37,6 @@ export const useAppStore = create<AppState>((set, get) => ({
                 get().actions.showDashboardScreen();
             }
         },
+        setSplashScreenDebugState: (state) => set({ splashScreenDebugState: state }),
     },
 }));

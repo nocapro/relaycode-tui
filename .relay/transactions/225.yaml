@@ -1,0 +1,1536 @@
+uuid: f1dd5f7f-f14d-4299-a417-64041b619a9d
+projectId: relaycode-tui
+createdAt: '2025-09-27T08:22:01.594Z'
+gitCommitMsg: >-
+  feat(debug): add git init and splash update fail debug states
+
+  Introduces two new debug scenarios accessible via the debug menu to enhance UI
+  testing for edge cases:
+
+  1.  **Initialization Screen (Git Not Found):**
+      -   Adds a `GIT_INIT_PROMPT` phase to the initialization flow.
+      -   Updates `init.store` to track Git status.
+      -   Implements UI and input handling for prompting the user to run `git init`.
+      -   Adds a "Init: Git Not Found Prompt" option to the debug menu.
+
+  2.  **Splash Screen (Update Failed):**
+      -   Adds a mechanism to simulate a failed update check.
+      -   `app.store` now includes a transient debug flag.
+      -   `useSplashScreen` hook reads this flag to enter a failure state, showing an error and offering retry/skip options.
+      -   Adds a "Splash Screen: Update Failed" option to the debug menu.
+promptSummary: >-
+  Add debug menu states for Git initialization prompt and splash screen update
+  failures.
+reasoning:
+  - This is a two-part refactor to enhance our TUI's debug capabilities.
+  - >-
+    First, I'm adding a "Git Not Found" scenario to the Initialization screen.
+    This involves extending the `init.store` with a new `GIT_INIT_PROMPT` phase
+    and state to track Git's status. The corresponding hook and component are
+    updated to handle user input and render the new prompt. This allows us to
+    test the user flow for projects where `git init` hasn't been run.
+  - >-
+    Second, I'm introducing an "Update Failed" state for the Splash screen's
+    auto-update check. I've added a transient debug flag to `app.store` which
+    the `useSplashScreen` hook checks on mount. If the flag is set, the hook
+    enters a failure state, displays an error message with "Retry" and "Skip"
+    options, and pauses the startup countdown.
+  - >-
+    Finally, both of these new states are now accessible directly from the debug
+    menu for easy testing and development.
+  - '### Initialization Screen - "Git Not Found" Scenario'
+  - >-
+    I'll start by updating the `init.store` to track the state of Git
+    initialization.
+  - >-
+    Next, I'll update the `InitService` to conform to the new store action
+    signature.
+  - >-
+    Now I'll adapt the `useInitializationScreen` hook to handle the new
+    `GIT_INIT_PROMPT` phase.
+  - >-
+    I'll implement the UI for the new prompt in the `InitializationScreen`
+    component.
+  - '### Splash Screen - "Update Failed" Scenario'
+  - I'll start by adding the necessary debug state to `app.store`.
+  - Now I'll make the `useSplashScreen` hook aware of this new debug state.
+  - I'll update the `SplashScreen` component to render the failure state.
+  - '### Add Debug Menu Entries'
+  - >-
+    Finally, I'll add the new entries to the debug menu to make these states
+    easily accessible.
+operations:
+  - type: write
+    path: src/stores/init.store.ts
+    content: >+
+      --- src/stores/init.store.ts
+
+      +++ src/stores/init.store.ts
+
+      @@ -2,10 +2,12 @@
+       
+       // Store Interface
+       export type TaskStatus = 'pending' | 'active' | 'done';
+      -export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' |
+      'FINALIZE';
+
+      +export type InitPhase = 'ANALYZE' | 'GIT_INIT_PROMPT' | 'CONFIGURE' |
+      'INTERACTIVE' | 'FINALIZE';
+       export type GitignoreChoice = 'ignore' | 'share';
+      +export type GitInitChoice = 'init' | 'ignore';
+       export interface Task {
+           id: string;
+           title: string;
+      @@ -17,17 +19,21 @@
+           phase: InitPhase;
+           analyzeTasks: Task[];
+           projectId: string | null;
+      +    gitInitialized: boolean | null;
+           gitignoreFound: boolean | null;
+           configureTasks: Task[];
+           interactiveChoice: GitignoreChoice | null;
+      +    gitInitChoice: GitInitChoice | null;
+       
+           actions: {
+               setPhase: (phase: InitPhase) => void;
+               setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+               updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+      -        setAnalysisResults: (projectId: string, gitignoreFound: boolean)
+      => void;
+
+      +        setAnalysisResults: (projectId: string, gitignoreFound: boolean,
+      gitInitialized: boolean) => void;
+               updateConfigureTask: (id: string, status: TaskStatus) => void;
+               setInteractiveChoice: (choice: GitignoreChoice) => void;
+      +        setGitInitChoice: (choice: GitInitChoice) => void;
+               resetInit: () => void;
+           };
+       }
+      @@ -37,9 +43,11 @@
+           phase: 'ANALYZE',
+           analyzeTasks: [],
+           projectId: null,
+      +    gitInitialized: null,
+           gitignoreFound: null,
+           configureTasks: [],
+           interactiveChoice: null,
+      +    gitInitChoice: null,
+       
+           actions: {
+               setPhase: (phase) => set({ phase }),
+      @@ -50,18 +58,21 @@
+               updateAnalyzeTask: (id, status) => set(state => ({
+                   analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+               })),
+      -        setAnalysisResults: (projectId, gitignoreFound) => set({
+      projectId, gitignoreFound }),
+
+      +        setAnalysisResults: (projectId, gitignoreFound, gitInitialized)
+      => set({ projectId, gitignoreFound, gitInitialized }),
+               updateConfigureTask: (id, status) => set(state => ({
+                   configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+               })),
+               setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+      +        setGitInitChoice: (choice) => set({ gitInitChoice: choice }),
+               resetInit: () => set({
+                   phase: 'ANALYZE',
+                   analyzeTasks: [],
+                   projectId: null,
+      +            gitInitialized: null,
+                   gitignoreFound: null,
+                   configureTasks: [],
+                   interactiveChoice: null,
+      +            gitInitChoice: null,
+               }),
+           },
+       }));
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/services/init.service.ts
+    content: >+
+      --- src/services/init.service.ts
+
+      +++ src/services/init.service.ts
+
+      @@ -16,7 +16,7 @@
+               await sleep(800);
+               actions.updateAnalyzeTask(task.id, 'done');
+           }
+      -    actions.setAnalysisResults('relaycode (from package.json)', true);
+
+      +    actions.setAnalysisResults('relaycode (from package.json)', true,
+      true);
+           await sleep(500);
+       
+           actions.setPhase('CONFIGURE');
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useInitializationScreen.tsx
+    content: >+
+      --- src/hooks/useInitializationScreen.tsx
+
+      +++ src/hooks/useInitializationScreen.tsx
+
+      @@ -9,12 +9,19 @@
+       export const useInitializationScreen = () => {
+           const phase = useInitStore(s => s.phase);
+           const interactiveChoice = useInitStore(s => s.interactiveChoice);
+      +    const gitInitChoice = useInitStore(s => s.gitInitChoice);
+           const actions = useInitStore(s => s.actions);
+           const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+           const { exit } = useApp();
+       
+           useInput((input, key) => {
+      -        if (phase === 'INTERACTIVE') {
+
+      +        if (phase === 'GIT_INIT_PROMPT') {
+
+      +            if (key.return) {
+
+      +                actions.setGitInitChoice('ignore');
+
+      +            } else if (input.toLowerCase() === 'i') {
+
+      +                actions.setGitInitChoice('init');
+
+      +            }
+
+      +        } else if (phase === 'INTERACTIVE') {
+                   if (key.return) {
+                       actions.setInteractiveChoice('ignore');
+                   } else if (input.toLowerCase() === 's') {
+                       actions.setInteractiveChoice('share');
+                   }
+      -        }
+
+      -        if (phase === 'FINALIZE') {
+
+      +        } else if (phase === 'FINALIZE') {
+                   if (input.toLowerCase() === 'w') {
+                       showDashboardScreen();
+                   }
+      @@ -28,6 +35,13 @@
+               InitService.runInitializationProcess();
+           }, []);
+       
+      +    useEffect(() => {
+
+      +        if (phase === 'GIT_INIT_PROMPT' && gitInitChoice !== null) {
+
+      +            // In a real flow, the service would handle git init. Here we
+      just move on.
+
+      +            actions.setPhase('CONFIGURE');
+
+      +        }
+
+      +    }, [gitInitChoice, phase, actions]);
+
+      +
+           useEffect(() => {
+               if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+                   InitService.resumeInitializationProcess();
+      @@ -43,6 +57,7 @@
+           switch (phase) {
+               case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+               case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+      +        case 'GIT_INIT_PROMPT': footerText = <Text>(<Text color="cyan"
+      bold>I</Text>)nitialize new repository · (<Text color="cyan"
+      bold>Enter</Text>) Ignore (default)</Text>; break;
+               case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+               case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+           }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/InitializationScreen.tsx
+    content: >+
+      --- src/components/InitializationScreen.tsx
+
+      +++ src/components/InitializationScreen.tsx
+
+      @@ -73,6 +73,16 @@
+               </Box>
+           );
+       
+      +    const renderGitInitPrompt = () => (
+
+      +        <Box flexDirection="column">
+
+      +            {renderContext()}
+
+      +            <Box flexDirection="column" marginTop={1}>
+
+      +                <Text><Text color="cyan">&gt;</Text> No git repository
+      found in the current directory.</Text>
+
+      +                <Text color="yellow">  relaycode works best with version
+      control. Initialize a new repository?</Text>
+
+      +            </Box>
+
+      +        </Box>
+
+      +    );
+
+      +
+           const renderInteractive = () => (
+               <Box flexDirection="column">
+                   {renderContext()}
+      @@ -120,6 +130,7 @@
+               switch (phase) {
+                   case 'ANALYZE': return renderAnalyze();
+                   case 'CONFIGURE': return renderConfigure();
+      +            case 'GIT_INIT_PROMPT': return renderGitInitPrompt();
+                   case 'INTERACTIVE': return renderInteractive();
+                   case 'FINALIZE': return renderFinalize();
+               }
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/stores/app.store.ts
+    content: >+
+      --- src/stores/app.store.ts
+
+      +++ src/stores/app.store.ts
+
+      @@ -3,8 +3,10 @@
+       import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from '../constants/app.constants';
+       
+       interface AppState {
+           currentScreen: AppScreen;
+      +    splashScreenDebugState: 'default' | 'update-failed';
+           actions: {
+               showInitScreen: () => void;
+               showReviewProcessingScreen: () => void;
+      @@ -15,11 +17,14 @@
+               showTransactionHistoryScreen: () => void;
+               showTransactionDetailScreen: () => void;
+               navigateBack: () => void;
+      +        setSplashScreenDebugState: (state: 'default' | 'update-failed')
+      => void;
+           };
+       }
+       
+       export const useAppStore = create<AppState>((set, get) => ({
+           currentScreen: 'splash',
+      +    splashScreenDebugState: 'default',
+           actions: {
+               showInitScreen: () => set({ currentScreen: 'init' }),
+               showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+      @@ -35,6 +40,7 @@
+                       get().actions.showDashboardScreen();
+                   }
+               },
+      +        setSplashScreenDebugState: (state) => set({
+      splashScreenDebugState: state }),
+           },
+       }));
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useSplashScreen.tsx
+    content: >+
+      --- src/hooks/useSplashScreen.tsx
+
+      +++ src/hooks/useSplashScreen.tsx
+
+      @@ -8,11 +8,12 @@
+           const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+           const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+           const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+           const [tip, setTip] = useState('');
+      -    const [updateStatus, setUpdateStatus] = useState('');
+
+      +    const [updateState, setUpdateState] = useState<'checking' | 'success'
+      | 'failed'>('checking');
+
+      +    const [updateMessage, setUpdateMessage] = useState('');
+           const [visibleSections, setVisibleSections] = useState(new Set<string>());
+           const [animationComplete, setAnimationComplete] = useState(false);
+       
+           // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+           const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+      @@ -26,10 +27,15 @@
+               setAnimationComplete(true);
+               setVisibleLogoLines(100); // A high number to show all lines
+               setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+      -        setUpdateStatus('✓ You are up to date.');
+
+      +        setUpdateState('success');
+
+      +        setUpdateMessage('✓ You are up to date.');
+               showInitScreen();
+           };
+       
+      +    const runUpdateCheck = () => {
+
+      +        setUpdateState('checking');
+
+      +        setUpdateMessage('Checking for updates...');
+
+      +        timeouts.current.push(setTimeout(() => {
+      setUpdateState('success'); setUpdateMessage('✓ You are up to date.'); },
+      1500));
+
+      +    };
+
+      +
+           useInput((input) => {
+               const lowerInput = input.toLowerCase();
+               if (lowerInput === 'v') {
+      @@ -59,6 +65,16 @@
+                   });
+                   return;
+               }
+      +        if (updateState === 'failed') {
+
+      +            if (lowerInput === 'r') {
+
+      +                runUpdateCheck();
+
+      +                return;
+
+      +            }
+
+      +            if (lowerInput === 's') {
+
+      +                handleSkip();
+
+      +                return;
+
+      +            }
+
+      +        }
+       
+               // Any other key skips
+               handleSkip(); 
+      @@ -67,6 +83,21 @@
+           useEffect(() => {
+               const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+       
+      +        const debugState = useAppStore.getState().splashScreenDebugState;
+
+      +        if (debugState === 'update-failed') {
+
+      +           
+      useAppStore.getState().actions.setSplashScreenDebugState('default');
+
+      +            setVisibleLogoLines(100);
+
+      +            setVisibleSections(new Set(['tagline', 'version',
+      'updateCheck', 'promo', 'links']));
+
+      +            setUpdateState('failed');
+
+      +            setUpdateMessage('✗ Update check failed. Please check your
+      connection.');
+
+      +            // Skip countdown and other animations, but don't auto-skip
+      the screen
+
+      +            setAnimationComplete(true);
+
+      +            setCountdown(999); // Prevent auto-skip via countdown
+
+      +            if (!tip) {
+
+      +                setTip(SPLASH_TIPS[Math.floor(Math.random() *
+      SPLASH_TIPS.length)]!);
+
+      +            }
+
+      +            return;
+
+      +        }
+
+      +
+               // Pick a random tip on mount
+               if (!tip) {
+                   setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+      @@ -82,8 +113,7 @@
+                           t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                           t(() => {
+                               setVisibleSections(s => new Set(s).add('updateCheck'));
+      -                        setUpdateStatus('Checking for updates...');
+
+      -                        t(() => setUpdateStatus('✓ You are up to date.'),
+      1500);
+
+      +                        runUpdateCheck();
+                           }, 600);
+       
+                           t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
+      @@ -102,7 +132,7 @@
+           }, [tip]);
+       
+           useEffect(() => {
+      -        if (!animationComplete) return;
+
+      +        if (!animationComplete || updateState === 'failed') return;
+       
+               if (countdown <= 0) {
+                   showInitScreen();
+      @@ -114,7 +144,7 @@
+               timeouts.current.push(timer);
+               
+               return () => clearTimeout(timer);
+      -    }, [countdown, showInitScreen, animationComplete]);
+
+      +    }, [countdown, showInitScreen, animationComplete, updateState]);
+       
+      -    return { countdown, visibleLogoLines, visibleSections,
+      animationComplete, tip, updateStatus };
+
+      +    return { countdown, visibleLogoLines, visibleSections,
+      animationComplete, tip, updateState, updateMessage };
+       };
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/components/SplashScreen.tsx
+    content: >+
+      --- src/components/SplashScreen.tsx
+
+      +++ src/components/SplashScreen.tsx
+
+      @@ -4,7 +4,7 @@
+       import { useSplashScreen } from '../hooks/useSplashScreen';
+       
+       const SplashScreen = () => {
+      -    const { countdown, visibleLogoLines, visibleSections,
+      animationComplete, tip, updateStatus } = useSplashScreen();
+
+      +    const { countdown, visibleLogoLines, visibleSections,
+      animationComplete, tip, updateState, updateMessage } = useSplashScreen();
+           const logo = `
+                ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+                ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+      @@ -49,7 +49,14 @@
+       
+                       {visibleSections.has('updateCheck') && (
+                           <Box marginTop={1}>
+      -                        <Text>{updateStatus}</Text>
+
+      +                        {updateState === 'checking' &&
+      <Text>{updateMessage}</Text>}
+
+      +                        {updateState === 'success' &&
+      <Text>{updateMessage}</Text>}
+
+      +                        {updateState === 'failed' && (
+
+      +                            <Box flexDirection="column"
+      alignItems="center">
+
+      +                                <Text color="red">{updateMessage}</Text>
+
+      +                                <Text>(<Text bold>R</Text>)etry · (<Text
+      bold>S</Text>)kip</Text>
+
+      +                            </Box>
+
+      +                        )}
+                           </Box>
+                       )}
+                       
+      @@ -75,7 +82,7 @@
+                           <Text color="gray">
+                               {animationComplete ? 'Loading... ' : 'Loading...'}
+                           </Text>
+      -                    {animationComplete && <Text
+      color="yellow">{countdown}</Text>}
+
+      +                    {animationComplete && updateState !== 'failed' &&
+      <Text color="yellow">{countdown}</Text>}
+                           <Text color="gray"> (Press any key to skip)</Text>
+                       </Text>
+                   </Box>
+
+    patchStrategy: standard-diff
+  - type: write
+    path: src/hooks/useDebugMenu.tsx
+    content: >+
+      --- src/hooks/useDebugMenu.tsx
+
+      +++ src/hooks/useDebugMenu.tsx
+
+      @@ -10,6 +10,7 @@
+       import type { MenuItem } from '../types/debug.types';
+       import { useTransactionStore, selectTransactionsByStatus } from '../stores/transaction.store';
+       import { ClipboardService } from '../services/clipboard.service';
+      +import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from
+      '../constants/init.constants';
+       import { UI_CONFIG } from '../config/ui.config';
+       import { OVERLAYS } from '../constants/view.constants';
+       import { useViewport } from './useViewport';
+      @@ -73,6 +74,15 @@
+                   action: () => appActions.showSplashScreen(),
+               },
+               {
+      +            title: 'Splash Screen: Update Failed',
+
+      +            action: () => {
+
+      +                appActions.setSplashScreenDebugState('update-failed');
+
+      +                appActions.showSplashScreen();
+
+      +            },
+
+      +        },
+
+      +        {
+                   title: 'Init: Analyze Phase',
+                   action: () => {
+                       initActions.setPhase('ANALYZE');
+      @@ -80,6 +90,16 @@
+                   },
+               },
+               {
+      +            title: 'Init: Git Not Found Prompt',
+
+      +            action: () => {
+
+      +                initActions.resetInit();
+
+      +                initActions.setTasks(INITIAL_ANALYZE_TASKS,
+      INITIAL_CONFIGURE_TASKS);
+
+      +                initActions.setAnalysisResults('relaycode-tui', true,
+      false);
+
+      +                initActions.setPhase('GIT_INIT_PROMPT');
+
+      +                appActions.showInitScreen();
+
+      +            },
+
+      +        },
+
+      +        {
+                   title: 'Init: Interactive Phase',
+                   action: () => {
+                       initActions.setPhase('INTERACTIVE');
+
+    patchStrategy: standard-diff
+snapshot:
+  src/stores/init.store.ts: >-
+    import { create } from 'zustand';
+
+
+    // Store Interface
+
+    export type TaskStatus = 'pending' | 'active' | 'done';
+
+    export type InitPhase = 'ANALYZE' | 'CONFIGURE' | 'INTERACTIVE' |
+    'FINALIZE';
+
+    export type GitignoreChoice = 'ignore' | 'share';
+
+    export interface Task {
+        id: string;
+        title: string;
+        subtext?: string;
+        status: TaskStatus;
+    }
+     
+    interface InitState {
+        phase: InitPhase;
+        analyzeTasks: Task[];
+        projectId: string | null;
+        gitignoreFound: boolean | null;
+        configureTasks: Task[];
+        interactiveChoice: GitignoreChoice | null;
+
+        actions: {
+            setPhase: (phase: InitPhase) => void;
+            setTasks: (analyzeTasks: Task[], configureTasks: Task[]) => void;
+            updateAnalyzeTask: (id: string, status: TaskStatus) => void;
+            setAnalysisResults: (projectId: string, gitignoreFound: boolean) => void;
+            updateConfigureTask: (id: string, status: TaskStatus) => void;
+            setInteractiveChoice: (choice: GitignoreChoice) => void;
+            resetInit: () => void;
+        };
+    }
+
+
+    // Create the store
+
+    export const useInitStore = create<InitState>((set) => ({
+        phase: 'ANALYZE',
+        analyzeTasks: [],
+        projectId: null,
+        gitignoreFound: null,
+        configureTasks: [],
+        interactiveChoice: null,
+
+        actions: {
+            setPhase: (phase) => set({ phase }),
+            setTasks: (analyzeTasks, configureTasks) => set({
+                analyzeTasks: JSON.parse(JSON.stringify(analyzeTasks)),
+                configureTasks: JSON.parse(JSON.stringify(configureTasks)),
+            }),
+            updateAnalyzeTask: (id, status) => set(state => ({
+                analyzeTasks: state.analyzeTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setAnalysisResults: (projectId, gitignoreFound) => set({ projectId, gitignoreFound }),
+            updateConfigureTask: (id, status) => set(state => ({
+                configureTasks: state.configureTasks.map(t => t.id === id ? { ...t, status } : t),
+            })),
+            setInteractiveChoice: (choice) => set({ interactiveChoice: choice }),
+            resetInit: () => set({
+                phase: 'ANALYZE',
+                analyzeTasks: [],
+                projectId: null,
+                gitignoreFound: null,
+                configureTasks: [],
+                interactiveChoice: null,
+            }),
+        },
+    }));
+  src/hooks/useInitializationScreen.tsx: |-
+    import { useEffect } from 'react';
+    import { Text, useApp, useInput } from 'ink';
+    import { useInitStore } from '../stores/init.store';
+    import { useAppStore } from '../stores/app.store';
+    import { InitService } from '../services/init.service';
+
+    export const useInitializationScreen = () => {
+        const phase = useInitStore(s => s.phase);
+        const interactiveChoice = useInitStore(s => s.interactiveChoice);
+        const actions = useInitStore(s => s.actions);
+        const showDashboardScreen = useAppStore(s => s.actions.showDashboardScreen);
+        const { exit } = useApp();
+
+        useInput((input, key) => {
+            if (phase === 'INTERACTIVE') {
+                if (key.return) {
+                    actions.setInteractiveChoice('ignore');
+                } else if (input.toLowerCase() === 's') {
+                    actions.setInteractiveChoice('share');
+                }
+            }
+            if (phase === 'FINALIZE') {
+                if (input.toLowerCase() === 'w') {
+                    showDashboardScreen();
+                }
+                if (input.toLowerCase() === 'q') {
+                    exit();
+                }
+            }
+        });
+
+        useEffect(() => {
+            InitService.runInitializationProcess();
+        }, []);
+
+        useEffect(() => {
+            if (phase === 'INTERACTIVE' && interactiveChoice !== null) {
+                InitService.resumeInitializationProcess();
+            }
+        }, [interactiveChoice, phase]);
+
+        const {
+            analyzeTasks,
+            configureTasks,
+            projectId,
+        } = useInitStore();
+
+        let footerText;
+        switch (phase) {
+            case 'ANALYZE': footerText = 'This utility will configure relaycode for your project.'; break;
+            case 'CONFIGURE': footerText = 'Applying configuration based on project analysis...'; break;
+            case 'INTERACTIVE': footerText = <Text>(<Text color="cyan" bold>Enter</Text>) No, ignore it (default)      (<Text color="cyan" bold>S</Text>) Yes, share it</Text>; break;
+            case 'FINALIZE': footerText = <Text>(<Text color="cyan" bold>W</Text>)atch for Patches · (<Text color="cyan" bold>L</Text>)View Logs · (<Text color="cyan" bold>Q</Text>)uit</Text>; break;
+        }
+
+        return {
+            phase,
+            analyzeTasks,
+            configureTasks,
+            interactiveChoice,
+            projectId,
+            footerText,
+        };
+    };
+  src/components/InitializationScreen.tsx: "import { Box, Text } from 'ink';\nimport { useState, useEffect } from 'react';\nimport Spinner from 'ink-spinner';\nimport type { Task } from '../stores/init.store';\nimport { useInitializationScreen } from '../hooks/useInitializationScreen';\nimport ScreenLayout from './layout/ScreenLayout';\n\nconst TaskItem = ({ task, doneSymbol = '✓' }: { task: Task; doneSymbol?: string }) => {\n\tconst [isJustDone, setIsJustDone] = useState(false);\n\n\tuseEffect(() => {\n\t\tif (task.status === 'done') {\n\t\t\tsetIsJustDone(true);\n\t\t\tconst timer = setTimeout(() => setIsJustDone(false), 300);\n\t\t\treturn () => clearTimeout(timer);\n\t\t}\n\t}, [task.status]);\n\n\tlet symbol: React.ReactNode;\n\tswitch (task.status) {\n\t\tcase 'pending': symbol = '( )'; break;\n\t\tcase 'active': symbol = <Text color=\"cyan\"><Spinner type=\"dots\" /></Text>; break;\n\t\tcase 'done': symbol = <Text color=\"green\">{doneSymbol}</Text>; break;\n\t}\n\n\tconst title = task.status === 'done' && doneSymbol?.startsWith('[✓]') ? `Created ${task.title.split(' ')[1]}` : task.title;\n\n\treturn (\n\t\t<Box flexDirection=\"column\">\n\t\t\t<Text color={isJustDone ? 'green' : undefined} bold={isJustDone}>\n\t\t\t\t{symbol} {title}\n\t\t\t</Text>\n\t\t\t{task.subtext && task.status !== 'done' && (\n\t\t\t\t<Text italic color=\"gray\">\n\t\t\t\t\t{'     └─ '}{task.subtext}\n\t\t\t\t</Text>\n\t\t\t)}\n\t\t</Box>\n\t);\n};\n\nconst InitializationScreen = () => {\n    const {\n        phase,\n        analyzeTasks,\n        configureTasks,\n        interactiveChoice,\n        projectId,\n        footerText,\n    } = useInitializationScreen();\n\n    const renderAnalyze = () => (\n        <Box flexDirection=\"column\">\n            <Text bold color=\"cyan\">PHASE 1: ANALYZE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {analyzeTasks.map(t => <TaskItem key={t.id} task={t} />)}\n            </Box>\n        </Box>\n    );\n\n    const renderContext = () => (\n        <Box flexDirection=\"column\" marginBottom={1}>\n            <Text bold color=\"cyan\">CONTEXT</Text>\n            <Text>  <Text color=\"green\">✓</Text> Project ID: {projectId}</Text>\n            <Text>  <Text color=\"green\">✓</Text> Gitignore:  Found at ./</Text>\n        </Box>\n    );\n\n    const renderConfigure = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1} gap={1}>\n                {configureTasks.map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n            </Box>\n        </Box>\n    );\n\n    const renderInteractive = () => (\n        <Box flexDirection=\"column\">\n            {renderContext()}\n            <Text bold color=\"cyan\">PHASE 2: CONFIGURE</Text>\n            <Box flexDirection=\"column\" marginTop={1}>\n                {configureTasks.slice(0, 2).map(t => <TaskItem key={t.id} task={t} doneSymbol='[✓]' />)}\n                <Box flexDirection=\"column\" marginTop={1}>\n                    <Text><Text color=\"cyan\">&gt;</Text> The .relay/ directory is usually ignored by git.</Text>\n                    <Text color=\"yellow\">  Do you want to share its state with your team by committing it?</Text>\n                </Box>\n            </Box>\n        </Box>\n    );\n\n    const renderFinalize = () => {\n        const stateText = interactiveChoice === 'share'\n            ? <Text><Text color=\"cyan\">.relay/</Text> directory initialized. It will be committed to git.</Text>\n            : <Text><Text color=\"cyan\">.relay/</Text> directory initialized and added to <Text color=\"cyan\">.gitignore</Text>.</Text>;\n        const stateSubText = interactiveChoice === 'share'\n            ? undefined\n            : 'Local transaction history will be stored here.';\n        \n        return (\n            <Box flexDirection=\"column\">\n                <Text bold color=\"green\">✓ SYSTEM READY</Text>\n                <Box flexDirection=\"column\" marginTop={1} paddingLeft={2} gap={1}>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> <Text bold>Config:</Text>   <Text color=\"cyan\">relay.config.json</Text> created.</Text>\n                        <Text color=\"gray\" italic>          › Edit this file to tune linters, git integration, etc.</Text>\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> <Text bold>State:</Text>    {stateText}</Text>\n                        {stateSubText && <Text color=\"gray\" italic>          › {stateSubText}</Text>}\n                    </Box>\n                    <Box flexDirection=\"column\">\n                        <Text><Text color=\"green\">✓</Text> <Text bold>Prompt:</Text>   System prompt generated at <Text color=\"cyan\">.relay/prompts/system-prompt.md</Text>.</Text>\n                        <Text color=\"green\" italic>          › Copied to clipboard. Paste into your AI&apos;s custom instructions.</Text>\n                    </Box>\n                </Box>\n            </Box>\n        );\n    };\n\n    const renderPhase = () => {\n        switch (phase) {\n            case 'ANALYZE': return renderAnalyze();\n            case 'CONFIGURE': return renderConfigure();\n            case 'INTERACTIVE': return renderInteractive();\n            case 'FINALIZE': return renderFinalize();\n        }\n    };\n\n    return (\n        <ScreenLayout\n            title={phase === 'FINALIZE' ? 'BOOTSTRAP COMPLETE' : 'BOOTSTRAP'}\n            footer={typeof footerText === 'string' ? <Text>{footerText}</Text> : footerText}\n        >\n            {renderPhase()}\n        </ScreenLayout>\n    );\n};\n\nexport default InitializationScreen;"
+  src/services/init.service.ts: >-
+    import { useInitStore } from '../stores/init.store';
+
+    import { sleep } from '../utils';
+
+    import { INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS } from
+    '../constants/init.constants';
+
+    import { LoggerService } from './logger.service';
+
+
+    const runInitializationProcess = async () => {
+        LoggerService.info('Starting initialization process...');
+        const { actions } = useInitStore.getState();
+        actions.resetInit();
+        actions.setTasks(INITIAL_ANALYZE_TASKS, INITIAL_CONFIGURE_TASKS);
+
+        actions.setPhase('ANALYZE');
+        LoggerService.debug('Phase set to ANALYZE');
+        for (const task of INITIAL_ANALYZE_TASKS) {
+            actions.updateAnalyzeTask(task.id, 'active');
+            LoggerService.debug(`Analyzing task active: ${task.title}`);
+            await sleep(800);
+            actions.updateAnalyzeTask(task.id, 'done');
+        }
+        actions.setAnalysisResults('relaycode (from package.json)', true);
+        await sleep(500);
+
+        actions.setPhase('CONFIGURE');
+        LoggerService.debug('Phase set to CONFIGURE');
+        const configTasksUntilInteractive = INITIAL_CONFIGURE_TASKS.slice(0, 2);
+        for (const task of configTasksUntilInteractive) {
+            actions.updateConfigureTask(task.id, 'active');
+            LoggerService.debug(`Configuring task active: ${task.title}`);
+            await sleep(800);
+            actions.updateConfigureTask(task.id, 'done');
+        }
+        await sleep(500);
+
+        actions.setPhase('INTERACTIVE');
+        LoggerService.debug('Phase set to INTERACTIVE');
+    };
+
+
+    const resumeInitializationProcess = async () => {
+        LoggerService.info('Resuming initialization process...');
+        const { actions } = useInitStore.getState();
+        
+        actions.setPhase('CONFIGURE');
+        LoggerService.debug('Phase set to CONFIGURE');
+        const lastTask = INITIAL_CONFIGURE_TASKS[INITIAL_CONFIGURE_TASKS.length - 1];
+        if (lastTask) {
+            actions.updateConfigureTask(lastTask.id, 'active');
+            LoggerService.debug(`Configuring task active: ${lastTask.title}`);
+            await sleep(800);
+            actions.updateConfigureTask(lastTask.id, 'done');
+            await sleep(500);
+
+            actions.setPhase('FINALIZE');
+            LoggerService.info('Initialization process finalized.');
+        }
+    };
+
+
+    export const InitService = {
+        runInitializationProcess,
+        resumeInitializationProcess,
+    };
+  src/stores/app.store.ts: >-
+    import { create } from 'zustand';
+
+    import type { AppScreen } from '../types/view.types';
+
+    import { SCREENS_WITH_DASHBOARD_BACK_ACTION } from
+    '../constants/app.constants';
+
+
+    interface AppState {
+        currentScreen: AppScreen;
+        actions: {
+            showInitScreen: () => void;
+            showReviewProcessingScreen: () => void;
+            showDashboardScreen: () => void;
+            showReviewScreen: () => void;
+            showGitCommitScreen: () => void;
+            showSplashScreen: () => void;
+            showTransactionHistoryScreen: () => void;
+            showTransactionDetailScreen: () => void;
+            navigateBack: () => void;
+        };
+    }
+
+
+    export const useAppStore = create<AppState>((set, get) => ({
+        currentScreen: 'splash',
+        actions: {
+            showInitScreen: () => set({ currentScreen: 'init' }),
+            showReviewProcessingScreen: () => set({ currentScreen: 'review-processing' }),
+            showDashboardScreen: () => set({ currentScreen: 'dashboard' }),
+            showReviewScreen: () => set({ currentScreen: 'review' }),
+            showGitCommitScreen: () => set({ currentScreen: 'git-commit' }),
+            showSplashScreen: () => set({ currentScreen: 'splash' }),
+            showTransactionHistoryScreen: () => set({ currentScreen: 'transaction-history' }),
+            showTransactionDetailScreen: () => set({ currentScreen: 'transaction-detail' }),
+            navigateBack: () => {
+                const { currentScreen } = get();
+                if ((SCREENS_WITH_DASHBOARD_BACK_ACTION as readonly string[]).includes(currentScreen)) {
+                    get().actions.showDashboardScreen();
+                }
+            },
+        },
+    }));
+  src/hooks/useSplashScreen.tsx: |-
+    import { useState, useEffect, useRef } from 'react';
+    import { useInput } from 'ink';
+    import { useAppStore } from '../stores/app.store';
+    import { UI_CONFIG } from '../config/ui.config';
+    import { SPLASH_TIPS } from '../constants/splash.constants';
+    import { useNotificationStore } from '../stores/notification.store';
+
+    export const useSplashScreen = () => {
+        const showInitScreen = useAppStore(state => state.actions.showInitScreen);
+        const [countdown, setCountdown] = useState<number>(UI_CONFIG.splash.initialCountdown);
+        const [visibleLogoLines, setVisibleLogoLines] = useState(0);
+        const [tip, setTip] = useState('');
+        const [updateStatus, setUpdateStatus] = useState('');
+        const [visibleSections, setVisibleSections] = useState(new Set<string>());
+        const [animationComplete, setAnimationComplete] = useState(false);
+
+        // Use a ref to manage timeouts to prevent memory leaks on fast unmount/skip
+        const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+        const clearAllTimeouts = () => {
+            timeouts.current.forEach(clearTimeout);
+            timeouts.current = [];
+        };
+
+        const handleSkip = () => {
+            clearAllTimeouts();
+            setAnimationComplete(true);
+            setVisibleLogoLines(100); // A high number to show all lines
+            setVisibleSections(new Set(['tagline', 'version', 'updateCheck', 'promo', 'links']));
+            setUpdateStatus('✓ You are up to date.');
+            showInitScreen();
+        };
+
+        useInput((input) => {
+            const lowerInput = input.toLowerCase();
+            if (lowerInput === 'v') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening https://relay.noca.pro in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'x') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening X/Twitter in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'd') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening Discord invite in your browser...',
+                });
+                return;
+            }
+            if (lowerInput === 'g') {
+                useNotificationStore.getState().actions.show({
+                    type: 'info',
+                    title: 'Opening Link',
+                    message: 'Opening GitHub repository in your browser...',
+                });
+                return;
+            }
+
+            // Any other key skips
+            handleSkip(); 
+        });
+
+        useEffect(() => {
+            const t = (fn: () => void, delay: number) => timeouts.current.push(setTimeout(fn, delay));
+
+            // Pick a random tip on mount
+            if (!tip) {
+                setTip(SPLASH_TIPS[Math.floor(Math.random() * SPLASH_TIPS.length)]!);
+            }
+
+            // 1. Animate logo
+            const logoTimer = setInterval(() => {
+                setVisibleLogoLines(l => {
+                    if (l >= 4) { // Fix: was 3, which cut off the last line of the logo
+                        clearInterval(logoTimer);
+                        
+                        // 2. Animate sections
+                        t(() => setVisibleSections(s => new Set(s).add('tagline')), 100);
+                        t(() => setVisibleSections(s => new Set(s).add('version')), 300);
+                        t(() => {
+                            setVisibleSections(s => new Set(s).add('updateCheck'));
+                            setUpdateStatus('Checking for updates...');
+                            t(() => setUpdateStatus('✓ You are up to date.'), 1500);
+                        }, 600);
+
+                        t(() => setVisibleSections(s => new Set(s).add('promo')), 800);
+                        t(() => setVisibleSections(s => new Set(s).add('links')), 1000);
+                        t(() => setAnimationComplete(true), 1200);
+
+                        return l;
+                    }
+                    return l + 1;
+                });
+            }, 80);
+
+            // Cleanup
+            return () => {
+                clearInterval(logoTimer);
+                clearAllTimeouts();
+            };
+        }, [tip]);
+
+        useEffect(() => {
+            if (!animationComplete) return;
+
+            if (countdown <= 0) {
+                showInitScreen();
+                return;
+            }
+
+            const timer = setTimeout(() => {
+                setCountdown(c => c - 1);
+            }, 1000);
+            timeouts.current.push(timer);
+            
+            return () => clearTimeout(timer);
+        }, [countdown, showInitScreen, animationComplete]);
+
+        return { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus };
+    };
+  src/hooks/useDebugMenu.tsx: >-
+    import { useState } from 'react';
+
+    import { useAppStore } from '../stores/app.store';
+
+    import { useViewStore } from '../stores/view.store';
+
+    import { useDashboardStore } from '../stores/dashboard.store';
+
+    import { useReviewStore } from '../stores/review.store';
+
+    import { useDetailStore } from '../stores/detail.store';
+
+    import { useHistoryStore } from '../stores/history.store';
+
+    import { useInitStore } from '../stores/init.store';
+
+    import { useNotificationStore } from '../stores/notification.store';
+
+    import { useCommitStore } from '../stores/commit.store';
+
+    import { useCopyStore } from '../stores/copy.store';
+
+    import { CopyService } from '../services/copy.service';
+
+    import type { MenuItem } from '../types/debug.types';
+
+    import { useTransactionStore, selectTransactionsByStatus } from
+    '../stores/transaction.store';
+
+    import { ClipboardService } from '../services/clipboard.service';
+
+    import { UI_CONFIG } from '../config/ui.config';
+
+    import { OVERLAYS } from '../constants/view.constants';
+
+    import { useViewport } from './useViewport';
+
+    import { useListNavigator } from './useListNavigator';
+
+    export type { MenuItem } from '../types/debug.types';
+
+
+    const useDebugMenuActions = () => {
+        const { actions: appActions } = useAppStore();
+        const { actions: initActions } = useInitStore();
+        const { actions: notificationActions } = useNotificationStore();
+        const { actions: commitActions } = useCommitStore();
+        const { actions: dashboardActions } = useDashboardStore();
+        const { actions: reviewActions } = useReviewStore();
+        const { actions: detailActions } = useDetailStore();
+        const { actions: historyActions } = useHistoryStore();
+
+        const menuItems: MenuItem[] = [
+            {
+                title: 'Simulate Pasting Valid Patch',
+                action: () => ClipboardService.processClipboardContent(true),
+            },
+            {
+                title: 'Simulate Pasting Invalid Text',
+                action: () => ClipboardService.processClipboardContent(false),
+            },
+            {
+                title: 'View Debug Log',
+                action: () => useViewStore.getState().actions.setActiveOverlay(OVERLAYS.LOG),
+            },
+            {
+                title: 'Show Success Notification',
+                action: () => notificationActions.show({
+                    type: 'success',
+                    title: 'Operation Successful',
+                    message: 'The requested operation completed without errors.',
+                }),
+            },
+            {
+                title: 'Show Error Notification',
+                action: () => notificationActions.show({
+                    type: 'error',
+                    title: 'Operation Failed',
+                    message: 'An unexpected error occurred. Check the debug log for details.',
+                }),
+            },
+            {
+                title: 'Show Info Notification',
+                action: () => notificationActions.show({
+                    type: 'info',
+                    title: 'Information',
+                    message: 'This is an informational message for the user.',
+                }),
+            },
+            {
+                title: 'Show Warning Notification',
+                action: () => notificationActions.show({
+                    type: 'warning',
+                    title: 'Warning',
+                    message: 'This action may have unintended side effects.',
+                }),
+            },
+            {
+                title: 'Splash Screen',
+                action: () => appActions.showSplashScreen(),
+            },
+            {
+                title: 'Init: Analyze Phase',
+                action: () => {
+                    initActions.setPhase('ANALYZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Interactive Phase',
+                action: () => {
+                    initActions.setPhase('INTERACTIVE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Init: Finalize Phase',
+                action: () => {
+                    initActions.setPhase('FINALIZE');
+                    appActions.showInitScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Listening',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Confirm Approve',
+                action: () => {
+                    dashboardActions.startApproveAll();
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Approving',
+                action: () => {
+                    dashboardActions.setStatus('APPROVING');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Dashboard: Expanded View',
+                action: () => {
+                    dashboardActions.setStatus('LISTENING');
+                    dashboardActions.setExpandedTransactionId('1');
+                    appActions.showDashboardScreen();
+                },
+            },
+            {
+                title: 'Review: Partial Failure (Default)',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Success',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Diff View',
+                action: () => {
+                    reviewActions.load('1');
+                    reviewActions.setBodyView('diff');
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Reasoning View',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'reasoning' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Copy Mode',
+                action: () => {
+                    reviewActions.load('1');
+                    appActions.showReviewScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '1');
+                    if (!tx) return;
+                    // On load, selected index is 0, so we can assume the first file.
+                    const selectedFile = tx.files && tx.files.length > 0
+                        ? tx.files[0]
+                        : undefined;
+                    useCopyStore.getState().actions.openForReview(tx, tx.files || [], selectedFile);
+                },
+            },
+            {
+                title: 'Review: Script Output',
+                action: () => {
+                    reviewActions.load('2');
+                    appActions.showReviewScreen();
+                    reviewActions.setBodyView('script_output');
+                },
+            },
+            {
+                title: 'Review: Bulk Repair',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Repair (Navigable)',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'bulk_repair', selectedBulkRepairOptionIndex: 1 });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Bulk Instruct',
+                action: () => {
+                    reviewActions.load('2'); // Load success case
+                    // Reject some files to enable the workflow
+                    reviewActions.toggleFileApproval('2-1');
+                    reviewActions.toggleFileApproval('2-2');
+                    reviewActions.showBulkInstruct();
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review: Handoff Confirm',
+                action: () => {
+                    reviewActions.load('1', { bodyView: 'confirm_handoff' });
+                    appActions.showReviewScreen();
+                },
+            },
+            {
+                title: 'Review Processing (Success)',
+                action: () => {
+                    // Use tx '2' which is the success case in prepareTransactionForReview
+                    reviewActions.load('2');
+                    reviewActions.startApplySimulation('2', 'success');
+                },
+            },
+            {
+                title: 'Review Processing (Failure)',
+                action: () => {
+                    // Use tx '1' which is the failure case in prepareTransactionForReview
+                    reviewActions.load('1');
+                    reviewActions.startApplySimulation('1', 'failure');
+                },
+            },
+            {
+                title: 'Git Commit Screen',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                },
+            },
+            {
+                title: 'Git Commit Screen (Failure State)',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    // Fire-and-forget, the UI will update from the store
+                    commitActions.commit(true);
+                },
+            },
+            {
+                title: 'Git Commit: Copy Mode',
+                action: () => {
+                    commitActions.prepareCommitScreen();
+                    appActions.showGitCommitScreen();
+                    const transactionsToCommit = selectTransactionsByStatus('APPLIED')(useTransactionStore.getState());
+                    const { finalCommitMessage } = useCommitStore.getState();
+                    const items = CopyService.getCopyItemsForCommit(
+                        transactionsToCommit,
+                        finalCommitMessage,
+                    );
+                    useCopyStore.getState().actions.open('Select data to copy from commit:', items);
+                },
+            },
+            {
+                title: 'Transaction Detail Screen',
+                action: () => {
+                    // The dashboard store has transactions, we'll just pick one.
+                    detailActions.load('3'); // 'feat: implement new dashboard UI'
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Copy Mode',
+                action: () => {
+                    detailActions.load('3');
+                    appActions.showTransactionDetailScreen();
+                    const tx = useTransactionStore.getState().transactions.find(t => t.id === '3');
+                    if (!tx) return;
+                    const selectedFile = tx.files?.[0];
+                    useCopyStore.getState().actions.openForDetail(tx, selectedFile);
+                },
+            },
+            {
+                title: 'Detail: Diff View (for File Open action)',
+                action: () => {
+                    detailActions.load('3', {
+                        focusedItemPath: 'FILES/3-1',
+                        bodyView: 'DIFF_VIEW',
+                        expandedItemPaths: new Set(['FILES']),
+                    });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Detail: Revert Confirm',
+                action: () => {
+                    detailActions.load('3', { bodyView: 'REVERT_CONFIRM' });
+                    appActions.showTransactionDetailScreen();
+                },
+            },
+            {
+                title: 'Transaction History Screen',
+                action: () => {
+                    historyActions.load();
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L1 Drilldown (Content)',
+                action: () => {
+                    historyActions.prepareDebugState('l1-drill-content');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (Reasoning)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-reasoning');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: L2 Drilldown (for File Open action)',
+                action: () => {
+                    historyActions.prepareDebugState('l2-drill-diff');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Filter Mode',
+                action: () => {
+                    historyActions.prepareDebugState('filter');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+            {
+                title: 'History: Copy Mode',
+                action: () => {
+                    historyActions.prepareDebugState('copy');
+                    appActions.showTransactionHistoryScreen();
+                    const { transactions } = useTransactionStore.getState();
+                    const { selectedForAction } = useHistoryStore.getState();
+                    const txsToCopy = transactions.filter(tx => selectedForAction.has(tx.id));
+                    useCopyStore.getState().actions.openForHistory(txsToCopy);
+                },
+            },
+            {
+                title: 'History: Bulk Actions Mode',
+                action: () => {
+                    historyActions.prepareDebugState('bulk');
+                    appActions.showTransactionHistoryScreen();
+                },
+            },
+        ];
+        return { menuItems };
+    };
+
+
+    export const useDebugMenu = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+        const { menuItems } = useDebugMenuActions();
+
+        const { viewOffset, viewportHeight } = useViewport({
+            selectedIndex,
+            itemCount: menuItems.length,
+            layoutConfig: UI_CONFIG.layout.debugMenu,
+        });
+        
+        useListNavigator({
+            itemCount: menuItems.length,
+            viewportHeight,
+            selectedIndex,
+            onIndexChange: setSelectedIndex,
+            isActive: useViewStore.getState().activeOverlay === OVERLAYS.DEBUG,
+            onKey: (input, key) => {
+                if (key.return) {
+                    const item = menuItems[selectedIndex];
+                    if (item) {
+                        useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                        item.action();
+                    }
+                    return;
+                }
+                if (key.escape || key.leftArrow) {
+                    useViewStore.getState().actions.setActiveOverlay(OVERLAYS.NONE);
+                    return;
+                }
+
+                // No ctrl/meta keys for selection shortcuts, and only single characters
+                if (key.ctrl || key.meta || input.length !== 1) return;
+
+                if (input >= '1' && input <= '9') {
+                    const targetIndex = parseInt(input, 10) - 1;
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                } else if (input.toLowerCase() >= 'a' && input.toLowerCase() <= 'z') {
+                    const targetIndex = 9 + (input.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+                    if (targetIndex < menuItems.length) {
+                        setSelectedIndex(targetIndex);
+                    }
+                }
+            },
+        });
+
+        const menuItemsInView = menuItems.slice(viewOffset, viewOffset + viewportHeight);
+
+        return {
+            selectedIndex,
+            menuItems: menuItemsInView,
+            viewOffset,
+            totalItems: menuItems.length,
+        };
+    };
+  src/components/SplashScreen.tsx: |-
+    import { Box, Text } from 'ink';
+    import Separator from './Separator';
+    import { useSplashScreen } from '../hooks/useSplashScreen';
+
+    const SplashScreen = () => {
+        const { countdown, visibleLogoLines, visibleSections, animationComplete, tip, updateStatus } = useSplashScreen();
+        const logo = `
+             ░█▀▄░█▀▀░█░░░█▀█░█░█░█▀▀░█▀█░█▀▄░█▀▀
+             ░█▀▄░█▀▀░█░░░█▀█░░█░░█░░░█░█░█░█░█▀▀
+             ░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀`;
+
+        const logoLines = logo.split('\n');
+
+        return (
+            <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
+                <Box flexDirection="column">
+                    <Text bold color="black" backgroundColor="yellow"> ▲ relaycode </Text>
+                    <Separator />
+                    <Box flexDirection="column">
+                        {logoLines.slice(0, visibleLogoLines).map((line, index) => {
+                            if (index === 0) return <Text key={index}>{line}</Text>;
+                            if (index === 2) return <Text key={index} color="white">{line}</Text>;
+                            return <Text key={index} color="cyan">{line}</Text>;
+                        })}
+                    </Box>
+                    {visibleSections.has('tagline') && (
+                        <Box flexDirection="column" alignItems="center">
+                            <Text italic>A zero-friction, AI-native patch engine.</Text>
+                            <Text italic color="gray">Built by Arman and contributors · <Text underline color="blue">https://relay.noca.pro</Text></Text>
+                        </Box>
+                    )}
+                    
+                    {visibleSections.has('version') && (
+                        <Box flexDirection="row" justifyContent="space-around" width="100%" marginTop={1}>
+                            <Box flexDirection="column" width="45%">
+                                <Text color="yellow">Version 1.1.5</Text>
+                                <Text color="gray">─────────────────────────</Text>
+                                <Text>relaycode</Text>
+                                <Text>relaycode-core</Text>
+                                <Text>apply-multi-diff</Text>
+                                <Text>konro</Text>
+                            </Box>
+                             <Box flexDirection="column" width="45%">
+                                <Text color="yellow">Build Timestamps</Text>
+                                <Text color="gray">─────────────────────────</Text>
+                                <Text>2025-09-20 13:58:05</Text>
+                                <Text>2025-09-20 10:59:05</Text>
+                                <Text>(versioned)</Text>
+                                <Text>(versioned)</Text>
+                            </Box>
+                        </Box>
+                    )}
+
+                    {visibleSections.has('updateCheck') && (
+                        <Box marginTop={1}>
+                            <Text>{updateStatus}</Text>
+                        </Box>
+                    )}
+                    
+                    {visibleSections.has('promo') && (
+                        <>
+                            <Box marginTop={1}><Separator /></Box>
+                            <Text>If you love this workflow, check out <Text underline color="blue">https://www.noca.pro</Text> for the full</Text>
+                            <Text>web app with repo-wide visual context, history, and rollback.</Text>
+                            <Text><Text color="cyan" bold>(V)</Text>isit noca.pro</Text>
+                        </>
+                    )}
+
+                    {visibleSections.has('links') && (
+                        <>
+                            <Separator />
+                            <Text>Follow <Text color="cyan" bold>(X)</Text> · Join <Text color="cyan" bold>(D)</Text>iscord · Star on <Text color="cyan" bold>(G)</Text>itHub</Text>
+                        </>
+                    )}
+
+                    <Separator />
+                    {animationComplete && (
+                        <Box marginBottom={1}>
+                            <Text italic color="gray">{tip}</Text>
+                        </Box>
+                    )}
+                    <Text>
+                        <Text color="gray">
+                            {animationComplete ? 'Loading... ' : 'Loading...'}
+                        </Text>
+                        {animationComplete && <Text color="yellow">{countdown}</Text>}
+                        <Text color="gray"> (Press any key to skip)</Text>
+                    </Text>
+                </Box>
+            </Box>
+        );
+    };
+
+    export default SplashScreen;
+approved: true
+linesAdded: null
+linesRemoved: null
+linesDifference: null
+gitCommittedAt: null
+status: committed
+id: 225
