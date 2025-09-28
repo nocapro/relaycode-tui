@@ -28,15 +28,7 @@
     "eslint.config.js",
     "tsconfig.json",
     "index.tsx",
-    // "src"
-    "src/stores/dashboard.store.ts",
-    "src/stores/view.store.ts",
-    "src/hooks/useGlobalHotkeys.tsx",
-    "src/components/layout/ScreenLayout.tsx",
-    "src/services/clipboard.service.ts",
-    "src/hooks/useDashboardScreen.tsx",
-    "src/stores/notification.store.ts",
-    "src/services/logger.service.ts"
+    "src"
     // "docs/relaycode-tui/splash-screen.readme.md",
     // "docs/relaycode-tui/initialization-screen.readme.md"
     // "docs/relaycode-tui/dashboard-screen.readme.md"
