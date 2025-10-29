@@ -21,9 +21,9 @@ The screen maintains a consistent single-column layout, divided into three key r
 2.  **Body:** The primary dynamic content area. It displays the current phase, analysis results, interactive prompts, and the final summary report.
 3.  **Footer / Status Bar:** A single line at the bottom that provides context on the current operation or displays the available keyboard actions.
 
-### 3. The State Machine: A Four-Phase Flow
+### 3. The State Machine: A Five-Phase Flow
 
-The initialization process is a state machine that progresses through four distinct phases.
+The initialization process is a state machine that progresses through five distinct phases.
 
 ---
 
@@ -73,7 +73,37 @@ The results from the analysis are now displayed in a persistent `CONTEXT` panel.
  Applying configuration based on project analysis...
 ```
 -   **Behavior:** The `CONTEXT` panel shows the outcome of Phase 1. The main list shows the file system modifications as they happen.
--   **Transition:** The process may pause and transition to Phase 3 if user input is required. Otherwise, it proceeds directly to Phase 4.
+-   **Transition:** If Git repository initialization is needed, transitions to Phase 2. Otherwise, may pause for user input (Phase 4) or proceed directly to Phase 5.
+
+---
+
+---
+
+#### **Phase 2: Git Repository Init**
+
+This phase handles Git repository initialization when no `.git` directory is detected. It provides an intelligent prompt to help users set up version control.
+
+**State 2.1: Git Init Prompt**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode' (from package.json)
+   ✓ Gitignore:  Found at ./
+
+ PHASE 1: ANALYZE
+
+ [✓] Scanning project structure...
+ [✓] Determining Project ID
+ [✓] Checking for existing .gitignore
+ [✓] Checking git repository
+ > No git repository found in the current directory. relaycode works best with version control. Initialize a new repository?
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (Enter) Ignore (default)      (I) Initialize repository
+```
+-   **Behavior:** The system detects the absence of a Git repository and prompts the user to initialize one. The focus shifts to the prompt, indicated by `>`.
+-   **Transition:** Resumes the flow to Phase 3 after receiving valid user input (`Enter` to ignore or `I` to initialize).
 
 ---
 
@@ -88,8 +118,9 @@ This is a blocking state that halts the automated process to request user input.
  CONTEXT
    ✓ Project ID: 'relaycode'
    ✓ Gitignore:  Found at ./
+   ✓ Git Repository: Initialized
 
- PHASE 2: CONFIGURE
+ PHASE 3: CONFIGURE
 
  [✓] Created relay.config.json
  [✓] Initialized .relay state directory
@@ -104,11 +135,42 @@ This is a blocking state that halts the automated process to request user input.
 
 ---
 
-#### **Phase 4: Finalize & Hand-off**
+---
+
+#### **Phase 4: Configure**
+
+This phase handles the actual configuration of relaycode files and directories after all user decisions have been made.
+
+**State 4.1: Configuration in Progress**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode' (from package.json)
+   ✓ Gitignore:  Found at ./
+   ✓ Git Repository: Initialized
+   ✓ Share .relay: No (user choice)
+
+ PHASE 4: CONFIGURE
+
+ (●) Creating relay.config.json...
+     └─ Writing default configuration with Project ID
+ ( ) Initializing .relay state directory
+ ( ) Generating system prompt template
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Applying configuration based on project analysis...
+```
+-   **Behavior:** The `CONTEXT` panel shows all user decisions and analysis results. The main list shows the file system modifications as they happen.
+-   **Transition:** Proceeds automatically to Phase 5 upon completion.
+
+---
+
+#### **Phase 5: Finalize & Hand-off**
 
 The final state. The screen transforms into a summary report, providing confirmation of the setup and clear instructions for the user's next steps. The content of this report is *dynamically generated* based on the choices made in previous phases.
 
-**State 4.1: Success Report (Default Choice)**
+**State 5.1: Success Report (Default Choice)**
 ```
  ▲ relaycode bootstrap complete
  ──────────────────────────────────────────────────────────────────────────────
@@ -129,7 +191,179 @@ The final state. The screen transforms into a summary report, providing confirma
 -   **Behavior:** The header updates to `...complete`. The Body provides a scannable summary. Crucially, the footer now becomes a menu, guiding the user to the next logical actions within the Relaycode ecosystem.
 -   **Dynamic Content:** If the user had chosen to *share* the state in Phase 3, the `State` line would dynamically change to: `✓ State: .relay/ directory initialized. It will be committed to git.`
 
-### 4. Edge Cases & Alternate Flows
+### 4. Debug Menu Integration
+
+The initialization screen includes comprehensive debug capabilities accessible via the application debug menu. These test states allow developers and testers to verify all initialization scenarios without requiring actual file system modifications.
+
+#### **Available Debug States**
+
+-   **Init: Git Not Found Prompt** - Simulates missing Git repository scenario
+-   **Init: Analyze Phase** - Tests the initial project analysis workflow
+-   **Init: Git Init Prompt** - Tests the Git repository initialization prompt
+-   **Init: Interactive Choice** - Tests the .relay directory sharing decision
+-   **Init: Finalize Phase** - Tests the completion summary screen
+-   **Init: All Phases** - Runs through the complete initialization sequence
+
+#### **Debug Features**
+
+-   **Phase Isolation**: Each debug state allows testing of specific phases independently
+-   **State Preservation**: Debug states maintain proper context and user choices
+-   **Error Simulation**: Test edge cases like missing files or permissions
+-   **Quick Navigation**: Jump to any phase for targeted testing
+-   **Performance Testing**: Validate timing and animations
+
+### 5. Handling Pre-existing Conditions
+
+The initialization screen is designed to be idempotent and intelligent about detecting when certain steps have already been completed in previous runs. This ensures a smooth user experience even when relaycode is run multiple times on the same project.
+
+#### **Scenario: Complete Setup Already Exists**
+
+When all initialization steps have been completed in a previous run, the system provides a verification flow rather than repeating the setup:
+
+**State 5.1: Verification Mode**
+```
+ ▲ relaycode bootstrap complete
+ ──────────────────────────────────────────────────────────────────────────────
+  SYSTEM ALREADY CONFIGURED
+
+  ✓ Config:   relay.config.json found and validated.
+              › Configuration is up to date.
+
+  ✓ State:    .relay/ directory exists and is properly initialized.
+              › Local transaction history is ready.
+
+  ✓ Git:      Repository already initialized.
+              › Version control is active.
+
+  ✓ Prompt:   System prompt exists at .relay/prompts/system-prompt.md.
+              › AI integration is ready.
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (W)atch for Patches · (L)View Logs · (Q)uit
+```
+
+#### **Scenario: Partial Setup Detected**
+
+The system intelligently detects which steps have been completed and skips unnecessary operations while still verifying existing configurations:
+
+**State 2.1: Partial Configuration Detected**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode' (from package.json)
+   ✓ Gitignore:  Found at ./
+   ✓ Git Repository: Already initialized
+   ✓ Config: relay.config.json exists (verifying...)
+
+ PHASE 2: CONFIGURE
+
+ [✓] Verifying relay.config.json...
+     └─ Configuration is valid and up to date
+ (●) Checking .relay state directory
+ ( ) Validating system prompt template
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Updating existing configuration...
+```
+
+#### **Scenario: Git Repository Already Exists**
+
+When a Git repository is already present, the system skips the Git initialization prompt and proceeds to the next steps:
+
+**State 2.2: Git Repository Pre-existing**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode' (from package.json)
+   ✓ Gitignore:  Found at ./
+   ✓ Git Repository: Already exists (active branch: main)
+
+ PHASE 1: ANALYZE
+
+ [✓] Scanning project structure...
+ [✓] Determining Project ID
+ [✓] Checking for existing .gitignore
+ [✓] Checking git repository (found, skipping init)
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Git repository detected, continuing with configuration...
+```
+
+#### **Scenario: Configuration File with Updates**
+
+When an existing configuration file is found but may need updates, the system provides clear options:
+
+**State 3.1: Configuration Update Prompt**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode' (from package.json)
+   ✓ Gitignore:  Found at ./
+   ✓ Git Repository: Already initialized
+
+ PHASE 3: CONFIGURE
+
+ [✓] Found existing relay.config.json
+ > Existing configuration detected. Your config may need updates.
+   Choose how to handle the existing configuration:
+
+ ──────────────────────────────────────────────────────────────────────────────
+ (Enter) Keep existing (default)      (U) Update with new defaults      (R) Replace
+```
+
+#### **Scenario: Migration from Previous Version**
+
+The system can detect and handle migrations from previous versions of relaycode:
+
+**State 4.1: Migration Mode**
+```
+ ▲ relaycode bootstrap
+ ──────────────────────────────────────────────────────────────────────────────
+ CONTEXT
+   ✓ Project ID: 'relaycode' (from package.json)
+   ✓ Gitignore:  Found at ./
+   ✓ Git Repository: Already initialized
+   ✓ Legacy Config: Found v1.0 configuration
+
+ PHASE 4: MIGRATE
+
+ (●) Backing up existing configuration...
+     └─ Created backup at .relay/backup/config-v1.0.json
+ (●) Migrating to v2.0 format...
+     └─ Converting configuration structure
+ (●) Updating state directory...
+     └─ Restructuring .relay/ directory layout
+
+ ──────────────────────────────────────────────────────────────────────────────
+ Migrating from v1.0 to v2.0...
+```
+
+### 6. State Persistence & Detection
+
+The initialization system maintains state awareness through several mechanisms:
+
+#### **Configuration Detection**
+- **File Existence Checks**: Detects existing `relay.config.json`, `.relay/` directory, and other artifacts
+- **Content Validation**: Verifies that existing files contain valid, up-to-date configurations
+- **Version Detection**: Identifies configuration file versions and determines if updates are needed
+- **Integrity Checks**: Ensures existing state is not corrupted and is properly structured
+
+#### **Git Repository Detection**
+- **Directory Check**: Looks for `.git/` directory to determine if repository exists
+- **Repository Status**: Checks if repository is properly initialized with valid HEAD
+- **Remote Detection**: Identifies if repository has remote origins configured
+- **Branch Status**: Determines current branch and working tree status
+
+#### **User Preference Memory**
+- **Previous Choices**: Remembers user decisions from previous runs (e.g., .relay sharing preference)
+- **Default Preservation**: Maintains existing user preferences unless explicitly changed
+- **Choice Validation**: Ensures previous choices are still valid in current context
+- **Smart Defaults**: Uses previous choices as defaults for new installations
+
+### 7. Edge Cases & Alternate Flows
 
 A robust TUI must gracefully handle pre-existing conditions.
 
@@ -143,7 +377,39 @@ A robust TUI must gracefully handle pre-existing conditions.
     -   The system falls back to using the current directory name as the Project ID.
     -   The `CONTEXT` panel in Phase 2 will display: `✓ Project ID: 'my-project' (from directory name)`.
 
-### 5. UI Symbol Legend
+### 8. Keyboard Shortcuts & Actions
+
+#### **Global Navigation**
+- `Q` - Quit the initialization process at any time
+- `Esc` - Cancel current operation or go back (when available)
+
+#### **Phase-Specific Actions**
+
+**Git Init Prompt (Phase 2)**
+- `Enter` - Ignore Git initialization (default)
+- `I` - Initialize new Git repository
+
+**Interactive Choice (Phase 3)**
+- `Enter` - No, ignore .relay directory (default)
+- `S` - Yes, share .relay directory by committing it
+
+**Configuration Update Prompt (Phase 3)**
+- `Enter` - Keep existing configuration (default)
+- `U` - Update with new defaults
+- `R` - Replace configuration
+
+**Finalize & Hand-off (Phase 5)**
+- `W` - Watch for patches (start monitoring)
+- `L` - View logs
+- `Q` - Quit application
+
+#### **Navigation Principles**
+- **Default Safety**: Enter always provides the safe/default option
+- **Context Awareness**: Footer actions change based on current phase
+- **Clear Indicators**: Active choices are highlighted with `>` symbol
+- **Consistent Layout**: Actions are always displayed in the footer bar
+
+### 9. UI Symbol Legend
 
 | Symbol | Meaning | State |
 | :--- | :--- | :--- |
@@ -155,3 +421,39 @@ A robust TUI must gracefully handle pre-existing conditions.
 | `>` | Focused Item / User Prompt | Interactive |
 | `›` | Informational Sub-point | Static |
 | `─` | Horizontal Separator | Static |
+
+### 10. Implementation Details
+
+#### **Technical Architecture**
+
+The initialization screen is built using React with TypeScript and follows a component-based architecture:
+
+- **State Management**: Zustand store for phase tracking and user choices
+- **UI Components**: Reusable React components with consistent styling
+- **Service Layer**: Backend logic for file operations and process control
+- **Input Handling**: Custom hooks for keyboard navigation and user interactions
+- **Debug Integration**: Comprehensive testing capabilities via debug menu
+
+#### **Key Files**
+
+- `src/components/InitializationScreen.tsx` - Main UI component
+- `src/stores/init.store.ts` - State management and phase tracking
+- `src/hooks/useInitializationScreen.tsx` - Input handling and phase transitions
+- `src/services/init.service.ts` - Backend logic and process control
+- `src/hooks/useDebugMenu.tsx` - Debug state integration
+
+#### **Design System**
+
+The initialization screen follows a consistent design system with:
+- **Color Palette**: Cyan for active elements, green for completed items, yellow for warnings
+- **Typography**: Bold headers, italic subtext, clear visual hierarchy
+- **Spacing**: Consistent padding and margins throughout all phases
+- **Animation**: Smooth transitions between phases with loading indicators
+- **Accessibility**: High contrast, keyboard navigation, clear visual feedback
+
+#### **Performance Considerations**
+
+- **Efficient Rendering**: Component memoization to prevent unnecessary re-renders
+- **State Optimization**: Minimal state updates with proper cleanup
+- **Resource Management**: Proper cleanup of event listeners and timers
+- **Memory Usage**: Optimized data structures for task tracking and phase management

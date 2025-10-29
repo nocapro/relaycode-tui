@@ -1,70 +1,131 @@
-# REVIEW-PROCESSING-SCREEN.README.MD
+# Review Processing Screen
 
-## Relaycode TUI: The Live Patch Application Screen
+## Relaycode TUI: Live Patch Application Screen
 
-This document specifies the design and behavior of the **Live Patch Application Screen**. This is the initial, ephemeral screen shown immediately after a new patch is detected and while it is being processed. Its primary purpose is to provide a real-time, step-by-step feedback loop as Relaycode applies changes.
-
-This screen is not interactive. It is a transparent progress indicator that automatically transitions to the main interactive **Apply & Review Screen** upon completion or failure.
-
-### 1. Core Philosophy
-
--   **Live Feedback Loop:** The screen provides real-time progress during patch application, giving the user confidence that the system is working and transparency into its performance. Each step is clearly delineated with status updates and timings.
--   **Clarity on Failure:** It immediately and clearly communicates not just *what* failed, but the downstream consequences. By explicitly marking subsequent steps as `SKIPPED`, it prevents user confusion and saves system resources.
--   **Informative & Ephemeral:** The screen exists only as long as it needs to, presenting crucial information about the application process before seamlessly transitioning the user to the next logical step: interactive review and repair.
-
-### 2. The Workflow States
-
-The screen displays one of two primary states, depending on the outcome of the patch application process.
+The **Review Processing Screen** provides real-time, step-by-step feedback during patch application. This screen is the first thing users see when a patch is being processed, giving them confidence that the system is working and transparency into the process.
 
 ---
 
-#### **State 2.1: Live Application (Success Case)**
+## Live Interface Demonstration
 
-This is the state shown while Relaycode processes a patch that applies cleanly without any errors.
-
+### Active Processing State
 ```
- ▲ relaycode apply
- ──────────────────────────────────────────────────────────────────────────────
- Applying patch 4b9d8f03... (refactor: simplify clipboard logic)
+▲ relaycode
+──────────────────────────────────────────────────────────────────────────────
+                 APPLYING PATCH
+──────────────────────────────────────────────────────────────────────────────
+Applying patch 4b9d8f03... (refactor: simplify clipboard logic)
 
- (●) Reading initial file snapshot... (0.1s)
- (●) Applying operations to memory... (0.3s)
-     └─ [✓] write: src/core/clipboard.ts (strategy: replace)
-     └─ [✓] write: src/utils/shell.ts (strategy: standard-diff)
- (●) Running post-command script... (2.3s)
-     └─ `bun run test` ... Passed
- (●) Analyzing changes with linter... (1.2s)
-     └─ `bun run lint` ... 0 Errors
+(●) Reading initial file snapshot... (0.1s)
+(●) Applying operations to memory... (0.3s)
+    └─ ○ write: src/core/clipboard.ts
+    └─ ○ write: src/utils/shell.ts
+( ) Running post-command script...
+( ) Analyzing changes with linter...
 
- ──────────────────────────────────────────────────────────────────────────────
- Elapsed: 3.9s · Processing... Please wait.
+──────────────────────────────────────────────────────────────────────────────
+Elapsed: 0.4s · Processing... Please wait.
+
+[Ctrl+C] Cancel Process [S] Skip Script
 ```
--   **Behavior:** Each line updates its status symbol `( ) → (●) → [✓]`. Timings appear as each step completes. The specific patch strategy used for each file is displayed.
--   **Transition:** Upon completion, seamlessly transitions into the **Interactive Review Screen** for final approval.
+
+### Visual Status Indicators
+- `( )` - Pending step (waiting to start)
+- `(●)` - Active step with spinner animation (in progress)
+- `[✓]` - Completed successfully
+- `[!]` - Failed operation with error details
+- `(-)` - Skipped (due to previous failure)
+
+### Substep Visualization
+Each main step can expand to show detailed substeps:
+```
+(●) Applying operations to memory... (0.3s)
+    └─ ● write: src/core/clipboard.ts (spinner active)
+    └─ ○ write: src/utils/shell.ts
+```
 
 ---
 
-#### **State 2.2: Live Application (Partial Failure Case)**
+## Real-Time Feedback Flow
 
-This state is shown when one or more file operations fail during the application process. It demonstrates the **Golden Rule**: post-application scripts are **skipped** if the patch does not apply cleanly.
+### Success Case Timeline
+1. **File Snapshot**: `(●) Reading initial file snapshot... (0.1s)` → `[✓] Reading initial file snapshot... (0.1s)`
+2. **Memory Operations**: Shows individual file operations with patch strategies
+3. **Post-Command**: Executes build/test scripts with live output
+4. **Lint Analysis**: Runs validation tools with error counts
 
+### Partial Failure Handling
+When patch application fails, dependent steps are automatically skipped:
 ```
- ▲ relaycode apply
- ──────────────────────────────────────────────────────────────────────────────
- Applying patch e4a7c112... (refactor: rename core utility function)
-
- (●) Reading initial file snapshot... (0.1s)
- (●) Applying operations to memory... (0.5s)
-     └─ [✓] write: src/core/transaction.ts (strategy: replace)
-     └─ [!] failed: src/utils/logger.ts (Hunk #1 failed to apply)
-     └─ [!] failed: src/commands/apply.ts (Context mismatch at line 92)
- (-) SKIPPED Post-command script...
-     └─ Skipped due to patch application failure
- (-) SKIPPED Analyzing changes with linter...
-     └─ Skipped due to patch application failure
-
- ──────────────────────────────────────────────────────────────────────────────
- Elapsed: 0.6s · Transitioning to repair workflow...
+[✓] Reading initial file snapshot... (0.1s)
+[!] Applying operations to memory... (0.5s)
+    └─ ✗ src/utils/logger.ts (Hunk #1 failed to apply)
+    └─ ✗ src/commands/apply.ts (Context mismatch at line 92)
+(-) SKIPPED Post-command script...
+    └─ Skipped due to patch application failure
+(-) SKIPPED Analyzing changes with linter...
+    └─ Skipped due to patch application failure
 ```
--   **Behavior:** Failed operations are marked with `[!]` and a concise error message. Subsequent dependent steps (scripts, linters) are marked `(-) SKIPPED` with a clear explanation, preventing false results and saving resources.
--   **Transition:** Immediately transitions to the **Interactive Review Screen** in its "Failed Application & Repair Workflow" state.
+
+---
+
+## Interactive Controls
+
+### Keyboard Shortcuts
+- **Ctrl+C**: Cancel the entire patch application process
+- **S**: Skip the currently running post-command script (when skippable)
+
+### Dynamic Footer States
+- **Processing**: Shows elapsed time and available actions
+- **Cancelling**: `Elapsed: 2.3s · Cancelling... Please wait.`
+- **Success**: `Elapsed: 3.9s · Patch applied successfully. Transitioning...`
+- **Failure**: `Elapsed: 0.6s · Transitioning to repair workflow...`
+
+---
+
+## Technical Implementation
+
+### Component Architecture
+```tsx
+// Main component structure
+<ScreenLayout title="APPLYING PATCH" footer={dynamicFooter}>
+  <TransactionInfo />
+  <ApplyStepsList>
+    {applySteps.map(step => (
+      <ApplyStepRow key={step.id} step={step} now={currentTime} />
+    ))}
+  </ApplyStepsList>
+</ScreenLayout>
+```
+
+### State Management
+- **Real-time Timer**: Updates every 100ms for accurate elapsed time display
+- **Step Progression**: Manages status transitions (pending → active → done/failed)
+- **Substep Tracking**: Supports nested file operations within main steps
+- **Skip Logic**: Determines when post-command scripts can be safely skipped
+
+### Error Handling
+- **Graceful Degradation**: Individual file failures don't crash the entire process
+- **Clear Messaging**: Each failed operation includes specific error details
+- **Dependency Awareness**: Automatically skips dependent steps on failure
+- **Repair Integration**: Seamlessly transitions to interactive repair workflow
+
+---
+
+## Animation & UX Details
+
+### Spinner States
+- **Main Steps**: Static symbols `(●)` with color changes
+- **Substeps**: Animated spinners using Ink's `<Spinner type="dots" />` component
+- **Color Coding**: Cyan (active), Green (success), Red (error), Gray (skipped)
+
+### Timing Display
+- **Active Steps**: Real-time duration updates every 100ms
+- **Completed Steps**: Final duration frozen on completion
+- **Precision**: Shows timing to 1 decimal place for granular feedback
+
+### Visual Hierarchy
+- **Transaction Info**: Hash and message prominently displayed
+- **Step Progression**: Clear top-to-bottom flow with indentation
+- **Footer Actions**: Context-sensitive controls separated by separator
+- **Status Consistency**: Symbol and color language used throughout app

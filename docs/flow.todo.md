@@ -2,6 +2,22 @@
 
 chrome extension suggestion
 
+===
+
+extract & copy mentioned files
+
+===
+
+update ui
+
+===
+
+re-run script
+
+===
+
+config setting ui
+
 === DONE
 
 clipboard pause resume should be global from any screen and the change status should appear in the top right header
